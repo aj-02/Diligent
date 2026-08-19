@@ -1,0 +1,1002 @@
+*&---------------------------------------------------------------------*
+*&  Include           PCF16IN13
+*&---------------------------------------------------------------------*
+
+INITIALIZATION.
+
+*Check if Alternate Financial Year is implemented
+  PERFORM chk_afy  USING pbegda pendda
+                CHANGING afy_switch.
+
+START-OF-SELECTION.
+
+  IF dmail EQ 'X' AND form_16 NE 'X' AND file2 IS INITIAL
+                                         AND file3 IS INITIAL.
+    MESSAGE 'Maintain Folder Path for Form 16 Part-A and Part-B'
+                                     TYPE 'I' DISPLAY LIKE 'I'.
+    LEAVE LIST-PROCESSING.
+  ENDIF.
+
+  IF dmail EQ 'X' AND form_16 NE 'X' AND ( file2 IS INITIAL
+                                          OR file3 IS INITIAL ).
+    MESSAGE 'Form 16 Part-A and Part-B should be sent together'
+                                     TYPE 'I' DISPLAY LIKE 'I'.
+    LEAVE LIST-PROCESSING.
+  ENDIF.
+
+  IF dmail EQ 'X' AND form_16 EQ 'X' AND file2 IS INITIAL.
+    MESSAGE 'Folder path for Form 16 Part-A cannot be left blank'
+                                     TYPE 'I' DISPLAY LIKE 'I'.
+    LEAVE LIST-PROCESSING.
+  ENDIF.
+
+  IF fmail EQ 'X' AND file4 IS INITIAL.
+    MESSAGE 'Folder path for Form 12BB cannot be left blank'
+                                    TYPE 'I' DISPLAY LIKE 'I'.
+    LEAVE LIST-PROCESSING.
+  ENDIF.
+
+  IF p_email EQ 'X' AND fmail NE 'X' AND dmail NE 'X' AND f10_mail NE 'X'.
+    MESSAGE 'Maintain folder paths of Form 16 Part-A, Part-B and/or Form 12BB or Form 2f10k'
+                                    TYPE 'I' DISPLAY LIKE 'I'.
+    LEAVE LIST-PROCESSING.
+  ENDIF.
+
+* Get start and end date of the fiscal year.
+  PERFORM get_fiscal USING year afy_switch CHANGING pbegda pendda.
+
+  pnpbegda = pbegda.
+  pnpendda = pendda.
+* Check if multiple Form 16 is enabled.
+  PERFORM chk_mul_f16 USING pbegda CHANGING multiple_f16.
+
+  PERFORM get_wts_1 TABLES i512w
+                  USING  pnpendda.
+  PERFORM upld_ch_details TABLES excel_tab USING file1 ftype
+                              file_length.
+
+  IF dsign IS NOT INITIAL.
+    PERFORM digi_alias_check TABLES pnpwerks pnpbtrtl pnpabkrs USING s_alsign tan_no comp_cd year CHANGING err_tab.
+  ENDIF.
+
+**- Read all Part-B files
+  IF file2 IS NOT INITIAL AND file3 IS NOT INITIAL AND dmail IS NOT INITIAL.
+    CALL FUNCTION 'TMP_GUI_DIRECTORY_LIST_FILES'
+      EXPORTING
+        directory  = file3
+        filter     = '*.*'
+      TABLES
+        file_table = file_tab
+        dir_table  = dir_tab
+      EXCEPTIONS
+        cntl_error = 1
+        OTHERS     = 2.
+  ENDIF.
+
+**-Budget Changes 2017-18
+** Capping maximum limit of Ded u/s 24
+  SELECT SINGLE * FROM t511p INTO gs_t511p
+                WHERE molga EQ '40'
+                AND konst = 'S24LT'
+                AND begda <= pendda
+                AND endda >= pendda.
+  IF sy-subrc EQ 0.
+    gv_ded_s24 = 'X'.
+  ENDIF.
+* Income Tax rounding
+  SELECT * FROM t511k INTO gv_t511k
+                     WHERE molga EQ '40'
+                       AND konst EQ 'TAXRO'
+                       AND begda LE pendda
+                       AND endda GE pendda.               "#EC PORTABLE
+  ENDSELECT.
+
+  IF year GE '2018'.
+    f16_new = 'X'.
+  ENDIF.
+
+GET pernr.
+
+* IF file3 IS INITIAL AND file4 IS INITIAL.
+  IF p_email IS INITIAL.
+    IF err_tab IS INITIAL.
+
+      PERFORM read_cocd TABLES tmp_cocd
+                               p0000
+                               p0001
+                               p0580
+                         USING tan_no
+                               pernr-pernr
+                               multiple_f16
+                               pbegda
+                               pendda.
+      tmp_cocd_1[] = tmp_cocd[].
+      PERFORM get_tmp_cocd TABLES tmp_cocd
+                                  p0000
+                                  p0001
+                                  p0185
+                                  p0580
+                            USING tan_no
+                                  pernr-pernr multiple_f16
+                                  pbegda pendda comp_cd
+                                  tanr
+                         CHANGING cocd_lines
+                                  f16_begda.
+*  IMPORT RESULTS.
+      PERFORM get_rgdir TABLES rgdir USING pernr-pernr.
+
+*- Start:- Retain results of Correction Run after last period in case of AFY
+****************************************************************************
+      IF afy_switch IS NOT INITIAL.
+
+        IF rgdir_afy_crun[] IS NOT INITIAL.
+          tmp_afy_crun[] = rgdir_afy_crun[].
+          SORT tmp_afy_crun DESCENDING BY seqnr.
+
+          LOOP AT tmp_afy_crun INTO wa_rgdir.
+
+            PERFORM get_payresult TABLES wa_pay_result-rt_tab
+                                         wa_pay_result-s80
+                                         wa_pay_result-s88
+                                   USING wa_pay_result-versc
+                                         wa_rgdir-seqnr
+                                         pernr-pernr.
+
+            APPEND wa_pay_result TO pay_result_afy_crun.
+            EXIT.
+          ENDLOOP.
+          CLEAR: wa_pay_result,wa_rgdir.
+        ENDIF.
+      ENDIF.
+*- End:- Retain results of Correction Run after last period in case of AFY
+**************************************************************************
+
+      DELETE rgdir WHERE ipend > pnpendda AND inpty <> 'B'.
+
+      REFRESH pay_result.
+      CLEAR pay_result.
+
+      LOOP AT rgdir INTO wa_rgdir WHERE   fpbeg <= pnpendda
+                                    AND   fpend >= pnpbegda.
+
+        PERFORM get_payresult TABLES wa_pay_result-rt_tab
+                                     wa_pay_result-s80
+                                     wa_pay_result-s88
+                               USING wa_pay_result-versc
+                                     wa_rgdir-seqnr
+                                     pernr-pernr.
+*    append B on B to temporory result table
+*     L4HK115084
+        IF tmp_cor_rgdir IS NOT INITIAL.
+          READ TABLE tmp_cor_rgdir INTO wa_tmp_cor_rgdir WITH KEY seqnr = wa_rgdir-seqnr.
+          IF sy-subrc = 0 .
+            APPEND wa_pay_result TO cor_pay_result.
+          ENDIF.
+        ENDIF.     " L4HK115084
+        APPEND wa_pay_result TO pay_result.
+        CLEAR wa_pay_result.
+      ENDLOOP.
+*   append results if correction run is across the financial year
+      IF tmp_cor_rgdir IS NOT INITIAL.
+        LOOP AT tmp_cor_rgdir INTO wa_tmp_cor_rgdir WHERE  fpbeg >= pnpendda
+                                                         AND payty = 'B'
+                                                         AND inpty = 'B'.
+*                                AND   cocdeedt >= PNPBEGDA.
+          rx-key-seqno = wa_tmp_cor_rgdir-seqnr.
+          rx-key-pernr = pernr-pernr.
+
+          rp-imp-c2-in.
+          wa_pay_result-rt_tab[] = rt[].
+          wa_pay_result-versc = versc.
+          wa_pay_result-s80[] = s80[].
+          wa_pay_result-s88[] = s88[].
+          APPEND wa_pay_result TO cor_pay_result.
+          APPEND wa_pay_result TO pay_result.
+          CLEAR wa_pay_result.
+        ENDLOOP.
+      ENDIF.                                                "L4HK115084
+
+      IF pay_result[] IS INITIAL.
+        REJECT.
+      ENDIF.
+
+      LOOP AT tmp_cocd INTO wa_tmp_cocd.
+        CLEAR: tmp_result_flag.
+        LOOP AT rgdir INTO wa_tmp_rgdir WHERE ipend GE wa_tmp_cocd-begda.
+          tmp_result_flag = 'X'.
+          EXIT.
+        ENDLOOP.
+        IF wa_tmp_cocd-stat2 NE 0 OR tmp_result_flag EQ 'X'.
+
+
+          PERFORM get_f16_endda TABLES p0000
+                                       p0001
+                                 USING wa_tmp_cocd-begda
+                                       wa_tmp_cocd-endda
+                                       pbegda
+                                       pendda
+                              CHANGING f16_endda.
+
+          f16_cntr2 = wa_tmp_cocd-cntr2.
+*    IF WA_TMP_COCD-CNTR2 = COCD_LINES.
+*      wa_tmp_cocd-begda = F16_BEGDA.
+*    ENDIF.
+
+          PERFORM pop_mon_tax TABLES mon_tax_comp
+                                   rgdir
+                                   pay_result
+                            USING  wa_tmp_cocd
+                                   p0001-pernr
+                          CHANGING last_result .
+
+          PERFORM fill_main_table TABLES main_tab
+                                 USING last_result-rt_tab.
+
+          PERFORM get_empr_details TABLES p0001 p0185
+                                        p0002
+                                        p0006
+                                        p0021
+                                        hd_tab
+                                 USING  wa_tmp_cocd-begda
+                                        wa_tmp_cocd-cntr2
+                                        wa_tmp_cocd-endda
+                                        wa_tmp_cocd-bukrs
+                                        multiple_f16
+                                        pernr-pernr
+                                        tanr
+                                        cocd_lines
+                                        f16_begda
+                                        f16_endda.
+
+          PERFORM fill_final_table TABLES hd_tab
+                                         main_tab
+                                         final_tab
+                                  USING  pernr-pernr.
+
+          PERFORM fill_int_s80 TABLES int_s80
+                              USING last_result-s80
+                                    last_result-rt_tab
+                                    wa_tmp_cocd-cntr2
+                                    pernr-pernr pbegda
+                                    pendda.
+
+          PERFORM fill_int_nps TABLES int_nps
+                               USING  last_result-rt_tab
+                                      pernr-pernr.
+
+          PERFORM fill_int_s88 TABLES int_s88 USING last_result-s88
+                                                    wa_tmp_cocd-cntr2
+                                                    pernr-pernr
+                                           CHANGING s88_total.
+
+          PERFORM fill_gross_tab TABLES gross_tab
+                                 USING  last_result-rt_tab
+                                        wa_tmp_cocd"-CNTR2
+                                        pernr-pernr.
+
+          PERFORM fill_ifos_tab TABLES ifos_tab
+                                USING  last_result-rt_tab
+                                       wa_tmp_cocd-cntr2
+                                       pernr-pernr.
+
+          PERFORM fill_perk_tab TABLES perk_tab
+                                USING  last_result-rt_tab
+                                       wa_tmp_cocd-cntr2
+                                       pernr-pernr.
+
+          PERFORM fill_sec10_tab TABLES sec10_tab
+                                 USING  last_result-rt_tab
+                                        wa_tmp_cocd-cntr2
+                                        pernr-pernr.
+
+*** Begin of INS by AIS:RW to consider Child allowance
+          FIELD-SYMBOLS : <fs_final_tab> LIKE LINE OF final_tab.
+          LOOP AT final_tab ASSIGNING <fs_final_tab>.
+            CLEAR <fs_final_tab>-sec10_all.
+            LOOP AT sec10_tab WHERE pernr = <fs_final_tab>-pernr.
+              <fs_final_tab>-sec10_all = <fs_final_tab>-sec10_all + sec10_tab-amount.
+            ENDLOOP.
+          ENDLOOP.
+
+*** End of INS by AIS:RW to consider Child allowance
+
+          CLEAR: p4dedt_tab, p4chln_tab.
+          REFRESH: p4dedt_tab, p4chln_tab.
+
+          PERFORM get_challan_cluster TABLES mon_tax_comp
+                                             p0001
+                                             p0185
+                                             p4dedt_tab
+                                             p4chln_tab
+                                       USING tanr
+                                             multiple_f16
+                                             pernr-pernr
+                                             wa_tmp_cocd-bukrs
+                                             wa_tmp_cocd-cntr2.
+
+
+          PERFORM read_challan_details TABLES mon_tax_comp
+                                             ch_det
+                                             p4dedt_tab
+                                             p4chln_tab
+                                             p0001
+                                             p0185
+                                       USING wa_tmp_cocd-cntr2
+                                             wa_tmp_cocd-bukrs
+                                             pernr-pernr
+                                             year
+                                             tanr
+                                             multiple_f16.
+          PERFORM merge_upl_chl TABLES excel_tab
+                                     ch_det
+                                USING wa_tmp_cocd.
+
+          PERFORM fill_sum_tab TABLES sum_tab
+                                      mon_tax_comp
+                                      ch_det
+                                      p0001
+                                      p0185
+                               USING  wa_tmp_cocd-cntr2
+                                      wa_tmp_cocd-bukrs
+                                      pernr-pernr
+                                      hd_tab-tanno
+                                      year
+                                      tanr
+                                      multiple_f16
+                                      afy_switch.
+
+          PERFORM fill_form12ba_tab TABLES i512w
+                                           form12ba_tab
+                                    USING  pernr-pernr
+                                           wa_tmp_cocd-cntr2.
+
+          SORT p0001 BY endda DESCENDING.
+*       READ TABLE p0001 INDEX 1.
+          rp-provide-from-last p0001 space f16_begda f16_endda.
+          IF sy-subrc = 0 AND NOT p0001-werks IS INITIAL.
+            MOVE p0001-werks TO pers_area.
+          ENDIF.
+        ENDIF.
+      ENDLOOP.
+      MOVE pernr-pernr TO emp_tab-pernr.
+      APPEND emp_tab.
+
+      DATA: bd_f16_taxsp  TYPE REF TO hr_in_f16_enh,
+            f16ft_tab     TYPE pin_hincf160_t_f16ft WITH HEADER LINE,
+            chl_det       TYPE pin_hincf160_t_chdet WITH HEADER LINE,
+            sec80_tab     TYPE pin_hincf160_t_sec80 WITH HEADER LINE,
+            sec88_tab     TYPE pin_hincf160_t_sec88 WITH HEADER LINE,
+            gross_sal_tab TYPE pin_hincf160_t_sec10 WITH HEADER LINE,
+            sc10_tab      TYPE pin_hincf160_t_sec10 WITH HEADER LINE,
+            perk_tab1     TYPE pin_hincf160_t_sec10 WITH HEADER LINE,
+            fr12ba_tab    TYPE pin_hincf160_t_f12ba WITH HEADER LINE.
+      CLEAR: f16ft_tab, chl_det, sec80_tab, sec88_tab, gross_sal_tab, sc10_tab, perk_tab1, fr12ba_tab.
+      REFRESH: f16ft_tab, chl_det, sec80_tab, sec88_tab, gross_sal_tab, sc10_tab, perk_tab1, fr12ba_tab.
+
+      LOOP AT final_tab WHERE pernr = pernr-pernr.
+        CLEAR f16ft_tab.
+        MOVE: final_tab-cntr2 TO f16ft_tab-hdtab-cntr2,
+              final_tab-f16_begda TO f16ft_tab-hdtab-begda,
+              final_tab-f16_endda TO f16ft_tab-hdtab-endda,
+              final_tab-pernr TO f16ft_tab-hdtab-pernr,
+              final_tab-ename TO f16ft_tab-hdtab-ename,
+              final_tab-position TO f16ft_tab-hdtab-posin,
+              final_tab-icnum TO f16ft_tab-hdtab-icnum,
+              final_tab-dob TO f16ft_tab-hdtab-gbdat,
+              final_tab-gender TO f16ft_tab-hdtab-gesch,
+              final_tab-ffname TO f16ft_tab-hdtab-ffnam,
+              final_tab-flname TO f16ft_tab-hdtab-flnam,
+              final_tab-hnumb TO f16ft_tab-hdtab-hnumb,
+              final_tab-locality TO f16ft_tab-hdtab-locat,
+              final_tab-pin TO f16ft_tab-hdtab-pstlz,
+              final_tab-city TO f16ft_tab-hdtab-ort01,
+              final_tab-country TO f16ft_tab-hdtab-land1,
+              final_tab-teln TO f16ft_tab-hdtab-telnr,
+              final_tab-panno TO f16ft_tab-hdtab-panno,
+              final_tab-tanno TO f16ft_tab-hdtab-tanno,
+              final_tab-girno TO f16ft_tab-hdtab-girno,
+              final_tab-tdscr TO f16ft_tab-hdtab-tdscr,
+              final_tab-addrs TO f16ft_tab-hdtab-addrs,
+              final_tab-dirst TO f16ft_tab-hdtab-dirst,
+              final_tab-cntr1 TO f16ft_tab-mntab-cntr1,
+              final_tab-gross_sal TO f16ft_tab-mntab-gross,
+              final_tab-sec10_all TO f16ft_tab-mntab-sec10,
+              final_tab-balance TO f16ft_tab-mntab-balnc,
+              final_tab-std_ded TO f16ft_tab-mntab-stded,
+              final_tab-ptax TO f16ft_tab-mntab-prtax,
+              final_tab-aggr_ded TO f16ft_tab-mntab-agded,
+              final_tab-salaries TO f16ft_tab-mntab-salry,
+              final_tab-oth_income TO f16ft_tab-mntab-other,
+              final_tab-bus_prof TO f16ft_tab-mntab-bprof,
+              final_tab-gross_tot_income TO f16ft_tab-mntab-gtinc,
+              final_tab-sec80_ded TO f16ft_tab-mntab-sec80,
+              final_tab-epf_tot TO f16ft_tab-mntab-emppf,
+              final_tab-sec88_ded TO f16ft_tab-mntab-sec88,
+              final_tab-sec88b_ded TO f16ft_tab-mntab-s88bd,
+              final_tab-sec88c_ded TO f16ft_tab-mntab-s88cd,
+              final_tab-sec88d_ded TO f16ft_tab-mntab-s88dd,
+              final_tab-tot_income TO f16ft_tab-mntab-totin,
+              final_tab-tax_tot_income TO f16ft_tab-mntab-tottx,
+              final_tab-chapvi_ded TO f16ft_tab-mntab-chpvi,
+              final_tab-surchg TO f16ft_tab-mntab-surch,
+              final_tab-edu_cess TO f16ft_tab-mntab-ecess,
+              final_tab-tax_payable_before_relief TO f16ft_tab-mntab-txbrl,
+              final_tab-tax_payable TO f16ft_tab-mntab-txpay,
+              final_tab-sec89_relief TO f16ft_tab-mntab-s89rl,
+              final_tab-tds_petd TO f16ft_tab-mntab-pettx,
+              final_tab-tds_ifos TO f16ft_tab-mntab-iostx,
+              final_tab-tax_ded_so_far TO f16ft_tab-mntab-txdsf,
+              final_tab-tax_this_month TO f16ft_tab-mntab-txmon,
+              final_tab-vol_tax TO f16ft_tab-mntab-voltx,
+              final_tab-tax_deducted TO f16ft_tab-mntab-txded,
+              final_tab-tot_tax_deducted TO f16ft_tab-mntab-tottd,
+              final_tab-tax_paid_employer TO f16ft_tab-mntab-txper,
+              final_tab-net_tax_payable TO f16ft_tab-mntab-nettx,
+              final_tab-petd_s172 TO f16ft_tab-mntab-pet72,
+              final_tab-petd_s173 TO f16ft_tab-mntab-pet73,
+              final_tab-dedn_s24 TO f16ft_tab-mntab-ded24,
+              final_tab-prev_emp_sal TO f16ft_tab-mntab-prev_sal.
+        APPEND f16ft_tab.
+      ENDLOOP.
+
+      LOOP AT ch_det INTO wa_ch_det WHERE pernr = pernr-pernr.
+        MOVE-CORRESPONDING wa_ch_det TO chl_det.
+        APPEND chl_det.
+      ENDLOOP.
+
+      LOOP AT int_s80 WHERE pernr = pernr-pernr.
+        MOVE-CORRESPONDING int_s80 TO sec80_tab.
+        APPEND sec80_tab.
+      ENDLOOP.
+
+      LOOP AT int_s88 WHERE pernr = pernr-pernr.
+        MOVE-CORRESPONDING int_s88 TO sec88_tab.
+        APPEND sec88_tab.
+      ENDLOOP.
+
+      LOOP AT gross_tab WHERE pernr = pernr-pernr.
+        MOVE-CORRESPONDING gross_tab TO gross_sal_tab.
+        APPEND gross_sal_tab.
+      ENDLOOP.
+
+      LOOP AT sec10_tab WHERE pernr = pernr-pernr.
+        MOVE-CORRESPONDING sec10_tab TO sc10_tab.
+        APPEND sc10_tab.
+      ENDLOOP.
+
+      LOOP AT perk_tab WHERE pernr = pernr-pernr.
+        MOVE-CORRESPONDING perk_tab TO perk_tab1.
+        APPEND perk_tab1.
+      ENDLOOP.
+
+      LOOP AT form12ba_tab WHERE pernr = pernr-pernr.
+        MOVE-CORRESPONDING form12ba_tab TO fr12ba_tab.
+        APPEND fr12ba_tab.
+      ENDLOOP.
+
+      TRY.
+          GET BADI bd_f16_taxsp
+            FILTERS
+              flt_val = '40'.
+
+          CALL BADI bd_f16_taxsp->get_f16_details
+            EXPORTING
+              pernr     = pernr-pernr
+              fyear     = year
+              f16ft     = f16ft_tab[]
+              chdet     = chl_det[]
+              sec80     = sec80_tab[]
+              sec88     = sec88_tab[]
+              gross_tab = gross_sal_tab[]
+              sec10_tab = sc10_tab[]
+              perk_tab  = perk_tab1[]
+              f12ba     = fr12ba_tab[]
+              flt_val   = '40'.
+
+        CATCH cx_badi_not_implemented.
+      ENDTRY.
+    ENDIF.
+  ENDIF.
+
+  IF p_email EQ 'X'.
+    IF file2 IS NOT INITIAL AND ( file3 IS NOT INITIAL OR form_16 IS NOT INITIAL )
+        AND dmail IS NOT INITIAL AND file4 IS NOT INITIAL AND
+        fmail IS NOT INITIAL.
+
+*** To send Form 12BB as mail attachment, IT 0588, subtype 0007 should be maintained
+      READ TABLE p0588 WITH KEY endda = pendda
+                                pernr = pernr-pernr
+                                subty = '0007'
+                                eecnf = 'X'.
+      IF sy-subrc EQ 0.
+        PERFORM f16_f12bb_file_to_mail TABLES p0185 p0105 USING pernr-pernr 'Form 16 and Form 12BB'
+                            pernr-ename pbegda pendda CHANGING p_assm_start_mail p_assm_end_mail
+                                                               p_fin_start_mail p_fin_end_mail.
+      ELSE.
+        gs_f12bb_mail_log-pernr = pernr-pernr.
+        gs_f12bb_mail_log-error = 'Check box in Infotype 0588, Subtype 0007 not selected'.
+        APPEND gs_f12bb_mail_log TO gt_f12bb_mail_log.
+      ENDIF.
+
+    ELSEIF file2 IS NOT INITIAL AND ( file3 IS NOT INITIAL OR
+            form_16 IS NOT INITIAL ) AND dmail IS NOT INITIAL.
+      PERFORM folder_file_to_mail TABLES p0185 p0105 USING pernr-pernr 'Form 16'
+            pernr-ename pbegda pendda CHANGING p_assm_start_mail p_assm_end_mail.
+
+    ENDIF.
+  ENDIF.
+
+END-OF-SELECTION.
+
+
+  IF file2 IS NOT INITIAL AND ( file3 IS NOT INITIAL OR form_16 IS NOT INITIAL )
+                                                       AND dmail IS NOT INITIAL.
+    IF gt_log_file IS NOT INITIAL AND year GE '2012'.
+
+      SORT gt_log_file BY status ASCENDING.
+      mail_counter_mail = 1.
+      LOOP AT gt_log_file INTO gs_log_file.
+        gs_log_file-sl_no    = mail_counter_mail.
+        MODIFY gt_log_file FROM gs_log_file INDEX sy-tabix.
+        ADD 1 TO mail_counter_mail.
+      ENDLOOP.
+
+*      MOVE text-240 TO lang. "'EN'
+*      PERFORM job_open_pdf USING lang.
+      gs_fpoutparams-getpdf    = 'X'.
+      gs_fpoutparams-nodialog = 'X'.
+
+      CALL FUNCTION 'FP_JOB_OPEN'
+        CHANGING
+          ie_outputparams = gs_fpoutparams
+        EXCEPTIONS
+          cancel          = 1
+          usage_error     = 2
+          system_error    = 3
+          internal_error  = 4
+          OTHERS          = 5.
+
+      TRY.
+          CALL FUNCTION 'FP_FUNCTION_MODULE_NAME'
+            EXPORTING
+              i_name     = 'HR_IN_F16_MAIL_LOG'
+            IMPORTING
+              e_funcname = gv_fmname.
+        CATCH cx_root INTO lv_w_cx_root_mail.
+
+      ENDTRY.
+
+      CALL FUNCTION gv_fmname
+        EXPORTING
+          /1bcdwb/docparams  = gs_fpdocparams
+          log_file           = gt_log_file
+          tan_no             = tan_no
+          comp_cd            = comp_cd
+          assm_start         = p_assm_start_mail
+          assm_end           = p_assm_end_mail
+          folder_path        = file2
+        IMPORTING
+          /1bcdwb/formoutput = lst_formoutput_mail
+        EXCEPTIONS
+          usage_error        = 1
+          system_error       = 2
+          internal_error     = 3
+          OTHERS             = 4.
+
+
+      CALL FUNCTION 'SCMS_XSTRING_TO_BINARY'
+        EXPORTING
+          buffer        = lst_formoutput_mail-pdf
+        IMPORTING
+          output_length = l_length_mail
+        TABLES
+          binary_tab    = l_table_mail.
+
+      CONCATENATE file2 'Form 16 log' '_' sy-uzeit '.PDF' INTO lv_filename_out_mail.
+
+      CALL METHOD cl_gui_frontend_services=>gui_download
+        EXPORTING
+          bin_filesize = l_length_mail
+          filename     = lv_filename_out_mail
+          filetype     = 'BIN'
+        CHANGING
+          data_tab     = l_table_mail
+        EXCEPTIONS
+          OTHERS       = 1.
+
+      CALL FUNCTION 'FP_JOB_CLOSE'
+        EXCEPTIONS
+          usage_error    = 1
+          system_error   = 2
+          internal_error = 3
+          OTHERS         = 4.
+
+    ENDIF.
+  ENDIF.
+
+
+******** Begin of Ins New F16 Changes *********
+  PERFORM  calculate_revised_tax." TABLES final_tab.
+
+******** End of Ins New F16 Changes *********
+
+
+  IF fmail NE 'X'.
+    IF NOT final_tab IS INITIAL.
+      PERFORM display_alv TABLES final_tab.
+    ELSE.
+      IF err_tab IS INITIAL.
+        IF pnpesscf = ' '.
+          IF ( file3 IS NOT INITIAL OR form_16 IS NOT INITIAL )
+                                 AND file4 IS INITIAL.
+*           CALL FUNCTION 'POPUP_TO_INFORM'
+*                EXPORTING
+*                  titel = text-029
+*                  txt1  = text-030
+*                 txt2  = text-031
+*              EXCEPTIONS
+*                   OTHERS  = 1.
+*         EXIT.
+*         ELSE.
+*           IF file3 IS NOT INITIAL AND form_16 IS NOT INITIAL
+*                AND file2 IS NOT INITIAL AND dmail IS NOT INITIAL.
+            CALL FUNCTION 'POPUP_TO_INFORM'
+              EXPORTING
+                titel  = text-701
+                txt1   = text-702
+                txt2   = text-703
+              EXCEPTIONS
+                OTHERS = 1.
+            EXIT.
+          ENDIF.
+        ENDIF.
+      ELSE.
+        READ TABLE err_tab INTO err_struc INDEX 1.
+        CALL FUNCTION 'POPUP_TO_INFORM'
+          EXPORTING
+            titel  = text-029
+            txt1   = err_struc-message_v1
+            txt2   = err_struc-message_v2
+            txt3   = err_struc-message_v3
+            txt4   = err_struc-message_v4
+          EXCEPTIONS
+            OTHERS = 1.
+      ENDIF.
+    ENDIF.
+  ELSE.
+    IF gt_f12bb_mail_log IS INITIAL.
+      CALL FUNCTION 'POPUP_TO_INFORM'
+        EXPORTING
+          titel  = text-701
+          txt1   = 'Mails sent successfully'
+          txt2   = ''
+        EXCEPTIONS
+          OTHERS = 1.
+      EXIT.
+    ELSE.
+      PERFORM display_alv_12bb.
+    ENDIF.
+  ENDIF.
+
+*&---------------------------------------------------------------------*
+*&      Form  DIGI_ALIAS_CHECK
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_PNPWERKS  text
+*      -->P_PNPBTRTL  text
+*      -->P_PNPABKRS  text
+*      -->P_S_ALSIGN  text
+*      -->P_TAN_NO  text
+*      -->P_COMP_CD  text
+*      -->P_YEAR  text
+*      <--P_ERR_TAB  text
+*----------------------------------------------------------------------*
+FORM digi_alias_check  TABLES   p_werks STRUCTURE pnpwerks
+                                p_btrtl STRUCTURE pnpbtrtl
+                                p_abkrs STRUCTURE pnpabkrs
+                       USING    p_alias
+                                p_tan
+                                p_cocd
+                                p_year
+                       CHANGING err_tab.
+
+  DATA: digi_alias TYPE REF TO hr_in_f16_htext1.
+
+  LOOP AT p_werks.
+    lst_werks-werks = p_werks-low.
+    APPEND lst_werks TO ltb_werks.
+  ENDLOOP.
+
+  LOOP AT p_btrtl.
+    lst_btrtl-btrtl = p_btrtl-low.
+    APPEND lst_btrtl TO ltb_btrtl.
+  ENDLOOP.
+
+  LOOP AT p_abkrs.
+    lst_abkrs-abkrs = p_abkrs-low.
+    APPEND lst_abkrs TO ltb_abkrs.
+  ENDLOOP.
+
+  TRY.
+
+      GET BADI digi_alias
+        FILTERS
+          flt_val = '40'.
+
+      CALL BADI digi_alias->digi_alias_validate
+        EXPORTING
+          alias      = p_alias
+          pers_area  = ltb_werks
+          pers_sarea = ltb_btrtl
+          pay_area   = ltb_abkrs
+          tan_no     = p_tan
+          comp_code  = p_cocd
+          year       = p_year
+          flt_val    = '40'
+        IMPORTING
+          err_tab    = err_tab.
+
+
+    CATCH cx_badi_not_implemented.
+  ENDTRY.
+
+ENDFORM.                    " DIGI_ALIAS_CHECK
+
+******** Begin of Ins New F16 Changes *********
+FORM calculate_revised_tax."  TABLES  final_tab.
+
+  FIELD-SYMBOLS <fs_final> LIKE LINE OF final_tab.
+  DATA: ls_pa0588            TYPE pa0588,
+        lv_total_income      TYPE pc207-betrg,
+        lv_tax_till_250000   TYPE pc207-betrg,
+        lv_tax_till_500000   TYPE pc207-betrg,
+        lv_tax_till_750000   TYPE pc207-betrg,
+        lv_tax_till_1000000  TYPE pc207-betrg,
+        lv_tax_till_1250000  TYPE pc207-betrg,
+        lv_tax_till_1500000  TYPE pc207-betrg,
+        lv_tax_after_1500000 TYPE pc207-betrg.
+
+
+
+  LOOP AT final_tab ASSIGNING <fs_final>.
+
+    <fs_final>-balance = <fs_final>-gross_sal - <fs_final>-sec10_all.
+
+    "Section # 6 = Income chargeable under the head "Salaries" [(3+1(e)-5]
+    <fs_final>-salaries = <fs_final>-balance - <fs_final>-aggr_ded.
+
+    "Section#9 Gross total income
+    <fs_final>-gross_tot_income =  <fs_final>-salaries + <fs_final>-oth_income.
+
+    "Section#12 Total taxable Income
+    <fs_final>-tot_income = <fs_final>-gross_tot_income - <fs_final>-sec80_ded.
+
+
+
+    SELECT SINGLE * FROM pa0588
+      INTO ls_pa0588
+    WHERE pernr = <fs_final>-pernr AND subty = '0008'.
+
+    lv_total_income = <fs_final>-tot_income .
+    CLEAR lv_tax_till_250000.
+
+    IF  ls_pa0588-txopt = 1.
+
+      "Employee has opted for old tax regime process the tax as per old regime
+
+      IF lv_total_income LE 250000.
+
+        lv_tax_till_250000 = 0.
+
+
+      ELSEIF lv_total_income > 250000 AND lv_total_income LE 500000 .
+
+        lv_tax_till_250000 = 0.
+
+        lv_total_income = lv_total_income - 250000.
+        lv_tax_till_500000 = lv_total_income * 5 / 100.
+
+      ELSEIF lv_total_income > 500000 AND lv_total_income LE 750000 .
+
+        lv_total_income = lv_total_income - 500000.
+        lv_tax_till_250000 = 0.
+        lv_tax_till_500000 = 250000 * 5 / 100.
+        lv_tax_till_750000 = lv_total_income * 20 / 100.
+
+      ELSEIF lv_total_income > 750000 AND lv_total_income LE 1000000 .
+
+        "tax for first 250000
+        lv_total_income = lv_total_income - 750000.
+        lv_tax_till_250000 = 0.
+        lv_tax_till_500000 = 250000 * 5 / 100.
+        lv_tax_till_750000 = 250000 * 20 / 100.
+        "Tax till 1000000
+        lv_tax_till_1000000 = lv_total_income * 20 / 100.
+
+
+      ELSEIF lv_total_income > 1000000 AND lv_total_income LE 1250000 .
+
+        "tax for first 250000
+        lv_total_income = lv_total_income - 1000000.
+        lv_tax_till_250000 = 0.
+        lv_tax_till_500000 = 250000 * 5 / 100.
+        lv_tax_till_750000 = 250000 * 20 / 100.
+        "Tax till 1000000
+        lv_tax_till_1000000 = 250000  * 20 / 100.
+        lv_tax_till_1250000 = lv_total_income * 30 / 100.
+
+
+      ELSEIF lv_total_income > 1250000 AND lv_total_income LE 1500000 .
+
+        "tax for first 250000
+        lv_total_income = lv_total_income - 1250000.
+        lv_tax_till_250000 = 0.
+        lv_tax_till_500000 = 250000 * 5 / 100.
+        lv_tax_till_750000 = 250000 * 20 / 100.
+        "Tax till 1000000
+        lv_tax_till_1000000 = 250000  * 20 / 100.
+        lv_tax_till_1250000 = 250000 * 30 / 100.
+        "Tax till 1500000
+        lv_tax_till_1500000 = lv_total_income * 30 / 100.
+
+
+      ELSEIF lv_total_income > 150000.
+
+        "tax for first 250000
+        lv_total_income = lv_total_income - 1500000.
+        lv_tax_till_250000 = 0.
+        lv_tax_till_500000 = 250000 * 5 / 100.
+        lv_tax_till_750000 = 250000 * 20 / 100.
+        "Tax till 1000000
+        lv_tax_till_1000000 = 250000  * 20 / 100.
+        lv_tax_till_1250000 = 250000 * 30 / 100.
+        "Tax till 1500000
+        lv_tax_till_1500000 = 250000 * 30 / 100.
+        lv_tax_after_1500000 = lv_total_income * 30 / 100.
+
+
+      ENDIF.
+
+    ELSEIF ls_pa0588-txopt = 2.
+      "Employee has opted for New tax regime process the tax as per old regime
+      IF lv_total_income LE 250000.
+
+        lv_tax_till_250000 = 0.
+
+
+      ELSEIF lv_total_income > 250000 AND lv_total_income LE 500000 .
+
+        lv_tax_till_250000 = 0.
+
+        lv_total_income = lv_total_income - 250000.
+        lv_tax_till_500000 = lv_total_income * 5 / 100.
+
+      ELSEIF lv_total_income > 500000 AND lv_total_income LE 750000 .
+
+        lv_total_income = lv_total_income - 500000.
+        lv_tax_till_250000 = 0.
+        lv_tax_till_500000 = 250000 * 5 / 100.
+        lv_tax_till_750000 = lv_total_income * 10 / 100.
+
+      ELSEIF lv_total_income > 750000 AND lv_total_income LE 1000000 .
+
+        "tax for first 250000
+        lv_total_income = lv_total_income - 750000.
+        lv_tax_till_250000 = 0.
+        lv_tax_till_500000 = 250000 * 5 / 100.
+        lv_tax_till_750000 = 250000 * 10 / 100.
+        "Tax till 1000000
+        lv_tax_till_1000000 = lv_total_income * 15 / 100.
+
+
+      ELSEIF lv_total_income > 1000000 AND lv_total_income LE 1250000 .
+
+        "tax for first 250000
+        lv_total_income = lv_total_income - 1000000.
+        lv_tax_till_250000 = 0.
+        lv_tax_till_500000 = 250000 * 5 / 100.
+        lv_tax_till_750000 = 250000 * 10 / 100.
+        "Tax till 1000000
+        lv_tax_till_1000000 = 250000  * 15 / 100.
+        lv_tax_till_1250000 = lv_total_income * 20 / 100.
+
+
+      ELSEIF lv_total_income > 1250000 AND lv_total_income LE 1500000 .
+
+        "tax for first 250000
+        lv_total_income = lv_total_income - 1250000.
+        lv_tax_till_250000 = 0.
+        lv_tax_till_500000 = 250000 * 5 / 100.
+        lv_tax_till_750000 = 250000 * 10 / 100.
+        "Tax till 1000000
+        lv_tax_till_1000000 = 250000  * 15 / 100.
+        lv_tax_till_1250000 = 250000 * 20 / 100.
+        "Tax till 1500000
+        lv_tax_till_1500000 = lv_total_income * 25 / 100.
+
+
+      ELSEIF lv_total_income > 150000.
+
+        "tax for first 250000
+        lv_total_income = lv_total_income - 1500000.
+        lv_tax_till_250000 = 0.
+        lv_tax_till_500000 = 250000 * 5 / 100.
+        lv_tax_till_750000 = 250000 * 10 / 100.
+        "Tax till 1000000
+        lv_tax_till_1000000 = 250000  * 15 / 100.
+        lv_tax_till_1250000 = 250000 * 20 / 100.
+        "Tax till 1500000
+        lv_tax_till_1500000 = 250000 * 25 / 100.
+        lv_tax_after_1500000 = lv_total_income * 30 / 100.
+
+      ENDIF.
+
+    ENDIF.
+
+    <fs_final>-tax_tot_income = lv_tax_till_250000 +
+                            lv_tax_till_500000 +
+                            lv_tax_till_750000 +
+                            lv_tax_till_1000000 +
+                            lv_tax_till_1250000 +
+                            lv_tax_till_1500000 +
+                            lv_tax_after_1500000.
+
+    IF <fs_final>-tax_tot_income LE 12500.
+      <fs_final>-tax_credit = <fs_final>-tax_tot_income.
+    ELSE.
+      <fs_final>-tax_credit = 0.
+    ENDIF.
+
+    "Surcgarge Logic
+*    IF  <fs_final>-tax_tot_income >= 5000000 AND <fs_final>-tax_tot_income <= 10000000 .
+*      <fs_final>-surchg = <fs_final>-tax_tot_income * 10 / 100 .
+*    ELSEIF <fs_final>-tax_tot_income > 10000000 AND <fs_final>-tax_tot_income <= 20000000 .
+*      <fs_final>-surchg = <fs_final>-tax_tot_income * 15 / 100 .
+*    ELSEIF <fs_final>-tax_tot_income > 20000000 AND <fs_final>-tax_tot_income <= 50000000 .
+*      <fs_final>-surchg = <fs_final>-tax_tot_income * 25 / 100 .
+*    ELSEIF <fs_final>-tax_tot_income > 50000000 .
+*      <fs_final>-surchg = <fs_final>-tax_tot_income * 37 / 100 .
+*    ENDIF.
+
+
+    IF  <fs_final>-tot_income >= 5000000 AND <fs_final>-tot_income <= 10000000 .
+      <fs_final>-surchg = <fs_final>-tax_tot_income * 10 / 100 .
+    ELSEIF <fs_final>-tot_income > 10000000 AND <fs_final>-tot_income <= 20000000 .
+      <fs_final>-surchg = <fs_final>-tax_tot_income * 15 / 100 .
+    ELSEIF <fs_final>-tot_income > 20000000 AND <fs_final>-tot_income <= 50000000 .
+      <fs_final>-surchg = <fs_final>-tax_tot_income * 25 / 100 .
+    ELSEIF <fs_final>-tot_income > 50000000 .
+      <fs_final>-surchg = <fs_final>-tax_tot_income * 37 / 100 .
+    ENDIF.
+
+
+
+
+
+*    <fs_final>-edu_cess = ( <fs_final>-tax_tot_income - <fs_final>-tax_credit ) * 4 / 100.
+    <fs_final>-edu_cess = ( <fs_final>-tax_tot_income - <fs_final>-tax_credit + <fs_final>-surchg ) * 4 / 100.
+
+
+    "Section # 17
+    "Tax payable (13+15+16-14)
+    <fs_final>-tax_payable_before_relief = <fs_final>-tax_tot_income + <fs_final>-surchg + <fs_final>-edu_cess - <fs_final>-tax_credit.
+
+    DATA: lv_tmp_tax_bef_rel TYPE j_1itaxvar-j_1itaxam1.
+    lv_tmp_tax_bef_rel = <fs_final>-tax_payable_before_relief.
+
+    CALL FUNCTION 'J_1I6_ROUND_TO_NEAREST_AMT'
+      EXPORTING
+        i_amount = lv_tmp_tax_bef_rel
+      IMPORTING
+        e_amount = lv_tmp_tax_bef_rel.
+
+    <fs_final>-tax_payable_before_relief = lv_tmp_tax_bef_rel.
+    <fs_final>-tax_payable = <fs_final>-tax_payable_before_relief - <fs_final>-sec89_relief.
+
+  ENDLOOP.
+
+
+ENDFORM.
+
+******** End of Ins New F16 Changes *********

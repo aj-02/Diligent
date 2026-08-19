@@ -1,0 +1,19 @@
+*--- MAIN PROGRAM: FZMM_OLM_DCDV ---*
+* declaration for the long text
+DATA: BEGIN OF ICDTXT_ZMM_OLM_D OCCURS 20.
+        INCLUDE STRUCTURE CDTXT.
+DATA: END OF ICDTXT_ZMM_OLM_D.
+DATA: UPD_ICDTXT_ZMM_OLM_D TYPE C.
+
+* workaera_old of ZOL_MFST_D
+TABLES: *ZOL_MFST_D
+* workaera_new of ZOL_MFST_D
+       , ZOL_MFST_D.
+DATA: UPD_ZOL_MFST_D TYPE C.
+
+* workaera_old of ZOL_MFST_H
+TABLES: *ZOL_MFST_H
+* workaera_new of ZOL_MFST_H
+       , ZOL_MFST_H.
+DATA: UPD_ZOL_MFST_H TYPE C.
+

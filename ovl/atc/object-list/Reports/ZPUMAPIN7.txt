@@ -1,0 +1,226 @@
+*&---------------------------------------------------------------------*
+*&  Include           PUMAPIN7
+*&---------------------------------------------------------------------*
+*----------------------------------------------------------------------*
+* import definition for cluster I2
+*----------------------------------------------------------------------*
+DEFINE rp-imp-c4-i2.
+
+  clear: "oi2version,
+*         PC4CHLN,
+         p4dedt.
+*  i2_key-idty = '0'.
+  import "i2_version to oi2version
+*         pc4chln
+         p4dedt
+
+  from database pcl4(i2) id i2_key       " using pcl4_exp_imp
+       ignoring structure boundaries .
+
+  rp_imp_i2_subrc = sy-subrc.
+*  i2_version-number = i2_version_number.
+*
+*  if sy-subrc eq 0 and
+*     oi2version-number ne i2_version-number.
+*    rp_imp_i2_subrc = 8.
+*  endif.
+
+END-OF-DEFINITION.                                        " rp-imp-c4-i2
+
+*----------------------------------------------------------------------*
+* import definition -'O' tables- for cluster I2
+*----------------------------------------------------------------------*
+
+DEFINE rp-imp-c4-i2-o.
+
+  clear: oi2_version,
+*         opc4chln, opc4chln[],
+         opc4dedt, opc4dedt[].
+*i2_key-idty = '0'.
+  import "i2_version to oi2_version
+*         pc4chln    to opc4chln
+         pc4dedt    to opc4dedt
+  from database pcl4(i2) id i2_key using pcl4_exp_imp.
+          " ignoring structure boundaries.
+
+
+  rp_imp_i2_subrc = sy-subrc.
+  i2_version-number = i2_version_number.
+
+  if sy-subrc eq 0 and
+     oi2_version-number ne i2_version-number.
+    rp_imp_i2_subrc = 8.
+  endif.
+
+END-OF-DEFINITION.                                      " rp-imp-c4-i2-o
+
+*----------------------------------------------------------------------*
+* export definition for cluster I2
+*----------------------------------------------------------------------*
+
+DEFINE rp-exp-c4-i2.
+
+  clear: i2_version.
+
+  pcl4-aedtm = sy-datum.
+  pcl4-uname = sy-uname.
+  pcl4-pgmid = sy-repid.
+  pcl4-versn        = i2_version_number.
+
+*  i2_version-number = i2_version_number.
+*  i2_version-saprl  = sy-saprl.         "RELEASE-STAMP.
+*  i2_version-uname  = sy-uname.         "Benutzername.
+*  i2_version-datum  = sy-datum.         "Datum.
+*  i2_version-uzeit  = sy-uzeit.         "Uhrzeit.
+*  i2_version-pgmid  = sy-repid.         "Report-Id.
+
+  export                                                    "i2_version
+*         pc4chln
+         p4dedt
+
+  to database pcl4(i2) id i2_key." using pcl4_exp_imp.
+
+  rp_exp_i2_subrc = sy-subrc.
+
+END-OF-DEFINITION.                                        " rp-exp-c4-i2
+
+*----------------------------------------------------------------------*
+* refresh definition for cluster I2
+*----------------------------------------------------------------------*
+
+DEFINE rp-ref-c4-i2.
+  clear: oi2version,
+*         pc4chln,
+         p4dedt.
+
+END-OF-DEFINITION.                                        " rp-ref-c4-i2
+
+*----------------------------------------------------------------------*
+* refresh definition -'O' tables- for cluster I2
+*----------------------------------------------------------------------*
+
+DEFINE rp-ref-c4-i2-o.
+  clear: oi2version,
+*         opc4chln, opc4chln[],
+         op4dedt, op4dedt[].
+
+END-OF-DEFINITION.                                      " rp-ref-c4-i2-o
+
+*----------------------------------------------------------------------*
+* delete definition for cluster I2
+*----------------------------------------------------------------------*
+
+DEFINE rp-del-c4-i2.
+  delete from database pcl4(i2) id i2_key.
+  rp_del_subrc = sy-subrc.
+END-OF-DEFINITION.
+
+*----------------------------------------------------------------------*
+* import definition for cluster I1
+*----------------------------------------------------------------------*
+DEFINE rp-imp-c4-i1.
+
+  clear: "oi1version,
+         p4chln.
+*         P4DEDT.
+
+  import "i1_version to oi1version
+         p4chln
+*         p4dedt
+  from database pcl4(i1) id i1_key." using pcl4_exp_imp
+*      ignoring structure boundaries.
+
+  rp_imp_i1_subrc = sy-subrc.
+*  i2_version-number = i2_version_number.
+*
+*  if sy-subrc eq 0 and
+*     oi2version-number ne i2_version-number.
+*    rp_imp_i2_subrc = 8.
+*  endif.
+
+END-OF-DEFINITION.                                        " rp-imp-c4-i1
+
+*----------------------------------------------------------------------*
+* import definition -'O' tables- for cluster I1
+*----------------------------------------------------------------------*
+
+DEFINE rp-imp-c4-i1-o.
+
+  clear: "oi1_version,
+         op4chln, op4chln[].
+*         opc4dedt, opc4dedt[].
+
+  import "i1_version to oi1_version
+         p4chln    to op4chln
+*         pc4dedt    to opc4dedt
+  from database pcl4(i1) id i1_key." using pcl4_exp_imp
+  "      ignoring structure boundaries.
+
+  rp_imp_i1_subrc = sy-subrc.
+  i1_version-number = i1_version_number.
+
+  if sy-subrc eq 0 and
+     oi1_version-number ne i1_version-number.
+    rp_imp_i1_subrc = 8.
+  endif.
+
+END-OF-DEFINITION.                                      " rp-imp-c4-i1-o
+
+*----------------------------------------------------------------------*
+* export definition for cluster I1
+*----------------------------------------------------------------------*
+
+DEFINE rp-exp-c4-i1.
+
+  clear: i1_version.
+
+  pcl4-aedtm = sy-datum.
+  pcl4-uname = sy-uname.
+  pcl4-pgmid = sy-repid.
+  pcl4-versn        = i2_version_number.
+*  i2_version-number = i2_version_number.
+*  i2_version-saprl  = sy-saprl.         "RELEASE-STAMP.
+*  i2_version-uname  = sy-uname.         "Benutzername.
+*  i2_version-datum  = sy-datum.         "Datum.
+*  i2_version-uzeit  = sy-uzeit.         "Uhrzeit.
+*  i2_version-pgmid  = sy-repid.         "Report-Id.
+
+  export                                                    "i1_version
+         p4chln
+*         p4dedt
+  to database pcl4(i1) id i1_key." using pcl4_exp_imp.
+
+  rp_exp_i1_subrc = sy-subrc.
+
+END-OF-DEFINITION.                                        " rp-exp-c4-i1
+
+*----------------------------------------------------------------------*
+* refresh definition for cluster I1
+*----------------------------------------------------------------------*
+
+DEFINE rp-ref-c4-i1.
+  clear: oi1version,
+         p4chln.
+*         p4dedt.
+
+END-OF-DEFINITION.                                        " rp-ref-c4-i1
+
+*----------------------------------------------------------------------*
+* refresh definition -'O' tables- for cluster I1
+*----------------------------------------------------------------------*
+
+DEFINE rp-ref-c4-i1-o.
+  clear: oi2version,
+         op4chln, op4chln[].
+*         op4dedt, op4dedt[].
+
+END-OF-DEFINITION.                                      " rp-ref-c4-i1-o
+
+*----------------------------------------------------------------------*
+* delete definition for cluster I1
+*----------------------------------------------------------------------*
+
+DEFINE rp-del-c4-i1.
+  delete from database pcl4(i1) id i1_key.
+  rp_del_subrc = sy-subrc.
+END-OF-DEFINITION.

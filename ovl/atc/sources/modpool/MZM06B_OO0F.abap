@@ -1,0 +1,7 @@
+*--- MAIN PROGRAM: MZM06B_OO0F ---*
+  INCLUDE MM06BO0F_FELDAUSWAHL .  " FELDAUSWAHL
+
+  INCLUDE MM06BO0F_FELDAUSWAHL_KONT .  " FELDAUSWAHL_KONT
+
+  INCLUDE MM06BO0F_FLIEF .  " FLIEF
+*end*******************************************************************

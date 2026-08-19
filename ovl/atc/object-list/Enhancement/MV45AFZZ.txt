@@ -1,0 +1,1713 @@
+***INCLUDE MV45AFZZ .
+
+************************************************************************
+*                                                                      *
+* This include is reserved for user modifications                      *
+*                                                                      *
+* Forms for sales document processing                                  *
+*                                                                      *
+* The name of modification modules should begin with 'ZZ'.             *
+*                                                                      *
+************************************************************************
+
+*---------------------------------------------------------------------*
+*       FORM ZZEXAMPLE                                                *
+*---------------------------------------------------------------------*
+*       text......................................                    *
+*---------------------------------------------------------------------*
+*FORM ZZEXAMPLE.
+
+*  ...
+
+*ENDFORM.
+
+*eject
+*---------------------------------------------------------------------*
+*       FORM USEREXIT_DELETE_DOCUMENT                                 *
+*---------------------------------------------------------------------*
+*       This userexit can be used to delete data in additional tables *
+*       when a sales document is deleted.                             *
+*                                                                     *
+*      This form is called in dialog at the end of form BELEG_LOESCHEN*
+*      just before form BELEG_SICHERN is performed to delete the      *
+*      datas on the database.                                         *
+*                                                                     *
+*---------------------------------------------------------------------*
+FORM userexit_delete_document.
+
+ENDFORM.
+*eject
+
+*---------------------------------------------------------------------*
+*       FORM USEREXIT_FIELD_MODIFICATION                              *
+*---------------------------------------------------------------------*
+*       This userexit can be used to modify the attributes of         *
+*       screen fields.                                                *
+*       This form is processed for each field in the screen.          *
+*                                                                     *
+*       The use of the fields screen-group1 to screen-group4 is:      *
+*                                                                     *
+*       Screen-group1: Automatic modification contolles by transaction*
+*                      MFAW.                                          *
+*       Screen-group2: Contents 'LOO' for steploop-fields.            *
+*       Screen-group3: Used for modififaction, which are dependent on *
+*                      control tables or other fix information.       *
+*       Screen-group4: Unused                                         *
+*                                                                     *
+*       For field mofifications, which are dependent on the document  *
+*       status, you can use the status field in the workareas         *
+*       XVBAP for item status and XVBUK for header status.            *
+*                                                                     *
+*       This form is called from module FELDAUSWAHL.                  *
+*                                                                     *
+*---------------------------------------------------------------------*
+FORM userexit_field_modification.
+*BREAK-POINT.
+
+*  ENDIF.
+* CASE SCREEN-GROUP3.
+*   WHEN '900'.
+*     IF VBAK-VBTYP NE 'A'.
+*       SCREEN-ACTIVE = 0.
+*     ENDIF.
+* ENDCASE.
+
+* CASE SCREEN-NAME.
+*   WHEN 'VBAK-VBELN'.
+*     SCREEN-ACTIVE = 0.
+* ENDCASE.
+
+ENDFORM.
+*eject
+
+*---------------------------------------------------------------------*
+*       FORM USEREXIT_MOVE_FIELD_TO_VBAK                              *
+*---------------------------------------------------------------------*
+*       This userexit can be used to move some fields into the sales  *
+*       dokument header workaerea VBAK.                               *
+*                                                                     *
+*       SVBAK-TABIX = 0:  Create header                               *
+*       SVBAK-TABIX > 0:  Change header                               *
+*                                                                     *
+*       This form is called at the end of form VBAK_FUELLEN.          *
+*                                                                     *
+*---------------------------------------------------------------------*
+FORM userexit_move_field_to_vbak.
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""$"$\SE:(1) Form USEREXIT_MOVE_FIELD_TO_VBAK, Start                                                                                                           A
+*$*$-Start: (1)---------------------------------------------------------------------------------$*$*
+ENHANCEMENT 1  ZGST_CHECK_SO.    "active version
+
+  "check customer having STCD3 - GSTIN number
+
+data: lv_stcd3 type stcd3,
+      lv_msg   type string.
+*BREAK in10808.
+if sy-tcode = 'VA01' or sy-tcode = 'VA02' .
+  if
+     ( vbak-auart eq 'ZBRE'
+    or vbak-auart eq 'ZRMF'
+    or vbak-auart eq 'ZHMF'
+    or vbak-auart eq 'Z5MA' "( vbak-AUART eq 'Z5MA' and vbak-vkorg ne 1500 )" "(
+    or vbak-auart eq 'ZOFC')
+    and vbak-vkorg eq 1500 ." ( vbak-AUART eq 'ZOFC' and vbak-vkorg ne 1500 ) ) "). "
+else.
+select single stcd3 from kna1 into lv_stcd3
+  where kunnr = vbak-kunnr.
+  if sy-subrc = 0.
+    if  lv_stcd3 is initial .
+      concatenate 'Customer ' ' ' vbak-kunnr ' GST Registration Number is Missing.' into lv_msg.
+      message  lv_msg type 'E' display like 'E' .
+*      LEAVE to SCREEN  0 .
+    endif.
+  endif.
+ endif.
+endif.
+
+
+ DATA : it_xvbuv TYPE TABLE OF vbuv.
+* begin of code added by ravi on 28.01.2021
+   it_xvbuv[] = xvbuv[] .
+
+ DATA(lv_bukrs) =  t001-bukrs .
+
+  EXPORT it_xvbuv to MEMORY id 'IT_TAB'.
+  EXPORT lv_bukrs to MEMORY id 'BUKRS' .
+* end  of code added by ravi on 28.01.2021
+
+
+ENDENHANCEMENT.
+ENHANCEMENT 1  ZSD_VA02_AUTHORIZATION_HEADER.    "active version
+**
+  IF SY-TCODE EQ 'VA02' AND SY-UCOMM EQ 'SICH'.
+    IF VBAK-ZZNAME IS NOT INITIAL.
+       VBAK-ZZNAME = ' '.
+    ENDIF.
+  ENDIF.
+ENDENHANCEMENT.
+*$*$-End:   (1)---------------------------------------------------------------------------------$*$*
+*{   INSERT         DEVK900571                                        1
+  CONSTANTS : gc_zor1 TYPE auart VALUE 'ZOR1',
+              gc_zor2 TYPE auart VALUE 'ZOR2',
+              gc_06   TYPE kdgrp VALUE '06'.
+
+** Coded by ravin for credit limit check : Yet to be finalied (changes on:31.08.17)
+*Data : lv_kunnr TYPE knkk-kunnr,
+*       lv_kkber TYPE knkk-kkber,
+*       LV_PERCENTAGE  LIKE  VBKRED-KLPRZ,
+*       LV_CREDITLIMIT LIKE  KNKK-KLIMK,
+*       LV_CREDIT LIKE  KNKK-KLIMK,
+*       LV_OPEN_ITEMS  LIKE  KNKK-SKFOR,
+*       LV_DELTA_TO_LIMIT  LIKE  KNKK-KLIMK.
+*
+*IF SY-TCODE = 'VA02'.
+*select single kunnr kkber from knkk into ( lv_kunnr,lv_kkber )
+*  where kunnr = vbak-kunnr.
+*
+*IF lv_kunnr IS NOT INITIAL AND lv_kkber IS NOT INITIAL.
+*CALL FUNCTION 'CREDIT_EXPOSURE'
+*  EXPORTING
+*    kkber                      = lv_kkber
+*    kunnr                      = lv_kunnr
+*    DATE_CREDIT_EXPOSURE       = '99991231'
+* IMPORTING
+**   CREDITLIMIT                = LV_CREDITLIMIT
+*   DELTA_TO_LIMIT             =  LV_DELTA_TO_LIMIT
+**   E_KNKK                     =
+**   KNKLI                      =
+**   OPEN_DELIVERY              =
+**   OPEN_INVOICE               =
+*    OPEN_ITEMS                  = lv_open_items
+**   OPEN_ORDER                 =
+**   OPEN_SPECIALS              =
+*    PERCENTAGE                 = LV_PERCENTAGE
+**   SUM_OPENS                  =
+**   OPEN_ORDER_SECURE          =
+**   OPEN_DELIVERY_SECURE       =
+**   OPEN_INVOICE_SECURE        =
+**   CMWAE                      =
+*          .
+**LV_CREDIT = LV_CREDITLIMIT - lv_open_items.
+*  IF  LV_DELTA_TO_LIMIT LE '0'.
+**  IF LV_CREDITLIMIT > '0'.
+*    MESSAGE  'Customer Credit Limit Already Expired and crossed 100% limit' TYPE 'E'.
+**  ELSE.
+**    MESSAGE 'Customer Credit Limit Still exists and still below 100%' TYPE 'W'.
+*  ENDIF.
+*ENDIF.
+*ENDIF.
+
+
+  IF vbak-zzdate IS INITIAL AND ( vbak-auart EQ gc_zor1 OR vbak-auart EQ gc_zor2 ) AND vbkd-kdgrp NE gc_06.
+    CALL FUNCTION 'ADD_TIME_TO_DATE'
+      EXPORTING
+        i_idate = vbak-erdat
+        i_time  = 8
+        i_iprkz = ' '
+      IMPORTING
+        o_idate = vbak-zzdate.
+
+  ENDIF.
+
+
+
+
+  """"""""""""""""""""""""""""""""""""""""""""""
+*BREAK SAP_ABAP.
+*DATA it_xvbuv TYPE TABLE OF vbuv.
+  DATA lv_error TYPE char1.
+  DATA: lv_credit TYPE char1,
+        w_vbak    TYPE zsd_so_header,
+        wa_tvarvc TYPE tvarvc,
+        is_vbak   TYPE vbak.
+*        lv_bukrs TYPE t001-bukrs.
+********************
+  CONSTANTS : c_var_name TYPE rvari_vnam VALUE 'ZSD_EX_AUTH_TCODE',
+              c_type_s   TYPE rsscr_kind VALUE 'S'.
+**************   added by parth 11.08.2021
+  CONSTANTS : c_soff   TYPE rvari_vnam VALUE 'ZSO_EX_AUTH_SOFF',
+              c_soff_s TYPE rsscr_kind VALUE 'S'.
+*******************************
+  CONSTANTS : c_logt   TYPE rvari_vnam VALUE 'ZSO_LOG_TCODE',
+              c_logt_s TYPE rsscr_kind VALUE 'S'.
+
+  TYPES: BEGIN OF ty_logt,
+           sign TYPE tvarv_sign,
+           opti TYPE tvarv_opti,
+           low  TYPE tvarv_val,
+           high TYPE tvarv_val,
+         END OF ty_logt.
+  DATA: lt_logt TYPE STANDARD TABLE OF ty_logt,
+        wa_logt TYPE ty_logt.
+
+********Begin of changes Added by Raj on 11.01.2024*********
+
+*    TYPES: BEGIN OF ty_log,
+*           sign TYPE tvarv_sign,
+*           opti TYPE tvarv_opti,
+*           low  TYPE tvarv_val,
+*           high TYPE tvarv_val,
+*         END OF ty_log.
+*  DATA: it_logs TYPE STANDARD TABLE OF ty_log,
+*        wa_logs TYPE ty_log.
+*
+*
+*   CONSTANTS : c_log   TYPE rvari_vnam VALUE 'ZSD_LOG_TCODE',
+*              c_logs TYPE rsscr_kind VALUE 'S'.
+
+
+
+*******End of changes Added by Raj on 11.01.2024************
+
+****************************
+
+  TYPES: BEGIN OF ty_soff,
+           sign TYPE tvarv_sign,
+           opti TYPE tvarv_opti,
+           low  TYPE tvarv_val,
+           high TYPE tvarv_val,
+         END OF ty_soff.
+  DATA: lt_soff TYPE STANDARD TABLE OF ty_soff,
+        wa_soff TYPE ty_soff.
+
+*********
+
+  TYPES: BEGIN OF ty_tvarvc,
+           sign TYPE tvarv_sign,
+           opti TYPE tvarv_opti,
+           low  TYPE tvarv_val,
+           high TYPE tvarv_val,
+         END OF ty_tvarvc.
+  DATA: lt_tcode TYPE STANDARD TABLE OF ty_tvarvc,
+        wa_tcode TYPE ty_tvarvc.
+************
+  SELECT sign
+          opti
+          low
+          high INTO TABLE lt_tcode
+                     FROM tvarvc
+                     WHERE name = c_var_name AND
+                           type = c_type_s.
+************
+*********************  11.08.2021
+  SELECT sign
+        opti
+        low
+        high INTO TABLE lt_soff
+                   FROM tvarvc
+                   WHERE name = c_soff AND
+                         type = c_soff_s.
+***********
+********************    02.06.2023
+  SELECT sign
+     opti
+     low
+     high INTO TABLE lt_logt
+                FROM tvarvc
+                WHERE name = c_logt AND
+                      type = c_logt_s.
+
+************Begin of changes Added by Raj on 11.01.204*********
+*      SELECT sign
+*     opti
+*     low
+*     high INTO TABLE it_logs
+*                FROM tvarvc
+*                WHERE name = c_log AND
+*                      type = c_logs.
+
+* ********End of changes Added by Raj on 11.01.2024************
+************    02.06.2023
+
+*  IF sy-tcode = 'VA01' OR   sy-tcode = 'VA02' or sy-tcode = 'VA03' OR sy-tcode = 'ZVA01'.
+*BREAK SAP_ABAP.
+  READ TABLE lt_tcode INTO wa_tcode WITH KEY low = sy-tcode.
+  IF sy-subrc = 0 .
+
+**************    added by parth sales office exclude 11.08.2021
+    READ TABLE lt_soff INTO wa_soff WITH KEY low = vbak-vkbur.
+    IF sy-subrc <> 0.
+*****************
+
+      IMPORT it_xvbuv TO it_xvbuv FROM MEMORY ID 'IT_TAB'.
+      IMPORT lv_error TO lv_error FROM MEMORY ID 'MSG' .
+      IMPORT lv_bukrs TO lv_bukrs FROM MEMORY ID 'BUKRS' .
+*  *  for credit check information message
+*  export memory id is available in include LVKMPF10
+      IMPORT lv_credit TO lv_credit FROM MEMORY ID 'CREDIT'.
+      DELETE it_xvbuv WHERE fdnam = 'ZZNAME' .
+
+*   if lv_credit IS INITIAL AND it_xvbuv[] IS INITIAL AND lv_error IS INITIAL .
+*    if lv_bukrs = '1000'. " for company merger
+      IF vbak-vkorg = '1000' OR vbak-vkorg = '1100'.
+        SELECT SINGLE * FROM tvarvc INTO wa_tvarvc
+                        WHERE name = 'ZSD_SO_AUTHORIZATION_1000' .
+
+        w_vbak-zzname = wa_tvarvc-low .
+        vbak-zzname = wa_tvarvc-low .
+        is_vbak-zzname =  wa_tvarvc-low .
+      ELSE.
+*     lv_bukrs = '2000'.
+        IF vbak-vkorg = '4000' OR vbak-vkorg = '4100'.
+
+          SELECT SINGLE * FROM tvarvc INTO wa_tvarvc
+                          WHERE name = 'ZSD_SO_AUTHORIZATION_2000' .
+
+          IF wa_tvarvc-low  IS NOT INITIAL. "added by parth 01.07.2021
+            w_vbak-zzname = wa_tvarvc-low .
+            vbak-zzname = wa_tvarvc-low .
+
+            is_vbak-zzname =  wa_tvarvc-low .
+          ENDIF.
+        ENDIF .
+      ENDIF .
+
+*********************   gem paint 30.09.2023
+      IF vbak-vkorg = '7000' OR vbak-vkorg = '7100'.
+
+        SELECT SINGLE * FROM tvarvc INTO wa_tvarvc
+                        WHERE name = 'ZSD_SO_AUTHORIZATION_7000' .
+
+        IF wa_tvarvc-low  IS NOT INITIAL. "added by parth 01.07.2021
+          w_vbak-zzname = wa_tvarvc-low .
+          vbak-zzname = wa_tvarvc-low .
+
+          is_vbak-zzname =  wa_tvarvc-low .
+        ENDIF.
+      ENDIF .
+*   ENDIF .
+
+***************
+
+      FREE MEMORY ID 'IT_TAB'.
+      FREE MEMORY ID 'MSG'.
+      FREE MEMORY ID 'BUKRS'.
+      FREE MEMORY ID 'CREDIT'.
+
+      CLEAR: wa_tcode,wa_soff.
+
+    ENDIF.
+  ENDIF.
+
+*  ********** for only vkm3 authorised id  consider as system user id 25.10.2021
+  READ TABLE lt_logt  INTO wa_logt WITH KEY low = sy-tcode.
+  IF sy-subrc = 0.
+    "" "Add by gokul for update tcode when relise 27.05.2023
+    w_vbak-zztcode  = sy-tcode .
+    vbak-zztcode    = sy-tcode .
+    is_vbak-zztcode = sy-tcode .
+
+    w_vbak-zzsydate  = sy-datum .
+    vbak-zzsydate    = sy-datum .
+    is_vbak-zzsydate = sy-datum .
+
+    w_vbak-zzsy_time  = sy-uzeit .
+    vbak-zzsy_time    = sy-uzeit .
+    is_vbak-zzsy_time = sy-uzeit .
+
+
+  ENDIF.
+
+
+
+  """"End by gokul for update tcode when relise 27.05.2023
+
+
+*********************** end 25.10.2021
+
+********************** for RVKRED06 v
+* *  ********** for only vkm3 authorised id  consider as system user id 25.10.2021
+  DATA : l_flag TYPE sy-tcode."Added by Rahul Vasita on 20.05.2024 16:53:21
+  IMPORT lv_tcode TO l_flag FROM MEMORY ID 'EXP_VKM03'. "Added by Rahul Vasita on 20.05.2024 16:53:36
+  IF sy-tcode = 'VKM3' OR l_flag = 'ZSD_VKM03'.
+    IF vbuk-cmgst EQ 'D'.
+      w_vbak-zzname = sy-uname .
+      vbak-zzname = sy-uname .
+      is_vbak-zzname =  sy-uname .
+    ENDIF.
+  ENDIF.
+*********************** end 25.10.2021
+
+*******************Begin of changes Added by Raj on 11.01.2024*************
+
+
+
+*  constants
+
+
+
+*  DATA : wa_log TYPE zsd_log.
+*
+**  IF sy-tcode = 'VA01' OR sy-tcode = 'VA02'.
+*  READ TABLE it_logs into wa_logs with key low = sy-tcode.  "Stvarv T-codes for Logs capturing in Custom Table
+*
+**   IF wa_logs-low = 'VA01' OR wa_logs-low = 'VA02'.
+*  if sy-subrc = 0.
+*    IF vbuk-cmgst EQ 'A' OR  vbuk-cmgst EQ ' '.
+*      SELECT SINGLE zvbeln zzname zudate zutime FROM zsd_log INTO CORRESPONDING FIELDS OF wa_log WHERE zvbeln = vbak-vbeln.
+*      IF wa_log IS INITIAL.
+*        wa_log-zvbeln = vbak-vbeln.
+*        wa_log-zzname = vbak-zzname.
+*        wa_log-zudate =  sy-datum.
+*        wa_log-zutime =  sy-uzeit.
+*        MODIFY zsd_log FROM  wa_log.
+*      ENDIF.
+*    ENDIF.
+*  ENDIF.
+*  endif.
+****************End of changes Added by Raj on 11.01.2024*************
+
+  """"""""""""""""""
+
+*  IF SY-TCODE EQ 'VA02' AND SY-UCOMM EQ 'SICH'.
+*    IF VBAK-ZZNAME IS NOT INITIAL.
+*  VBAK-ZZNAME = ' '.
+*
+*  ENDIF.
+*  ENDIF.
+
+
+
+
+**types: begin of ty_tvarvc,
+**         sign type tvarv_sign,
+**         opti type tvarv_opti,
+**         low  type tvarv_val,
+**         high type tvarv_val,
+**       end of ty_tvarvc.
+**constants : c_type_s   type rsscr_kind value 'S'.
+**
+**data : lv_var_name type rvari_vnam,
+**       lt_acc_key type STANDARD TABLE OF ty_tvarvc,
+**       lv_auart TYPE auart.
+**
+**FIELD-SYMBOLS : <fs_auart>  TYPE auart.
+**
+**ASSIGN ('(SAPMV45A)VBAK-AUART') to <fs_auart>.
+**IF <fs_auart> IS ASSIGNED.
+**  lv_auart = <fs_auart>.
+**  lv_var_name = lv_auart.
+**ENDIF.
+**
+**  select   sign
+**           opti
+**           low
+**           high into table lt_acc_key
+**                from tvarvc
+**                where name = lv_var_name and
+**                      type = c_type_s.
+**
+**    IF vbap-werks NOT IN lt_acc_key.
+**message 'Error ' type 'I' DISPLAY LIKE 'E' .
+**    ENDIF.
+
+
+  DATA: lv_vbeln TYPE vbak-vbeln.
+  CLEAR lv_vbeln.
+  lv_vbeln = vbak-vbeln.
+
+  EXPORT lv_vbeln = lv_vbeln TO MEMORY ID 'SO_NO'.
+
+  """""""""""""""""""""""""""
+
+
+
+  """"""""""""""""""""""""""""""""""
+*IF sy-tcode EQ 'VA02' AND vbak-zzname IS INITIAL .
+*  vbak-zzname = sy-uname.
+*ENDIF.
+*
+****************************HSN CODE LENGTH CHECK
+*DATA: IT_VBAP type TABLE OF vbap,
+*      wa_vbap type vbap.
+*DATA : it_lhsn TYPE STANDARD TABLE OF zsd_hsn_len,
+*       wa_lhsn TYPE zsd_hsn_len.
+*data: v_mtart type mara-mtart.
+*data: v_steuc type marc-steuc.
+*DATA : llen TYPE i.
+*DATA : htype LIKE dd01v-datatype.
+*
+*********************
+*  CONSTANTS : c_hsn TYPE rvari_vnam VALUE 'ZSD_HSN_TCODE',
+*            c_hsn_s   TYPE rsscr_kind VALUE 'S'.
+*
+*TYPES: BEGIN OF ty_hsn_tcode,
+*         sign TYPE tvarv_sign,
+*         opti TYPE tvarv_opti,
+*         low  TYPE tvarv_val,
+*         high TYPE tvarv_val,
+*       END OF ty_hsn_tcode.
+*DATA: lt_tcode_hsn TYPE STANDARD TABLE OF ty_hsn_tcode,
+*      wa_tcode_hsn TYPE ty_hsn_tcode.
+*************
+*SELECT sign
+*        opti
+*        low
+*        high INTO TABLE lt_tcode_hsn
+*                   FROM tvarvc
+*                   WHERE name = c_hsn AND
+*                         type = c_hsn_s.
+*************
+*
+*
+*READ TABLE lt_tcode_hsn into wa_tcode_hsn with key low = sy-tcode.
+*
+*if sy-subrc = 0.
+*
+*it_vbap[] = xvbap[].
+*
+*SELECT * FROM zsd_hsn_len INTO TABLE it_lhsn.
+*
+*loop at it_vbap into wa_vbap.
+*
+*  SELECT single mtart from mara into v_mtart
+*    where matnr = wa_vbap-matnr
+*          .
+*
+*  select single steuc from marc into v_steuc
+*    where matnr = wa_vbap-matnr and
+*          werks = wa_vbap-werks.
+*
+* READ TABLE it_lhsn INTO wa_lhsn WITH KEY mtart = v_mtart.
+*
+*      IF sy-subrc = 0.
+*
+*        CALL FUNCTION 'NUMERIC_CHECK'
+*          EXPORTING
+*            string_in = v_steuc
+*          IMPORTING
+**           STRING_OUT       =
+*            htype     = htype.
+*
+*        IF htype = 'NUMC'.
+*
+*          llen = strlen( v_steuc ).
+*          IF ( llen <> wa_lhsn-zlent AND  llen <> wa_lhsn-zlenf AND llen <> wa_lhsn-zlenm ) .
+*
+*            MESSAGE e023(zsd) WITH wa_vbap-matnr wa_vbap-posnr.
+*          ENDIF.
+*
+*        ELSE.
+*          MESSAGE 'Please enter only numaric value' TYPE 'E'.
+*        ENDIF.
+*        clear: v_steuc,v_mtart,wa_lhsn,wa_vbap,wa_tcode_hsn.
+*     endif.
+****************
+*
+*endloop.
+*endif.
+**********************
+*}   INSERT
+
+*  vbak-zzfield = xxxx-zzfield2.
+
+ENDFORM.
+*eject
+
+*---------------------------------------------------------------------*
+*       FORM USEREXIT_MOVE_FIELD_TO_VBAP                              *
+*---------------------------------------------------------------------*
+*       This userexit can be used to move some fields into the sales  *
+*       dokument item workaerea VBAP                                  *
+*                                                                     *
+*       SVBAP-TABIX = 0:  Create item                                 *
+*       SVBAP-TABIX > 0:  Change item                                 *
+*                                                                     *
+*       This form is called at the end of form VBAP_FUELLEN.          *
+*                                                                     *
+*---------------------------------------------------------------------*
+FORM userexit_move_field_to_vbap.
+
+*{   INSERT         DEVK901243                                        1
+**
+*break sap_abap.
+
+
+*}   INSERT
+*  VBAP-zzfield = xxxx-zzfield2.
+
+ENDFORM.
+*eject
+
+*---------------------------------------------------------------------*
+*       FORM USEREXIT_MOVE_FIELD_TO_VBEP                              *
+*---------------------------------------------------------------------*
+*       This userexit can be used to move some fields into the sales  *
+*       dokument schedule line workaerea VBEP                         *
+*                                                                     *
+*       SVBEP-TABIX = 0:  Create schedule line                        *
+*       SVBEP-TABIX > 0:  Change schedule line                        *
+*                                                                     *
+*       This form is called at the end of form VBEP_FUELLEN.          *
+*                                                                     *
+*---------------------------------------------------------------------*
+FORM userexit_move_field_to_vbep.
+
+*  VBEP-zzfield = xxxx-zzfield2.
+
+ENDFORM.
+*eject
+
+*---------------------------------------------------------------------*
+*       FORM USEREXIT_MOVE_FIELD_TO_VBKD                              *
+*---------------------------------------------------------------------*
+*       This userexit can be used to move some fields into the sales  *
+*       dokument business data workaerea VBKD                         *
+*                                                                     *
+*       SVBKD-TABIX = 0:  Create data                                 *
+*       SVBKD-TABIX > 0:  Change data                                 *
+*                                                                     *
+*       This form is called at the end of form VBKD_FUELLEN.          *
+*                                                                     *
+*---------------------------------------------------------------------*
+FORM userexit_move_field_to_vbkd.
+
+*  VBKD-zzfield = xxxx-zzfield2.
+
+ENDFORM.
+*eject
+
+*---------------------------------------------------------------------*
+*       FORM USEREXIT_NUMBER_RANGE                                    *
+*---------------------------------------------------------------------*
+*       This userexit can be used to determine the numberranges for   *
+*       the internal document number.                                 *
+*                                                                     *
+*       US_RANGE_INTERN - internal number range                       *
+*                                                                     *
+*       This form is called from form BELEG_SICHERN                   *
+*                                                                     *
+*---------------------------------------------------------------------*
+FORM userexit_number_range USING us_range_intern.
+
+* Example: Numer range from TVAK like in standard
+* US_RANGE_INTERN = TVAK-NUMKI.
+
+ENDFORM.
+*eject
+
+*---------------------------------------------------------------------*
+*       FORM USEREXIT_PRICING_PREPARE_TKOMK                           *
+*---------------------------------------------------------------------*
+*       This userexit can be used to move additional fields into the  *
+*       communication table which is used for pricing:                *
+*                                                                     *
+*       TKOMK for header fields                                       *
+*                                                                     *
+*       This form is called from form PREISFINDUNG_VORBEREITEN.       *
+*                                                                     *
+*---------------------------------------------------------------------*
+FORM userexit_pricing_prepare_tkomk.
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""$"$\SE:(2) Form USEREXIT_PRICING_PREPARE_TKOMK, Start                                                                                                        A
+*$*$-Start: (2)---------------------------------------------------------------------------------$*$*
+ENHANCEMENT 1  ZSDCHECK_DUPLICATE_COND.    "active version
+*
+Data: lv_cnt1 type i,
+         lv_cnt2 type i,
+         it_temp type table of komv,
+          wa_temp type komv.
+
+data : s_mwsk1 type konv-mwsk1.
+data : s_mwsk2 type konv-mwsk1.
+
+   CHECK  sy-tcode = 'VA01' or sy-tcode = 'VA02'
+         AND NOT xkomv[] IS INITIAL.
+
+it_temp[] = xkomv[].
+sort it_temp by kposn kschl .
+delete adjacent duplicates from it_temp comparing kposn kschl.
+lv_cnt1 = lines( it_temp ).
+lv_cnt2 = lines( xkomv  ).
+
+if lv_cnt1 NE lv_cnt2.
+message i009(ZSD)  DISPLAY LIKE 'E'."'Duplicate entries exit' type 'E'." DISPLAY LIKE 'E'.
+endif.
+
+loop at it_temp into wa_temp where kschl = 'JVAT' AND KPOSN = '000010'.
+  IF SY-SUBRC = 0.
+  s_mwsk1 = wa_temp-mwsk1.
+  ENDIF.
+ENDLOOP.
+loop at it_temp into wa_temp where kschl = 'JVAT' AND KPOSN <> '000010'.
+  IF SY-SUBRC = 0.
+  S_MWSK2 = WA_TEMP-MWSK1.
+  ENDIF.
+ENDLOOP.
+
+loop at it_temp into wa_temp where kschl = 'JCST' AND KPOSN = '000010'.
+  IF SY-SUBRC = 0.
+  s_mwsk1 = wa_temp-mwsk1.
+  ENDIF.
+ENDLOOP.
+loop at it_temp into wa_temp where kschl = 'JCST' AND KPOSN <> '000010'.
+  IF SY-SUBRC = 0.
+  S_MWSK2 = WA_TEMP-MWSK1.
+  ENDIF.
+ENDLOOP.
+
+IF S_MWSK1 IS NOT INITIAL AND S_MWSK2 IS NOT INITIAL.
+IF S_MWSK1 NE S_MWSK2.
+  MESSAGE I010(ZSD) DISPLAY LIKE 'E'.
+ENDIF.
+ENDIF.
+ENDENHANCEMENT.
+*$*$-End:   (2)---------------------------------------------------------------------------------$*$*
+
+*  TKOMK-zzfield = xxxx-zzfield2.
+
+ENDFORM.
+*eject
+
+*---------------------------------------------------------------------*
+*       FORM USEREXIT_PRICING_PREPARE_TKOMP                           *
+*---------------------------------------------------------------------*
+*       This userexit can be used to move additional fields into the  *
+*       communication table which is used for pricing:                *
+*                                                                     *
+*       TKOMP for item fields                                         *
+*                                                                     *
+*       This form is called from form PREISFINDUNG_VORBEREITEN.       *
+*                                                                     *
+*---------------------------------------------------------------------*
+FORM userexit_pricing_prepare_tkomp.
+
+*{   INSERT         DEVK925266                                        1
+*     BREAK-POINT.
+*     tkomp-lgort = VBAP-lgort.
+
+*}   INSERT
+*  TKOMP-zzfield = xxxx-zzfield2.
+
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""$"$\SE:(3) Form USEREXIT_PRICING_PREPARE_TKOMP, End                                                                                                          A
+*$*$-Start: (3)---------------------------------------------------------------------------------$*$*
+ENHANCEMENT 2  ZIMPL_ENHPANNUM.    "active version
+"Start - Update PAN Number Availability field - 27.04.2022
+  DATA: l_panno   TYPE string,
+        ls_mocust TYPE j_1imocust.
+  CLEAR: l_panno, ls_mocust.
+
+  " Get PAN Number from Bill-to party
+  SELECT SINGLE * FROM j_1imocust INTO ls_mocust WHERE kunnr = tkomk-kunre.
+  IF sy-subrc = 0 AND ls_mocust-j_1ipanno IS NOT INITIAL .
+    l_panno = ls_mocust-j_1ipanno.
+    CONDENSE l_panno.
+    " Check for vaild PAN Number
+    IF matches( val = l_panno regex = '[[:alpha:]]{5}[[:digit:]]{4}[[:alpha:]]{1}' ).
+      tkomp-zzpannum = '01'.   "PAN Maintained
+    ELSE.
+      tkomp-zzpannum = '02'.   " Invalid PAN Number
+    ENDIF.
+  ENDIF.
+
+  IF ls_mocust-j_1ipanno IS INITIAL .
+    tkomp-zzpannum = '02'. "No PANMaintained
+  ENDIF.
+
+"End - Update PAN Number Availability field - 27.04.2022
+ENDENHANCEMENT.
+*$*$-End:   (3)---------------------------------------------------------------------------------$*$*
+ENDFORM.
+*eject
+
+*---------------------------------------------------------------------*
+*       FORM USEREXIT_READ_DOCUMENT                                   *
+*---------------------------------------------------------------------*
+*       This userexit can be used to read data in additional tables   *
+*       when the program reads a sales document.                      *
+*                                                                     *
+*       This form is called at the end of form BELEG_LESEN.           *
+*                                                                     *
+*---------------------------------------------------------------------*
+FORM userexit_read_document.
+
+ENDFORM.
+*eject
+
+*---------------------------------------------------------------------*
+*       FORM USEREXIT_SAVE_DOCUMENT                                   *
+*---------------------------------------------------------------------*
+*       This userexit can be used to save data in additional tables   *
+*       when a document is saved.                                     *
+*                                                                     *
+*       If field T180-TRTYP contents 'H', the document will be        *
+*       created, else it will be changed.                             *
+*                                                                     *
+*       This form is called at from form BELEG_SICHERN, before COMMIT *
+*                                                                     *
+*---------------------------------------------------------------------*
+FORM userexit_save_document.
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""$"$\SE:(4) Form USEREXIT_SAVE_DOCUMENT, Start                                                                                                                A
+*$*$-Start: (4)---------------------------------------------------------------------------------$*$*
+ENHANCEMENT 1  ZSDCHECK_BEFORE_SAVE_PLANT.    "active version
+**
+
+*  ** Coded by ravin for credit limit check : Yet to be finalied (changes on:31.08.17)
+Data : lv_kunnr TYPE knkk-kunnr,
+       lv_kkber TYPE knkk-kkber,
+       LV_PERCENTAGE  LIKE  VBKRED-KLPRZ,
+       LV_CREDITLIMIT LIKE  KNKK-KLIMK,
+       LV_CREDIT LIKE  KNKK-KLIMK,
+       LV_OPEN_ITEMS  LIKE  KNKK-SKFOR,
+       LV_DELTA_TO_LIMIT  LIKE  KNKK-KLIMK,
+       user like vbak-zzname.
+
+*BREAK sap_abap.
+
+
+*
+*IF SY-TCODE = 'VA02'.
+*
+*  if ( vbak-vkorg = '1000' or  vbak-vkorg = '1100') and ( vbak-zzname is not initial or user is not INITIAL ).
+*  if vbak-auart <> 'ZFGS' and vbak-auart <> 'ZCR1' and vbak-auart <> 'ZCRP'.
+*select single kunnr kkber from knkk into ( lv_kunnr,lv_kkber )
+*  where kunnr = vbak-kunnr.
+*
+*IF lv_kunnr IS NOT INITIAL AND lv_kkber IS NOT INITIAL.
+*CALL FUNCTION 'CREDIT_EXPOSURE'
+*  EXPORTING
+*    kkber                      = lv_kkber
+*    kunnr                      = lv_kunnr
+*    DATE_CREDIT_EXPOSURE       = '99991231'
+* IMPORTING
+**   CREDITLIMIT                = LV_CREDITLIMIT
+*   DELTA_TO_LIMIT             =  LV_DELTA_TO_LIMIT
+**   E_KNKK                     =
+**   KNKLI                      =
+**   OPEN_DELIVERY              =
+**   OPEN_INVOICE               =
+*    OPEN_ITEMS                  = lv_open_items
+**   OPEN_ORDER                 =
+**   OPEN_SPECIALS              =
+*    PERCENTAGE                 = LV_PERCENTAGE
+**   SUM_OPENS                  =
+**   OPEN_ORDER_SECURE          =
+**   OPEN_DELIVERY_SECURE       =
+**   OPEN_INVOICE_SECURE        =
+**   CMWAE                      =
+*          .
+**LV_CREDIT = LV_CREDITLIMIT - lv_open_items.
+*  IF  LV_DELTA_TO_LIMIT LE '0'.
+**  IF LV_CREDITLIMIT > '0'.
+*    MESSAGE  'Customer Credit Limit Already Expired and crossed 100% limit' TYPE 'E'.
+**  ELSE.
+**    MESSAGE 'Customer Credit Limit Still exists and still below 100%' TYPE 'W'.
+*  ENDIF.
+*ENDIF.
+*ENDIF.
+*ENDIF.
+*endif.
+*  BREAK sap_abap.
+*
+*DATA:WA_VBAK TYPE VBAK,
+*     IT_VBAK TYPE TABLE OF VBAK.
+*
+*MOVE-CORRESPONDING VBAK TO WA_VBAK.
+*
+*IF WA_VBAK-VBELN IS NOT INITIAL.
+*
+*  SELECT * FROM VBAK INTO TABLE IT_VBAK WHERE VBELN = WA_VBAK-VBELN.
+*
+*ENDIF.
+*
+*CLEAR:WA_VBAK.
+*
+*LOOP AT IT_VBAK INTO WA_VBAK.
+*
+*WA_VBAK-ZZNAME = ' '.
+*MODIFY IT_VBAK FROM WA_VBAK TRANSPORTING ZZNAME.
+*
+*UPDATE VBAK SET ZSD_SO_HEADER-ZZNAME = WA_VBAK-ZZNAME WHERE VBELN = WA_VBAK-VBELN.
+*
+*
+*
+*ENDLOOP.
+
+*DATA:wa_vbak TYPE vbak,
+*     it_vbak TYPE TABLE OF vbak.
+*
+*DATA:WA_VBAP TYPE VBAP,
+*     IT_VBAP TYPE TABLE OF VBAP.
+
+*LOOP AT IT_VBAP INTO WA_VBAP.
+*
+*  IF WA_VBAP-WERKS IS INITIAL.
+*    MESSAGE 'Plant is missing' TYPE 'E'.
+*  ENDIF.
+*
+*
+*ENDLOOP.
+
+* begin of code added on 16.04.2021 by JKT
+********************** for RVKRED06 v
+
+
+************
+*BREAK sap_abap.
+IF SY-TCODE <> 'VKM3'.
+
+DATA lv_error TYPE char1.
+DATA : lv_check TYPE char30 .
+DATA : is_vbak TYPE vbak.
+DATA lv_vbeln TYPE vbak-vbeln.
+DATA: W_VBAK TYPE ZSD_SO_HEADER.
+FIELD-SYMBOLS : <fs> TYPE KOMP-FXMSG .
+
+********************** for RVKRED06 v
+
+*if sy-cprog = 'RVKRED06'.
+*
+*if VBUK-CMGST = 'A'.
+*    w_vbak-zzname = sy-uname .
+*    vbak-zzname = sy-uname .
+*    is_vbak-zzname =  sy-uname .
+* endif.
+*
+*endif.
+************
+
+*********************  11.08.2021
+ CONSTANTS : s_soff TYPE rvari_vnam VALUE 'ZSO_EX_AUTH_SOFF',
+            s_soff_s   TYPE rsscr_kind VALUE 'S'.
+
+  TYPES: BEGIN OF ty_soffi,
+         sign TYPE tvarv_sign,
+         opti TYPE tvarv_opti,
+         low  TYPE tvarv_val,
+         high TYPE tvarv_val,
+       END OF ty_soffi.
+DATA: lt_soff TYPE STANDARD TABLE OF ty_soffi,
+      la_soff TYPE ty_soffi.
+
+
+  SELECT sign
+        opti
+        low
+        high INTO TABLE lt_soff
+                   FROM tvarvc
+                   WHERE name = s_soff AND
+                         type = s_soff_s.
+***********
+     READ TABLE lt_soff into la_soff with key low = vbak-vkbur.
+    if sy-subrc <> 0.
+
+**********
+
+* to get the runtime value of filed KOMP-FXMSG
+ASSIGN ('(SAPLV61A)KOMP-FXMSG') to <fs> .
+
+IF sy-subrc = 0.
+  IF <fs> = '801' .
+    lv_error = 'X'.
+  ENDIF.
+ENDIF.
+
+*if VBUK-CMPSA = 'B' or VBUK-CMPSA = 'A' or lv_error = 'X' or xvbuv[] IS NOT INITIAL .
+if VBUK-CMPSA = 'B' or lv_error = 'X' or xvbuv[] IS NOT INITIAL .
+*if  lv_error = 'X' or xvbuv[] IS NOT INITIAL . " added by parth 30.10.2021 for
+if VBUK-CMGST NE 'D' or xvbuv[] IS NOT INITIAL.   " comment by parth 30.10.2021 for
+*if ( VBUK-CMGST NE 'D' AND VBUK-CMGST NE 'A') or xvbuv[] IS NOT INITIAL or lv_error = 'X'. " added by parth 30.10.2021 for CHANGE LOGIC
+GET PARAMETER ID 'AUN' FIELD lv_vbeln.
+* VBAK-ZZNAME  field is not clearing here so logic written in the below FM
+CALL FUNCTION 'Z_CREDIT_LIMITCHECK' IN UPDATE TASK
+  EXPORTING
+    vbeln          = lv_vbeln .
+endif.
+
+ENDIF.
+* end of code added on 16.04.2021 by JKT
+endif. " 11.08.2021
+endif.
+
+
+*ENDIF.
+
+*if sy-tcode = 'VKM3'.
+*if VBUK-CMGST = 'A'.
+*    w_vbak-zzname = sy-uname .
+*    vbak-zzname = sy-uname .
+*    is_vbak-zzname =  sy-uname .
+* endif.
+* ENDIF.
+
+if sy-cprog = 'RVKRED06'.
+
+if VBUK-CMGST = 'A'.
+   w_vbak-zzname = sy-uname .
+    vbak-zzname = sy-uname .
+    is_vbak-zzname =  sy-uname .
+ endif.
+
+endif.
+
+******************** for first authorization id
+*if vbak-zzname_fix is INITIAL.
+*  if VBUK-CMGST NE 'D'.
+*
+*   w_vbak-zzname_fix  =  sy-uname .
+*    vbak-zzname_fix    =  sy-uname .
+*    is_vbak-zzname_fix =  sy-uname .
+*
+*    w_vbak-zzsydate_fix  = sy-datum .
+*    vbak-zzsydate_fix    = sy-datum .
+*    is_vbak-zzsydate_fix = sy-datum .
+*
+*    w_vbak-zzsy_time_fix  = sy-uzeit .
+*    vbak-zzsy_time_fix    = sy-uzeit .
+*    is_vbak-zzsy_time_fix = sy-uzeit .
+*
+*    GET PARAMETER ID 'AUN' FIELD lv_vbeln.
+** VBAK-ZZNAME  field is not clearing here so logic written in the below FM
+*CALL FUNCTION 'Z_CREDIT_LIMITCHECK' "IN UPDATE TASK
+*  EXPORTING
+*    vbeln          = lv_vbeln .
+*
+*
+*  ENDIF.
+*  endif.
+*****************
+
+*   vbak-zzname = SY-UNAME.
+*   is_vbak-zzname = sy-uname.
+*    MODIFY vbak.
+
+*ENDIF.
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""$"$\SE:(5) Form USEREXIT_SAVE_DOCUMENT, Start, Enhancement ZSDCHECK_BEFORE_SAVE_PLANT, End                                                                   A
+*$*$-Start: (5)---------------------------------------------------------------------------------$*$*
+ENHANCEMENT 1  ZSD_CHANGE_LOG_SAVE.    "active version
+
+          TYPES: BEGIN OF ty_log,
+            SIGN TYPE tvarv_sign,
+            opti TYPE tvarv_opti,
+            low  TYPE tvarv_val,
+            high TYPE tvarv_val,
+          END OF ty_log.
+          DATA: it_logs TYPE STANDARD TABLE OF ty_log,
+                wa_logs TYPE ty_log.
+
+
+          CONSTANTS : c_log   TYPE rvari_vnam VALUE 'ZSD_LOG_TCODE',
+          c_logs TYPE rsscr_kind VALUE 'S'.
+
+
+          SELECT SIGN
+          opti
+          low
+          high INTO TABLE it_logs
+          FROM tvarvc
+          WHERE name = c_log AND
+          TYPE = c_logs.
+
+
+
+
+      DATA : wa_log TYPE zsd_log.
+
+*  IF sy-tcode = 'VA01' OR sy-tcode = 'VA02'.
+      READ TABLE it_logs INTO wa_logs WITH KEY low = sy-tcode.  "Stvarv T-codes for Logs capturing in Custom Table
+
+*   IF wa_logs-low = 'VA01' OR wa_logs-low = 'VA02'.
+      IF sy-subrc = 0.
+        IF vbuk-cmgst EQ 'A' OR  vbuk-cmgst EQ ' ' OR vbuk-cmgst EQ 'D'.
+          "Adding Start by Rahul Vasita on 14.02.2024 11:32:43
+          CALL FUNCTION 'ZSD_LOG_TAB_UPDATE' IN UPDATE TASK
+          EXPORTING
+            vbeln         = vbak-vbeln
+            name          = vbak-zzname
+            tcode         = sy-tcode.
+
+          "Adding End by Rahul Vasita on 14.02.2024 11:32:43
+          "Comment Start by Rahul Vasita on 14.02.2024 11:30:06
+**              SELECT SINGLE zvbeln zzname zudate zutime FROM zsd_log INTO CORRESPONDING FIELDS OF wa_log WHERE zvbeln = vbak-vbeln.
+**              IF wa_log IS INITIAL.
+**                wa_log-zvbeln = vbak-vbeln.
+**                wa_log-zzname = vbak-zzname.
+**                wa_log-zudate =  sy-datum.
+**                wa_log-zutime =  sy-uzeit.
+**                wa_log-ztcode = sy-tcode.
+**                MODIFY zsd_log FROM  wa_log.
+**              ENDIF.
+          "Comment End by Rahul Vasita on 14.02.2024 11:30:06
+        ENDIF.
+      ENDIF.
+*  endif.
+
+
+
+ENDENHANCEMENT.
+*$*$-End:   (5)---------------------------------------------------------------------------------$*$*
+ENDENHANCEMENT.
+ENHANCEMENT 1  ZSD_SEND_SMSEMAIL_ON_SAVE.    "active version
+**Added by Carina Jose on 21.10.2019 to send sms and email to distributor on saving Sales Order.
+TYPES : BEGIN OF ty_kna1,
+          kunnr TYPE kna1-kunnr,
+          adrnr TYPE kna1-adrnr,
+*          telf2 TYPE kna1-telf2,
+          END OF ty_kna1.
+TYPES : BEGIN OF ty_vbap,
+        vbeln TYPE vbap-vbeln,
+        netwr TYPE vbap-netwr,
+        mwsbp TYPE vbap-mwsbp,
+        erdat TYPE vbap-erdat,
+        amt   TYPE vbap-netwr,
+        END OF ty_vbap.
+TYPES : BEGIN OF ty_adr2,
+        addrnumber TYPE adr2-addrnumber,
+        tel_number TYPE adr2-tel_number,
+
+        END OF ty_adr2.
+TYPES : BEGIN OF ty_adr6,
+        addrnumber TYPE adr6-addrnumber,
+        smtp_addr  TYPE adr6-smtp_addr,
+        END OF ty_adr6.
+
+TYPES : BEGIN OF ty_vbak,
+        vbeln TYPE vbak-vbeln,
+        kunnr TYPE vbak-kunnr,
+        END OF ty_vbak.
+
+TYPES: BEGIN OF ty_tvarvc,
+         sign TYPE tvarv_sign,
+         opti TYPE tvarv_opti,
+         low  TYPE tvarv_val,
+         high TYPE tvarv_val,
+       END OF ty_tvarvc.
+
+TYPES: BEGIN OF ty_soff,
+         sign TYPE tvarv_sign,
+         opti TYPE tvarv_opti,
+         low  TYPE tvarv_val,
+         high TYPE tvarv_val,
+       END OF ty_soff.
+
+TYPES: BEGIN OF ty_tsms,
+         sign TYPE tvarv_sign,
+         opti TYPE tvarv_opti,
+         low  TYPE tvarv_val,
+         high TYPE tvarv_val,
+       END OF ty_tsms.
+
+DATA : it_kna1 TYPE STANDARD TABLE OF ty_kna1,
+       wa_kna1 TYPE ty_kna1,
+       it_vbap1 TYPE STANDARD TABLE OF vbap,
+       wa_vbap1 TYPE vbap,
+       it_vbak TYPE STANDARD TABLE OF ty_vbak,
+       wa_vbak TYPE ty_vbak,
+       it_adr6  TYPE STANDARD TABLE OF ty_adr6,
+       wa_adr6  TYPE ty_adr6,
+       it_adr2  TYPE STANDARD TABLE OF ty_adr2,
+       wa_adr2  TYPE ty_adr2,
+       it_tvarvc TYPE STANDARD TABLE OF ty_tvarvc,
+       wa_tvarvc TYPE ty_tvarvc,
+       it_soff TYPE STANDARD TABLE OF ty_soff,
+       wa_soff TYPE ty_soff,
+
+       it_tsms TYPE STANDARD TABLE OF ty_tsms,
+       wa_tsms TYPE ty_tsms.
+
+  DATA : v_vbeln TYPE vbak-vbeln,
+         v_kunnr TYPE vbak-kunnr.
+DATA: BEGIN OF xvbap occurs 0.
+      include STRUCTURE vbap.
+ DATA: end of xvbap.
+CONSTANTS:
+  c_tvarvc_name TYPE rvari_vnam VALUE 'ZSD_ORDERTYPE',
+   c_type_p   TYPE rsscr_kind VALUE 'S'.   "  Added on 07.11.2019
+
+CONSTANTS:
+  c_SOFF TYPE rvari_vnam VALUE 'ZORDER_SMS_SOFF',
+   c_SOFF_P   TYPE rsscr_kind VALUE 'S'.   "  Added on 07.11.2019
+
+CONSTANTS:
+  c_tsms TYPE rvari_vnam VALUE 'ZORDER_SMS_TCODE',
+   c_tsms_p   TYPE rsscr_kind VALUE 'S'.   "  Added on 07.11.2019
+
+
+*CONSTANTS:
+*c_1000_name TYPE rvari_vnam VALUE 'ZSD_ORDER_1000',
+*c_2000_name TYPE rvari_vnam VALUE 'ZSD_ORDER_2000'.
+* To send SMS to the distributor.
+
+DATA: lo_send_request         TYPE REF TO cl_bcs.
+DATA: lo_document             TYPE REF TO cl_document_bcs.
+DATA: l_dockey                TYPE soodk.
+DATA: l_service               TYPE ad_pagserv.
+DATA: l_number                TYPE ad_pagnmbr.
+DATA: li_recipient            TYPE REF TO if_recipient_bcs.
+DATA: l_texttype              TYPE so_obj_tp VALUE  'TXT'.
+DATA: lt_text                 TYPE bcsy_text.
+DATA: l_text                  TYPE LINE OF bcsy_text.
+DATA: l_subject               TYPE so_obj_des.
+DATA: l_len                   TYPE so_obj_len.
+DATA: lt_recipients           TYPE bcsy_re.
+DATA: lo_bcs_exception        TYPE REF TO cx_bcs.
+DATA: l_msg_text              TYPE string.
+DATA: lw_total                TYPE string.
+DATA: p_addr TYPE ad_pagnmbr.
+DATA : p_subj TYPE so_obj_des.
+DATA : p_body TYPE soli-line.
+DATA : bodytext(500).
+DATA : finalamt(20).
+DATA : amt type vbak-netwr.
+DATA : cname type t001-butxt.
+DATA : v_date(20).
+DATA: company_name TYPE char200.
+DATA: cparam TYPE char200.
+*DATA: company_2 TYPE char200.
+
+
+DATA: send_request TYPE REF TO cl_bcs.
+DATA: text TYPE bcsy_text.
+*DATA: lo_document TYPE REF TO cl_document_bcs.
+DATA: sender TYPE REF TO cl_sapuser_bcs.
+DATA: recipient TYPE REF TO if_recipient_bcs.
+DATA: bcs_exception TYPE REF TO cx_bcs.
+DATA: sent_to_all TYPE os_boolean.
+DATA lp_sms_num TYPE ad_pagnmbr.
+*DATA :it_temp type vbap.
+
+
+ v_vbeln = vbak-vbeln.
+
+ SELECT   sign
+           opti
+           low
+           high INTO TABLE it_tsms
+                 FROM tvarvc
+                 WHERE name = c_tsms AND
+                       type = c_tsms_p.
+
+
+* IF sy-tcode = 'VA01' .
+* CHECK  sy-tcode = 'VA01' OR SY-TCODE = 'ZVA01' OR SY-CPROG = 'ZSD_SALES_ORD_CREATE_AL11'.
+ READ TABLE it_tsms into wa_tsms with key low = sy-tcode.
+ if sy-subrc = 0.
+* CHECK vbak-auart = 'YFP1' OR vbak-auart = 'YFFD' .
+ SELECT   sign
+           opti
+           low
+           high INTO TABLE it_tvarvc
+                 FROM tvarvc
+                 WHERE name = c_tvarvc_name AND
+                       type = c_type_p.
+
+ CONCATENATE 'ZSD_ORDER_'  VBAK-BUKRS_VF into cparam.
+
+ SELECT SINGLE low
+        INTO company_name
+        FROM tvarvc
+        WHERE name = cparam.
+
+* SELECT SINGLE low
+*        INTO company_2
+*        FROM tvarvc
+*        WHERE name = c_2000_name.
+
+  SELECT   sign
+           opti
+           low
+           high INTO TABLE it_soff
+                 FROM tvarvc
+                 WHERE name = c_soff AND
+                       type = c_soff_p.
+
+
+LOOP AT it_tvarvc INTO wa_tvarvc.
+
+  CHECK vbak-auart = wa_tvarvc-low .
+   WAIT UP TO 2 SECONDS.
+
+   IF vbak-vbeln IS NOT INITIAL.
+     SELECT kunnr adrnr
+        INTO CORRESPONDING FIELDS OF TABLE it_kna1
+        FROM kna1
+        WHERE kunnr = vbak-kunnr.
+  ENDIF.
+   IF it_kna1 IS NOT INITIAL.
+     SELECT addrnumber tel_number
+       INTO CORRESPONDING FIELDS OF TABLE it_adr2
+       FROM adr2
+       FOR ALL ENTRIES IN it_kna1
+       WHERE addrnumber = it_kna1-adrnr
+       AND   r3_user = '3'.
+
+      SELECT addrnumber smtp_addr
+        INTO CORRESPONDING FIELDS OF TABLE it_adr6
+        FROM adr6
+        FOR ALL ENTRIES IN it_kna1
+        WHERE addrnumber = it_kna1-adrnr.
+    ENDIF.
+
+
+*loop at VVBAP.
+**loop at VBAP.
+*  MOVE-CORRESPONDING vvbap to wa_vbap1.
+*  append wa_vbap1 to it_vbap1.
+*  CLEAR : wa_vbap1.
+*endloop.
+
+*wa_vbap1-amt = vbap-netwr + vbap-mwsbp.
+ READ TABLE it_soff into wa_soff with key low = vbak-vkbur.
+ if sy-subrc = 0.
+loop at tkomp.
+*  IF tkomp-pstyv NE 'TANN'.  " Added to exclude amount of free goods by Carina Jose on 24.12.2019
+     amt = amt + tkomp-netwr + tkomp-mwsbp.
+*  ENDIF.
+endloop.
+WRITE amt TO finalamt DECIMALS 2.
+CONDENSE finalamt.
+
+SHIFT v_vbeln LEFT DELETING LEADING '0'.
+
+CONCATENATE vbap-erdat+6(2) '/' vbap-erdat+4(2) '/' vbap-erdat+0(4) into v_date.
+READ TABLE it_kna1 INTO wa_kna1 WITH KEY kunnr = vbak-kunnr.
+READ TABLE it_adr2 INTO wa_adr2 WITH KEY addrnumber = wa_kna1-adrnr.
+READ TABLE it_adr6 INTO wa_adr6 WITH KEY addrnumber = wa_kna1-adrnr.
+*CONCATENATE 'Dear Channel Partner, Thanks for placing your valuable order. Your order no. is-' v_vbeln 'dated' v_date 'and approx. value is Rs.' finalamt '. We will process as soon as it is authorized. -Astral Adhesives' INTO bodytext
+*IF VBAK-BUKRS_VF = '1000'.
+CONCATENATE 'Dear Channel Partner, Thanks for placing your valuable order. Your order no. is-' v_vbeln 'dated' v_date 'and approx. value is Rs.' finalamt '. We will process as soon as it is authorized. -' company_name INTO bodytext
+SEPARATED BY ' '.
+*ELSE.
+*  CONCATENATE 'Dear Channel Partner, Thanks for placing your valuable order. Your order no. is-' v_vbeln 'dated' v_date 'and approx. value is Rs.' finalamt '. We will process as soon as it is authorized. -' company_2 INTO bodytext
+*SEPARATED BY ' '.
+*ENDIF.
+
+*p_addr =  wa_kna1-telf2.
+p_addr =  wa_adr2-tel_number.
+p_subj = 'Order placed'.
+p_body = bodytext .
+
+
+
+TRY.
+*   handle request
+    lo_send_request = cl_bcs=>create_persistent( ).
+*   set 'send immediately' -> no send queue required
+    lo_send_request->set_send_immediately( 'X' ).
+
+*   set subject
+    MOVE p_subj TO l_subject.
+
+*   set text
+    MOVE p_body TO l_text.
+    APPEND l_text TO lt_text.
+    l_len = strlen( l_text ).
+
+*   create document
+    lo_document = cl_document_bcs=>create_document(
+                          i_type = l_texttype
+                          i_text = lt_text
+                          i_language = sy-langu
+                          i_subject = l_subject
+                          i_length = l_len
+                          ).
+*   add document to send request
+    CALL METHOD lo_send_request->set_document( lo_document ).
+
+*   document key
+    l_dockey-objtp = lo_document->get_doctp( ).
+    l_dockey-objyr = lo_document->get_docyr( ).
+    l_dockey-objno = lo_document->get_docno( ).
+
+    TRY.
+*       create SMS/pager recipient
+        l_number = p_addr.
+        CALL METHOD cl_cam_address_bcs=>create_sms_address
+          EXPORTING
+            i_service = l_service
+            i_number  = l_number
+          RECEIVING
+            result    = li_recipient.
+
+*       add recipient to send request
+        CALL METHOD lo_send_request->add_recipient
+          EXPORTING
+            i_recipient = li_recipient.
+
+      CATCH cx_address_bcs cx_send_req_bcs.
+        MESSAGE e038(swn) WITH l_number INTO l_msg_text.
+*       error message
+        WRITE:/ text-t01, l_msg_text.
+        EXIT.
+    ENDTRY.
+
+*   add recipient with its respective attributes to send request
+    CALL METHOD lo_send_request->add_recipient
+      EXPORTING
+        i_recipient = li_recipient
+        i_express   = 'X'.
+
+*   check if document has recipients at all
+    lt_recipients = lo_send_request->recipients( ).
+    IF lt_recipients IS INITIAL.
+      MESSAGE e040(swn) INTO l_msg_text.
+*     error message
+      WRITE:/ text-t01, l_msg_text.
+      EXIT.
+    ELSE.
+*     send document
+      CALL METHOD lo_send_request->send( ).
+      COMMIT WORK.
+      MESSAGE s058(swn) WITH l_dockey INTO l_msg_text.
+*     sms has been sent
+      WRITE:/ text-t02, l_msg_text.
+    ENDIF.
+
+  CATCH cx_bcs INTO lo_bcs_exception.
+*   error messages
+    MESSAGE e034(salert) WITH lo_bcs_exception->error_type INTO l_msg_text.
+    WRITE:/ text-t01, l_msg_text.
+    MESSAGE e041(salert) WITH p_addr INTO l_msg_text.
+    WRITE:/ text-t01, l_msg_text.
+    EXIT.
+ENDTRY.
+*  SUBMIT SWN_TEST_SEND_SMS1.
+CLEAR: p_body,p_subj,p_addr,wa_vbak,wa_vbap1,wa_kna1,wa_adr6,wa_soff,company_name.
+REFRESH : lt_text.
+endif.
+ENDLOOP.
+endif.
+*endloop.
+* End of code to send sms to the distributor
+*ENDIF.
+********End of changes on 21.10.2019
+
+ENDENHANCEMENT.
+*$*$-End:   (4)---------------------------------------------------------------------------------$*$*
+
+* Example:
+* CALL FUNCTION 'ZZ_EXAMPLE'
+*      IN UPDATE TASK
+*      EXPORTING
+*           ZZTAB = ZZTAB.
+
+
+
+
+ENDFORM.
+*eject
+*---------------------------------------------------------------------*
+*       FORM USEREXIT_SAVE_DOCUMENT_PREPARE                           *
+*---------------------------------------------------------------------*
+*       This userexit can be used for changes or checks, before a     *
+*       document is saved.                                            *
+*                                                                     *
+*       If field T180-TRTYP contents 'H', the document will be        *
+*       created, else it will be changed.                             *
+*                                                                     *
+*       This form is called at the beginning of form BELEG_SICHERN    *
+*                                                                     *
+*---------------------------------------------------------------------*
+FORM userexit_save_document_prepare.
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""$"$\SE:(6) Form USEREXIT_SAVE_DOCUMENT_PREPARE, Start                                                                                                        A
+*$*$-Start: (6)---------------------------------------------------------------------------------$*$*
+ENHANCEMENT 2  ZSDCHECK_PDC.    "active version
+ DATA: lw_order_typ TYPE tvarvc-low,
+       lw_tcode TYPE tvarvc-low,
+        lw_cust_grp  TYPE tvarvc-low,
+        lw_katr1     TYPE kna1-katr1,
+        lw_kdgrp     TYPE knvv-kdgrp.
+
+   SELECT SINGLE low FROM tvarvc INTO lw_tcode WHERE name = 'ZSD_PDC_TRANSACTION'
+                                                    AND low = sy-tcode.
+  IF lw_tcode IS NOT INITIAL.
+
+  SELECT SINGLE low FROM tvarvc INTO lw_order_typ WHERE name = 'ZSD_PDC_ORDERTYPE'
+                                                    AND low = VBAK-AUART.
+  IF lw_order_typ IS NOT INITIAL.
+    SELECT SINGLE kdgrp FROM knvv INTO lw_kdgrp WHERE kunnr = vbak-kunnr.
+    IF lw_kdgrp IS NOT INITIAL.
+    SELECT SINGLE low FROM tvarvc INTO lw_cust_grp WHERE name = 'ZSD_PDC_CUST_GRP'
+                                                     AND low  = lw_kdgrp.
+      IF lw_cust_grp IS NOT INITIAL.
+        SELECT SINGLE katr1 FROM kna1 INTO lw_katr1 WHERE kunnr = vbak-kunnr
+                                                            AND katr1 = ''.
+        IF sy-subrc = 0.
+         vbak-lifsk = '10'.
+         *vbak-lifsk = '10'.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+ ENDIF.
+ENDIF.
+ENDENHANCEMENT.
+ENHANCEMENT 4  ZSD_CHECK_RETURN_ORDER.    "active version
+
+TYPES: BEGIN OF ty_vbfa,
+         vbelv   TYPE vbeln_von,
+         posnv   TYPE posnr_von,
+         vbeln    TYPE vbeln_nach,
+         posnn    TYPE posnr_nach,
+         vbtyp_n  TYPE vbtyp_n,
+         rfmng    TYPE rfmng,
+         meins    TYPE meins,
+         matnr    TYPE matnr, "New
+       END OF ty_vbfa.
+DATA: lt_vbfa   TYPE TABLE OF ty_vbfa,
+      lw_vbfa   TYPE ty_vbfa,
+      lt_tvarvc TYPE TABLE OF tvarvc.
+DATA: lv_retqty  TYPE rfmng,
+      lv_cancqty  TYPE rfmng,
+      lv_invqty  TYPE rfmng,
+      lv_va01     TYPE sy-tcode VALUE 'VA01',        "*******************************************vd
+      lv_va02     TYPE sy-tcode VALUE 'VA02',         "*******************************************
+      gv_tcode TYPE TABLE OF tvarvc.
+
+CONSTANTS: lc_name TYPE  rvari_vnam VALUE 'Z_SD_RETURN1',
+           lc_type TYPE  rsscr_kind VALUE 'S',
+           lv_tvarvc1 type tvarvc-name value 'ZSD_TCODE',    "**************************vd
+           lc_h    TYPE c VALUE 'H',
+           lc_m    TYPE c VALUE 'M',
+           lc_n    TYPE c VALUE 'N',
+           lc_x    type c VALUE 'X'.
+data : l_vbtyp type vbak-vbtyp,
+       l_flag type c,
+       l_vbeln type vbrk-vbeln.
+      "*******************************************************************************
+           SELECT *
+           FROM tvarvc
+           INTO TABLE gv_tcode
+           WHERE name = lv_tvarvc1.
+*BREAK-POINT.
+clear l_flag.
+if xvbak-vgbel is not INITIAL or vbak-vgbel is NOT INITIAL.
+  select single vbeln from vbrk INTO l_vbeln WHERE vbeln = xvbak-vgbel.
+    if sy-subrc = 0.
+       l_flag = lc_x.
+       else.
+  select single vbeln from vbrk INTO l_vbeln WHERE vbeln = vbak-vgbel.
+    if sy-subrc = 0.
+       l_flag = lc_x.
+    endif.
+  endif.
+
+endif.
+
+if l_flag = lc_x.
+ READ TABLE gv_tcode INTO DATA(gw_tcode) with key low = sy-tcode. "***************************************************vd
+*IF sy-tcode = lv_va01 OR sy-tcode = lv_va02.              " sy-tcode = 'VA01' OR sy-tcode = 'VA02'.
+SELECT * INTO TABLE lt_tvarvc
+  FROM tvarvc
+  WHERE name = lc_name " 'Z_SD_RETURN1'.
+    AND type = lc_type.
+
+  if xvbak-vbtyp is NOT INITIAL.
+    l_vbtyp = xvbak-vbtyp.
+   else.
+   l_vbtyp = vbak-vbtyp.
+   endif.
+*BREAK-POINT .
+*READ TABLE lt_tvarvc INTO DATA(lw_tvarvc) WITH KEY low = xvbak-auart.
+READ TABLE lt_tvarvc INTO DATA(lw_tvarvc) WITH KEY low = l_vbtyp.
+IF sy-subrc = 0.
+
+DATA:LV_LINES TYPE I.CLEAR LV_LINES.
+DATA:LV_LINES1 TYPE I.CLEAR LV_LINES.
+DATA(LT_VBRP) = XVBAP[].
+*BREAK-POINT.
+DELETE LT_VBRP[] WHERE VGBEL = ''.
+ LV_LINES = lines( iVBAP[] ).
+ LV_LINES1 = lines( LT_VBRP[] ).
+ IF LV_LINES NE LV_LINES1.
+   MESSAGE ID 'ZSD' TYPE 'E' NUMBER '032'.
+ ENDIF.
+
+
+  TYPES : BEGIN OF ty_tab,
+            matnr TYPE matnr,
+            type  TYPE c,
+            rfmng TYPE rfmng,
+          END OF ty_tab.
+    DATA : lw_tab TYPE ty_tab,
+           lt_tab TYPE TABLE OF ty_tab.
+    DATA : lv_tot_order_qty TYPE kwmeng,
+          lv_pendqty TYPE rfmng.
+
+  TYPES : BEGIN OF ty_tab1,
+            posnr TYPE posnr,
+            matnr TYPE matnr,
+            type  TYPE c,
+            rfmng TYPE rfmng,
+          END OF ty_tab1.
+    DATA : lw_tab1 TYPE ty_tab1,
+           lt_tab1 TYPE TABLE OF ty_tab1.
+
+  LOOP AT xvbfa INTO DATA(lw_xvbfa) WHERE vbeln is NOT INITIAL
+                                      AND posnn IS NOT INITIAL
+                                      AND ( vbtyp_n = lc_h OR vbtyp_n = lc_n ).
+*    IF sy-tcode = lv_va02 AND lw_xvbfa-vbeln EQ vbak-vbeln.       "**********************vd
+    IF lw_xvbfa-vbeln EQ vbak-vbeln.       "**********************vd
+      CONTINUE.
+    ENDIF.
+    lw_vbfa-vbelv  = lw_xvbfa-vbelv.
+    lw_vbfa-posnv  = lw_xvbfa-posnv.
+    lw_vbfa-posnn  = lw_xvbfa-posnn.
+    lw_vbfa-vbtyp_n = lw_xvbfa-vbtyp_n.
+    lw_vbfa-rfmng  = lw_xvbfa-rfmng.
+    lw_vbfa-meins  = lw_xvbfa-meins.
+     READ TABLE vvbrp INTO DATA(lw_xvbrp) WITH KEY vbeln = lw_xvbfa-vbelv posnr = lw_xvbfa-posnv.
+     IF sy-subrc eq 0.
+       lw_vbfa-matnr  = lw_xvbrp-matnr.
+     ENDIF.
+    COLLECT lw_vbfa INTO lt_vbfa.
+    CLEAR : lw_vbfa, lw_xvbfa.
+  ENDLOOP.
+
+  LOOP AT lt_vbfa INTO lw_vbfa WHERE matnr IS NOT INITIAL.
+       lw_tab1-posnr = lw_vbfa-posnn.
+       lw_tab1-matnr = lw_vbfa-matnr.
+       lw_tab1-type = lw_vbfa-vbtyp_n. " Return / Cancel
+       lw_tab1-rfmng = lw_vbfa-rfmng.
+       COLLECT lw_tab1 INTO lt_tab1.
+       CLEAR lw_tab1.
+  ENDLOOP.
+
+  LOOP AT xvbap INTO DATA(ls_xvbap).
+
+    IF ls_xvbap-kwmeng > 0.
+      READ TABLE lt_tab1 INTO lw_tab1 WITH KEY posnr = ls_xvbap-posnr matnr = ls_xvbap-matnr
+                       type = lc_h.
+      IF sy-subrc = 0.
+         lv_retqty = lw_tab1-rfmng.
+      ENDIF.
+
+      CLEAR lw_tab.
+      READ TABLE lt_tab1 INTO lw_tab1 WITH KEY posnr = ls_xvbap-posnr matnr = ls_xvbap-matnr
+                       type = lc_n.
+      IF sy-subrc = 0.
+         lv_cancqty = lw_tab1-rfmng.
+      ENDIF.
+
+**      LOOP AT xvbap INTO DATA(lw_vbap) WHERE posnr = ls_xvbap-matnr AND matnr = ls_xvbap-matnr.
+**        lv_tot_order_qty = lv_tot_order_qty + lw_vbap-kwmeng.
+**        CLEAR lw_vbap.
+**      ENDLOOP.
+
+      READ TABLE vvbrp INTO DATA(lw_vbrp) WITH KEY posnr = ls_xvbap-posnr matnr = ls_xvbap-matnr.
+      IF sy-subrc = 0.
+        lv_invqty = lw_vbrp-fkimg." + lv_invqty.   "Total Invoice Qty for Material in Bill Doc
+        CLEAR lw_vbrp.
+      ENDIF.
+      if lv_invqty gt 0.
+
+      lv_pendqty = lv_invqty - lv_retqty - lv_cancqty.
+
+      IF ls_xvbap-kwmeng > lv_pendqty.
+          MESSAGE ID 'ZSD' TYPE 'E' NUMBER '031'
+              WITH ls_xvbap-posnr lv_pendqty.
+          EXIT.
+      ENDIF.
+    endif.
+    ENDIF.
+
+  ENDLOOP.
+
+  ENDIF. " TVARVC check
+
+ENDIF.
+
+
+ENDENHANCEMENT.
+*$*$-End:   (6)---------------------------------------------------------------------------------$*$*
+
+
+ENDFORM.
+*eject

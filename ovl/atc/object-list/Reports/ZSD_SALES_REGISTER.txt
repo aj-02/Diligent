@@ -1,0 +1,4040 @@
+*&---------------------------------------------------------------------*
+*& Report  ZSD_SALES_REGISTER
+*&
+*&-------------------------------------------------------------------*
+*& REPORT AUTHOR         : HARDIK PATEL,
+*& FUNCTIONAL CONSULTANT : PRATIK JOSHI
+*& REPORT CREATION DATE  : 22/11/2014
+*& TRANSACTION CODE      : ZSALESREG
+*& REQUEST NUMBER        :
+*&-------------------------------------------------------------------*
+
+REPORT zsd_sales_register.
+
+TABLES : vbrk, vbrp, konv, vbak, vbap, mara, makt, t023t, zsal_reg2, kna1.
+
+TYPES : BEGIN OF gt_data,
+          vbeln         LIKE vbrk-vbeln,              " BILLING DOCUMENT
+          posnr         LIKE vbrp-posnr,
+          fkart         LIKE vbrk-fkart,              " BILLING TYPE
+          plant         TYPE t001w-werks,
+          vkrg          TYPE vbrk-vkorg,
+          fkart_txt     LIKE tvfkt-vtext,             " BILLING TYPE DESCRIPTION
+          bukrs         TYPE bukrs,
+          vkorg(20)     TYPE c,                       " SALES ORGANIZATION
+          vtweg(20)     TYPE c,                       " DISTRIBUTION CHANNEL
+          ref_doc       LIKE vbak-vgbel,              " DOCUMENT NUMBER OF THE REFERENCE DOCUMENT
+*** Begin Of Changes By Gaurav Dubey on 11.03.2015
+**  To Add fields in the final report
+          mblnr         TYPE mblnr,                  " Material Doc
+          dmbtr         TYPE dmbtr,                  " Material Doc Value
+*** End Of changes by Gaurav Dubey on 11.03.2015
+
+          vgbel         LIKE vbak-vgbel,              " DOCUMENT NUMBER OF THE REFERENCE DOCUMENT
+          erdat         LIKE vbak-erdat,              " DATE ON WHICH RECORD WAS CREATED
+          po_no         LIKE vbak-bstnk,              " CUSTOMER PURCHASE ORDER NUMBER
+          po_dt         LIKE vbak-bstdk,              " CUSTOMER PURCHASE ORDER DATE
+          kunrg         LIKE vbrk-kunrg,              " PAYER
+          name1(100),        "TYPE name1_gp,                " NAME
+          kunag         TYPE vbrk-kunag,              " SOLD-TO PARTY
+          sld_name(100),     "TYPE name1_gp,                " NAME
+          kunnr         TYPE likp-kunnr,              " SHIP-TO PARTY
+          shp_name(100),    " TYPE name1_gp,                " NAME
+          sld_city      TYPE ort01,
+          shp_regio     TYPE tvfkt-vtext,
+          shp_city      TYPE ort01,                   " CITY
+          spart         TYPE vtxtk,                   " DESCRIPTION
+          fkdat         LIKE vbrk-erdat,              " DATE ON WHICH RECORD WAS CREATED
+* ADDING ONE FIELD I.E. INVOICE CREATED DATE . BY KRUTARTH SHAH.
+          erdat1        TYPE erdat,                   " DATE ON WHICH INVOICE WAS CREATED
+* END BY KRUTARTH SHAH
+          " BILLING ITEM
+          fkimg         LIKE vbrp-fkimg,              " ACTUAL INVOICED QUANTITY
+          waerk         LIKE vbrk-waerk,              " CURRENCY
+          kurrf         LIKE vbrk-kurrf,              " EXCHANGE RATE
+          poper         LIKE vbrk-poper,              " POSTING PERIOD
+          hkont         TYPE hkont,                   " G/L CODE
+          txt50         TYPE txt50_skat,              " G/L DESCRIPTION
+          matnr         LIKE vbrp-matnr,              " MATERIAL NUMBER
+          mtart         TYPE mtart,                   " MATERIAL TYPE
+          meins         TYPE meins,
+          altum         TYPE meins,
+          maktx         LIKE makt-maktx,              " MATERIAL DESCRIPTION (SHORT TEXT)
+          net_wt        LIKE mara-ntgew,              " NET WEIGHT
+          vkbur         TYPE bezei20,                 " DESCRIPTION
+          vkgrp_txt     TYPE tvgrt-bezei,             " DESCRIPTION
+          exnum         TYPE j_1iexcnum,              " TAX INV NO
+          exdat         TYPE j_1iexcdat,              " TAX INV DATE
+*** Begin Of Changes By Gaurav Dubey on 11.03.2015
+**  To Add fields in the final report
+          extyp         TYPE char30,                  " EXCISE TYPE
+*** End Of changes by Gaurav Dubey on 11.03.2015
+
+          remtime       TYPE j_1iremtim,              " TIME OF REMOVAL
+          basicrate     TYPE kbetr,                   " BASIC RATE (CONDITION AMOUNT OR PERCENTAGE)
+          basicamt      TYPE kwert,                   " BASIC AMOUNT
+          netprcinr     TYPE kwert,                   " NET PRICE IN INR
+************************************************************************************************
+*          BASE_DISRATE TYPE KBETR,                   " BASE DISCOUNT RATE (CONDITION AMOUNT OR PERCENTAGE)
+*          BASE_DISAMT  TYPE KWERT,                   " BASE DISCOUNT VALUE
+          fixed_disamt  TYPE kwert,                   " FIXED DISCOUNT VALUE
+          spl_disamt    TYPE kwert,                   " SPECIAL DISCOUN VALUE
+          mch_surch     TYPE kwert,                   " MACHINE SURCHARGE VALUE
+************************************************************************************************
+          asseble_rate  TYPE kbetr,                   " ASSESSBLE RATE (CONDITION AMOUNT OR PERCENTAGE)
+          asseble_amt   TYPE kwert,                   " ASSESSBLE VALUE
+          dnd_amount    TYPE kwert,                   " D&D VALUE
+          excise        TYPE kwert,                   " EXCISE DUTY VALUE
+          ecess         TYPE kwert,                   " EDUCATION CESS VALUE
+          hecess        TYPE kwert,                   " SHECESS VALUE ON BED
+          stax          TYPE kwert,                   " SERVICE TAX VALUE ON BED
+          eceser        TYPE kwert,                   " EDUCESS VALUE ON SERVICE TAX
+          hecser        TYPE kwert,                   " SHECESS VALUE ON SERVICE TAX
+          add_disrate   TYPE kbetr,                   " ADDITIONAL DISCOUNT RATE (CONDITION AMOUNT OR PERCENTAGE)
+          add_disamt    TYPE kwert,                   " ADDITIONAL DISCOUNT VALUE
+          cstrate       TYPE kbetr,                   " CST RATE (CONDITION AMOUNT OR PERCENTAGE)
+          cstamt        TYPE kwert,                   " CST AMOUNT
+          vatrate       TYPE kbetr,                   " VAT RATE (CONDITION AMOUNT OR PERCENTAGE)
+          vatamt        TYPE kwert,                   " VAT AMOUNT
+          net_disrate   TYPE kbetr,                   " NET DISCOUNT RATE (CONDITION AMOUNT OR PERCENTAGE)
+          net_disamt    TYPE kwert,                   " NET DISCOUNT VALUE
+          nsv_disrate   TYPE kbetr,                   " NET SALES VALUE DISCOUNT RATE (CONDITION AMOUNT OR PERCENTAGE)
+          nsv_disamt    TYPE kwert,                   " NET SALES VALUE DISCOUNT VALUE
+          tcsrate       TYPE kbetr,                   " TCS RATE (CONDITION AMOUNT OR PERCENTAGE)
+          tcsamt        TYPE kwert,                   " TCS AMOUNT
+          frtamt        TYPE kwert,                   " FREIGHT BY CUSTOMER AMOUNT
+          insamt        TYPE kwert,                   " INSURANCE AMOUNT
+          fr1amt        TYPE kwert,                   " FREIGHT BY COMPANY AMOUNT
+          octrate       TYPE kbetr,                   " OCTROI RATE (CONDITION AMOUNT OR PERCENTAGE)
+          octamt        TYPE kwert,                   " OCTROI AMOUNT
+          rofamt        TYPE kwert,                   " ROUNDING OFF AMOUNT
+          gr_amt        TYPE netwr,                   " GROSS AMT
+          fksto         TYPE vbrk-fksto,              " BILLING DOCUMENT IS CANCELLED
+          inv_stat(40)  TYPE c,                       " INVOICE STATUS
+          plant_desc    LIKE t001w-name1,             " NAME
+          aubel         LIKE vbrp-aubel,              " SALES ORDER NO
+          aupos         LIKE vbrp-aupos,              " SALES ORDER ITEM NO
+          chapid        LIKE j_1imtchid-j_1ichid,     " CHAPTER ID
+          bolnr         LIKE likp-bolnr,              " NAME OF THE COURIER
+          traid         LIKE likp-traid,              " COURIER NO
+          adate         LIKE likp-wadat_ist,          " ACTUAL GOODS MOVEMENT DATE
+          kdmat         TYPE lips-kdmat,              " MATERIAL BELONGING TO THE CUSTOMER
+          matkl         TYPE matkl,                   " MATERIAL GROUP
+          wgbez         TYPE wgbez,                   " MATERIAL GROUP DESCRIPTION
+          j_1icstno     TYPE j_1icstno,               " CENTRAL SALES TAX NUMBER
+          j_1ilstno     TYPE j_1ilstno,               " LOCAL SALES TAX NUMBER (TIN) NO
+          j_1ipanno     TYPE j_1ipanno,               " PAN NO
+          j_1isern      TYPE j_1isern,                " SERVICE TAX REGISTRATION NUMBER
+          auart         TYPE auart,                   " SALES DOCUMENT TYPE
+          bezei         TYPE bezei20,                 " SALES DOCUMENT TYPE DESCRIPTION
+          inco1         TYPE inco1,                   " INCOTERMS (DELIVERY TERMS)
+          charg         TYPE tline-tdline,            " BATCH NUMBER
+          zmonth(05)    TYPE c,                       " MONTH
+          lad_text      TYPE tline-tdline,            " BILL OF LADING NO. & DATE TEXT
+          shp_text      TYPE tline-tdline,            " SHIPPING BILL NO. & DATE TEXT
+          trs_text      TYPE tline-tdline,            " TRANSPORTER TEXT
+          gr_text       TYPE tline-tdline,            " GR/RR NO. TEXT
+          vehno_text    TYPE tline-tdline,            " VEHICAL NO
+* ADDITIONAL FIELDS DISPLAY
+          vrkme         TYPE vbrp-vrkme,              " BASE UNIT
+          brgew         TYPE vbrp-brgew,              " GROSS WEIGHT
+          zph1_r        TYPE kbetr,                   " PKG& HND CH1 %
+          zph1          TYPE kwert,                   " PKG& HND CH1
+          zph2          TYPE kwert,                   " PKG& HND CH2 AMT
+          aduty_r       TYPE kbetr,                   " ADDITIONAL DUTY RATE
+          aduty         TYPE kwert,                   " PKG& HND CH1
+          zfr2          TYPE kwert,                   " OS FRT. BEF. TAX
+          zact_r        TYPE kbetr,                   " ADDITIONAL CST RATE
+          zact          TYPE kwert,                   " ADDITIONAL CST
+          zvat_r        TYPE kbetr,                   " ADDITIONAL VAT RATE
+          zvat          TYPE kwert,                   " ADDITIONAL VAT
+          zfr3          TYPE kwert,                   " MAN. FRT. AFR. TAX
+          zfr4          TYPE kwert,                   " OS FRT. AFR. TAX
+          zfr5          TYPE kwert,                   " EXPORT LOCAL FRT
+          ztf5          TYPE kwert,                    " scrap sales
+          zfr6          TYPE kwert,                   " EXP INS.
+          zfr7          TYPE kwert,                   " EXP. COMM. RECD.
+          zds5_r        TYPE kbetr,                   " EXP C&F DISC %
+          zds5          TYPE kwert,                   " EXP C&F DISC
+          zds4_r        TYPE kbetr,                   " EXP CIF DISC %
+          zds4          TYPE kwert,                   " EXP CIF DISC
+          zds6          TYPE kwert,                   " QTY DISC.
+          zds7          TYPE kwert,                   " FIXED AMT DISC.
+
+          zaed          TYPE kwert,
+          zpst          TYPE kwert,
+          zcom          TYPE kwert,
+
+          discper       TYPE konv-kbetr,
+          mdiscper      TYPE konv-kbetr,
+
+          opblf         TYPE menge_d, "Opening Bal in FT'
+          opblm         TYPE menge_d, "Opening Bal in M'
+
+          ntgew         LIKE vbrp-ntgew,
+
+          kdgrp         TYPE vbrk-kdgrp,              " CUSTOMER GROUP
+          ktext         TYPE t151t-ktext,             " CUSTOMER GROUP TEXT
+*                    " REGION TEXT
+          bezei1        LIKE t005u-bezei,
+          gewei         LIKE vbrp-gewei,              " WEIGHT UNIT
+          zterm         LIKE vbrk-zterm,              " PAUMENT TERM
+          inco2         LIKE vbrk-inco2,              " INCOTERMS2
+          kondm(05),
+          lgort         TYPE lips-lgort,
+          ktgrm         TYPE mvke-ktgrm,
+          mvgr1         TYPE mvke-mvgr1,
+          mvgr2         TYPE mvke-mvgr2,
+          vtext1        TYPE t178t-vtext,
+          vtext2        TYPE tvkmt-vtext,
+          bezei11       TYPE tvm1t-bezei,
+          bezei22       TYPE tvm2t-bezei,
+          class         TYPE bklas,
+          cldes         TYPE bkbez,
+          zcno          TYPE kunnr,                            "COMMISSION AGENT NUMBER
+          zcname        TYPE name1_adrs,                     "COMMISSION AGENT NAME
+          "COMMISSION AMOUNT
+          pan_no        LIKE j_1imocust-j_1ipanno,     " PAN NO
+          are1no        TYPE j_1iexchdr-docno,
+          prctr         TYPE bseg-prctr,
+          mwsk1         LIKE konv-mwsk1,
+          vtwg          TYPE vbrk-vtweg,
+          sprt          TYPE vbrk-spart,
+          are3no        TYPE j_1iexchdr-docno,
+          are3date      TYPE j_1iexchdr-cpudt,
+
+          vtext         LIKE tvzbt-vtext,             " PAYMENT TERM DESC
+          bzirk         LIKE vbrk-bzirk,                  " ZONE
+          j_1icht1      LIKE j_1ichidtx-j_1icht1,     " CHAPTER ID TEXT
+
+
+          bwtar         TYPE lips-bwtar,
+          ecc           LIKE j_1imocust-j_1iexcd,     " ECC NO
+          cst_no        LIKE j_1imocust-j_1icstno,     " CST NO
+          lst_no        LIKE j_1imocust-j_1ilstno,     " LST NO
+
+
+***END OF ADDITIONS FOR COMMISSION AGENT DETAILS------------------------------*
+
+
+
+          are1date      TYPE j_1iexchdr-cpudt,
+          mwtext(50),
+*          taxnote1      TYPE tskdt-vtext, " JCST
+*          taxnote2      TYPE tskdt-vtext, "JVAT
+*           kondm         TYPE mvke-kondm,
+          taxnote1(30),
+          taxnote2(30),
+          zzdat         TYPE vbap-aedat,
+
+
+
+***ADDITION OF FIELDS FOR COMMISSION AGENT DETAILS----------------------------*
+
+          " ADDITIONAL EXCISE DUTY
+          " NET WEIGHT
+
+*****Added by Ravin: 12.07.17 for GST Condition/Amt
+          joigper       TYPE konv-kbetr,
+          joigamt       LIKE konv-kwert,
+          josgper       TYPE konv-kbetr,
+          josgamt       LIKE konv-kwert,
+          jocgper       TYPE konv-kbetr,
+          jocgamt       LIKE konv-kwert,
+          ziigper       TYPE konv-kbetr,
+          ziigamt       LIKE konv-kwert,
+          zicgper       TYPE konv-kbetr,
+          zicgamt       LIKE konv-kwert,
+          zisgper       TYPE konv-kbetr,
+          zisgamt       LIKE konv-kwert,
+          zfigper       TYPE konv-kbetr,
+          zfigamt       LIKE konv-kwert,
+          zfcgper       TYPE konv-kbetr,
+          zfcgamt       LIKE konv-kwert,
+          zfsgper       TYPE konv-kbetr,
+          zfsgamt       LIKE konv-kwert,
+*
+*         zfsgamt LIKE konv-kwert,
+*         zcadper TYPE konv-kbetr,
+*         zcad   TYPE  konv-kwert,
+*         zdxpper TYPE konv-kbetr,
+*         zdxpamt LIKE konv-kwert,
+          steuc         LIKE marc-steuc,
+          stcd3         LIKE kna1-stcd3,
+          sgstn         LIKE kna1-stcd3,
+***Addition of fields for commission data by Carina Jose on 14.06.2019
+          zcon          TYPE kwert,
+          zrate1(08),
+          lifnr         TYPE lfa1-lifnr,
+          lname         TYPE lfa1-name1,
+          dsku          TYPE kwert,
+*          avgrate       TYPE kwert,
+          belnr         TYPE belnr_d,
+          budat         TYPE budat,
+          augdt         TYPE augdt,
+          augcp         TYPE augcp,
+          augbl         TYPE augbl,
+          blart         TYPE blart,
+          free(10),
+***End of changes.
+****** Added by Carina Jose on 01.10.2020
+          tcs           TYPE kwert,
+          disc3per      TYPE kbetr,
+          disc3         TYPE kwert,
+          irn           TYPE /mvn/e_inv_t_log-irn,
+****** End of changes by Carina Jose on 01.10.2020
+**** Added by Carina Jose on 19.04.2021
+          aumng         TYPE mvke-aumng,
+          totbox        TYPE vbrp-fkimg,
+**** End of changes by Carina Jose on  19.04.2021
+
+************* Added by Carina Jose on 14.09.2021
+*         fr_hkont       TYPE hkont,
+*         fr_gldesc      TYPE txt50_skat,
+          zfrlamt       TYPE kwert,
+************* End of changes by Carina Jose on 14.09.2021
+*************************Added by Raj on 20.06.2023****************
+*          zvgbel        TYPE vbap-vgbel,
+*          zvgpos        TYPE vbap-vgpos,
+
+*************************End of changes by Raj on 20.06.2023**********
+*          vbak_vgbel    TYPE vbak-vgbel, "Added by Raj on 25.09.2023
+
+        END OF gt_data.
+
+*&-- STRUCTURE FOR SALES DATA---------------------------*
+TYPES : BEGIN OF gt_sale,
+          vbeln  LIKE vbrk-vbeln,                  " BILLING DOCUMENT
+          fkart  LIKE vbrk-fkart,                  " BILLING TYPE
+          waerk  LIKE vbrk-waerk,                  " CURRENCY
+          bukrs  TYPE bukrs,
+          vkorg  LIKE vbrk-vkorg,                  " SALES ORGANIZATION
+          vtweg  LIKE vbrk-vtweg,                  " DISTRIBUTION CHANNEL
+          kurrf  LIKE vbrk-kurrf,                  " EXCHANGE RATE FOR FI POSTINGS
+          kunrg  LIKE vbrk-kunrg,                  " PAYER
+          kunag  LIKE vbrk-kunag,                  " SOLD-TO PARTY
+          fkdat  LIKE vbrk-erdat,                  " DATE ON WHICH RECORD WAS CREATED
+          taxk1  TYPE taxk1,
+          taxk2  TYPE taxk2,
+* ADDING ONE FIELD I.E INVOICE CREATED DATE BY KRUTARTH SHAH.
+          erdat1 LIKE vbrk-erdat,                 " DATE ON WHICH INVOICE WAS CREATED
+* END BY KRUTARTH SHAH.
+          inco1  LIKE vbrk-inco1,                  " INCOTERMS (PART 1)
+          netwr  LIKE vbrk-netwr,                  " NET VALUE IN DOCUMENT CURRENCY
+          mwsbk  LIKE vbrk-mwsbk,                  " TAX AMOUNT IN DOCUMENT CURRENCY
+          knumv  LIKE vbrk-knumv,                  " NUMBER OF THE DOCUMENT CONDITION
+          poper  LIKE vbrk-poper,                  " POSTING PERIOD
+          rfbsk  LIKE vbrk-rfbsk,                  " STATUS FOR TRANSFER TO ACCOUNTING
+          fksto  LIKE vbrk-fksto,                  " BILLING DOCUMENT IS CANCELLED
+          posnr  LIKE vbrp-posnr,                  " BILLING ITEM
+          fkimg  LIKE vbrp-fkimg,                  " ACTUAL INVOICED QUANTITY
+          matnr  LIKE vbrp-matnr,                  " MATERIAL NUMBER
+          werks  LIKE vbrp-werks,                  " PLANT
+          vkgrp  LIKE vbrp-vkgrp,                  " SALES GROUP
+          vkbur  LIKE vbrp-vkbur,                  " SALES OFFICE
+          aubel  LIKE vbrp-aubel,                  " SALES DOCUMENT
+          aupos  LIKE vbrp-aupos,                  " SALES DOCUMENT ITEM
+          vgbel  LIKE vbrp-vgbel,                  " DOCUMENT NUMBER OF THE REFERENCE DOCUMENT
+          vgpos  LIKE vbrp-vgpos,                  " ITEM No
+          spart  LIKE vbrp-spart,                  " DIVISION
+*          SPART LIKE VBRK-SPART,                  " DIVISION
+          charg  LIKE vbrp-charg,                  " BATCH NUMBER
+          pstyv  LIKE vbrp-pstyv,                  " SALES DOCUMENT ITEM CATEGORY
+          vrkme  LIKE vbrp-vrkme,                  " SALES UNIT
+          brgew  LIKE vbrp-brgew,                  " GROSS UNIT
+          kdgrp  LIKE vbrk-kdgrp,                  " CUSTOMER GROUP
+          regio  LIKE vbrk-regio,                  " REGION
+          counc  LIKE vbrk-counc,                  " COUNTRY
+          inco2  LIKE vbrk-inco2,                  " INCOTERMS2
+          zterm  LIKE vbrk-zterm,                  " PAYMENT TERM
+          bzirk  LIKE vbrk-bzirk,                  " ZONE
+          fklmg  LIKE vbrp-fklmg,                  " WEIGHT NET
+          gewei  LIKE vbrp-gewei,                  " WEIGHT UNIT
+          ntgew  LIKE vbrp-ntgew,                  " NET WEIGHT
+          netwr1 TYPE netwr,                       " Net Value
+          prctr  TYPE prctr,                       " Profit Center
+          mwsbp  TYPE mwsbp,                       " TAX Value
+          month  LIKE vbak-vtweg,                  " DISTRIBUTION CHANNEL
+          zvgbel TYPE vbap-vgbel,
+          zvgpos TYPE vbap-vgpos,
+
+        END OF gt_sale.
+
+TYPES : BEGIN OF gt_j_1iexchdr,
+          exnum   TYPE j_1iexchdr-exnum,          " OFFICIAL EXCISE DOCUMENT NUMBER
+          exdat   TYPE j_1iexchdr-exdat,          " EXCISE DOCUMENT DATE
+          remtime TYPE j_1iexchdr-remtime,        " TIME OF REMOVAL
+          rdoc    TYPE j_1iexchdr-rdoc,           " REFERENCE DOCUMENT 1
+          expind  TYPE j_1iindexp,                " EXPORT TYPE
+          status  TYPE j_1iexchdr-status,         " EXCISE DOCUMENT STATUS
+        END OF gt_j_1iexchdr.
+
+*&-- STRUCTURE FOR MATERIAL GROUP    ---------------------------*
+TYPES : BEGIN OF gt_mara,
+          matnr  TYPE matnr,                      " MATERIAL NUMBER
+          mtart  TYPE mtart,                      " MATERIAL TYPE
+          matkl  TYPE matkl,                      " MATERIAL GROUP
+* CHANGES TO ADD GROSS WEIGHT IN SALES REGISTER BY RAHUL PATHAK ON 12.09.2009
+          net_wt TYPE ntgew,                      " NET WEIGHT
+          wt_unt TYPE gewei,                      " WEIGHT UNIT
+          meins  TYPE meins,
+* CHANGES ENDED
+        END OF gt_mara.
+
+*&-- STRUCTURE FOR MATERIAL GROUP DESCRIPTION ---------------------------*
+TYPES : BEGIN OF gt_t023t,
+          matkl TYPE matkl,                       " MATERIAL GROUP
+          wgbez TYPE wgbez,                       " MATERIAL GROUP DESCRIPTION
+        END OF gt_t023t.
+
+*&-- STRUCTURE TO GET REVENUE ACCOUNT ---------------------------*
+TYPES : BEGIN OF gt_bseg,
+          belnr TYPE belnr_d,                     " ACCOUNTING DOCUMENT NUMBER
+          hkont TYPE hkont,                       " GENERAL LEDGER ACCOUNT
+          matnr TYPE matnr,                       " MATERIAL NUMBER
+        END OF gt_bseg.
+
+TYPES : BEGIN OF gt_skat,
+          saknr TYPE saknr,                       " G/L ACCOUNT NUMBER
+          txt50 TYPE txt50_skat,                  " G/L ACCOUNT LONG TEXT
+        END OF gt_skat.
+
+****************************Added by Raj on 20.06.2023********************
+TYPES : BEGIN OF ty_vbap,
+          vbeln  TYPE vbap-vbeln,
+          posnr  TYPE vbap-posnr,
+          zvgbel TYPE vbap-vgbel,
+          zvgpos TYPE vbap-vgpos,
+        END OF ty_vbap.
+DATA : it_vbap TYPE STANDARD TABLE OF ty_vbap,
+       wa_vbap TYPE ty_vbap.
+****************************Added by Raj on 20.06.2023********************
+TYPES : BEGIN OF gt_vbak,
+          vbeln TYPE vbeln_va,                    " SALES DOCUMENT
+          erdat TYPE erdat,                       " DATE ON WHICH RECORD WAS CREATED
+          auart TYPE auart,                       " SALES DOCUMENT TYPE
+          po_no TYPE bstnk,                       " CUSTOMER PURCHASE ORDER NUMBER
+          po_dt TYPE bstdk,                       " CUSTOMER PURCHASE ORDER DATE
+          vgbel TYPE vgbel,                       " DOCUMENT NUMBER OF THE REFERENCE DOCUMENT
+        END OF gt_vbak.
+
+TYPES : BEGIN OF gt_tvakt,
+          auart TYPE auart,                       " SALES DOCUMENT TYPE
+          bezei TYPE bezei20,                     " DESCRIPTION
+        END OF gt_tvakt.
+
+*&-- STRUCTURE FOR MATERIAL DESCRIPTION---------------------------*
+TYPES : BEGIN OF gt_makt,
+          matnr TYPE matnr,                       " MATERIAL NUMBER
+          maktx TYPE maktx,                       " MATERIAL DESCRIPTION (SHORT TEXT)
+        END OF gt_makt.
+
+*&-- STRUCTURE FOR CUSTOMER NAME---------------------------*
+TYPES : BEGIN OF gt_kna1,
+          kunnr TYPE kunnr,                       " CUSTOMER NUMBER 1
+          name1 TYPE name1_gp,                    " NAME
+          name2 TYPE name1_gp,                    " name2
+          city  TYPE ort01,                       " CITY
+          regio TYPE regio,
+          land1 TYPE land1,
+          stcd3 TYPE stcd3,
+        END OF gt_kna1.
+
+*&-- STRUCTURE FOR INVOICE TYPE DESCIPTION---------------------------*
+TYPES : BEGIN OF gt_tvfkt,
+          spras TYPE tvfkt-spras,                  " LANGUAGE KEY
+          fkart TYPE tvfkt-fkart,                  " BILLING TYPE
+          vtext TYPE tvfkt-vtext,                  " DESCRIPTION
+        END OF gt_tvfkt.
+
+*&-- STRUCTURE FOR PLANT DESCRIPTION---------------------------*
+TYPES : BEGIN OF gt_t001w,
+          werks TYPE t001w-werks,                  " PLANT
+          name1 TYPE t001w-name1,                  " NAME
+        END OF gt_t001w.
+
+TYPES : BEGIN OF gt_lips,
+          vbeln TYPE lips-vbeln,                   " DELIVERY
+          posnr TYPE lips-posnr,                   " DELIVERY ITEM
+          matnr TYPE lips-matnr,                   " MATERIAL NUMBER
+          kdmat TYPE lips-kdmat,                   " MATERIAL BELONGING TO THE CUSTOMER
+          bwtar TYPE lips-bwtar,
+          lgort TYPE lips-lgort,
+        END OF gt_lips.
+
+TYPES : BEGIN OF ty_mseg,
+          mblnr    TYPE mblnr,                                " Material Document
+          mjahr    TYPE mjahr,                                " Material Document Year
+          zeile    TYPE mblpo,                                " Item in Material Document
+          bwart    TYPE bwart,                                " Movement Type
+          dmbtr    TYPE dmbtr,                                " Amount in Local Currency
+          sjahr    TYPE mjahr,                                " Material Document Year
+          smbln    TYPE mblnr,                                " Material Document
+          smblp    TYPE mblpo,                                " Item in Material Document
+          vbeln_im TYPE vbeln,
+          vbelp_im TYPE posnr,
+          mark,
+        END OF ty_mseg.
+
+TYPES: BEGIN OF ty_t001w,
+         werks TYPE werks_d,
+       END OF ty_t001w.
+DATA : gt_t001w TYPE STANDARD TABLE OF ty_t001w,
+       wa_t001w TYPE ty_t001w.
+TYPES: BEGIN OF ty_marc,
+         matnr TYPE matnr,
+         werks TYPE werks_d,         "~~Plant
+         steuc TYPE steuc,           "~~Control code for consumption taxes in foreign trade
+         vkorg TYPE vkorg,
+*          vtweg type vtweg,
+       END OF ty_marc.
+
+DATA : it_marc TYPE TABLE OF ty_marc,
+       wa_marc TYPE ty_marc.
+*******************added by parth 07/04/2019
+TYPES: BEGIN OF ty_tvarvc1,
+         sign TYPE tvarv_sign,
+         opti TYPE tvarv_opti,
+         low  TYPE tvarv_val,
+         high TYPE tvarv_val,
+       END OF ty_tvarvc1.
+
+DATA: lt_acc_key1  TYPE STANDARD TABLE OF ty_tvarvc1.
+DATA: lwa_acc_key1 TYPE ty_tvarvc1.
+
+CONSTANTS : c_var_user  TYPE rvari_vnam VALUE 'ZSD_PGIVALUE_SHOW',
+            c_type_user TYPE rsscr_kind VALUE 'S'.
+****************ended by parth 07/04/2019
+
+
+*TYPES: BEGIN OF ty_t001w,
+*         werks TYPE werks_d,
+*       END OF ty_t001w.
+*DATA : gt_t001w TYPE STANDARD TABLE OF ty_t001w,
+*       wa_t001w TYPE ty_t001w.
+
+*======================================================================*
+*& TYPE POOLS - USED FOR ALL ALV RELATED OBJECT DECLARATION            *
+*======================================================================*
+TYPE-POOLS : slis.
+
+*======================================================================*
+*                     DATA OBJECTS                                     *
+*======================================================================*
+*-------| INTERNAL TABLES  :
+DATA : gi_data TYPE gt_data OCCURS 0,
+       it_data TYPE gt_data OCCURS 0,
+       gi_sale TYPE gt_sale OCCURS 0.
+
+DATA : it_final TYPE TABLE OF gt_data.
+
+DATA : gi_mara       TYPE STANDARD TABLE OF gt_mara,
+       lt_marm       TYPE STANDARD TABLE OF marm,
+       lwa_marm      TYPE marm,
+       it_t023t      TYPE STANDARD TABLE OF gt_t023t,
+       it_vbak       TYPE STANDARD TABLE OF gt_vbak,
+       it_tvakt      TYPE STANDARD TABLE OF gt_tvakt,
+       it_bseg       TYPE STANDARD TABLE OF gt_bseg,
+       it_skat       TYPE STANDARD TABLE OF gt_skat,
+       it_t151t      TYPE STANDARD TABLE OF t151t,
+       it_tvzbt      TYPE STANDARD TABLE OF tvzbt,
+       it_match      TYPE STANDARD TABLE OF j_1imtchid,
+       it_chid       TYPE STANDARD TABLE OF j_1ichidtx,
+       it_mbew       TYPE STANDARD TABLE OF mbew,
+       it_t025t      TYPE STANDARD TABLE OF t025t,
+       it_t005u      TYPE STANDARD TABLE OF t005u,
+       gi_tvfkt      TYPE STANDARD TABLE OF gt_tvfkt,
+       gi_t001w      TYPE STANDARD TABLE OF gt_t001w,
+       gi_lips       TYPE STANDARD TABLE OF gt_lips,
+       it_j_1iexchdr TYPE STANDARD TABLE OF gt_j_1iexchdr,
+       it_konp       TYPE STANDARD TABLE OF konp WITH HEADER LINE,
+       it_j_1imocust TYPE STANDARD TABLE OF j_1imocust.
+*** Begin Of Changes By Gaurav Dubey on 11.03.2015
+**  To Add fields in the final report
+DATA: it_mseg      TYPE STANDARD TABLE OF ty_mseg,
+      it_mseg_temp TYPE STANDARD TABLE OF ty_mseg,
+      wa_mseg      TYPE ty_mseg.
+FIELD-SYMBOLS : <fs_mseg>  LIKE LINE OF it_mseg.
+FIELD-SYMBOLS : <fs_mseg1> LIKE LINE OF it_mseg.
+*** End Of changes by Gaurav Dubey on 11.03.2015
+
+DATA : it_makt       TYPE gt_makt OCCURS 0 WITH HEADER LINE,
+       it_kna1       TYPE TABLE OF gt_kna1,
+       wa_kna1       TYPE gt_kna1,
+       wa_j_1imocust TYPE j_1imocust,
+       it_tspat      TYPE tspat OCCURS 0 WITH HEADER LINE,     " DIVISION
+       it_tvkbt      TYPE tvkbt OCCURS 0 WITH HEADER LINE,     " SALES OFFICE
+       it_1t005u     TYPE STANDARD TABLE OF t005u,
+       it_tvgrt      TYPE tvgrt OCCURS 0 WITH HEADER LINE,     " SALES GROUP
+       it_tvkot      TYPE tvkot OCCURS 0 WITH HEADER LINE,     " SALES ORGANIZATION
+       it_tvtwt      TYPE tvtwt OCCURS 0 WITH HEADER LINE,     " DISTRIBUTION CHANNEL
+       it_tvaut      TYPE tvaut OCCURS 0 WITH HEADER LINE,     " ORDER REASON
+       it_tvlvt      TYPE tvlvt OCCURS 0 WITH HEADER LINE,     " USAGE TEXT
+       it_tvagt      TYPE tvagt OCCURS 0 WITH HEADER LINE,     " REJECTION REASON
+       it_vbkd       TYPE vbkd  OCCURS 0 WITH HEADER LINE.     " SALES DISTRICT
+
+*-------| WORK AREA  :
+FIELD-SYMBOLS : <fs_data> TYPE gt_data.
+DATA : gw_data   TYPE gt_data,
+       wa_data   TYPE gt_data,
+       wa_match  TYPE j_1imtchid,
+       wa_chid   TYPE j_1ichidtx,
+       wa_mbew   TYPE mbew,
+       wa_t025t  TYPE t025t,
+       gw_data1  TYPE gt_data,
+       wa_mara   TYPE gt_mara,
+       wa_t023t  TYPE gt_t023t,
+       wa_t005u  TYPE t005u,
+       wa_1t005u TYPE t005u,
+       wa_tvzbt  TYPE tvzbt,
+       wa_vbak   TYPE gt_vbak,
+       wa_tvakt  TYPE gt_tvakt,
+       gw_sale   TYPE gt_sale,
+       wa_bseg   TYPE gt_bseg,
+       wa_skat   TYPE gt_skat,
+       gw_tvfkt  TYPE gt_tvfkt,
+       gw_t001w  TYPE gt_t001w,
+       gw_lips   TYPE gt_lips,
+       wa_t151t  TYPE t151t.
+DATA : v_taxk1 TYPE vbrk-taxk1.
+DATA : wa_j_1iexchdr TYPE gt_j_1iexchdr.
+
+DATA: BEGIN OF gi_konv OCCURS 0,
+        knumv LIKE konv-knumv,                   " NUMBER OF THE DOCUMENT CONDITION
+        kposn LIKE konv-kposn,                   " CONDITION ITEM NUMBER
+        kschl LIKE konv-kschl,                   " CONDITION TYPE
+        krech LIKE konv-krech,                   " CALCULATION TYPE FOR CONDITION
+        kbetr LIKE konv-kbetr,                   " RATE (CONDITION AMOUNT OR PERCENTAGE)
+        waers LIKE konv-waers,                   " CURRENCY KEY
+        kstat LIKE konv-kstat,                   " CONDITION IS USED FOR STATISTICS
+        kwert LIKE konv-kwert,                   " CONDITION VALUE
+        mwsk1 TYPE konv-mwsk1,
+      END OF gi_konv.
+
+TYPES : BEGIN OF t_t007s,
+          mwskz TYPE t007s-mwskz,
+          text1 TYPE t007s-text1,
+        END OF t_t007s.
+DATA : wa_t007s TYPE t_t007s.
+DATA : it_t007s TYPE STANDARD TABLE OF t_t007s.
+*--- OBJECT AND VARIABLE LIST FOR ALV GRID DISPLAY-------*
+DATA : t_listheader   TYPE slis_t_listheader   WITH HEADER LINE,
+       t_fieldcatalog TYPE slis_t_fieldcat_alv WITH HEADER LINE,
+*       lt_exclude     TYPE slis_t_extab,  "Added by Rahul Vasita on 14.02.2024 14:07:24
+*       ls_exclude     TYPE slis_extab,    "Added by Rahul Vasita on 14.02.2024 14:07:27
+*       rs_variant     LIKE disvariant,
+       fs_layout      TYPE slis_layout_alv,
+       t_event        TYPE slis_t_event WITH HEADER LINE.
+
+DATA: BEGIN OF gt_inv OCCURS 50,
+        vbeln LIKE vbrp-vbeln,                    " BILLING DOCUMENT
+        erdat LIKE vbrp-erdat,                    " DATE ON WHICH RECORD WAS CREATED
+      END OF gt_inv.
+
+DATA: BEGIN OF gt_gross OCCURS 50,
+        vbeln LIKE vbrk-vbeln,                    " BILLING DOCUMENT
+        erdat LIKE vbrk-erdat,                    " DATE ON WHICH RECORD WAS CREATED
+        netwr LIKE vbrk-netwr,                    " NET VALUE IN DOCUMENT CURRENCY
+        mwsbk LIKE vbrk-mwsbk,                    " TAX AMOUNT IN DOCUMENT CURRENCY
+        aubel LIKE vbrp-aubel,                    " SALES DOCUMENT
+        aupos LIKE vbrp-posnr,                    " BILLING ITEM
+      END OF gt_gross,
+
+      BEGIN OF it_chpt OCCURS 0,
+        matnr  LIKE j_1imtchid-matnr,              " MATERIAL NUMBER
+        chapid LIKE j_1imtchid-j_1ichid,          " CHAPTER ID
+      END OF it_chpt,
+
+      BEGIN OF it_likp OCCURS 0,
+        vbeln LIKE likp-vbeln,                    " DELIVERY
+        kunnr LIKE likp-kunnr,                    " SHIP-TO PARTY
+        kunag LIKE likp-kunag,                    " SOLD TO PARTY
+        bolnr LIKE likp-bolnr,                    " BILL OF LADING
+        traid LIKE likp-traid,                    " MEANS OF TRANSPORT ID
+        adate LIKE likp-wadat_ist,                " ACTUAL GOODS MOVEMENT DATE
+      END OF it_likp.
+
+DATA : it_tline TYPE TABLE OF tline.
+
+TYPES : BEGIN OF t_mvke,
+          matnr  TYPE mvke-matnr,
+          vkorg  TYPE mvke-vkorg,
+          vtweg  TYPE mvke-vtweg,
+          kondm  TYPE mvke-kondm,
+          ktgrm  TYPE mvke-ktgrm,
+          mvgr1  TYPE mvke-mvgr1,
+          mvgr2  TYPE mvke-mvgr2,
+          vtext1 TYPE t178t-vtext,
+          vtext2 TYPE tvkmt-vtext,
+          bezei1 TYPE tvm1t-bezei,
+          bezei2 TYPE tvm2t-bezei,
+        END OF t_mvke.
+DATA : wa_mvke TYPE t_mvke.
+DATA : it_mvke TYPE STANDARD TABLE OF t_mvke.
+
+DATA : wa_tline  TYPE tline,
+       lv_tdline TYPE tline-tdline,
+       gv_text   TYPE stxh-tdname.
+DATA : v_dt TYPE datum.
+DATA : lv_blmenge   TYPE menge_d.
+
+DATA:BEGIN OF it_append OCCURS 0,
+       all TYPE char16384,
+     END OF it_append.
+DATA:header TYPE char16384.
+
+*** Begin Of Changes By Gaurav Dubey on 28.03.2015
+**  To Summarise the report.
+DATA: gv_fkimg         TYPE fkimg,
+      gv_net_wt        TYPE ntgew,
+      gv_basicamt      TYPE kwert,
+      gv_fixed_disamt  TYPE kwert,
+      gv_spl_disamt    TYPE kwert,
+      gv_spl_disc3     TYPE kwert,
+      gv_asseble_amt   TYPE kwert,
+      gv_excise        TYPE kwert,
+      gv_ecess         TYPE kwert,
+      gv_hecess        TYPE kwert,
+      gv_stax          TYPE kwert,
+      gv_eceser        TYPE kwert,
+      gv_hecser        TYPE kwert,
+      gv_cstamt        TYPE kwert,
+      gv_vatamt        TYPE kwert,
+      gv_vat           TYPE kwert,
+*      gv_brgew         TYPE brgew,"COMMENT BY PARTH 30.07.2019
+      gv_brgew(16)     TYPE p DECIMALS 3  , "added by parth 30.07.2019
+      gv_ztf5          TYPE kwert,
+*      gv_ntgew         TYPE ntgew, "COMMENT BY PARTH 30.07.2019
+      gv_ntgew(16)     TYPE p DECIMALS 3  , "added by parth 30.07.2019
+      gv_zfr6          TYPE kwert,
+      gv_zfr5          TYPE kwert,
+      gv_rofamt        TYPE kwert,
+      gv_gr_amt        TYPE netwr,
+      gv_zpst          TYPE kwert,
+      gv_cstrate       TYPE kwert,
+      gv_vatrate       TYPE kwert,
+      gv_tcs           TYPE kwert,
+      gv_shp_text(100),
+      gv_gr_text(100),
+      gv_zaed          TYPE kwert,
+      gv_zfrl          TYPE kwert. " added by Carina Jose on 14.09.2021.
+
+*** End Of changes by Gaurav Dubey on 28.03.2015
+
+*======================================================================*
+*                     SELECTION SCREEN                                 *
+*======================================================================*
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-001.
+SELECT-OPTIONS :s_bukrs FOR vbrk-bukrs OBLIGATORY,  " Company Code
+                s_vkorg FOR vbrk-vkorg OBLIGATORY,  " SALES ORGANIZATION
+                s_werks FOR vbrp-werks OBLIGATORY,  " PLANT
+                s_vtweg FOR vbrk-vtweg,             " DISTRIBUTION CHANNEL
+                s_spart FOR vbrk-spart,             " DIVISION
+                s_vkbur FOR vbrp-vkbur,             " SALES OFFICE
+                s_vkgrp FOR vbrp-vkgrp,             " SALES GROUP
+                s_vbeln FOR vbrk-vbeln,             " BILLING DOCUMENT
+                s_fkart FOR vbrk-fkart,             " BILLING TYPE
+                s_fksto FOR vbrk-fksto,             " BILLING DOCUMENT IS CANCELLED
+                s_kdgrp FOR vbrk-kdgrp,             " CUSTOMER GROUP
+                s_prctr FOR vbrp-prctr,             " PROFIT CENTER
+                s_regio FOR vbrk-regio,             " REGION (STATE, PROVINCE, COUNTY)
+                s_zone  FOR vbrk-bzirk,             " SALES DISTRICT
+                s_price FOR vbrk-pltyp,             " PRICE LIST TYPE
+                s_matnr FOR vbrp-matnr,             " MATERIAL NUMBER
+                s_mtart FOR mara-mtart,             " MATERIAL TYPE
+                s_matkl FOR mara-matkl,             " MATERIAL GROUP
+                s_auart FOR vbak-auart,             " SALES DOCUMENT TYPE
+                s_kunag FOR vbrk-kunag,             " SOLD-TO PARTY
+                s_dt    FOR sy-datum OBLIGATORY,    " FOR SY-DATUM
+                s_cust  FOR vbrk-kunag NO-DISPLAY.  " SOLD-TO-PARTY
+PARAMETERS : r1 TYPE c RADIOBUTTON GROUP gp1 DEFAULT 'X',
+             r2 TYPE c RADIOBUTTON GROUP gp1,
+             r3 TYPE c RADIOBUTTON GROUP gp1.
+*PARAMETERS: pa_vari TYPE slis_vari.
+SELECTION-SCREEN END OF BLOCK b1.
+
+"Adding Start by Rahul Vasita on 14.02.2024 14:54:47
+
+**AT SELECTION-SCREEN OUTPUT.
+**  LOOP AT SCREEN.
+**    IF screen-name = 'PA_VARI' OR screen-name = '%_PA_VARI_%_APP_%-TEXT'.
+**      IF r3 = 'X'.
+**        screen-active = 1.
+**      ELSE.
+**        screen-active = 0.
+**      ENDIF.
+**      MODIFY SCREEN.
+**    ENDIF.
+**  ENDLOOP.
+***AT SELECTION-SCREEN ON pa_vari.
+***  IF pa_vari IS NOT INITIAL.
+***    rs_variant-report = sy-repid.
+***    rs_variant-variant  = pa_vari.
+***    rs_variant-username = sy-uname.
+***    CALL FUNCTION 'REUSE_ALV_VARIANT_EXISTENCE'
+***      EXPORTING
+***        i_save        = 'A'
+***      CHANGING
+***        cs_variant    = rs_variant
+***      EXCEPTIONS
+***        wrong_input   = 1
+***        not_found     = 2
+***        program_error = 3
+***        OTHERS        = 4.
+***    IF sy-subrc <> 0.
+***      MESSAGE 'Varaint Not Exist' TYPE 'S' DISPLAY LIKE 'E'.
+***      RETURN.
+***    ENDIF.
+***  ENDIF."pa_vari is NOT INITIAL.
+
+**AT SELECTION-SCREEN ON VALUE-REQUEST FOR pa_vari.
+**  PERFORM alv_variant_f4 CHANGING pa_vari.
+  "Adding End by Rahul Vasita on 14.02.2024 14:54:47
+
+*IF SY-UNAME = 'SAP_ABAP'.
+*  IF S_VKORG-LOW = '1000'.
+*  IF SY-SUBRC EQ 0.
+*   ELSE.
+* MESSAGE : 'USER NOT AUTHORISED TO DISPLAY FOR THIS ORGANIZATION' TYPE 'E'.
+* STOP.
+* ENDIF.
+* ENDIF.
+* ENDIF.
+
+
+* AUTHORITY-CHECK OBJECT 'V_VBAK_VKO'
+* ID 'ACTVT' FIELD '3'
+* ID 'VKORG' FIELD S_VKORG-LOW .
+* IF SY-SUBRC EQ 0. " CHECK AUTHORIZATION
+**   AUTHORITY-CHECK OBJECT 'C_ARPL_WRK'
+**   ID 'ACTVT' FIELD '3'
+**   ID 'WERKS' FIELD S_WERKS-LOW.
+* ELSE.
+* MESSAGE : 'USER NOT AUTHORISED TO DISPLAY FOR THIS ORGANIZATION' TYPE 'E'.
+* STOP.
+* ENDIF.
+*
+* AUTHORITY-CHECK OBJECT 'C_ARPL_WRK'
+*   ID 'ACTVT' FIELD '3'
+*   ID 'WERKS' FIELD S_WERKS-LOW.
+*  IF SY-SUBRC EQ 0.
+*    ELSE.
+* MESSAGE : 'USER NOT AUTHORISED TO DISPLAY FOR THIS PLANT' TYPE 'E'.
+* STOP.
+* ENDIF.
+
+START-OF-SELECTION.
+  PERFORM authorization_check.
+  PERFORM process_data.
+
+FORM process_data .
+
+*-------| INTERNAL TABLES  :
+  DATA : gi_salet TYPE STANDARD TABLE OF gt_sale,
+         it_bsegt TYPE STANDARD TABLE OF gt_bseg,
+         it_vbakt TYPE STANDARD TABLE OF gt_vbak.
+
+*-------| VARIABLES  :
+  DATA : v_cnt      TYPE i,
+         g_netprice TYPE kwert.
+
+  DATA : lv_netprcinr TYPE konv-kwert,
+         lv_excise    TYPE konv-kwert,
+         lv_ecess     TYPE konv-kwert,
+         lv_hecess    TYPE konv-kwert.
+
+  DATA : flag TYPE n.
+*****ADDITION OF DATA FOR PARTNER NUMBER -------------*
+  DATA lv_partner TYPE lifnr.
+*****END OF ADDITION OF DATA--------------------------*
+*********************
+  DATA: date TYPE sy-datum.
+
+  CALL FUNCTION 'LAST_DAY_OF_MONTHS'
+    EXPORTING
+      day_in            = s_dt-low
+    IMPORTING
+      last_day_of_month = date
+    EXCEPTIONS
+      day_in_no_date    = 1
+      OTHERS            = 2.
+  IF sy-subrc <> 0.
+* Implement suitable error handling here
+  ENDIF.
+
+**************
+******************   ADD BY PARTH     04.07.2019
+  SELECT sign
+   opti
+   low
+   high INTO TABLE lt_acc_key1
+             FROM tvarvc
+             WHERE name = c_var_user AND
+  type = c_type_user.
+************** ended by parth 04.07.2019
+
+
+* **************
+
+  IF s_dt-high <> sy-datum OR s_dt-low <> sy-datum.
+
+    IF sy-uname = 'APLSD16'.
+      SELECT * FROM zsal_reg2 INTO CORRESPONDING FIELDS OF TABLE gi_data
+        WHERE vbeln IN s_vbeln AND
+
+              plant IN s_werks AND
+              vkrg IN s_vkorg AND
+              bukrs  IN s_bukrs AND
+              fkdat IN s_dt AND
+              fkart  IN s_fkart AND
+              fksto  IN s_fksto AND
+              spart  IN s_spart  AND
+              kdgrp  IN s_kdgrp AND
+              kunag  IN s_kunag AND
+              prctr  IN s_prctr AND
+              matnr  IN s_matnr AND
+              vkbur  NE 'HITEN MEHTA' AND
+      matkl  IN ('COLUMN','CASING')." AND
+      .
+    ELSE.
+      SELECT * FROM zsal_reg2 INTO CORRESPONDING FIELDS OF TABLE gi_data
+        WHERE vbeln IN s_vbeln AND
+              plant IN s_werks AND
+              vkrg IN s_vkorg AND
+              bukrs  IN s_bukrs AND
+              fkdat IN s_dt AND
+              fkart  IN s_fkart AND
+              fksto  IN s_fksto AND
+              spart  IN s_spart  AND
+              kdgrp  IN s_kdgrp AND
+              kunag  IN s_kunag AND
+              prctr  IN s_prctr AND
+              matnr  IN s_matnr AND
+              matkl  IN s_matkl AND
+      mtart  IN s_mtart." AND
+
+    ENDIF.
+  ENDIF.
+
+************Added by Raj on 21.06.2023*****
+
+*
+
+  IF s_dt-low EQ sy-datum OR  s_dt-high EQ sy-datum.
+
+*  SELECT * FROM ZSAL_REG2 INTO TABLE GI_SALE
+*    WHERE FKDAT IN S_DT.
+* ADDING INVOICE CREATED DATE IN SQL QUERY
+    IF sy-uname = 'APLSD16'.
+
+      SELECT a~vbeln a~fkart a~waerk a~bukrs a~vkorg a~vtweg a~kurrf a~kunrg a~kunag a~fkdat a~taxk1 a~taxk2 a~erdat a~inco1 a~netwr a~mwsbk a~knumv a~poper a~rfbsk a~fksto
+           b~posnr b~fkimg b~matnr b~werks b~vkgrp b~vkbur b~aubel b~aupos b~vgbel b~vgpos b~spart b~charg b~pstyv b~vrkme b~brgew a~kdgrp
+           a~regio a~counc a~inco2 a~zterm a~bzirk b~fklmg b~gewei b~ntgew b~netwr b~prctr b~mwsbp
+* END
+           INTO TABLE gi_sale
+           FROM vbrk AS a INNER JOIN vbrp AS b ON a~vbeln = b~vbeln
+           WHERE a~vbeln IN s_vbeln AND
+                 a~bukrs IN s_bukrs AND
+                 a~fkart IN s_fkart AND
+                 a~fksto IN s_fksto AND
+                 a~vkorg IN s_vkorg AND
+                 a~vtweg IN s_vtweg AND
+                 a~bzirk IN s_zone  AND
+                 a~pltyp IN s_price AND
+                 a~regio IN s_regio AND
+                 a~kdgrp IN s_kdgrp AND
+                 a~kunag IN s_kunag AND
+                 b~prctr IN s_prctr AND
+                 b~spart IN s_spart AND
+*               a~fkdat IN s_dt    AND
+                 a~fkdat EQ sy-datum AND
+                 a~vbtyp NE 'U'     AND
+                 b~werks IN s_werks AND
+                 b~vkbur NE 'MG05'  AND
+                 b~vkgrp IN s_vkgrp AND
+                 b~matnr IN s_matnr AND
+                 a~fkart IN s_fkart AND
+      b~matkl = 'COLUMN'.
+    ELSE.
+      SELECT a~vbeln a~fkart a~waerk a~bukrs a~vkorg a~vtweg a~kurrf a~kunrg a~kunag a~fkdat a~taxk1 a~taxk2 a~erdat a~inco1 a~netwr a~mwsbk a~knumv a~poper a~rfbsk a~fksto
+             b~posnr b~fkimg b~matnr b~werks b~vkgrp b~vkbur b~aubel b~aupos b~vgbel b~vgpos b~spart b~charg b~pstyv b~vrkme b~brgew a~kdgrp
+             a~regio a~counc a~inco2 a~zterm a~bzirk b~fklmg b~gewei b~ntgew b~netwr b~prctr b~mwsbp
+* END
+             INTO TABLE gi_sale
+             FROM vbrk AS a INNER JOIN vbrp AS b ON a~vbeln = b~vbeln
+             WHERE a~vbeln IN s_vbeln AND
+                   a~bukrs IN s_bukrs AND
+                   a~fkart IN s_fkart AND
+                   a~fksto IN s_fksto AND
+                   a~vkorg IN s_vkorg AND
+                   a~vtweg IN s_vtweg AND
+                   a~bzirk IN s_zone  AND
+                   a~pltyp IN s_price AND
+                   a~regio IN s_regio AND
+                   a~kdgrp IN s_kdgrp AND
+                   a~kunag IN s_kunag AND
+                   b~prctr IN s_prctr AND
+                   b~spart IN s_spart AND
+*                   a~fkdat IN s_dt    AND
+                 a~fkdat EQ sy-datum AND
+                   a~vbtyp NE 'U'     AND
+                   b~werks IN s_werks AND
+                   b~vkbur IN s_vkbur AND
+                   b~vkgrp IN s_vkgrp AND
+                   b~matnr IN s_matnr AND
+      a~fkart IN s_fkart.
+    ENDIF.
+*    IF sy-subrc NE 0.
+*      MESSAGE 'NO INVOICES EXISTS FOR THIS SELECTION' TYPE 'E'.
+*    ENDIF.
+**
+    IF gi_sale[] IS INITIAL AND gi_data[] IS INITIAL.
+      MESSAGE 'NO INVOICES EXISTS FOR THIS SELECTION' TYPE 'E'.
+    ENDIF.
+
+
+
+    IF gi_sale[] IS NOT INITIAL.
+      SELECT * FROM t151t INTO TABLE it_t151t FOR ALL ENTRIES IN gi_sale
+      WHERE kdgrp = gi_sale-kdgrp AND spras = 'E'.
+
+      SELECT * FROM t005u INTO TABLE it_t005u FOR ALL ENTRIES IN gi_sale
+      WHERE spras = 'E' AND land1 = 'IN' AND bland = gi_sale-regio.
+
+      SELECT * FROM tvzbt INTO TABLE it_tvzbt FOR ALL ENTRIES IN gi_sale
+      WHERE spras = 'E' AND zterm = gi_sale-zterm.
+
+      SELECT * FROM j_1imtchid INTO TABLE it_match FOR ALL ENTRIES IN gi_sale
+      WHERE matnr = gi_sale-matnr AND werks = gi_sale-werks.
+
+      IF it_match[] IS NOT INITIAL.
+        SELECT * FROM j_1ichidtx INTO TABLE it_chid FOR ALL ENTRIES IN it_match
+        WHERE j_1ichid = it_match-j_1ichid AND langu = 'E'.
+      ENDIF.
+      DELETE gi_sale WHERE fkimg EQ '0.000' OR pstyv = 'TAP'.
+
+*************      Qutoation
+      IF gi_sale IS NOT INITIAL.
+        SELECT vbeln FROM vbak INTO TABLE it_vbak FOR ALL ENTRIES IN gi_sale WHERE vbeln = gi_sale-aubel.
+
+*  IF gi_data IS NOT INITIAL.
+        SELECT vbeln posnr vgbel vgpos FROM vbap INTO TABLE it_vbap FOR ALL ENTRIES IN it_vbak WHERE vbeln = it_vbak-vbeln.
+
+      ENDIF.
+*************
+
+***********   valuation calss
+      SELECT * FROM  mbew INTO TABLE it_mbew
+        FOR ALL ENTRIES IN gi_sale
+         WHERE matnr = gi_sale-matnr
+      AND   bwkey = gi_sale-werks.
+
+      SELECT * FROM t025t INTO TABLE it_t025t
+         FOR ALL ENTRIES IN  it_mbew
+         WHERE bklas = it_mbew-bklas
+      AND   spras = 'EN'.
+*******************
+*
+
+      LOOP AT gi_sale INTO gw_sale.
+        s_cust-sign   = 'I'.
+        s_cust-option = 'EQ'.
+        s_cust-low    = gw_sale-kunrg.
+        APPEND s_cust.
+        CLEAR s_cust.
+        s_cust-sign   = 'I'.
+        s_cust-option = 'EQ'.
+        s_cust-low    = gw_sale-kunag.
+        APPEND s_cust.
+        CLEAR s_cust.
+      ENDLOOP.
+
+      SORT gi_sale BY vbeln.
+      gi_salet[] = gi_sale[].
+      DELETE ADJACENT DUPLICATES FROM gi_salet COMPARING vbeln.
+
+      SELECT exnum exdat remtime rdoc expind status
+             FROM j_1iexchdr
+             INTO TABLE it_j_1iexchdr
+             FOR ALL ENTRIES IN gi_sale
+             WHERE rdoc   EQ gi_sale-vbeln AND
+      status EQ 'C'.
+
+      SORT it_j_1iexchdr BY exnum.
+      CLEAR gi_salet[].
+
+      SELECT knumv kposn kschl krech kbetr waers kstat kwert mwsk1
+*             kpein "changes: 12.07.17: Ravin
+             FROM konv
+             INTO TABLE gi_konv
+             FOR ALL ENTRIES IN gi_sale
+             WHERE knumv EQ gi_sale-knumv AND
+                   kinak EQ ' '           AND
+      kposn EQ gi_sale-posnr.
+      IF gi_konv[] IS NOT INITIAL.
+        SELECT mwskz text1 FROM t007s INTO TABLE it_t007s FOR ALL ENTRIES IN gi_konv WHERE mwskz = gi_konv-mwsk1 AND spras = 'EN' AND kalsm = 'TAXINN'.
+      ENDIF.
+
+      DELETE gi_konv WHERE kbetr = '0.000'.
+      SORT gi_sale[] BY matnr.
+      gi_salet[] = gi_sale[].
+      DELETE ADJACENT DUPLICATES FROM gi_salet COMPARING matnr.
+      IF gi_salet[] IS NOT INITIAL.
+        SELECT matnr maktx
+               INTO TABLE it_makt
+               FROM makt
+               FOR ALL ENTRIES IN gi_salet
+               WHERE matnr = gi_salet-matnr AND
+        spras = 'EN'.
+      ENDIF.
+
+      SELECT matnr mtart matkl ntgew gewei meins
+      FROM mara INTO TABLE gi_mara  FOR ALL ENTRIES IN gi_sale
+      WHERE matnr EQ gi_sale-matnr AND mtart IN s_mtart AND
+      matkl IN s_matkl.
+
+      SELECT * FROM marm
+                     INTO TABLE lt_marm
+                     FOR ALL ENTRIES IN gi_mara
+                     WHERE matnr = gi_mara-matnr
+      AND meinh IN ('FT', 'M').
+
+      CLEAR gi_salet[].
+
+      SORT gi_sale BY aubel.
+      gi_salet[] = gi_sale[].
+      DELETE ADJACENT DUPLICATES FROM gi_salet COMPARING aubel.
+      IF gi_salet[] IS NOT INITIAL.
+        SELECT vbeln erdat auart bstnk bstdk vgbel
+               FROM vbak
+               INTO TABLE it_vbak
+               FOR ALL ENTRIES IN gi_salet
+               WHERE vbeln EQ gi_salet-aubel AND
+        auart IN s_auart.
+      ENDIF.
+
+************************************Added by Raj on 21.06.2023*********
+
+*      if it_vbak is not INITIAL.
+*        select vbeln posnr vgbel vgpos from vbap into table it_vbap FOR ALL ENTRIES IN gi_salet where vbeln = gi_salet-aubel.
+*
+*      endif.
+
+***********************************Added by Raj on 21.06.2023*********
+
+      CLEAR gi_salet[].
+
+      LOOP AT  gi_sale INTO gw_sale.
+        CLEAR : wa_vbak.
+        READ TABLE it_vbak INTO wa_vbak WITH KEY vbeln = gw_sale-aubel.
+        IF sy-subrc NE 0.
+          DELETE TABLE gi_sale FROM gw_sale.
+        ENDIF.
+      ENDLOOP.
+
+      SORT it_vbak BY auart.
+      it_vbakt[] = it_vbak[].
+      DELETE ADJACENT DUPLICATES FROM it_vbakt COMPARING auart.
+      IF it_vbakt[] IS NOT INITIAL.
+        SELECT auart bezei
+               FROM tvakt
+               INTO TABLE it_tvakt
+               FOR ALL ENTRIES IN it_vbakt
+               WHERE spras EQ 'EN' AND
+        auart EQ it_vbakt-auart.
+        CLEAR it_vbakt[].
+      ENDIF.
+      IF gi_mara[] IS NOT INITIAL.
+        SELECT matkl wgbez
+               FROM t023t
+               INTO TABLE it_t023t
+               FOR ALL ENTRIES IN gi_mara
+        WHERE matkl = gi_mara-matkl.
+      ENDIF.
+      SORT gi_sale BY vbeln.
+      gi_salet[] = gi_sale[].
+      DELETE ADJACENT DUPLICATES FROM gi_salet COMPARING vbeln.
+      IF gi_salet[] IS NOT INITIAL.
+        SELECT belnr hkont matnr
+                   FROM bseg
+                   INTO TABLE it_bseg
+                   FOR ALL ENTRIES IN gi_salet
+                   WHERE bukrs = gi_salet-bukrs AND
+                         belnr = gi_salet-vbeln AND
+                       ( hkont BETWEEN '0000311000' AND '0000312018' OR
+        hkont EQ '0050010101' ).
+*      SELECT belnr hkont matnr
+*                 FROM bseg
+*                 INTO TABLE it_bseg
+*                 FOR ALL ENTRIES IN gi_salet
+*                 WHERE bukrs = gi_salet-bukrs AND
+*                       belnr = gi_salet-vbeln.
+
+        CLEAR gi_salet[].
+      ENDIF.
+
+
+      SORT it_bseg[] BY hkont.
+      it_bsegt[] = it_bseg[].
+      DELETE ADJACENT DUPLICATES FROM it_bsegt COMPARING hkont.
+      IF it_bsegt[] IS NOT INITIAL.
+        SELECT saknr txt50
+                  FROM skat
+                  INTO TABLE it_skat
+                  FOR ALL ENTRIES IN it_bsegt
+                  WHERE saknr = it_bsegt-hkont AND
+        ktopl = '1000'.
+      ENDIF.
+
+      SELECT vbeln kunnr kunag bolnr traid wadat_ist
+             FROM likp
+             INTO TABLE it_likp
+             FOR ALL ENTRIES IN gi_sale
+      WHERE vbeln = gi_sale-vgbel.
+      IF it_likp[] IS NOT INITIAL.
+        SELECT * FROM j_1imocust INTO TABLE it_j_1imocust
+                            FOR ALL ENTRIES IN it_likp
+        WHERE kunnr = it_likp-kunag.
+      ENDIF.
+      LOOP AT it_likp.
+        s_cust-sign = 'I'.
+        s_cust-option = 'EQ'.
+        s_cust-low = it_likp-kunnr.
+        APPEND s_cust.
+        CLEAR s_cust.
+      ENDLOOP.
+      IF it_likp[] IS NOT INITIAL.
+        SELECT vbeln posnr matnr kdmat bwtar lgort
+                   FROM lips
+                   INTO TABLE gi_lips
+                   FOR ALL ENTRIES IN it_likp
+        WHERE vbeln EQ it_likp-vbeln.
+      ENDIF.
+*** Begin Of Changes By Gaurav Dubey on 11.03.2015
+**  To Add fields in sales Reg
+      IF gi_lips[] IS NOT INITIAL.
+        SELECT mblnr
+               mjahr
+               zeile
+               bwart
+               dmbtr
+               sjahr
+               smbln
+               smblp
+               vbeln_im
+               vbelp_im
+          FROM mseg
+            INTO TABLE it_mseg_temp
+             FOR ALL ENTRIES IN gi_lips
+              WHERE vbeln_im = gi_lips-vbeln
+        AND vbelp_im = gi_lips-posnr.
+
+        it_mseg[] = it_mseg_temp[].
+
+        LOOP AT it_mseg_temp INTO wa_mseg.
+          READ TABLE it_mseg ASSIGNING <fs_mseg> WITH KEY smbln = wa_mseg-mblnr
+                                                          smblp = wa_mseg-zeile.
+          IF sy-subrc EQ 0.
+            <fs_mseg>-mark = 'X'.
+            READ TABLE it_mseg ASSIGNING <fs_mseg1> WITH KEY mblnr = wa_mseg-mblnr
+                                                             zeile = wa_mseg-zeile.
+            IF sy-subrc EQ 0.
+              <fs_mseg1>-mark = 'X'.
+            ENDIF.
+          ENDIF.
+        ENDLOOP.
+        DELETE it_mseg WHERE mark = 'X'.
+
+      ENDIF.
+*** End Of changes by Gaurav Dubey on 11.03.2015
+      SORT gi_sale[] BY kunag.
+      gi_salet[] = gi_sale[].
+      DELETE ADJACENT DUPLICATES FROM gi_salet COMPARING kunag.
+
+      SORT s_cust.
+      DELETE ADJACENT DUPLICATES FROM s_cust.
+
+      SELECT kunnr name1 name2 ort01 regio land1 stcd3
+             FROM kna1
+             INTO TABLE it_kna1
+      WHERE kunnr IN s_cust.
+
+      CLEAR gi_salet[].
+
+      SELECT * FROM t005u INTO TABLE it_t005u FOR ALL ENTRIES IN it_kna1
+      WHERE spras = 'E' AND land1 = it_kna1-land1 AND bland = it_kna1-regio.
+
+      SORT gi_sale[] BY vkbur.
+      gi_salet[] = gi_sale[].
+      DELETE ADJACENT DUPLICATES FROM gi_salet COMPARING vkbur.
+      IF gi_salet[] IS NOT INITIAL.
+        SELECT * FROM tvkbt
+                 INTO TABLE it_tvkbt
+                 FOR ALL ENTRIES IN gi_salet
+                 WHERE vkbur = gi_salet-vkbur AND
+        spras EQ 'EN'.
+      ENDIF.
+
+      CLEAR gi_salet[].
+
+      SORT gi_sale[] BY spart.
+      gi_salet[] = gi_sale[].
+      DELETE ADJACENT DUPLICATES FROM gi_salet COMPARING spart.
+      IF gi_salet[] IS NOT INITIAL.
+        SELECT * FROM tspat
+                     INTO TABLE it_tspat
+                     FOR ALL ENTRIES IN gi_salet
+                     WHERE spart = gi_salet-spart AND
+        spras EQ 'EN'.
+        CLEAR gi_salet[].
+      ENDIF.
+      SORT gi_sale[] BY vkgrp.
+      gi_salet[] = gi_sale[].
+      DELETE ADJACENT DUPLICATES FROM gi_salet COMPARING vkgrp.
+      IF gi_salet[] IS NOT INITIAL.
+        SELECT * FROM tvgrt
+                     INTO TABLE it_tvgrt
+                     FOR ALL ENTRIES IN gi_salet
+                     WHERE vkgrp = gi_salet-vkgrp AND
+        spras EQ 'EN'.
+        CLEAR gi_salet[].
+      ENDIF.
+
+      SORT gi_sale BY vbeln.
+      gi_salet[] = gi_sale[].
+      DELETE ADJACENT DUPLICATES FROM gi_salet COMPARING vbeln.
+      IF gi_salet[] IS NOT INITIAL.
+        SELECT * FROM vbkd
+                     INTO TABLE it_vbkd
+                     FOR ALL ENTRIES IN gi_salet
+        WHERE vbeln = gi_salet-vbeln.
+        CLEAR gi_salet[].
+      ENDIF.
+
+      SORT gi_sale[] BY vkorg.
+      gi_salet[] = gi_sale[].
+      DELETE ADJACENT DUPLICATES FROM gi_salet COMPARING vkorg.
+
+      IF gi_salet[] IS NOT INITIAL.
+        SELECT * FROM tvkot
+                     INTO TABLE it_tvkot
+                     FOR ALL ENTRIES IN gi_salet
+                     WHERE vkorg = gi_salet-vkorg AND
+        spras EQ 'EN'.
+        CLEAR gi_salet[].
+      ENDIF.
+
+      SORT gi_sale[] BY vtweg.
+      gi_salet[] = gi_sale[].
+      DELETE ADJACENT DUPLICATES FROM gi_salet COMPARING vtweg.
+      IF gi_salet[] IS NOT INITIAL.
+        SELECT * FROM tvtwt
+                     INTO TABLE it_tvtwt
+                     FOR ALL ENTRIES IN gi_salet
+                     WHERE vtweg = gi_salet-vtweg AND
+        spras EQ 'EN'.
+        CLEAR gi_salet[].
+      ENDIF.
+
+      SORT gi_sale[] BY matnr.
+      gi_salet[] = gi_sale[].
+      DELETE ADJACENT DUPLICATES FROM gi_salet COMPARING matnr.
+
+      IF gi_salet[] IS NOT INITIAL.
+        SELECT matnr j_1ichid
+               FROM j_1imtchid
+               INTO TABLE it_chpt
+               FOR ALL ENTRIES IN gi_salet
+        WHERE matnr = gi_salet-matnr.
+        CLEAR gi_salet[].
+      ENDIF.
+      IF gi_sale[] IS NOT INITIAL.
+        SELECT spras fkart vtext
+                   FROM tvfkt
+                   INTO TABLE gi_tvfkt
+                   FOR ALL ENTRIES IN gi_sale
+                   WHERE spras = 'EN' AND
+        fkart = gi_sale-fkart.
+        CLEAR gi_salet[].
+      ENDIF.
+
+      SORT gi_sale[] BY werks.
+      gi_salet[] = gi_sale[].
+      DELETE ADJACENT DUPLICATES FROM gi_salet COMPARING werks.
+      IF gi_salet[] IS NOT INITIAL.
+        SELECT werks name1
+                   FROM t001w
+                   INTO TABLE gi_t001w
+                   FOR ALL ENTRIES IN gi_salet
+        WHERE werks EQ gi_salet-werks.
+        CLEAR gi_salet[].
+      ENDIF.
+    ENDIF.
+
+    SORT gi_sale BY vbeln posnr.
+
+***************************************************************
+** added by hardik
+*****************************************************************
+    IF gi_sale[] IS NOT INITIAL.
+      SELECT mvke~matnr mvke~vkorg mvke~vtweg mvke~kondm mvke~ktgrm mvke~mvgr1 mvke~mvgr2
+          t178t~vtext tvkmt~vtext tvm1t~bezei tvm2t~bezei FROM mvke
+          LEFT OUTER JOIN t178t ON mvke~kondm = t178t~kondm AND t178t~spras = 'EN'
+          LEFT OUTER JOIN tvkmt ON mvke~ktgrm = tvkmt~ktgrm AND tvkmt~spras = 'EN'
+          LEFT OUTER JOIN tvm1t ON mvke~mvgr1 = tvm1t~mvgr1 AND tvm1t~spras = 'EN'
+          LEFT OUTER JOIN tvm2t ON mvke~mvgr2 = tvm2t~mvgr2 AND tvm2t~spras = 'EN'
+          INTO TABLE it_mvke FOR ALL ENTRIES IN gi_sale
+      WHERE matnr = gi_sale-matnr AND vkorg = gi_sale-vkorg AND vtweg = gi_sale-vtweg.
+    ENDIF.
+
+    LOOP AT gi_sale INTO gw_sale.
+      CLEAR gi_konv.
+      AT NEW vbeln.
+        gv_text = gw_sale-vbeln.
+        CALL FUNCTION 'READ_TEXT'
+          EXPORTING
+            id                      = 'Z014'
+            language                = sy-langu
+            name                    = gv_text
+            object                  = 'VBBK'
+          TABLES
+            lines                   = it_tline
+          EXCEPTIONS
+            id                      = 1
+            language                = 2
+            name                    = 3
+            not_found               = 4
+            object                  = 5
+            reference_check         = 6
+            wrong_access_to_archive = 7
+            OTHERS                  = 8.
+        IF sy-subrc <> 0.
+        ENDIF.
+
+        IF NOT it_tline IS INITIAL.
+          LOOP AT it_tline INTO wa_tline.
+            CONCATENATE lv_tdline wa_tline-tdline INTO lv_tdline SEPARATED BY space.
+          ENDLOOP.
+        ENDIF.
+
+        gw_data-charg = lv_tdline.
+        CLEAR lv_tdline.
+        CLEAR it_tline.
+        CALL FUNCTION 'READ_TEXT'
+          EXPORTING
+            id                      = 'Z002'
+            language                = sy-langu
+            name                    = gv_text
+            object                  = 'VBBK'
+          TABLES
+            lines                   = it_tline
+          EXCEPTIONS
+            id                      = 1
+            language                = 2
+            name                    = 3
+            not_found               = 4
+            object                  = 5
+            reference_check         = 6
+            wrong_access_to_archive = 7
+            OTHERS                  = 8.
+        IF sy-subrc <> 0.
+        ENDIF.
+
+        IF NOT it_tline IS INITIAL.
+          LOOP AT it_tline INTO wa_tline.
+            CONCATENATE lv_tdline wa_tline-tdline INTO lv_tdline SEPARATED BY space.
+          ENDLOOP.
+        ENDIF.
+
+        gw_data-lad_text = lv_tdline.
+        CLEAR lv_tdline.
+        CLEAR it_tline.
+
+        CALL FUNCTION 'READ_TEXT'
+          EXPORTING
+            id                      = '0002'
+            language                = sy-langu
+            name                    = gv_text
+            object                  = 'VBBK'
+          TABLES
+            lines                   = it_tline
+          EXCEPTIONS
+            id                      = 1
+            language                = 2
+            name                    = 3
+            not_found               = 4
+            object                  = 5
+            reference_check         = 6
+            wrong_access_to_archive = 7
+            OTHERS                  = 8.
+        IF sy-subrc <> 0.
+        ENDIF.
+
+        IF NOT it_tline IS INITIAL.
+          LOOP AT it_tline INTO wa_tline.
+            CONCATENATE lv_tdline wa_tline-tdline INTO lv_tdline SEPARATED BY space.
+          ENDLOOP.
+        ENDIF.
+
+        gw_data-shp_text = lv_tdline.
+        CLEAR lv_tdline.
+        CLEAR it_tline.
+
+        CALL FUNCTION 'READ_TEXT'
+          EXPORTING
+            id                      = 'Z003'
+            language                = sy-langu
+            name                    = gv_text
+            object                  = 'VBBK'
+          TABLES
+            lines                   = it_tline
+          EXCEPTIONS
+            id                      = 1
+            language                = 2
+            name                    = 3
+            not_found               = 4
+            object                  = 5
+            reference_check         = 6
+            wrong_access_to_archive = 7
+            OTHERS                  = 8.
+        IF sy-subrc <> 0.
+        ENDIF.
+
+        IF NOT it_tline IS INITIAL.
+          LOOP AT it_tline INTO wa_tline.
+            CONCATENATE lv_tdline wa_tline-tdline INTO lv_tdline SEPARATED BY space.
+          ENDLOOP.
+        ENDIF.
+
+        gw_data-trs_text = lv_tdline.
+        CLEAR lv_tdline.
+        CLEAR it_tline.
+
+        CALL FUNCTION 'READ_TEXT'
+          EXPORTING
+            id                      = 'YH11'
+            language                = sy-langu
+            name                    = gv_text
+            object                  = 'VBBK'
+          TABLES
+            lines                   = it_tline
+          EXCEPTIONS
+            id                      = 1
+            language                = 2
+            name                    = 3
+            not_found               = 4
+            object                  = 5
+            reference_check         = 6
+            wrong_access_to_archive = 7
+            OTHERS                  = 8.
+        IF sy-subrc <> 0.
+        ENDIF.
+
+        IF NOT it_tline IS INITIAL.
+          LOOP AT it_tline INTO wa_tline.
+            CONCATENATE lv_tdline wa_tline-tdline INTO lv_tdline SEPARATED BY space.
+          ENDLOOP.
+        ENDIF.
+
+        gw_data-gr_text = lv_tdline.
+        CLEAR lv_tdline.
+        CLEAR it_tline.
+      ENDAT.
+
+      CALL FUNCTION 'READ_TEXT'
+        EXPORTING
+          id                      = 'Z001'
+          language                = sy-langu
+          name                    = gv_text
+          object                  = 'VBBK'
+        TABLES
+          lines                   = it_tline
+        EXCEPTIONS
+          id                      = 1
+          language                = 2
+          name                    = 3
+          not_found               = 4
+          object                  = 5
+          reference_check         = 6
+          wrong_access_to_archive = 7
+          OTHERS                  = 8.
+      IF sy-subrc <> 0.
+      ENDIF.
+      IF NOT it_tline IS INITIAL.
+        LOOP AT it_tline INTO wa_tline.
+          CONCATENATE lv_tdline wa_tline-tdline INTO lv_tdline SEPARATED BY space.
+        ENDLOOP.
+      ENDIF.
+
+      gw_data-vehno_text = lv_tdline.
+      CLEAR lv_tdline.
+      CLEAR it_tline.
+      CLEAR gv_text.
+
+      IF gw_sale-fksto = 'X'.
+        gw_data-inv_stat = 'CANCELLED'.
+      ENDIF.
+
+      gw_data-vrkme  = gw_sale-vrkme.              " BASE UNIT
+      gw_data-ntgew  = gw_sale-ntgew.              " GROSS WEIGHT
+      gw_data-net_wt = gw_data-ntgew / 1000.
+      gw_data-brgew  = gw_sale-brgew.              " GROSS WEIGHT
+      gw_data-gewei  = gw_sale-gewei.              " WEIGHT UNIT
+
+      SELECT SINGLE sakn1
+             FROM konv
+             INTO gw_data-hkont
+             WHERE knumv = gw_sale-knumv AND kposn = gw_sale-posnr
+      AND kvsl1 IN ('ERL','EXD','ZSC').
+
+      SELECT SINGLE txt50 FROM skat
+             INTO gw_data-txt50
+             WHERE saknr = gw_data-hkont AND
+      spras = 'EN'.
+
+      LOOP AT gi_konv WHERE knumv = gw_sale-knumv AND
+                            kposn = gw_sale-posnr. "and
+*                          KSTAT NE 'X'.
+
+
+        CASE gi_konv-kschl.
+
+          WHEN 'PR00' OR 'ZPR0'.
+            IF gw_sale-waerk EQ 'INR'.
+              gw_data-basicrate = gi_konv-kbetr.
+              gw_data-basicamt  = gi_konv-kwert.
+              gw_data-netprcinr = gi_konv-kwert.
+              g_netprice        = gw_data-basicamt.
+            ELSE.
+              gw_data-basicrate = gi_konv-kbetr.
+              gw_data-basicamt  = gi_konv-kwert.
+              gw_data-netprcinr = gi_konv-kwert * gw_sale-kurrf.
+              g_netprice        = gw_data-basicamt.
+            ENDIF.
+
+          WHEN 'ZMAT' OR 'ZMA1' OR 'ZMA2'.
+            IF gi_konv-krech = 'A'.
+              gw_data-discper = gi_konv-kbetr / 10.
+            ENDIF.
+            IF gw_sale-waerk EQ 'INR'.
+              gw_data-fixed_disamt  = gw_data-fixed_disamt + gi_konv-kwert.
+            ELSE.
+              gw_data-fixed_disamt  = gw_data-fixed_disamt + ( gi_konv-kwert * gw_sale-kurrf ).
+            ENDIF.
+
+
+          WHEN 'ZMND'.
+            IF gi_konv-krech = 'A'.
+              gw_data-mdiscper = gi_konv-kbetr / 10.
+            ENDIF.
+            IF gw_sale-waerk EQ 'INR'.
+              gw_data-spl_disamt  = gi_konv-kwert.
+            ELSE.
+              gw_data-spl_disamt  = gi_konv-kwert * gw_sale-kurrf.
+            ENDIF.
+
+          WHEN 'ZDS1'.
+            IF gi_konv-krech = 'A'.
+              gw_data-disc3per = gi_konv-kbetr / 10.
+            ENDIF.
+            IF gw_sale-waerk EQ 'INR'.
+              gw_data-disc3  = gi_konv-kwert.
+            ELSE.
+              gw_data-disc3  = gi_konv-kwert * gw_sale-kurrf.
+            ENDIF.
+
+          WHEN 'JASS'.
+            IF gw_sale-waerk EQ 'INR'.
+              gw_data-asseble_amt  = gi_konv-kwert.
+            ELSE.
+              gw_data-asseble_amt  = gi_konv-kwert * gw_sale-kurrf.
+            ENDIF.
+
+          WHEN 'JEXP'.                                      " BASIC EXCISE DUTY.
+            IF gw_sale-waerk EQ 'INR'.
+              gw_data-excise = gi_konv-kwert.
+            ELSE.
+              gw_data-excise = gi_konv-kwert * gw_sale-kurrf.
+            ENDIF.
+
+          WHEN 'JCEP'.                                         " EDUCATION CESS ON BED
+            IF gw_sale-waerk EQ 'INR'.
+              gw_data-ecess = gi_konv-kwert.
+            ELSE.
+              gw_data-ecess = gi_konv-kwert * gw_sale-kurrf.
+            ENDIF.
+
+          WHEN 'JHEP'.                                         " SECONDARY & HR E-CESS ON BED
+            IF gw_sale-waerk EQ 'INR'.
+              gw_data-hecess = gi_konv-kwert.
+            ELSE.
+              gw_data-hecess = gi_konv-kwert * gw_sale-kurrf.
+            ENDIF.
+
+          WHEN 'ZES1'.                                        " SERVICE TAX
+            IF gw_sale-waerk EQ 'INR'.
+              gw_data-stax = gi_konv-kwert.
+            ELSE.
+              gw_data-stax = gi_konv-kwert * gw_sale-kurrf.
+            ENDIF.
+
+          WHEN 'ZES2'.                                       " EDUCATION CESS ON SERVICE TAX
+            IF gw_sale-waerk EQ 'INR'.
+              gw_data-eceser = gi_konv-kwert.
+            ELSE.
+              gw_data-eceser = gi_konv-kwert * gw_sale-kurrf.
+            ENDIF.
+
+          WHEN 'ZES3'.                                         " SECONDARY & HR E-CESS ON SERVICE TAX
+            IF gw_sale-waerk EQ 'INR'.
+              gw_data-hecser = gi_konv-kwert.
+            ELSE.
+              gw_data-hecser = gi_konv-kwert * gw_sale-kurrf.
+            ENDIF.
+
+          WHEN 'JCST'.                                       " CENTRAL SALES TAX
+            gw_data-cstrate = gi_konv-kbetr / 10.
+            gw_data-cstamt  = gi_konv-kwert.
+            gw_data-mwsk1   = gi_konv-mwsk1.
+            READ TABLE it_t007s INTO wa_t007s WITH KEY mwskz = gi_konv-mwsk1.
+            gw_data-mwtext   = wa_t007s-text1.
+            CLEAR wa_t007s.
+*          SELECT SINGLE taxk1 INTO v_taxk1 FROM vbrk WHERE vbeln = gw_sale-vbeln.
+            SELECT SINGLE vtext FROM tskdt INTO gw_data-taxnote1 WHERE tatyp = 'JCST' AND taxkd = gw_sale-taxk1.
+            CLEAR v_taxk1.
+
+          WHEN 'JVAT'.                                         " VAT
+            gw_data-vatrate = gi_konv-kbetr / 10.
+            gw_data-vatamt  = gi_konv-kwert.
+            gw_data-mwsk1   = gi_konv-mwsk1.
+            READ TABLE it_t007s INTO wa_t007s WITH KEY mwskz = gi_konv-mwsk1.
+            gw_data-mwtext   = wa_t007s-text1.
+            CLEAR wa_t007s.
+*          SELECT SINGLE taxk2 INTO v_taxk1 FROM vbrk WHERE vbeln = gw_sale-vbeln.
+            SELECT SINGLE vtext FROM tskdt INTO gw_data-taxnote2 WHERE tatyp = 'JVAT' AND taxkd = gw_sale-taxk2.
+            CLEAR v_taxk1.
+
+          WHEN 'ZFRT'.                                                  "Freight
+            IF gw_sale-waerk EQ 'INR'.
+              gw_data-zfr5  = gi_konv-kwert.
+            ELSE.
+              gw_data-zfr5  = gi_konv-kwert * gw_sale-kurrf.
+            ENDIF.
+
+          WHEN 'ZTFI'.                                                  "SCRAP SALES
+            IF gw_sale-waerk EQ 'INR'.
+              gw_data-ztf5  = gi_konv-kwert.
+            ELSE.
+              gw_data-ztf5  = gi_konv-kwert * gw_sale-kurrf.
+            ENDIF.
+
+          WHEN 'JVT2'.                                               "ADDITIONAL VAT
+            IF gw_sale-waerk EQ 'INR'.
+              gw_data-zvat_r = gi_konv-kbetr / 10.
+              gw_data-zvat  = gi_konv-kwert.
+            ELSE.
+              gw_data-zvat_r = gi_konv-kbetr / 10.
+              gw_data-zvat  = gi_konv-kwert * gw_sale-kurrf.
+            ENDIF.
+
+          WHEN 'ZINS'.                                         "EXP INS.
+            IF gw_sale-waerk EQ 'INR'.
+              gw_data-zfr6  = gi_konv-kwert.
+            ELSE.
+              gw_data-zfr6  = gi_konv-kwert * gw_sale-kurrf.
+            ENDIF.
+
+          WHEN 'JEAP'.                                          " ADDITINAL EXCISE DUTY
+            IF gw_sale-waerk EQ 'INR'.
+              gw_data-zaed = gi_konv-kwert.
+            ELSE.
+              gw_data-zaed = gi_konv-kwert * gw_sale-kurrf.
+            ENDIF.
+
+          WHEN 'ZPST' OR 'ZMA3'.                                          " GL POSTING
+            IF gw_sale-waerk EQ 'INR'.
+              gw_data-zpst = gi_konv-kwert.
+            ELSE.
+              gw_data-zpst = gi_konv-kwert * gw_sale-kurrf.
+            ENDIF.
+
+          WHEN 'DIFF'.                                          " ROUNDING OFF
+            IF gw_sale-waerk EQ 'INR'.
+              gw_data-rofamt  = gi_konv-kwert.
+            ELSE.
+              gw_data-rofamt  = gi_konv-kwert * gw_sale-kurrf.
+            ENDIF.
+*****Changes : 12.07.17 - GST : Ravin DEVK909218
+            "Material
+          WHEN 'JOIG'.
+            IF gi_konv-krech = 'A'.
+              gw_data-joigper = gi_konv-kbetr / 10.
+            ENDIF.
+            IF gw_sale-waerk EQ 'INR'.
+              gw_data-joigamt = gi_konv-kwert.
+            ELSE.
+              gw_data-joigamt  = gi_konv-kwert * gw_sale-kurrf.
+            ENDIF.
+          WHEN 'JOSG'.
+            IF gi_konv-krech = 'A'.
+              gw_data-josgper = gi_konv-kbetr / 10.
+            ENDIF.
+            IF gw_sale-waerk EQ 'INR'.
+              gw_data-josgamt = gi_konv-kwert.
+            ELSE.
+              gw_data-josgamt  = gi_konv-kwert * gw_sale-kurrf.
+            ENDIF.
+          WHEN 'JOCG'.
+            IF gi_konv-krech = 'A'.
+              gw_data-jocgper = gi_konv-kbetr / 10.
+            ENDIF.
+            IF gw_sale-waerk EQ 'INR'.
+              gw_data-jocgamt = gi_konv-kwert.
+            ELSE.
+              gw_data-jocgamt  = gi_konv-kwert * gw_sale-kurrf.
+            ENDIF.
+            "Insurance
+          WHEN 'ZIIG'.
+            IF gi_konv-krech = 'A'.
+              gw_data-ziigper = gi_konv-kbetr / 10.
+            ENDIF.
+            IF gw_sale-waerk EQ 'INR'.
+              gw_data-ziigamt = gi_konv-kwert.
+            ELSE.
+              gw_data-ziigamt  = gi_konv-kwert * gw_sale-kurrf.
+            ENDIF.
+          WHEN 'ZICG'.
+            IF gi_konv-krech = 'A'.
+              gw_data-zicgper = gi_konv-kbetr / 10.
+            ENDIF.
+            IF gw_sale-waerk EQ 'INR'.
+              gw_data-zicgamt = gi_konv-kwert.
+            ELSE.
+              gw_data-zicgamt  = gi_konv-kwert * gw_sale-kurrf.
+            ENDIF.
+          WHEN 'ZISG'.
+            IF gi_konv-krech = 'A'.
+              gw_data-zisgper = gi_konv-kbetr / 10.
+            ENDIF.
+            IF gw_sale-waerk EQ 'INR'.
+              gw_data-zisgamt = gi_konv-kwert.
+            ELSE.
+              gw_data-zisgamt  = gi_konv-kwert * gw_sale-kurrf.
+            ENDIF.
+            "Freight
+          WHEN 'ZFIG'.
+            IF gi_konv-krech = 'A'.
+              gw_data-zfigper = gi_konv-kbetr / 10.
+            ENDIF.
+            IF gw_sale-waerk EQ 'INR'.
+              gw_data-zfigamt = gi_konv-kwert.
+            ELSE.
+              gw_data-zfigamt  = gi_konv-kwert * gw_sale-kurrf.
+            ENDIF.
+          WHEN 'ZFCG'.
+            IF gi_konv-krech = 'A'.
+              gw_data-zfcgper = gi_konv-kbetr / 10.
+            ENDIF.
+            IF gw_sale-waerk EQ 'INR'.
+              gw_data-zfcgamt = gi_konv-kwert.
+            ELSE.
+              gw_data-zfcgamt  = gi_konv-kwert * gw_sale-kurrf.
+            ENDIF.
+          WHEN 'ZFSG'.
+            IF gi_konv-krech = 'A'.
+              gw_data-zfcgper = gi_konv-kbetr / 10.
+            ENDIF.
+            IF gw_sale-waerk EQ 'INR'.
+              gw_data-zfsgamt = gi_konv-kwert.
+            ELSE.
+              gw_data-zfsgamt  = gi_konv-kwert * gw_sale-kurrf.
+            ENDIF.
+
+          WHEN 'YTCS'.
+
+            IF gw_sale-waerk EQ 'INR'.
+              gw_data-ztf5 =  gi_konv-kwert.
+            ELSE.
+              gw_data-ztf5  = gi_konv-kwert * gw_sale-kurrf.
+            ENDIF.
+*****END Changes : 12.07.17 - for Material-GST : Ravin DEVK909218
+        ENDCASE.
+        IF gw_sale-fksto = 'X'.
+          gw_data-gr_amt = gw_data-gr_amt * -1.
+        ENDIF.
+        CLEAR gi_konv.
+      ENDLOOP.
+      IF gw_data-taxnote1 IS INITIAL.
+        SELECT SINGLE vtext FROM tskdt INTO gw_data-taxnote1 WHERE spras = sy-langu AND tatyp = 'JCST' AND taxkd = gw_sale-taxk1.
+      ENDIF.
+      IF gw_data-taxnote2 IS INITIAL.
+        SELECT SINGLE vtext FROM tskdt INTO gw_data-taxnote2 WHERE spras = sy-langu AND tatyp = 'JVAT' AND taxkd = gw_sale-taxk2.
+      ENDIF.
+*    gw_data-gr_amt = gw_data-asseble_amt + gw_data-excise + gw_data-ecess + gw_data-hecess + gw_data-stax + gw_data-eceser +
+*                      gw_data-hecser + gw_data-cstamt + gw_data-vatamt + gw_data-zvat + gw_data-zaed + gw_data-rofamt.
+      gw_data-gr_amt = gw_sale-kurrf * ( gw_sale-netwr1 + gw_sale-mwsbp ).
+      flag = 0.
+
+      gw_data-zmonth = gw_sale-fkdat+4(2).
+
+      gw_data-vbeln   = gw_sale-vbeln.
+      gw_data-fkart   = gw_sale-fkart.
+      gw_data-bukrs   = gw_sale-bukrs.
+      gw_data-ref_doc = gw_sale-vgbel .
+      SELECT SINGLE j_1iexcdtl~docno j_1iexchdr~cpudt FROM j_1iexcdtl
+        INNER JOIN j_1iexchdr ON j_1iexcdtl~docno = j_1iexchdr~docno
+        INTO (gw_data-are1no,v_dt)
+      WHERE j_1iexcdtl~rdoc1 = gw_sale-vgbel AND j_1iexcdtl~trntyp = 'ARE1'.
+*      CONCATENATE V_DT+6(2) '/' V_DT+4(2) '/' V_DT+0(4) INTO GW_DATA-ARE1DATE.
+      gw_data-are1date = v_dt.
+      CLEAR v_dt.
+      SELECT SINGLE j_1iexcdtl~docno j_1iexchdr~cpudt FROM j_1iexcdtl
+        INNER JOIN j_1iexchdr ON j_1iexcdtl~docno = j_1iexchdr~docno
+        INTO (gw_data-are3no,v_dt)
+      WHERE j_1iexcdtl~rdoc1 = gw_sale-vgbel AND j_1iexcdtl~trntyp = 'ARE3'.
+      CONCATENATE v_dt+6(2) '/' v_dt+4(2) '/' v_dt+0(4) INTO gw_data-are3date.
+      gw_data-are3date = v_dt.
+      CLEAR v_dt.
+      gw_data-posnr   = gw_sale-posnr .
+      gw_data-vkorg   = gw_sale-vkorg .
+      gw_data-vtweg   = gw_sale-vtweg .
+      gw_data-spart   = gw_sale-spart .
+      gw_data-fkdat   = gw_sale-fkdat .
+      gw_data-inco1   = gw_sale-inco1 .
+      gw_data-aubel   = gw_sale-aubel .
+      gw_data-poper   = gw_sale-poper .
+      gw_data-aupos   = gw_sale-aupos .
+      gw_data-matnr   = gw_sale-matnr .
+      gw_data-vkbur   = gw_sale-vkbur .
+      gw_data-kunag   = gw_sale-kunag .
+      gw_data-kunrg   = gw_sale-kunrg .
+      gw_data-fkimg   = gw_sale-fkimg .
+      gw_data-waerk   = gw_sale-waerk .
+      gw_data-kurrf   = gw_sale-kurrf .
+      gw_data-erdat1  = gw_sale-erdat1. " ADDING ONE FIELD - KRUTARTH SHAH
+*    MOVE GW_SALE-CHARG TO GW_DATA-CHARG.
+
+      gw_data-inco2 = gw_sale-inco2 .
+      gw_data-bzirk = gw_sale-bzirk .
+      gw_data-kdgrp = gw_sale-kdgrp .
+*      gw_data-zvgbel = gw_sale-zvgpos.
+*       gw_data-zvgpos = gw_sale-zvgbel.
+*      READ TABLE it_vbap INTO wa_vbap WITH KEY vbeln = gw_sale-aubel posnr = gw_data-posnr.
+*      gw_data-zvgbel = wa_vbap-zvgbel.
+*      gw_data-zvgpos = wa_vbap-zvgpos.
+
+
+      READ TABLE it_t151t INTO wa_t151t WITH KEY kdgrp = gw_sale-kdgrp.
+      IF sy-subrc = 0.
+        gw_data-ktext = wa_t151t-ktext.
+      ENDIF.
+      READ TABLE it_t005u INTO wa_t005u WITH KEY  bland = gw_sale-regio. " LAND1 = GW_SALE-COUNC
+      IF sy-subrc = 0.
+        gw_data-bezei1 = wa_t005u-bezei.
+      ENDIF.
+      READ TABLE it_tvzbt INTO wa_tvzbt WITH KEY zterm = gw_sale-zterm.
+      IF sy-subrc = 0.
+        gw_data-zterm = wa_tvzbt-zterm.
+        gw_data-vtext = wa_tvzbt-vtext.
+      ENDIF.
+
+      READ TABLE it_match INTO wa_match WITH KEY matnr = gw_sale-matnr
+                                                 werks = gw_sale-werks.
+      IF sy-subrc = 0.
+        READ TABLE it_chid INTO wa_chid WITH KEY j_1ichid = wa_match-j_1ichid.
+        IF sy-subrc = 0.
+          gw_data-j_1icht1 = wa_chid-j_1icht1.
+        ENDIF.
+      ENDIF.
+      SHIFT gw_data-matnr LEFT DELETING LEADING '0'.
+
+      CLEAR wa_vbak.
+      READ TABLE it_vbak INTO wa_vbak WITH KEY vbeln = gw_sale-aubel.
+      IF sy-subrc = 0.
+        gw_data-erdat = wa_vbak-erdat.
+        gw_data-auart = wa_vbak-auart.
+        gw_data-po_no = wa_vbak-po_no.
+        gw_data-po_dt = wa_vbak-po_dt.
+        gw_data-vgbel = wa_vbak-vgbel.
+      ENDIF.
+
+      CLEAR wa_tvakt.
+      READ TABLE it_tvakt INTO wa_tvakt WITH KEY auart = wa_vbak-auart.
+      IF sy-subrc = 0.
+        gw_data-bezei = wa_tvakt-bezei.
+        TRANSLATE gw_data-bezei TO UPPER CASE.
+      ENDIF.
+
+      CLEAR wa_j_1iexchdr.
+      READ TABLE it_j_1iexchdr INTO wa_j_1iexchdr WITH KEY rdoc = gw_sale-vbeln.
+      IF sy-subrc = 0.
+        gw_data-exnum   = wa_j_1iexchdr-exnum  .
+        gw_data-exdat   = wa_j_1iexchdr-exdat  .
+        gw_data-remtime = wa_j_1iexchdr-remtime.
+        PERFORM f_gv_domtxt.
+      ENDIF.
+
+      CLEAR it_makt.
+      READ TABLE it_makt WITH KEY matnr = gw_sale-matnr.
+      IF sy-subrc EQ 0.
+        gw_data-maktx = it_makt-maktx.
+      ENDIF.
+
+      CLEAR wa_mara.
+      READ TABLE gi_mara INTO wa_mara WITH KEY matnr = gw_sale-matnr.
+      IF sy-subrc = 0.
+        gw_data-matkl = wa_mara-matkl.
+        gw_data-mtart = wa_mara-mtart.
+        gw_data-meins = wa_mara-meins.
+* CHANGES ON 12.09.2009 BY RAHUL PATHAK TO ADD NET WEIGHT COLUMN.
+*      GW_DATA-NET_WT = WA_MARA-NET_WT * GW_SALE-FKIMG.
+*      GW_DATA-NET_WT = ( GW_DATA-NET_WT / 1000 ).
+
+* ENDED BY RAHUL PATHAK
+      ENDIF.
+*********** valuation class
+      CLEAR: wa_mbew.
+      READ TABLE it_mbew INTO wa_mbew WITH KEY matnr = gw_sale-matnr bwkey = gw_sale-werks .
+      IF sy-subrc = 0.
+        gw_data-class = wa_mbew-bklas.
+      ENDIF.
+      CLEAR: wa_t025t.
+      READ TABLE it_t025t INTO wa_t025t WITH KEY bklas = wa_mbew-bklas spras = 'EN'.
+      IF sy-subrc = 0.
+        gw_data-cldes = wa_t025t-bkbez.
+      ENDIF.
+*********************
+      CLEAR : lwa_marm.
+      READ TABLE lt_marm INTO lwa_marm WITH KEY matnr = gw_sale-matnr.
+      IF sy-subrc EQ 0.
+        gw_data-altum = lwa_marm-meinh. " Alternate UOM
+      ELSE.
+        gw_data-altum = 'EA'.
+      ENDIF.
+*************** conversion
+      CALL FUNCTION 'MD_CONVERT_MATERIAL_UNIT'
+        EXPORTING
+          i_matnr              = gw_data-matnr
+          i_in_me              = gw_data-meins
+          i_out_me             = gw_data-altum
+          i_menge              = gw_data-fkimg
+        IMPORTING
+          e_menge              = lv_blmenge
+        EXCEPTIONS
+          error_in_application = 1
+          error                = 2
+          OTHERS               = 3.
+      IF sy-subrc = 0.
+* Implement suitable error handling here
+        IF gw_data-altum = 'FT'.
+          gw_data-opblf = lv_blmenge.
+        ELSEIF gw_data-altum = 'M'.
+          gw_data-opblm = lv_blmenge.
+        ENDIF.
+      ENDIF.
+*************
+
+
+*    GW_DATA-NET_WT = GW_SALE-FKLMG.
+      CLEAR wa_t023t.
+      READ TABLE it_t023t INTO wa_t023t WITH KEY matkl = wa_mara-matkl.
+      IF sy-subrc = 0.
+        gw_data-wgbez = wa_t023t-wgbez.
+      ENDIF.
+
+      CLEAR it_tvkbt.
+      READ TABLE it_tvkbt WITH KEY vkbur = gw_sale-vkbur.
+      IF sy-subrc EQ 0.
+        TRANSLATE it_tvkbt-bezei TO UPPER CASE.
+        gw_data-vkbur = it_tvkbt-bezei.
+      ENDIF.
+
+      CLEAR it_tspat.
+      READ TABLE it_tspat WITH KEY spart = gw_sale-spart.
+      IF sy-subrc EQ 0.
+        gw_data-sprt = gw_sale-spart.
+        TRANSLATE it_tspat-vtext TO UPPER CASE.
+        gw_data-spart = it_tspat-vtext.
+      ENDIF.
+
+      CLEAR it_tvgrt.
+      READ TABLE it_tvgrt WITH KEY vkgrp = gw_sale-vkgrp.
+      IF sy-subrc EQ 0.
+        TRANSLATE it_tvgrt-bezei TO UPPER CASE.
+        gw_data-vkgrp_txt = it_tvgrt-bezei.
+      ENDIF.
+
+      CLEAR it_tvkot.
+      READ TABLE it_tvkot WITH KEY vkorg = gw_sale-vkorg.
+      gw_data-vkrg = gw_sale-vkorg.
+      IF sy-subrc EQ 0.
+        TRANSLATE it_tvkot-vtext TO UPPER CASE.
+        gw_data-vkorg = it_tvkot-vtext.
+      ENDIF.
+
+      CLEAR it_tvtwt.
+      READ TABLE it_tvtwt WITH KEY vtweg = gw_sale-vtweg.
+      IF sy-subrc EQ 0.
+        gw_data-vtwg = gw_sale-vtweg.
+        TRANSLATE it_tvtwt-vtext TO UPPER CASE.
+        gw_data-vtweg = it_tvtwt-vtext.
+      ENDIF.
+
+      CLEAR it_likp.
+      READ TABLE it_likp WITH KEY vbeln = gw_sale-vgbel.
+      IF sy-subrc EQ 0.
+        gw_data-kunnr = it_likp-kunnr.
+        gw_data-kunag = it_likp-kunag.
+        gw_data-bolnr = it_likp-bolnr.
+        gw_data-traid = it_likp-traid.
+        gw_data-adate = it_likp-adate.
+      ENDIF.
+      IF gw_data-kunag IS NOT INITIAL.
+*      READ TABLE it_j_1imocust INTO wa_j_1imocust WITH KEY kunnr = gw_data-kunnr.
+        READ TABLE it_j_1imocust INTO wa_j_1imocust WITH KEY kunnr = gw_data-kunag.
+        IF sy-subrc = 0.
+          gw_data-ecc      = wa_j_1imocust-j_1iexcd.     " ECC NO
+          gw_data-cst_no   = wa_j_1imocust-j_1icstno.     " CST NO
+          gw_data-lst_no   = wa_j_1imocust-j_1ilstno.     " LST NO
+          gw_data-pan_no   = wa_j_1imocust-j_1ipanno.     " PAN NO
+        ENDIF.
+      ENDIF.
+      CLEAR gw_lips.
+      READ TABLE gi_lips INTO gw_lips WITH KEY vbeln = it_likp-vbeln
+                                               posnr = gw_sale-vgpos
+                                               matnr = gw_sale-matnr.
+      IF sy-subrc EQ 0.
+        gw_data-kdmat = gw_lips-kdmat.
+        gw_data-bwtar = gw_lips-bwtar.
+        gw_data-lgort = gw_lips-lgort.
+
+*** Begin Of Changes By Gaurav Dubey on 11.03.2015
+**  To Add fields in sales Reg
+        READ TABLE it_mseg INTO wa_mseg WITH KEY vbeln_im = gw_lips-vbeln
+                                                 vbelp_im = gw_lips-posnr.
+        IF sy-subrc EQ 0.
+          gw_data-mblnr = wa_mseg-mblnr.
+          gw_data-dmbtr = wa_mseg-dmbtr.
+        ENDIF.
+*** End Of Changes By Gaurav Dubey on 11.03.2015
+
+      ENDIF.
+      gw_data-prctr = gw_sale-prctr.
+      CLEAR it_kna1.
+      READ TABLE it_kna1 INTO wa_kna1 WITH KEY kunnr = gw_sale-kunag.
+      IF sy-subrc EQ 0.
+        CONCATENATE wa_kna1-name1 wa_kna1-name2 INTO gw_data-sld_name SEPARATED BY space.
+*      gw_data-sld_name = it_kna1-name1.
+      ENDIF.
+
+      CLEAR: it_kna1, wa_kna1.
+      READ TABLE it_kna1 INTO wa_kna1 WITH KEY kunnr = gw_sale-kunrg.
+      IF sy-subrc EQ 0.
+        CONCATENATE wa_kna1-name1 wa_kna1-name2 INTO gw_data-name1 SEPARATED BY space.
+*      gw_data-name1 = it_kna1-name1.
+      ENDIF.
+
+      CLEAR: it_kna1, wa_kna1.
+      READ TABLE it_kna1 INTO wa_kna1 WITH KEY kunnr = it_likp-kunnr.
+      IF sy-subrc EQ 0.
+        CONCATENATE wa_kna1-name1 wa_kna1-name2 INTO gw_data-shp_name SEPARATED BY space.
+*      gw_data-shp_name = it_kna1-name1.
+        gw_data-shp_city = wa_kna1-city .
+        CLEAR: wa_1t005u.
+        READ TABLE it_1t005u INTO wa_1t005u WITH KEY  bland = wa_kna1-regio.
+        IF sy-subrc = 0.
+          gw_data-bezei1 = wa_1t005u-bezei.
+        ENDIF.
+      ENDIF.
+
+      CLEAR: it_kna1, wa_kna1.
+      READ TABLE it_kna1 INTO wa_kna1 WITH KEY kunnr = gw_sale-kunrg.
+      IF sy-subrc EQ 0.
+        CONCATENATE wa_kna1-name1 wa_kna1-name2 INTO gw_data-name1 SEPARATED BY space.
+*      gw_data-name1 = it_kna1-name1.
+      ENDIF.
+
+      CLEAR: it_kna1, wa_kna1.
+      READ TABLE it_kna1 INTO wa_kna1 WITH KEY kunnr = it_likp-kunnr.
+      IF sy-subrc EQ 0.
+        CONCATENATE wa_kna1-name1 wa_kna1-name2 INTO gw_data-shp_name SEPARATED BY space.
+*      gw_data-shp_name = it_kna1-name1.
+        gw_data-shp_city = wa_kna1-city .
+
+        CLEAR: wa_t005u.
+        READ TABLE it_t005u INTO wa_t005u WITH KEY  bland = wa_kna1-regio. " LAND1 = GW_SALE-COUNC
+        IF sy-subrc = 0.
+          gw_data-shp_regio = wa_t005u-bezei.
+        ENDIF.
+      ENDIF.
+      CLEAR: it_kna1, wa_kna1.
+      CLEAR gw_tvfkt.
+      READ TABLE gi_tvfkt INTO gw_tvfkt WITH KEY spras = 'EN'
+                                                 fkart = gw_sale-fkart.
+      IF sy-subrc EQ 0.
+        gw_data-fkart_txt = gw_tvfkt-vtext.
+      ENDIF.
+
+      CLEAR gw_t001w.
+      READ TABLE gi_t001w INTO gw_t001w WITH KEY werks = gw_sale-werks.
+      IF sy-subrc EQ 0.
+        gw_data-plant = gw_sale-werks.
+        gw_data-plant_desc = gw_t001w-name1.
+      ENDIF.
+
+      CLEAR it_chpt.
+      READ TABLE it_chpt WITH KEY matnr = gw_sale-matnr.
+      IF sy-subrc EQ 0.
+        gw_data-chapid = it_chpt-chapid.
+      ENDIF.
+
+*******ADDITIONS FOR COMMISSION AGENT-------------------*
+      CLEAR lv_partner.
+      SELECT SINGLE kunnr FROM vbpa
+                          INTO lv_partner
+                          WHERE vbeln = gw_data-aubel
+      AND   parvw = 'ZG'.
+
+      IF sy-subrc = 0.
+        UNPACK lv_partner TO lv_partner.
+        gw_data-zcno = lv_partner.
+        SELECT SINGLE name1 FROM kna1
+                     INTO gw_data-zcname
+        WHERE kunnr = lv_partner.
+      ENDIF.
+
+      READ TABLE it_mvke INTO wa_mvke WITH KEY matnr = gw_sale-matnr vkorg = gw_sale-vkorg vtweg = gw_sale-vtweg.
+      gw_data-kondm  = wa_mvke-kondm.
+      gw_data-ktgrm  = wa_mvke-ktgrm.
+      gw_data-mvgr1  = wa_mvke-mvgr1.
+      gw_data-mvgr2  = wa_mvke-mvgr2.
+      gw_data-vtext1 = wa_mvke-vtext1.
+      gw_data-vtext2 = wa_mvke-vtext2.
+      gw_data-bezei11 = wa_mvke-bezei1.
+      gw_data-bezei22 = wa_mvke-bezei2.
+*******END OF ADDITIONS FOR COMMISSION AGENT------------*
+**************** for credit memo /credit sales return
+      IF gw_sale-fkart = 'G2'.
+        gw_data-zpst = ( gw_data-zpst * -1 ).
+      ENDIF.
+      IF gw_sale-fkart = 'RE'.
+        gw_data-zpst = ( gw_data-zpst * -1 ).
+      ENDIF.
+*****************************
+****************      added by parth 20/06/2019
+      gw_data-dsku = gw_data-zpst - gw_data-dmbtr.
+**********************ended by parth 20/06/2019
+
+*  IF GW_dATA-zcno IS INITIAL.
+*    CONDENSE gw_data-zcno.
+*  endif.
+*  if gw_data-zcname is INITIAL.
+*    CONDENSE gw_data-zcname.
+*  endif.
+* CONDENSE gw_data-MWTEXT.
+* CONDENSE  gw_data-TAXNOTE1.
+* CONDENSE  gw_data-TAXNOTE2.
+* CONDENSE  gw_data-kondm.
+* CONDENSE  gw_data-lgort.
+* CONDENSE  gw_data-ktgrm.
+      IF gw_data-are1date = '00000000'.
+        gw_data-are1date = ' '.
+      ENDIF.
+***********************************************Added by Raj on 21.06.2023******************
+
+
+
+***********************************************Added by Raj on 21.06.2023******************
+* if gw_data-ARE3NO = '0000000000'.
+*   gw_data-ARE3NO = ' '.
+*  endif.
+*CONDENSE:gw_data-VBELN, gw_data-POSNR,gw_data-FKART,gw_data-PLANT,gw_data-VKRG,gw_data-FKART_TXT,gw_data-BUKRS,gw_data-VKORG,gw_data-VTWEG
+*,gw_data-REF_DOC
+*,gw_data-MBLNR
+*,gw_data-VGBEL
+*,gw_data-ERDAT
+*,gw_data-PO_NO
+*,gw_data-PO_DT
+*,gw_data-KUNRG
+*,gw_data-NAME1
+*,gw_data-KUNAG
+*,gw_data-SLD_NAME
+*,gw_data-KUNNR
+*,gw_data-SHP_NAME
+*,gw_data-SHP_CITY
+*,gw_data-SPART
+*,gw_data-FKDAT
+*,gw_data-ERDAT1
+*,gw_data-WAERK
+*,gw_data-POPER
+*,gw_data-HKONT
+*,gw_data-TXT50
+*,gw_data-MATNR
+*,gw_data-MTART
+*,gw_data-MEINS
+*,gw_data-ALTUM
+*,gw_data-MAKTX
+*,gw_data-VKBUR
+*,gw_data-VKGRP_TXT
+*,gw_data-EXNUM
+*,gw_data-EXDAT
+*,gw_data-EXTYP
+*,gw_data-REMTIME
+*
+*
+**,gw_data-ECESS
+**,gw_data-HECESS
+**,gw_data-STAX
+**,gw_data-ECESER
+**,gw_data-HECSER
+**,gw_data-ADD_DISRATE
+**,gw_data-ADD_DISAMT
+**,gw_data-CSTRATE
+**,gw_data-CSTAMT
+**,gw_data-VATRATE
+**,gw_data-VATAMT
+**,gw_data-NET_DISRATE
+**,gw_data-NET_DISAMT
+**,gw_data-NSV_DISRATE
+**,gw_data-NSV_DISAMT
+**,gw_data-TCSRATE
+**,gw_data-TCSAMT
+**,gw_data-FRTAMT
+**,gw_data-INSAMT
+**,gw_data-FR1AMT
+**,gw_data-OCTRATE
+**,gw_data-OCTAMT
+**,gw_data-ROFAMT
+**,gw_data-GR_AMT
+*,gw_data-FKSTO
+*,gw_data-INV_STAT
+*,gw_data-PLANT_DESC
+*,gw_data-AUBEL
+*,gw_data-AUPOS
+*,gw_data-CHAPID
+*,gw_data-BOLNR
+*,gw_data-TRAID
+*,gw_data-ADATE
+*,gw_data-KDMAT
+*,gw_data-MATKL
+*,gw_data-WGBEZ
+*,gw_data-J_1ICSTNO
+*,gw_data-J_1ILSTNO
+*,gw_data-J_1IPANNO
+*,gw_data-J_1ISERN
+*,gw_data-AUART
+*,gw_data-BEZEI
+*,gw_data-INCO1
+*,gw_data-CHARG
+*,gw_data-ZMONTH
+*,gw_data-LAD_TEXT
+*,gw_data-SHP_TEXT
+*,gw_data-TRS_TEXT
+*,gw_data-GR_TEXT
+*,gw_data-VEHNO_TEXT
+*,gw_data-VRKME
+**,gw_data-BRGEW
+**,gw_data-ZPH1_R
+**,gw_data-ZPH1
+**,gw_data-ZPH2
+**,gw_data-ADUTY_R
+**,gw_data-ADUTY
+**,gw_data-ZFR2
+**,gw_data-ZACT_R
+**,gw_data-ZACT
+**,gw_data-ZVAT_R
+**,gw_data-ZVAT
+**,gw_data-ZFR3
+**,gw_data-ZFR4
+**,gw_data-ZFR5
+**,gw_data-ZTF5
+**,gw_data-ZFR6
+**,gw_data-ZFR7
+**,gw_data-ZDS5_R
+**,gw_data-ZDS5
+**,gw_data-ZDS4_R
+**,gw_data-ZDS4
+**,gw_data-ZDS6
+**,gw_data-ZDS7
+**,gw_data-ZAED
+**,gw_data-ZPST
+**,gw_data-ZCOM
+**,gw_data-DISCPER
+**,gw_data-MDISCPER
+**,gw_data-OPBLF
+**,gw_data-OPBLM
+***,gw_data-NTGEW
+*,gw_data-KDGRP
+*,gw_data-KTEXT
+*,gw_data-BEZEI1
+*,gw_data-GEWEI
+*,gw_data-ZTERM
+*,gw_data-INCO2
+*,gw_data-VTEXT
+*,gw_data-BZIRK
+*,gw_data-J_1ICHT1
+*,gw_data-BWTAR
+*,gw_data-ECC
+*,gw_data-CST_NO
+*,gw_data-LST_NO
+*,gw_data-PAN_NO
+*,gw_data-ZCNO
+*,gw_data-ZCNAME
+*,gw_data-MWSK1
+*,gw_data-VTWG
+*,gw_data-SPRT
+*,gw_data-ARE1NO
+*,gw_data-PRCTR
+*
+*,gw_data-ARE1DATE
+*,gw_data-MWTEXT
+*,gw_data-ARE3NO
+*,gw_data-LGORT
+*,gw_data-ARE3DATE
+*,gw_data-TAXNOTE1
+*,gw_data-TAXNOTE2
+*,gw_data-KONDM
+*,gw_data-KTGRM
+*,gw_data-MVGR1
+*,gw_data-MVGR2
+*,gw_data-VTEXT1
+*,gw_data-VTEXT2
+*,gw_data-BEZEI11
+*,gw_data-BEZEI22
+*,gw_data-CLASS
+*,gw_data-CLDES.
+
+      APPEND gw_data TO gi_data.
+*   append gw_data to it_final.
+
+*    MODIFY zsal_reg2 FROM TABLE gi_data .
+      CLEAR: gw_data,gw_sale,wa_mvke,wa_vbap.
+    ENDLOOP.
+* endif. "
+  ENDIF.
+*  endif.
+
+  DELETE gi_data WHERE mtart EQ ' ' .
+*  DELETE GI_DATA WHERE AUART EQ ''.
+  SORT gi_data BY vbeln posnr.
+  IF r1 IS NOT INITIAL.
+  ELSEIF r2 IS  NOT INITIAL.
+    PERFORM f_summary_data.
+    REFRESH gi_data[].
+    gi_data[] = it_data[].
+*    PERFORM background_job.
+  ENDIF.
+*----------------------------------------------------------*
+* SUBROUTINE TO DISPLAY DETAILS IN ALV                     *
+*----------------------------------------------------------*
+
+  PERFORM fill_listheader.
+  PERFORM fill_fieldcatalog.
+  PERFORM fill_layout.
+  IF r3 = 'X'.
+    IF sy-uname ='APLIT01'.
+      PERFORM background_job.
+    ELSEIF sy-uname = 'BASIS'.
+      PERFORM background_job.
+    ELSEIF sy-uname = 'SAP_ABAP'.
+      PERFORM background_job.
+    ELSE.
+      MESSAGE: 'YOU ARE NOT AUTHORIZED FOR BACKGROUND' TYPE 'E'.
+    ENDIF.
+***    IF gi_data IS NOT INITIAL.
+***      PERFORM get_variant_tab.    "Added by Rahul Vasita on 14.02.2024 14:12:28
+***    ELSE.
+***      MESSAGE 'No Data for Excel File' TYPE 'E'." DISPLAY LIKE 'E'.
+****      RETURN.
+***    ENDIF.
+  ELSE.
+    PERFORM display_grid.
+  ENDIF.
+  FREE gi_data.
+ENDFORM. " PROCESS_DATA
+
+*&---------------------------------------------------------------------*
+*&      FORM  FILL_LISTHEADER                                          *
+*&---------------------------------------------------------------------*
+FORM fill_listheader.
+  DATA : frmdt(10) TYPE c,
+         todt(10)  TYPE c,
+         v_str     TYPE string.
+
+  t_listheader-typ = 'H'.
+  t_listheader-key = ' '.
+  t_listheader-info = 'SALES REGISTER'.
+  APPEND t_listheader.
+
+  IF s_dt-low NE '00000000' AND  s_dt-high NE '00000000'      .
+    WRITE s_dt-low  TO frmdt USING EDIT MASK '__.__.____'.
+    WRITE s_dt-high TO todt  USING EDIT MASK '__.__.____'.
+    CONCATENATE 'FROM'
+                 frmdt
+                 'TO'
+                 todt
+           INTO v_str SEPARATED BY space.
+  ELSEIF s_dt-low NE '00000000' AND  s_dt-high EQ '00000000'      .
+    WRITE s_dt-low  TO frmdt USING EDIT MASK '__.__.____'.
+    CONCATENATE 'ON'
+                 frmdt
+           INTO v_str SEPARATED BY space.
+  ELSEIF s_dt-low EQ '00000000' AND  s_dt-high NE '00000000'      .
+    WRITE s_dt-high  TO todt USING EDIT MASK '__.__.____'.
+    CONCATENATE 'ON'
+                 todt
+           INTO v_str SEPARATED BY space.
+  ENDIF.
+  t_listheader-typ = 'S'.
+  t_listheader-key = ' '.
+  t_listheader-info = v_str.
+  APPEND t_listheader.
+ENDFORM. " FILL_LISTHEADER
+
+*&---------------------------------------------------------------------*
+*&      FORM  FILL_FIELDCATALOG                                        *
+*&---------------------------------------------------------------------*
+FORM fill_fieldcatalog.
+  PERFORM fieldcat_append  USING  'VBELN'               'Invoice Number'                'X'  'GI_DATA'   ' '    ' '  ' '       .
+  PERFORM fieldcat_append  USING  'FKART_TXT'           'Invoice Type'                  'X'  'GI_DATA'   ' '    ' '  ' '       .
+  PERFORM fieldcat_append  USING  'INV_STAT'            'Invoice Status'                ' '  'GI_DATA'   ' '    ' '  ' '       .
+  PERFORM fieldcat_append  USING  'BUKRS'               'Company Code'                  ' '  'GI_DATA'   ' '    ' '  ' '       .
+  PERFORM fieldcat_append  USING  'PLANT'               'Delivering Plant'              ' '  'GI_DATA'   ' '    ' '  ' '       .
+  PERFORM fieldcat_append  USING  'PLANT_DESC'          'Delivering Plant DE.'          ' '  'GI_DATA'   ' '    ' '  ' '       .
+  PERFORM fieldcat_append  USING  'VKRG'                'Sales Organisation'            ' '  'GI_DATA'   ' '    ' '  ' '       .
+  PERFORM fieldcat_append  USING  'VKORG'               'Sales Organisation Text'       ' '  'GI_DATA'   ' '    ' '  ' '       .
+  PERFORM fieldcat_append  USING  'VTWG'                'Distribution Channel'          ' '  'GI_DATA'   ' '    ' '  ' '       .
+  PERFORM fieldcat_append  USING  'VTWEG'               'Distribution Channel Text'     ' '  'GI_DATA'   ' '    ' '  ' '       .
+  PERFORM fieldcat_append  USING  'SPRT'                'Division'                      ' '  'GI_DATA'   ' '    ' '  ' '       .
+  PERFORM fieldcat_append  USING  'SPART'               'Division Text'                 ' '  'GI_DATA'   ' '    ' '  ' '       .
+  PERFORM fieldcat_append  USING  'KUNAG'               'Sold to Party'                 ' '  'GI_DATA'   ' '    ' '  ' '       .
+  PERFORM fieldcat_append  USING  'SLD_NAME'            'Sold to Party Name'            ' '  'GI_DATA'   ' '    ' '  ' '       .
+  PERFORM fieldcat_append  USING  'KUNRG'               'Payer'                         ' '  'GI_DATA'   ' '    ' '  ' '       .
+  PERFORM fieldcat_append  USING  'NAME1'               'Payer Name'                    ' '  'GI_DATA'   ' '    ' '  ' '       .
+  PERFORM fieldcat_append  USING  'KUNNR'               'Ship To Party'                 ' '  'GI_DATA'   ' '    ' '  ' '       .
+  PERFORM fieldcat_append  USING  'SHP_NAME'            'Ship To Party Name'            ' '  'GI_DATA'   ' '    ' '  ' '       .
+  PERFORM fieldcat_append  USING  'SHP_CITY'            'Ship To Party City'            ' '  'GI_DATA'   ' '    ' '  ' '       .
+  PERFORM fieldcat_append  USING  'SLD_CITY'            'Sold To Party City'            ' '  'GI_DATA'   ' '    ' '  ' '      .
+  PERFORM fieldcat_append  USING  'FKDAT'               'Invoice Date'                  ' '  'GI_DATA'   ' '    ' '  ' '       .
+  PERFORM fieldcat_append  USING  'ERDAT1'              'Inv. Creation Date'            ' '  'GI_DATA'   ' '    ' '  ' '       .
+  PERFORM fieldcat_append  USING  'ZZDAT'               'Order Authorize Date'                ' '  'GI_DATA'   ' '    ' ' ' '.
+  IF r1 IS NOT INITIAL.
+    PERFORM fieldcat_append  USING  'POSNR'               'Invoice Item'                  ' '  'GI_DATA'   ' '    ' '  ' ' .
+    PERFORM fieldcat_append  USING  'MATNR'               'Material No.'                  ' '  'GI_DATA'   ' '    ' '  ' ' .
+    PERFORM fieldcat_append  USING  'MAKTX'               'Material Description'          ' '  'GI_DATA'   ' '    ' '  ' ' .
+
+  ENDIF.
+
+  PERFORM fieldcat_append  USING  'BWTAR'               'Valuation Type'                ' '  'GI_DATA'   ' '    ' ' ' '.
+
+  IF r1 IS NOT INITIAL.
+    PERFORM fieldcat_append  USING  'PRCTR'               'Profit Center'                 ' '  'GI_DATA'   ' '    ' ' ' '.
+    PERFORM fieldcat_append  USING  'KDMAT'               'Customer Mat No'               ' '  'GI_DATA'   ' '    ' ' ' '.
+  ENDIF.
+  PERFORM fieldcat_append  USING  'KTEXT'               'Customer Group'                ' '  'GI_DATA'   ' '    ' ' ' '.
+  IF r1 IS NOT INITIAL.
+    PERFORM fieldcat_append  USING  'MTART'               'Material Type'                 ' '  'GI_DATA'   ' '    ' ' ' '.
+    PERFORM fieldcat_append  USING  'MATKL'               'Material Group'                ' '  'GI_DATA'   ' '    ' ' ' '.
+  ENDIF.
+*  PERFORM FIELDCAT_APPEND  USING  'CHARG'               'BATCH NUMBER'                  ' '  'GI_DATA'   ' '    ' '.
+  IF r1 IS NOT INITIAL.
+    PERFORM fieldcat_append  USING  'WGBEZ'               'Group Description'             ' '  'GI_DATA'   ' '    ' ' ' '.
+    PERFORM fieldcat_append  USING  'KONDM'               'Mat Pricing Grp'               ' '  'GI_DATA'   ' '    ' ' ' '.
+    PERFORM fieldcat_append  USING  'VTEXT1'              'Mat Pricing Grp Description'   ' '  'GI_DATA'   ' '    ' ' ' '.
+    PERFORM fieldcat_append  USING  'KTGRM'               'Group Account Assign.'         ' '  'GI_DATA'   ' '    ' ' ' '.
+    PERFORM fieldcat_append  USING  'VTEXT2'              'Group Account Assign Description'      ' '  'GI_DATA'   ' '    ' ' ' '.
+    PERFORM fieldcat_append  USING  'MVGR1'               'Mat Grp 1'                     ' '  'GI_DATA'   ' '    ' ' ' '.
+    PERFORM fieldcat_append  USING  'BEZEI11'              'Mat Grp 1 Description'         ' '  'GI_DATA'   ' '    ' ' ' '.
+    PERFORM fieldcat_append  USING  'MVGR2'               'Mat Grp 2'                     ' '  'GI_DATA'   ' '    ' ' ' '.
+    PERFORM fieldcat_append  USING  'BEZEI22'               'Mat Grp 2 Description'        ' '  'GI_DATA'   ' '    ' ' ' '.
+    PERFORM fieldcat_append  USING  'HKONT'               'G/L Account'                   ' '  'GI_DATA'   ' '    ' ' ' '.
+    PERFORM fieldcat_append  USING  'TXT50'               'G/L Description'               ' '  'GI_DATA'   ' '    ' ' ' '.
+  ENDIF.
+  PERFORM fieldcat_append  USING  'VKBUR'               'Sales Office'                  ' '  'GI_DATA'   ' '    ' ' '40'  .
+  PERFORM fieldcat_append  USING  'AUBEL'               'Sales Order No'                ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'BEZEI'               'Order Type Desc'               ' '  'GI_DATA'   ' '    ' ' '40'  .
+  PERFORM fieldcat_append  USING  'ERDAT'               'Sales Order Date'              ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'VGBEL'               'Ref. to Sales Order'           ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'PO_NO'               'PO No'                         ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'PO_DT'               'PO Date'                       ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'REF_DOC'             'Delivery No'                   ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'STCD3'             'GSTIN of the recepient'          ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'SGSTN'             'GSTIN of the Sending'                   ' '  'GI_DATA'   ' '    ' ' ' '  .
+*  PERFORM fieldcat_append  USING  'STCD3'            'GSTIN of the recepient'           ' '  'GI_DATA'   ' '    ' '  ' '.
+*  PERFORM fieldcat_append  USING  'SGSTN'            'GSTIN of the Sending'             ' '  'GI_DATA'   ' '    ' '  ' '.
+  IF r1 IS NOT INITIAL.
+    PERFORM fieldcat_append  USING  'MBLNR'               'Material Doc'                 ' '  'GI_DATA'   ' '    ' ' ' '  .
+  ENDIF.
+  LOOP AT lt_acc_key1 INTO lwa_acc_key1.
+*  IF sy-uname = 'SAP_ABAP' OR sy-uname = 'APLFI11' OR sy-uname = 'APLIT02' OR sy-uname = 'APLIT03' OR sy-uname = 'APLCO01' OR sy-uname = 'APLFI21'.
+    IF sy-uname = lwa_acc_key1-low.
+      PERFORM fieldcat_append  USING  'DMBTR'               'PGI Value'                     ' '  'GI_DATA'   'X'    ' ' ' '  .
+      PERFORM fieldcat_append  USING  'DSKU'               'DSKU Value'                     ' '  'GI_DATA'   'X'    ' ' ' '  .
+*      PERFORM fieldcat_append  USING  'AVGRATE'            'Average Rate'                     ' '  'GI_DATA'   'X'    ' ' ' '  .
+    ENDIF.
+  ENDLOOP.
+  PERFORM fieldcat_append  USING  'ADATE'               'Delivery Date'                 ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'EXNUM'               'Excise Inv No'                 ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'EXDAT'               'Excise Inv Date'               ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'EXTYP'               'Excise Inv Type'               ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'ARE1NO'              'ARE1 No'                       ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'ARE1DATE'            'ARE1 Date'                     ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'ARE3NO'              'ARE3 No'                       ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'ARE3DATE'            'ARE3 Date'                     ' '  'GI_DATA'   ' '    ' ' ' '  .
+  IF r1 IS NOT INITIAL.
+    PERFORM fieldcat_append  USING  'REMTIME'             'TIME OF REMOVAL'               ' '  'GI_DATA'   ' '    ' ' ' '  .
+  ENDIF.
+  PERFORM fieldcat_append  USING  'ZMONTH'               'PERIOD'                        ' '  'GI_DATA'   ' '    ' ' ' '  .
+  IF r1 IS NOT INITIAL.
+*    PERFORM fieldcat_append  USING  'CHAPID'              'CHAPTER ID'                    ' '  'GI_DATA'   ' '    ' ' ' '  .
+*    PERFORM fieldcat_append  USING  'J_1ICHT1'            'CHAPTER ID DESC'               ' '  'GI_DATA'   ' '    ' ' ' '  .
+    PERFORM fieldcat_append  USING  'STEUC'            'CONTROL CODE'               ' '  'GI_DATA'   ' '    ' ' ' '  .
+*    PERFORM fieldcat_append  USING  'STCD3'            'GSTN No.'               ' '  'GI_DATA'   ' '    ' ' ' '  .
+  ENDIF.
+  PERFORM fieldcat_append  USING  'INCO1'               'DELIVERY TERMS'                ' '  'GI_DATA'   ' '    ' ' ' '  .
+  IF r1 IS NOT INITIAL.
+    PERFORM fieldcat_append  USING  'BASICRATE'           'BASIC RATE'                  ' '  'GI_DATA'   ' '    ' ' ' '  .
+  ENDIF.
+  PERFORM fieldcat_append  USING  'FKIMG'               'QTY'                           ' '  'GI_DATA'   'X'    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'OPBLF'               'QTY Manufactured in FT'                           ' '  'GI_DATA'   'X'    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'OPBLM'               'QTY Manufactured in M'                           ' '  'GI_DATA'   'X'    ' ' ' '  .
+
+  PERFORM fieldcat_append  USING  'AUMNG'               'Standard Packing'                           ' '  'GI_DATA'   'X'    ' ' ' '.  " Added by Carina Jose on 19.04.2021
+  PERFORM fieldcat_append  USING  'TOTBOX'               'Total No. of boxes'                           ' '  'GI_DATA'   'X'    ' ' ' '.  " Added by Carina Jose on 19.04.2021
+
+  PERFORM fieldcat_append  USING  'NET_WT'              'WEIGHT IN MT'                  ' '  'GI_DATA'   'X'    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'BASICAMT'            'BASIC AMOUNT'                  ' '  'GI_DATA'   'X'    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'WAERK'               'CURRENCY'                      ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'KURRF'               'EXCHANGE RATE'                 ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'NETPRCINR'           'NETPRICE IN INR'               ' '  'GI_DATA'   'X'    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'BEZEI1'              'SOLD TO REGION'                ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'SHP_REGIO'           'SHIP TO  REGION'               ' '  'GI_DATA'   ' '    ' ' ' ' .
+  PERFORM fieldcat_append  USING  'INCO2'               'INCOTERM2'                     ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'ZTERM'               'PAYMENT TERM'                  ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'VTEXT'               'PAYMENT TERM DESC'             ' '  'GI_DATA'   ' '    ' ' ' '  .
+  IF sy-uname NP 'APLSD*' OR sy-uname = 'APLSD01' OR sy-uname = 'APLSD02' OR sy-uname = 'APLSD04' OR sy-uname = 'APLSD15' OR sy-uname = 'APLFI21' OR sy-uname = 'APLFI06' .
+*  if sy-uname NP 'IT*' OR SY-UNAME = 'SAP_ABAP'.
+    IF r1 IS NOT INITIAL.
+      PERFORM fieldcat_append  USING  'DISCPER'             'FIXED DISCOUNT %'          ' '  'GI_DATA'   'X'    ' ' ' '  .
+    ENDIF.
+    PERFORM fieldcat_append  USING  'FIXED_DISAMT'         'FIXED DISCOUNT AMOUNT'          ' '  'GI_DATA'   'X'    ' ' ' '  .
+    IF r1 IS NOT INITIAL.
+      PERFORM fieldcat_append  USING  'MDISCPER'             'Manual Discount %'          ' '  'GI_DATA'   'X'    ' ' ' '  .
+    ENDIF.
+    PERFORM fieldcat_append  USING  'SPL_DISAMT'         'Manual Discount Amount'          ' '  'GI_DATA'   'X'    ' ' ' '  .
+
+    IF r1 IS NOT INITIAL.
+      PERFORM fieldcat_append  USING  'DISC3PER'             'Discount-3 %'          ' '  'GI_DATA'   'X'    ' ' ' '.
+    ENDIF.
+    PERFORM fieldcat_append  USING  'DISC3'              'Discount-3 Amount'          ' '  'GI_DATA'   'X'    ' ' ' '.
+  ENDIF.
+  PERFORM fieldcat_append  USING  'ASSEBLE_AMT'         'ASSESSABLE VALUE'              ' '  'GI_DATA'   'X'    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'EXCISE'              'BASIC EXCISE DUTY'             ' '  'GI_DATA'   'X'    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'ECESS'               'EDUCESS ON BED'                ' '  'GI_DATA'   'X'    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'HECESS'              'SHECESS ON BED'                ' '  'GI_DATA'   'X'    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'STAX'                'SERVICE TAX'                   ' '  'GI_DATA'   'X'    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'ECESER'              'ECESS ON SERVICE TAX'          ' '  'GI_DATA'   'X'    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'HECSER'              'HECESS ON SERVICE TAX'         ' '  'GI_DATA'   'X'    ' ' ' '  .
+*  IF r1 IS NOT INITIAL.
+  PERFORM fieldcat_append  USING  'CSTRATE'             'CST RATE %'                    ' '  'GI_DATA'   ' '    ' ' ' '  .
+*  ENDIF.
+  PERFORM fieldcat_append  USING  'CSTAMT'              'CST AMOUNT'                    ' '  'GI_DATA'   'X'    ' ' ' '  .
+*  IF r1 IS NOT INITIAL.
+  PERFORM fieldcat_append  USING  'VATRATE'             'VAT RATE %'                    ' '  'GI_DATA'   ' '    ' ' ' '  .
+*  ENDIF.
+  PERFORM fieldcat_append  USING  'VATAMT'              'VAT AMOUNT'                    ' '  'GI_DATA'   'X'    ' ' ' '  .
+  IF r1 IS NOT INITIAL.
+    PERFORM fieldcat_append  USING  'GEWEI'               'WEIGHT UNIT'                   ' '  'GI_DATA'   ' '    ' ' ' '  .
+    PERFORM fieldcat_append  USING  'VRKME'               'UNIT OF MEASURE'               ' '  'GI_DATA'   ' '    ' ' ' '  .
+  ENDIF.
+  PERFORM fieldcat_append  USING  'BRGEW'               'GROSS WEIGHT IN KG'            ' '  'GI_DATA'   'X'    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'NTGEW'               'NET WEIGHT IN KG'              ' '  'GI_DATA'   'X'    ' ' ' '  .
+*  PERFORM FIELDCAT_APPEND  USING  'ZPH1_R'              'PKG& HND CH1 %'                ' '  'GI_DATA'   ' '    ' ' ' '  .
+*  PERFORM FIELDCAT_APPEND  USING  'ZPH1'                'PKG& HND CH1'                  ' '  'GI_DATA'   'X'    ' ' ' '  .
+*  PERFORM FIELDCAT_APPEND  USING  'ZPH2'                'PKG& HND CH2 AMT'              ' '  'GI_DATA'   'X'    ' ' ' '  .
+*  IF r1 IS NOT INITIAL.
+  PERFORM fieldcat_append  USING  'ZVAT_R'              'ADD. VAT%'                     ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'ZVAT'              'ADD.VAT VALUE %'                     ' '  'GI_DATA'   ' '    ' ' ' '  .
+*  ENDIF.
+
+  PERFORM fieldcat_append  USING  'ZTF5'                'TCS SCRAP VALUE'                      ' '  'GI_DATA'   'X'    ' ' ' '  .
+
+  PERFORM fieldcat_append  USING  'ZFR5'                'FREIGHT'              ' '  'GI_DATA'   'X'    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'ZFR6'                'INSURANCE'                      ' '  'GI_DATA'   'X'    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'ROFAMT'              'ROUNDING AMOUNT'               ' '  'GI_DATA'   'X'    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'GR_AMT'              'GROSS AMOUNT'                  ' '  'GI_DATA'   'X'    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'TRS_TEXT'            'LR NO'              ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'LAD_TEXT'            'VEHICLE NO'                         ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'VEHNO_TEXT'          'TRANSPORTER NAME'                    ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'SHP_TEXT'          'HEADER NOTE 1'                    ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'GR_TEXT'          'E-Way Bill No.'                    ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'ECC'                 'CUST. ECC NO'                  ' '  'GI_DATA'   'X'    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'CST_NO'              'CUST. CST NO'                  ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'LST_NO'              'CUST. LST NO'                  ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'PAN_NO'              'CUST. PAN NO'                  ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'ZAED'                'AED'                           ' '  'GI_DATA'   ' '    '  ' '  '.
+  PERFORM fieldcat_append  USING  'ZPST'                'GL Posting'                           ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'MWSK1'                'Tax Code'                           ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'MWTEXT'                'Tax Code Text'                           ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'LGORT'                'Storage Location'                           ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'TAXNOTE1'                'Type of Sale JCST'                           ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'TAXNOTE2'                'Type of Sale JVAT'                           ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'CLASS'                'Valuation Class'                           ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'CLDES'                'Valuation Class Desc'                           ' '  'GI_DATA'   ' '    ' ' ' '  .
+* *** Added for GST:18.07.17
+  PERFORM fieldcat_append  USING  'JOIGPER'                  'Integrated GST%.'                           ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'JOIGAMT'                'Integrated GST'                           ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'JOSGPER'                  'State GST%.'                           ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'JOSGAMT'                'State GST'                           ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'JOCGPER'                  'Central GST%.'                           ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'JOCGAMT'                'Central GST'                           ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'ZIIGPER'                  'Ins. IGST-O/P%.'                           ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'ZIIGAMT'                'Ins. IGST-O/P'                           ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'ZICGPER'                  'Ins. CGST-O/P%.'                           ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'ZICGAMT'                'Ins. CGST-O/P'                           ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'ZISGPER'                  'Ins. SGST-O/P%.'                           ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'ZISGAMT'                'Ins. SGST-O/P'                           ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'ZFIGPER'                  'Freight IGST-O/P%.'                           ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'ZFIGAMT'                'Freight IGST-O/P'                           ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'ZFCGPER'                  'Freight CGST-O/P%.'                           ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'ZFCGAMT'                'Freight CGST-O/P'                           ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'ZFSGPER'                  'Freight SGST-O/P%.'                           ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'ZFSGAMT'                'Freight SGST-O/P'                           ' '  'GI_DATA'   ' '    ' ' ' '  .
+****Changes added for commission data by Carina Jose on 14.06.2019
+  PERFORM fieldcat_append  USING  'ZCON'                'Commission value'                           ' '  'GI_DATA'   ' '    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'ZRATE1'               'Commission %'                           ' '  'GI_DATA'   'X'    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'LIFNR'               'Commission vendor'                           ' '  'GI_DATA'   'X'    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'LNAME'               'Commission vendor Name'                           ' '  'GI_DATA'   'X'    ' ' ' '  .
+
+  PERFORM fieldcat_append  USING  'BELNR'                'Document No'                             ' '  'GI_DATA'   'X'    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'BUDAT'                 'Document Date'                              ' '  'GI_DATA'   'X'    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'AUGDT'                'Clearing Date'                             ' '  'GI_DATA'   'X'    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'AUGCP'                'Clearing Entry Date'                              ' '  'GI_DATA'   'X'    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'AUGBL'                'Doc. No of Clearing Doc.'                              ' '  'GI_DATA'   'X'    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'BLART'                'Clearing Doc. Type'                             ' '  'GI_DATA'   'X'    ' ' ' '  .
+  PERFORM fieldcat_append  USING  'FREE'                 'FREE'                             ' '  'GI_DATA'   'X'    ' ' ' '  .
+
+****End of changes by Carina Jose on 14.06.2019
+**********  Added by Carina Jose on 30.09.2020
+  PERFORM fieldcat_append  USING  'IRN'       'IRN No.'                           ''  'GI_DATA'   ' '    ' '  ' '.
+  PERFORM fieldcat_append  USING  'TCS'       'TCS Tax amount'                           ''  'GI_DATA'   ' '    ' ' ' '  .
+**********  End of changes by Carina Jose on 30.09.2020
+
+************************** Added by Carina Jose on 14.09.2021
+*   PERFORM fieldcat_append  USING  'FR_HKONT'       'GR/IR-FREIGHT A/C'                           ''  'GI_DATA'   ' '    ' '  ' ' .
+*   PERFORM fieldcat_append  USING  'FR_GLDESC'       'GR/IR-FREIGHT A/C Desc.'                           ''  'GI_DATA'   ' '    ' '  ''.
+  PERFORM fieldcat_append  USING  'ZFRLAMT'       'Freight Outward Clearing Amt.'                           ''  'GI_DATA'   ' '    ' '  ''.
+************************** End of changes by Carina Jose on 14.09.2021
+*  PERFORM fieldcat_append  USING  'ZVGBEL'       'Quotation Number'                           ''  'GI_DATA'   ' '    ' '  ''.
+*  PERFORM fieldcat_append  USING  'ZVGPOS'       'Quotation Line item Number.'                           ''  'GI_DATA'   ' '    ' '  ''.
+
+PERFORM FIELDCAT_APPEND  USING  'CHARG'               'BATCH NUMBER'                  ' '  'GI_DATA'   ' '  ' '   ' '      ."Added by Raj on 21.08.2024
+
+ENDFORM. " FILL_FIELDCATALOG
+
+*&---------------------------------------------------------------------*
+*&      FORM  FILL_LAYOUT                                              *
+*&---------------------------------------------------------------------*
+FORM fill_layout.
+  t_event-name = slis_ev_top_of_page.
+  t_event-form = 'TOP_OF_PAGE'.
+  APPEND t_event.
+  fs_layout-colwidth_optimize = 'X'.
+ENDFORM. " FILL_LAYOUT
+
+*&---------------------------------------------------------------------*
+*&      FORM  TOP_OF_PAGE                                              *
+*&---------------------------------------------------------------------*
+FORM top_of_page.
+  CALL FUNCTION 'REUSE_ALV_COMMENTARY_WRITE'
+    EXPORTING
+      it_list_commentary = t_listheader[].
+
+ENDFORM. " TOP_OF_PAGE
+
+*&---------------------------------------------------------------------*
+*&      FORM  DISPLAY_GRID                                             *
+*&---------------------------------------------------------------------*
+FORM display_grid.
+
+****Added for Control code: 18.07.17
+*  SELECT matnr werks steuc
+*       FROM marc
+*       INTO TABLE it_marc
+*       FOR ALL ENTRIES IN gi_data
+*       WHERE werks EQ gi_data-plant AND
+*             matnr EQ gi_data-matnr.
+*  LOOP AT gi_data INTO gw_data.
+*    CLEAR: wa_marc.
+*    SORT it_marc[] BY matnr.
+*    READ TABLE it_marc  INTO wa_marc WITH KEY matnr = gw_data-matnr "it_rseg-matnr "INTO wa_marc
+*                                              werks = gw_data-plant." vkorg = gw_sale-vkorg .
+*    IF sy-subrc = 0.
+*      gw_data-steuc = wa_marc-steuc.
+*      MODIFY  gi_data FROM gw_data TRANSPORTING steuc.
+*    ENDIF.
+*    READ TABLE it_kna1 INTO wa_kna1 WITH KEY kunnr = gw_data-kunrg.
+*    IF sy-subrc = 0.
+*      gw_data-stcd3 = wa_kna1-stcd3.
+*      MODIFY  gi_data FROM gw_data TRANSPORTING stcd3.
+*    ENDIF.
+*    CLEAR : gw_data.
+*  ENDLOOP.
+****  ls_exclude-fcode = '&XXL'.
+****
+****  APPEND ls_exclude TO lt_exclude.
+****  CLEAR : ls_exclude.
+
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      i_callback_program     = sy-repid
+      i_callback_top_of_page = 'TOP_OF_PAGE'
+      is_layout              = fs_layout
+      it_fieldcat            = t_fieldcatalog[]
+      it_events              = t_event[]
+*      it_excluding           = lt_exclude[] "Added by Rahul Vasita on 14.02.2024 14:09:33
+      i_save                 = 'A'
+*      is_variant             = rs_variant   "Added by Rahul Vasita on 14.02.2024 17:21:17
+    TABLES
+      t_outtab               = gi_data
+    EXCEPTIONS
+      program_error          = 1
+      OTHERS                 = 2.
+  IF sy-subrc <> 0.
+  ENDIF.
+ENDFORM. " DISPLAY_GRID
+*======================================================================*
+*&      FORM  FIELDCAT_APPEND                                          *
+*======================================================================*
+*    APPENDING FIELD CATALOG                                           *
+*----------------------------------------------------------------------*
+FORM fieldcat_append USING VALUE(p_fname)
+                           VALUE(p_ftext)
+                           VALUE(p_fixcol)
+                           VALUE(p_table)
+                           VALUE(p_dosum)
+                           VALUE(p_hotspot)
+                           VALUE(p_length).
+
+  t_fieldcatalog-fieldname   = p_fname.
+  t_fieldcatalog-seltext_l   = p_ftext.
+  t_fieldcatalog-fix_column  = p_fixcol.
+  t_fieldcatalog-tabname     = p_table.
+  t_fieldcatalog-do_sum      = p_dosum.
+  t_fieldcatalog-hotspot     = p_hotspot.
+  t_fieldcatalog-outputlen   = p_length.
+
+  APPEND t_fieldcatalog.
+
+
+
+ENDFORM. " FIELDCAT_APPEND
+*&---------------------------------------------------------------------*
+*&      Form  F_GV_DOMTXT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM f_gv_domtxt .
+  DATA: t_dd07v TYPE TABLE OF  dd07v WITH HEADER LINE.
+
+  CALL FUNCTION 'DD_DOMVALUES_GET'
+    EXPORTING
+      domname        = 'J_1IINDEXP'   "<-- Your Domain Here
+      text           = 'X'
+      langu          = sy-langu
+    TABLES
+      dd07v_tab      = t_dd07v
+    EXCEPTIONS
+      wrong_textflag = 1
+      OTHERS         = 2.
+
+  READ TABLE t_dd07v WITH KEY domvalue_l = wa_j_1iexchdr-expind.
+  IF sy-subrc EQ 0.
+    gw_data-extyp = t_dd07v-ddtext.
+  ENDIF.
+ENDFORM.                    " F_GV_DOMTXT
+*&---------------------------------------------------------------------*
+*&      Form  F_SUMMARY_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM f_summary_data .
+  LOOP AT gi_data INTO gw_data.
+    wa_data = gw_data.
+    gv_fkimg        = gv_fkimg        + wa_data-fkimg       .
+    gv_net_wt       = gv_net_wt       + wa_data-net_wt      .
+    gv_basicamt     = gv_basicamt     + wa_data-basicamt    .
+    gv_fixed_disamt = gv_fixed_disamt + wa_data-fixed_disamt.
+    gv_spl_disamt   = gv_spl_disamt   + wa_data-spl_disamt  .
+    gv_spl_disc3   = gv_spl_disc3   + wa_data-disc3  .
+    gv_asseble_amt  = gv_asseble_amt  + wa_data-asseble_amt .
+    gv_excise       = gv_excise       + wa_data-excise      .
+    gv_ecess        = gv_ecess        + wa_data-ecess       .
+    gv_hecess       = gv_hecess       + wa_data-hecess      .
+    gv_stax         = gv_stax         + wa_data-stax        .
+    gv_eceser       = gv_eceser       + wa_data-eceser      .
+    gv_hecser       = gv_hecser       + wa_data-hecser      .
+    gv_cstamt       = gv_cstamt       + wa_data-cstamt      .
+    gv_vatamt       = gv_vatamt       + wa_data-vatamt      .
+    gv_vat          = gv_vat          + wa_data-zvat        .
+    gv_brgew        = gv_brgew        + wa_data-brgew       .
+    gv_ntgew        = gv_ntgew        + wa_data-ntgew       .
+    gv_zfr6         = gv_zfr6         + wa_data-zfr6        .
+    gv_zfr5         = gv_zfr5         + wa_data-zfr5        .
+    gv_rofamt       = gv_rofamt       + wa_data-rofamt      .
+    gv_gr_amt       = gv_gr_amt       + wa_data-gr_amt      .
+    gv_zaed         = gv_zaed         + wa_data-zaed        .
+    gv_zpst         = gv_zpst         + wa_data-zpst        .
+    gv_ztf5         = gv_ztf5         + wa_data-ztf5        .
+    gv_tcs          = gv_tcs         + wa_data-tcs        .
+    gv_zfrl          = gv_zfrl      + wa_data-zfrlamt    . "Added by Carina Jose on 14.09.2021
+*    gv_cstrate      = gv_cstrate      + wa_data-cstrate     .
+*    gv_vatrate      = gv_vatrate      + wa_data-vatrate     .
+    AT NEW vbeln.
+      gv_shp_text      = wa_data-shp_text.
+      gv_gr_text    = wa_data-gr_text.
+    ENDAT.
+
+    AT END OF vbeln.
+      wa_data-fkimg           = gv_fkimg       .
+      wa_data-net_wt          = gv_net_wt      .
+      wa_data-basicamt        = gv_basicamt    .
+      wa_data-fixed_disamt    = gv_fixed_disamt.
+      wa_data-spl_disamt      = gv_spl_disamt  .
+      wa_data-disc3           = gv_spl_disc3  .
+      wa_data-asseble_amt     = gv_asseble_amt .
+      wa_data-excise          = gv_excise      .
+      wa_data-ecess           = gv_ecess       .
+      wa_data-hecess          = gv_hecess      .
+      wa_data-stax            = gv_stax        .
+      wa_data-eceser          = gv_eceser      .
+      wa_data-hecser          = gv_hecser      .
+      wa_data-cstamt          = gv_cstamt      .
+      wa_data-vatamt          = gv_vatamt      .
+      wa_data-brgew           = gv_brgew       .
+      wa_data-ntgew           = gv_ntgew       .
+      wa_data-zfr6            = gv_zfr6        .
+      wa_data-zfr5            = gv_zfr5        .
+      wa_data-rofamt          = gv_rofamt      .
+      wa_data-gr_amt          = gv_gr_amt      .
+      wa_data-zaed            = gv_zaed        .
+      wa_data-zpst            = gv_zpst.
+      wa_data-zvat            = gv_vat.
+      wa_data-ztf5            = gv_ztf5.
+      wa_data-shp_text        = gv_shp_text.
+      wa_data-gr_text        = gv_gr_text.
+      wa_data-tcs        = gv_tcs.
+      wa_data-zfrlamt         = gv_zfrl   . "Added by Carina Jose on 14.09.2021
+*      wa_data-cstrate         = gv_cstrate.
+*      wa_data-vatrate         = gv_vatrate.
+      APPEND wa_data TO it_data.
+      CLEAR wa_data.
+      CLEAR : gv_fkimg,gv_net_wt,gv_basicamt, gv_fixed_disamt,  gv_spl_disamt,gv_asseble_amt,gv_excise,gv_ecess,gv_hecess,gv_stax,gv_shp_text,gv_gr_text,gv_tcs,
+              gv_eceser,gv_hecser,gv_cstamt,gv_vatamt,gv_brgew,gv_ntgew,gv_zfr6,gv_zfr5,gv_rofamt,gv_gr_amt,gv_zaed,gv_zpst,gv_vat,gv_ztf5,gv_cstrate,gv_vatrate,gv_spl_disc3,
+              gv_zfrl.
+    ENDAT.
+  ENDLOOP.
+ENDFORM.                    " F_SUMMARY_DATA
+*&---------------------------------------------------------------------*
+*&      Form  AUTHORIZATION_CHECK
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM authorization_check .
+  SELECT werks FROM t001w INTO TABLE gt_t001w WHERE werks IN s_werks.
+  LOOP AT gt_t001w INTO wa_t001w.
+    AUTHORITY-CHECK OBJECT 'ZREG_WRK'
+    ID 'WERKS' FIELD wa_t001w-werks
+    ID 'ACTVT' FIELD '03'.
+    IF sy-subrc <> 0.
+      MESSAGE e007(zsd) WITH wa_t001w-werks.
+    ENDIF.
+  ENDLOOP.
+ENDFORM.                    " AUTHORIZATION_CHECK
+*&---------------------------------------------------------------------*
+*&      Form  BACKGROUND_JOB
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM background_job .
+  DATA:filepath(200) TYPE c." VALUE 'H:\Zprice\TaxDetailsReport.txt'.
+  DATA:dirname TYPE dirname.
+*DATA:FILE TYPE STRING.
+  DATA:BEGIN OF it_append OCCURS 0,
+         all TYPE char16384,
+       END OF it_append.
+  DATA:header TYPE char16384.
+
+  SELECT SINGLE dirname FROM user_dir INTO dirname WHERE aliass = 'SALREG'.
+
+  CONCATENATE dirname '\'  'SALREG.TXT' INTO filepath.
+
+  DATA: str1   TYPE string,
+        str2   TYPE string,
+        str3   TYPE string,
+        str4   TYPE string,
+        str5   TYPE string,
+        str6   TYPE string,
+        str7   TYPE string,
+        str8   TYPE string,
+        str9   TYPE string,
+        str10  TYPE string,
+        str11  TYPE string,
+        str12  TYPE string,
+        str13  TYPE string,
+        str14  TYPE string,
+        str15  TYPE string,
+        str16  TYPE string,
+        str17  TYPE string,
+        str18  TYPE string,
+        str19  TYPE string,
+        str20  TYPE string,
+        str21  TYPE string,
+        str22  TYPE string,
+        str23  TYPE string,
+        str24  TYPE string,
+        str25  TYPE string,
+        str26  TYPE string,
+        str27  TYPE string,
+        str28  TYPE string,
+        str29  TYPE string,
+        str30  TYPE string,
+        str31  TYPE string,
+        str32  TYPE string,
+        str33  TYPE string,
+        str34  TYPE string,
+        str35  TYPE string,
+        str36  TYPE string,
+        str37  TYPE string,
+        str38  TYPE string,
+        str39  TYPE string,
+        str40  TYPE string,
+        str41  TYPE string,
+        str42  TYPE string,
+        str43  TYPE string,
+        str44  TYPE string,
+        str45  TYPE string,
+        str46  TYPE string,
+        str47  TYPE string,
+        str48  TYPE string,
+        str49  TYPE string,
+        str50  TYPE string,
+        str51  TYPE string,
+        str52  TYPE string,
+        str53  TYPE string,
+        str54  TYPE string,
+        str55  TYPE string,
+        str56  TYPE string,
+        str57  TYPE string,
+        str58  TYPE string,
+        str59  TYPE string,
+        str60  TYPE string,
+        str61  TYPE string,
+        str62  TYPE string,
+        str63  TYPE string,
+        str64  TYPE string,
+        str65  TYPE string,
+        str66  TYPE string,
+        str67  TYPE string,
+        str68  TYPE string,
+        str69  TYPE string,
+        str70  TYPE string,
+        str71  TYPE string,
+        str72  TYPE string,
+        str73  TYPE string,
+        str74  TYPE string,
+        str75  TYPE string,
+        str76  TYPE string,
+        str77  TYPE string,
+        str78  TYPE string,
+        str79  TYPE string,
+        str80  TYPE string,
+        str81  TYPE string,
+        str82  TYPE string,
+        str83  TYPE string,
+        str84  TYPE string,
+        str85  TYPE string,
+        str86  TYPE string,
+        str87  TYPE string,
+        str88  TYPE string,
+        str89  TYPE string,
+        str90  TYPE string,
+        str91  TYPE string,
+        str92  TYPE string,
+        str93  TYPE string,
+        str94  TYPE string,
+        str95  TYPE string,
+        str96  TYPE string,
+        str97  TYPE string,
+        str98  TYPE string,
+        str99  TYPE string,
+        str100 TYPE string,
+        str101 TYPE string,
+        str102 TYPE string,
+        str103 TYPE string,
+        str104 TYPE string,
+        str105 TYPE string,
+        str106 TYPE string,
+        str107 TYPE string,
+        str108 TYPE string,
+        str109 TYPE string,
+        str110 TYPE string,
+        str111 TYPE string,
+        str112 TYPE string,
+        str113 TYPE string,
+        str114 TYPE string,
+        str115 TYPE string,
+        str116 TYPE string,
+        str117 TYPE string,
+        str118 TYPE string,
+        str119 TYPE string,
+        str120 TYPE string,
+        str121 TYPE string,
+        str122 TYPE string,
+        str123 TYPE string,
+****Added for GST : 12.07.17
+        str124 TYPE string,
+        str125 TYPE string,
+        str126 TYPE string,
+        str127 TYPE string,
+        str128 TYPE string,
+        str129 TYPE string,
+        str130 TYPE string,
+        str131 TYPE string,
+        str132 TYPE string,
+        str133 TYPE string,
+        str134 TYPE string,
+        str135 TYPE string,
+        str136 TYPE string,
+        str137 TYPE string,
+        str138 TYPE string,
+        str139 TYPE string,
+        str140 TYPE string.
+*End GST         .
+
+
+  LOOP AT gi_data INTO gw_data.
+
+*        str1 = gw_data-vbeln.
+*        str2 = gw_data-fkart_txt.
+*        str3 = gw_data-inv_stat.
+*        str4 = gw_data-bukrs.
+*        str5 = gw_data-plant.
+*        str6 = gw_data-plant_desc.
+*        str7 = gw_data-vkrg.
+*        str8 = gw_data-vkorg.
+*        str9 = gw_data-vtwg.
+*        str10 = gw_data-vtweg.
+*        str11 = gw_data-sprt.
+*        str12 = gw_data-spart.
+*        str13 = gw_data-kunag.
+*        str14 = gw_data-sld_name.
+*        str15 = gw_data-kunrg.
+*        str16 = gw_data-name1.
+*        str17 = gw_data-kunnr.
+*        str18 = gw_data-shp_name.
+*        str19 = gw_data-shp_city.
+*        str20 = gw_data-sld_city.
+*        str21 = gw_data-fkdat.
+*        str22 = gw_data-erdat1.
+*        str23 = gw_data-zzdat.
+*        str24 = gw_data-posnr.
+*        str25 = gw_data-matnr.
+*        str26 = gw_data-maktx.
+*        str27 = gw_data-bwtar.
+*        str28 = gw_data-prctr.
+*        str29 = gw_data-kdmat.
+*        str30 = gw_data-ktext.
+*        str31 = gw_data-mtart.
+*        str32 = gw_data-matkl.
+*        str33 = gw_data-wgbez.
+*        str34 = gw_data-kondm.
+*        str35 = gw_data-vtext1.
+*        str36 = gw_data-ktgrm.
+*        str37 = gw_data-vtext2.
+*        str38 = gw_data-mvgr1.
+*        str39 = gw_data-bezei11.
+*        str40 = gw_data-mvgr2.
+*        str41 = gw_data-bezei22.
+*        str42 = gw_data-hkont.
+*        str43 = gw_data-txt50.
+*        str44 =  gw_data-vkbur.
+*        str45  = gw_data-aubel.
+*        str46  = gw_data-bezei.
+*        str47  = gw_data-erdat.
+*        str48  = gw_data-vgbel.
+*        str49  = gw_data-po_no.
+*        str50  = gw_data-po_dt.
+*        str51  = gw_data-ref_doc.
+*        str52  = gw_data-mblnr.
+*        str53 = gw_data-dmbtr.
+*        str54  = gw_data-adate.
+*        str55  = gw_data-exnum.
+*        str56  = gw_data-exdat.
+*        str57  = gw_data-extyp.
+*        str58  = gw_data-are1no.
+*        str59  = gw_data-are1date.
+*        str60  = gw_data-are3no.
+*        str61  = gw_data-are3date.
+*        str62  = gw_data-remtime.
+*        str63  = gw_data-zmonth.
+*        str64  = gw_data-steuc.
+*        str65  = gw_data-stcd3.
+*        str66  = gw_data-inco1.
+*        str67  = gw_data-basicrate.
+*        str68  = gw_data-fkimg.
+*        str69  = gw_data-opblf.
+*        str70   = gw_data-opblm.
+*        str71 = gw_data-net_wt.
+*        str72 = gw_data-basicamt.
+*        str73 = gw_data-waerk.
+*        str74 = gw_data-kurrf.
+*        str75 = gw_data-netprcinr.
+*        str76 = gw_data-bezei1.
+*        str77 = gw_data-shp_regio.
+*        str78 = gw_data-inco2.
+*        str79 = gw_data-zterm.
+*        str80 = gw_data-vtext.
+*        str81  = gw_data-discper.
+*        str82  = gw_data-fixed_disamt.
+*        str83  = gw_data-mdiscper.
+*        str84  = gw_data-spl_disamt.
+*        str85  = gw_data-asseble_amt.
+*        str86  = gw_data-excise.
+*        str87  = gw_data-ecess.
+*        str88  = gw_data-hecess.
+*        str89  = gw_data-stax.
+*        str90  = gw_data-eceser.
+*        str91  = gw_data-hecser.
+*        str92  = gw_data-cstrate.
+*        str93  = gw_data-cstamt.
+*        str94  = gw_data-vatrate.
+*        str95  = gw_data-vatamt.
+*        str96  = gw_data-gewei.
+*        str97  = gw_data-vrkme.
+*        str98  = gw_data-brgew.
+*        str99  = gw_data-ntgew.
+*        str100 = gw_data-zvat_r.
+*        str101 = gw_data-zvat.
+*        str102 = gw_data-ztf5.
+*        str103 = gw_data-zfr5.
+*        str104 = gw_data-zfr6.
+*        str105 = gw_data-rofamt.
+*        str106 = gw_data-gr_amt.
+*        str107 = gw_data-trs_text.
+*        str108 = gw_data-lad_text.
+*        str109 = gw_data-vehno_text.
+*        str110 = gw_data-ecc.
+*        str111  = gw_data-cst_no.
+*        str112  = gw_data-lst_no.
+*        str113  = gw_data-pan_no.
+*        str114  = gw_data-zaed.
+*        str115  = gw_data-zpst.
+*        str116  = gw_data-mwsk1.
+*        str117  = gw_data-mwtext.
+*        str118  = gw_data-lgort.
+*        str119  = gw_data-taxnote1.
+*        str120  = gw_data-taxnote2.
+*        str121  = gw_data-class.
+*        str122  = gw_data-cldes.
+*        str123  = gw_data-joigper.
+*        str124 = gw_data-joigamt.
+*        str125  = gw_data-josgper.
+*        str126 = gw_data-josgamt.
+*        str127 = gw_data-jocgper.
+*        str128 = gw_data-jocgamt.
+*        str129 = gw_data-ziigper.
+*        str130 = gw_data-ziigamt.
+*        str131 = gw_data-zicgper.
+*        str132 = gw_data-zicgamt.
+*        str133 = gw_data-zisgper.
+*        str134 = gw_data-zisgamt.
+*        str135 = gw_data-zfigper.
+*        str136 = gw_data-zfigamt.
+*        str137 = gw_data-zfcgper.
+*        str138 = gw_data-zfcgamt.
+*        str139 = gw_data-zfsgper.
+*        str140 = gw_data-zfsgamt.
+
+
+    str1 = gw_data-vbeln.
+    str2 = gw_data-fkart_txt.
+    str3 = gw_data-inv_stat.
+    str4 = gw_data-bukrs.
+    str5 = gw_data-plant.
+    str6 = gw_data-plant_desc.
+    str7 = gw_data-vkrg.
+    str8 = gw_data-vkorg.
+    str9 = gw_data-vtwg.
+    str10 = gw_data-vtweg.
+    str11 = gw_data-sprt.
+    str12 = gw_data-spart.
+    str13 = gw_data-kunag.
+    str14 = gw_data-sld_name.
+    str15 = gw_data-kunrg.
+    str16 = gw_data-name1.
+    str17 = gw_data-kunnr.
+    str18 = gw_data-shp_name.
+    str19 = gw_data-shp_city.
+    str20 = gw_data-fkdat.
+    str21 = gw_data-erdat1.
+    str22 = gw_data-posnr.
+    str23 = gw_data-matnr.
+    str24 = gw_data-maktx.
+    str25 = gw_data-bwtar.
+    str26 = gw_data-prctr.
+    str27 = gw_data-kdmat.
+    str28 = gw_data-ktext.
+    str29 = gw_data-mtart.
+    str30 = gw_data-matkl.
+    str31 = gw_data-charg.
+    str32 = gw_data-wgbez.
+    str33 = gw_data-kondm.
+    str34 = gw_data-vtext1.
+    str35 = gw_data-ktgrm.
+    str36 = gw_data-vtext2.
+    str37 = gw_data-mvgr1.
+    str38 = gw_data-bezei11.
+    str39 = gw_data-mvgr2.
+    str40 = gw_data-bezei22.
+    str41 = gw_data-hkont.
+    str42 = gw_data-txt50.
+    str43 =  gw_data-vkbur.
+    str44  = gw_data-aubel.
+    str45  = gw_data-bezei.
+    str46  = gw_data-erdat.
+    str47  = gw_data-vgbel.
+    str48  = gw_data-po_no.
+    str49  = gw_data-po_dt.
+    str50  = gw_data-ref_doc.
+    str51  = gw_data-mblnr.
+    str52  = gw_data-dmbtr.
+    str53  = gw_data-adate.
+    str54  = gw_data-exnum.
+    str55  = gw_data-exdat.
+    str56  = gw_data-extyp.
+    str57  = gw_data-are1no.
+    str58  = gw_data-are1date.
+    str59  = gw_data-are3no.
+    str60  = gw_data-are3date.
+    str61  = gw_data-remtime.
+    str62  = gw_data-zmonth.
+    str63  = gw_data-steuc."chapid.
+    str64  = gw_data-stcd3."j_1icht1.
+    str65  = gw_data-inco1.
+    str66  = gw_data-basicrate.
+    str67  = gw_data-fkimg.
+    str68  = gw_data-opblf.
+    str69   = gw_data-opblm.
+    str70 = gw_data-net_wt.
+    str71 = gw_data-basicamt.
+    str72 = gw_data-waerk.
+    str73 = gw_data-kurrf.
+    str74 = gw_data-netprcinr.
+    str75 = gw_data-bezei1.
+    str76 = gw_data-inco2.
+    str77 = gw_data-zterm.
+    str78 = gw_data-vtext.
+    str79  = gw_data-discper.
+    str80  = gw_data-fixed_disamt.
+    str81  = gw_data-mdiscper.
+    str82  = gw_data-spl_disamt.
+    str83  = gw_data-asseble_amt.
+    str84  = gw_data-excise.
+    str85  = gw_data-ecess.
+    str86  = gw_data-hecess.
+    str87  = gw_data-stax.
+    str88  = gw_data-eceser.
+    str89  = gw_data-hecser.
+    str90  = gw_data-cstrate.
+    str91  = gw_data-cstamt.
+    str92  = gw_data-vatrate.
+    str93  = gw_data-vatamt.
+    str94  = gw_data-gewei.
+    str95  = gw_data-vrkme.
+    str96  = gw_data-brgew.
+    str97  = gw_data-ntgew.
+    str98  = gw_data-zph1_r.
+    str99  = gw_data-zph1.
+    str100  = gw_data-zph2.
+    str101 = gw_data-zvat_r.
+    str102 = gw_data-zvat.
+    str103 = gw_data-zfr6.
+    str103 = gw_data-ztf5.
+    str104 = gw_data-zfr5.
+    str105 = gw_data-zfr6.
+    str106 = gw_data-rofamt.
+    str107 = gw_data-gr_amt.
+    str108 = gw_data-trs_text.
+    str109 = gw_data-lad_text.
+    str110 = gw_data-vehno_text.
+    str111 = gw_data-ecc.
+    str112  = gw_data-cst_no.
+    str113  = gw_data-lst_no.
+    str114  = gw_data-pan_no.
+    str115  = gw_data-zaed.
+    str116  = gw_data-zpst.
+    str117  = gw_data-mwsk1.
+    str118  = gw_data-mwtext.
+    str119  = gw_data-lgort.
+    str120  = gw_data-taxnote1.
+    str121  = gw_data-taxnote2.
+    str122  = gw_data-class.
+    str123  = gw_data-cldes.
+***Added for GST : 12.07.17
+    str124 = gw_data-joigamt.
+    str125 = gw_data-josgamt.
+    str126 = gw_data-jocgamt.
+    str127 = gw_data-ziigamt.
+    str128 = gw_data-zicgamt.
+    str129 = gw_data-zisgamt.
+    str130 = gw_data-zfigamt.
+    str131 = gw_data-zfcgamt.
+    str132 = gw_data-zfsgamt.
+*    str133 = gw_data-zvgbel."Added by Raj on 20.06.2023
+*    str134 = gw_data-zvgpos."Added by Raj on 20.06.2023
+
+*End GST
+    CONCATENATE str1
+                str2
+                str3
+                str4
+                str5
+                str6
+                str7
+                str8
+                str9
+                str10
+                str11
+                str12
+                str13
+                str14
+                str15
+                str16
+                str17
+                str18
+                str19
+                str20
+                str21
+                str22
+                str23
+                str24
+                str25
+                str26
+                str27
+                str28
+                str29
+                str30
+                str31
+                str32
+                str33
+                str34
+                str35
+                str36
+                str37
+                str38
+                str39
+                str40
+                str41
+                str42
+                str43
+                str44
+                str45
+                str46
+                str47
+                str48
+                str49
+                str50
+                str51
+                str52
+                str53
+                str54
+                str55
+                str56
+                str57
+                str58
+                str59
+                str60
+                str61
+                str62
+                str63
+                str64
+                str65
+                str66
+                str67
+                str68
+                str69
+                str70
+                str71
+                str72
+                str73
+                str74
+                str75
+                str76
+                str77
+                str78
+                str79
+                str80
+                str81
+                str82
+                str83
+                str84
+                str85
+                str86
+                str87
+                str88
+                str89
+                str90
+                str91
+                str92
+                str93
+                str94
+                str95
+                str96
+                str97
+                str98
+                str99
+                str100
+                str101
+                str102
+                str103
+                str104
+                str105
+                str106
+                str107
+                str108
+                str109
+                str110
+                str111
+                str112
+                str113
+                str114
+                str115
+                str116
+                str117
+                str118
+                str119
+                str120
+                str121
+                str122
+                str123
+******Added for GST : 12.07.17
+                str124
+                str125
+                str126
+                str127
+                str128
+                str129
+                str130
+                str131
+                str132
+                str133
+                str134
+*                str135
+*                str136
+*                str137
+*                str138
+*                str139
+*                str140
+                INTO it_append-all SEPARATED BY '$'.
+    APPEND it_append.
+  ENDLOOP.
+
+*  CONCATENATE 'Invoice Number'
+*            'Invoice Type'
+*            'Invoice Status'
+*            'Company Code'
+*            'Delivering Plant'
+*            'Delivering Plant DE.'
+*            'Sales Organisation'
+*            'Sales Organisation Text'
+*            'Distribution Channel'
+*            'Distribution Channel Text'
+*            'Division'
+*            'Division Text'
+*            'Sold to Party'
+*            'Sold to Party Name'
+*            'Payer'
+*            'Payer Name'
+*            'Ship To Party'
+*            'Ship To Party Name'
+*            'Ship To Party City'
+*   'Sold To Party City'
+*            'Invoice Date'
+*            'Inv. Creation Date'
+*
+*            'Invoice Item'
+*            'Material No.'
+*            'Material Description'
+*            'Valuation Type'
+*            'Profit Center'
+*            'Customer Mat No'
+*            'Customer Group'
+*            'Material Type'
+*            'Material Group'
+*            'Group Description'
+*            'Mat Pricing Grp'
+*            'Mat Pricing Grp Description'
+*            'Group Account Assign.'
+*            'Group Account Assign Description'
+*            'Mat Grp 1'
+*            'Mat Grp 1 Description'
+*            'Mat Grp 2'
+*            'Mat Grp 2 Description'
+*            'G/L Account'
+*            'G/L Description'
+*            'Sales Office'
+*            'Sales Order No'
+*            'Order Type Desc'
+*            'Sales Order Date'
+*            'Ref. to Sales Order'
+*            'PO No'
+*            'PO Date'
+*            'Delivery No'
+*            'Material Doc'
+*            'PGI Value'
+*            'Delivery Date'
+*           'Excise Inv No'
+*           'Excise Inv Date'
+*           'Excise Inv Type'
+*           'ARE1 No'
+*   'ARE1 Date'
+*   'ARE3 No'
+*   'ARE3 Date'
+*   'TIME OF REMOVAL'
+*   'PERIOD'
+*   'CONTROL CODE'
+*   'GSTN NO'
+*   'DELIVERY TERMS'
+*   'BASIC RATE'
+*   'QTY'
+*   'QTY Manufactured in FT'
+*   'QTY Manufactured in M'
+*   'WEIGHT IN MT'
+*   'BASIC AMOUNT'
+*   'CURRENCY'
+*   'EXCHANGE RATE'
+*   'NETPRICE IN INR'
+*   'REGION'
+*  'SHIP TO  REGION'
+*   'INCOTERM2'
+*   'PAYMENT TERM'
+*   'PAYMENT TERM DESC'
+*   'FIXED DISCOUNT %'
+*   'FIXED DISCOUNT AMOUNT'
+*   'Manual Discount %'
+*   'Manual Discount Amount'
+*   'ASSESSABLE VALUE'
+*   'BASIC EXCISE DUTY'
+*   'EDUCESS ON BED'
+*   'SHECESS ON BED'
+*   'SERVICE TAX'
+*   'ECESS ON SERVICE TAX'
+*   'HECESS ON SERVICE TAX'
+*   'CST RATE %'
+*   'CST AMOUNT'
+*   'VAT RATE %'
+*   'VAT AMOUNT'
+*   'WEIGHT UNIT'
+*   'UNIT OF MEASURE'
+*   'GROSS WEIGHT IN KG'
+*   'NET WEIGHT IN KG'
+*   'ADD. VAT%'
+*    'ADD.VAT VALUE %'
+*   'SCRAP VALUE.'
+*   'FREIGHT'
+*   'insurance'
+*   'rounding amount'
+*   'gross amount'
+*   'lr no'
+*   'vehicle no'
+*   'TRANSPORTER NAME'
+*   'cust. ecc no'
+*    'cust. cst no'
+*    'cust. lst no'
+*    'cust. pan no'
+*    'aed'
+*    'gl posting'
+*    'tax code'
+*    'tax code text'
+*    'storage location'
+*    'type of sale jcst'
+*    'type of sale jvat'
+*    'Valuation Class'
+*    'Valuation Class Desc'
+*  'Integrated GST%.'
+*     'Integrated GST'
+*    'State GST%.'
+*    'State GST'
+*    'Central GST%.'
+*   'Central GST'
+*    'Ins. IGST-O/P%.'
+*     'Ins. IGST-O/P'
+*    'Ins. CGST-O/P%.'
+*    'Ins. CGST-O/P'
+*   'Ins. SGST-O/P%.'
+*   'Ins. SGST-O/P'
+*   'Freight IGST-O/P%.'
+*  'Freight IGST-O/P'
+*   'Freight CGST-O/P%.'
+*   'Freight CGST-O/P'
+*  'Freight SGST-O/P%.'
+*   'Freight SGST-O/P'
+
+  CONCATENATE     'Invoice Number'
+          'Invoice Type'
+          'Invoice Status'
+          'Company Code'
+          'Delivering Plant'
+          'Delivering Plant DE.'
+          'Sales Organisation'
+          'Sales Organisation Text'
+          'Distribution Channel'
+          'Distribution Channel Text'
+          'Division'
+          'Division Text'
+          'Sold to Party'
+          'Sold to Party Name'
+          'Payer'
+          'Payer Name'
+          'Ship To Party'
+          'Ship To Party Name'
+          'Ship To Party City'
+          'Invoice Date'
+          'Inv. Creation Date'
+          'Invoice Item'
+          'Material No.'
+          'Material Description'
+          'Valuation Type'
+          'Profit Center'
+          'Customer Mat No'
+          'Customer Group'
+          'Material Type'
+          'Material Group'
+          'BATCH NUMBER'
+          'Group Description'
+          'Mat Pricing Grp'
+          'Mat Pricing Grp Description'
+          'Group Account Assign.'
+          'Group Account Assign Description'
+          'Mat Grp 1'
+          'Mat Grp 1 Description'
+          'Mat Grp 2'
+          'Mat Grp 2 Description'
+          'G/L Account'
+          'G/L Description'
+          'Sales Office'
+          'Sales Order No'
+          'Order Type Desc'
+          'Sales Order Date'
+          'Ref. to Sales Order'
+          'PO No'
+          'PO Date'
+          'Delivery No'
+          'Material Doc'
+          'PGI Value'
+          'Delivery Date'
+         'Excise Inv No'
+         'Excise Inv Date'
+         'Excise Inv Type'
+         'ARE1 No'
+ 'ARE1 Date'
+ 'ARE3 No'
+ 'ARE3 Date'
+ 'TIME OF REMOVAL'
+ 'PERIOD'
+ 'CHAPTER ID'
+ 'CHAPTER ID DESC'
+ 'DELIVERY TERMS'
+ 'BASIC RATE'
+ 'QTY'
+ 'QTY Manufactured in FT'
+ 'QTY Manufactured in M'
+ 'WEIGHT IN MT'
+ 'BASIC AMOUNT'
+ 'CURRENCY'
+ 'EXCHANGE RATE'
+ 'NETPRICE IN INR'
+ 'REGION'
+ 'INCOTERM2'
+ 'PAYMENT TERM'
+ 'PAYMENT TERM DESC'
+ 'FIXED DISCOUNT %'
+ 'FIXED DISCOUNT AMOUNT'
+ 'Manual Discount %'
+ 'Manual Discount Amount'
+ 'ASSESSABLE VALUE'
+ 'BASIC EXCISE DUTY'
+ 'EDUCESS ON BED'
+ 'SHECESS ON BED'
+ 'SERVICE TAX'
+ 'ECESS ON SERVICE TAX'
+ 'HECESS ON SERVICE TAX'
+ 'CST RATE %'
+ 'CST AMOUNT'
+ 'VAT RATE %'
+ 'VAT AMOUNT'
+ 'WEIGHT UNIT'
+ 'UNIT OF MEASURE'
+ 'GROSS WEIGHT IN KG'
+ 'NET WEIGHT IN KG'
+ 'PKG& HND CH1 %'
+  'PKG& HND CH1'
+  'PKG& HND CH2 AMT'
+ 'ADD. VAT%'
+  'ADD.VAT VALUE %'
+* 'EXP INS.'
+ 'SCRAP VALUE.'
+ 'FREIGHT'
+ 'insurance'
+ 'rounding amount'
+ 'gross amount'
+ 'transporter name'
+ 'lr no'
+ 'vehicle no'
+ 'cust. ecc no'
+  'cust. cst no'
+  'cust. lst no'
+  'cust. pan no'
+  'aed'
+  'gl posting'
+  'tax code'
+  'tax code text'
+  'storage location'
+  'type of sale jcst'
+  'type of sale jvat'
+  'Valuation Class'
+  'Valuation Class Desc'
+
+****Added for GST : 12.07.17
+* *** Added for GST:12.07.17
+  'Integrated GST'
+  'State GST'
+  'Central GST'
+  'Ins. IGST-O/P'
+  'Ins. CGST-O/P'
+  'Ins. SGST-O/P'
+  'Freight IGST-O/P'
+  'Freight CGST-O/P'
+  'Freight SGST-O/P'
+  'Reference Document'"added by Raj
+  'Item no for Ref Doc'"added by Raj
+INTO header SEPARATED BY '$'.
+****End GST
+
+
+  OPEN DATASET filepath  FOR OUTPUT IN TEXT MODE ENCODING NON-UNICODE IGNORING CONVERSION ERRORS.
+
+  LOOP AT it_append .
+
+    AT FIRST.
+
+      TRANSFER header TO filepath.
+
+    ENDAT.
+
+    TRANSFER it_append-all TO filepath.
+
+  ENDLOOP.
+
+  CLOSE DATASET filepath.
+
+ENDFORM.                    " BACKGROUND_JOB
+*&---------------------------------------------------------------------*
+*&      Form  GET_VARIANT_TAB
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM get_variant_tab .
+*****  DATA : lt_def      TYPE kkblo_t_fieldcat,
+*****         ls_def      TYPE kkblo_fieldcat,
+*****         gc_tab      TYPE c VALUE cl_bcs_convert=>gc_tab,
+*****         gc_crlf     TYPE c VALUE cl_bcs_convert=>gc_crlf,
+*****         f_path      TYPE string,
+*****         lv_temp(50) TYPE c,
+*****         lv_type     TYPE abap_typekind.
+*****
+*****  DATA : lt_fcat TYPE kkblo_t_fieldcat,
+*****         ls_fcat TYPE kkblo_fieldcat.
+*****  DATA : ls_layout  TYPE kkblo_layout,
+*****         lv_string  TYPE string,
+*****         binary_tab TYPE solix_tab,
+*****         size       TYPE so_obj_len,
+*****         lv_len     TYPE i.
+*****  FIELD-SYMBOLS : <ls_data>.
+*****
+*****  LOOP AT t_fieldcatalog.
+*****    MOVE-CORRESPONDING t_fieldcatalog TO ls_def.
+*****    APPEND ls_def TO lt_def.
+*****    CLEAR : ls_def , t_fieldcatalog.
+*****  ENDLOOP.
+*****
+*****  MOVE-CORRESPONDING fs_layout TO ls_layout.
+*****
+*****  CALL FUNCTION 'LT_FC_LOAD'
+*****    EXPORTING
+*****      is_variant          = rs_variant
+*****      i_tabname           = 'GI_DATA'
+*****    IMPORTING
+*****      et_fieldcat         = lt_fcat[]
+*****    CHANGING
+*****      cs_layout           = ls_layout
+*****      ct_default_fieldcat = lt_def
+*****    EXCEPTIONS
+*****      fc_not_complete     = 1
+*****      OTHERS              = 2.
+*****  IF sy-subrc <> 0.
+****** Implement suitable error handling here
+*****  ENDIF.
+*****
+*****  SORT lt_fcat BY col_pos.
+*****  DELETE lt_fcat WHERE no_out = abap_true.
+*****
+*****  LOOP AT lt_fcat INTO ls_fcat.
+*****    CONCATENATE lv_string ls_fcat-seltext_l gc_tab INTO lv_string.
+*****  ENDLOOP.
+*****  CONCATENATE lv_string gc_crlf INTO lv_string.
+*****
+*****
+*****  LOOP AT gi_data INTO gw_data.
+*****    LOOP AT lt_fcat INTO ls_fcat.
+*****      ASSIGN COMPONENT ls_fcat-fieldname OF STRUCTURE gw_data TO <ls_data>.
+*****      CALL METHOD cl_abap_datadescr=>get_data_type_kind
+*****        EXPORTING
+*****          p_data      = <ls_data>        " Data
+*****        RECEIVING
+*****          p_type_kind = lv_type.    " Type Category
+*****      IF lv_type = 'P'.
+*****        IF <ls_data> < 0.
+*****          CLEAR : lv_temp.
+*****          lv_temp = <ls_data> .
+*****          CONDENSE : lv_temp NO-GAPS.
+*****          CALL FUNCTION 'CLOI_PUT_SIGN_IN_FRONT'
+*****            CHANGING
+*****              value = lv_temp.
+*****          CONCATENATE lv_string lv_temp gc_tab INTO lv_string.
+*****        ELSE.
+*****          CLEAR : lv_temp.
+*****          lv_temp = <ls_data> .
+*****          CONDENSE : lv_temp NO-GAPS.
+*****          CONCATENATE lv_string lv_temp gc_tab INTO lv_string.
+*****        ENDIF.
+*****      ELSEIF lv_type = 'D'.
+*****        CLEAR : lv_temp.
+*****        lv_temp = |{ <ls_data>+6(2) }.{ <ls_data>+4(2) }.{ <ls_data>+0(4) }|.
+*****        CONDENSE : lv_temp NO-GAPS.
+*****        CONCATENATE lv_string lv_temp gc_tab INTO lv_string.
+*****      ELSE.
+*****        CONCATENATE lv_string <ls_data> gc_tab INTO lv_string.
+*****      ENDIF.
+*****
+*****
+*****      AT END OF row_pos.
+*****        CONCATENATE lv_string gc_crlf INTO lv_string.
+*****      ENDAT.
+*****    ENDLOOP.
+*****  ENDLOOP.
+*****
+*****  TRY .
+*****      cl_bcs_convert=>string_to_solix(
+*****        EXPORTING
+*****          iv_string   =   lv_string  " Input data
+*****          iv_codepage =   '4103'  " Target Code Page in SAP Form  (Default = SAPconnect Setting)
+*****          iv_add_bom  =   'X'  " Add Byte-Order Mark
+*****        IMPORTING
+*****          et_solix    =   binary_tab  " Output data
+*****          ev_size     =   size  " Size of Document Content
+*****      ).
+*****    CATCH cx_bcs.
+*****      MESSAGE 'Error While Excel File Generation' TYPE 'S' DISPLAY LIKE 'E'.
+*****      RETURN.
+*****  ENDTRY.
+*****  CALL METHOD cl_gui_frontend_services=>directory_browse
+*****    CHANGING
+*****      selected_folder      = f_path
+*****    EXCEPTIONS
+*****      cntl_error           = 1
+*****      error_no_gui         = 2
+*****      not_supported_by_gui = 3
+*****      OTHERS               = 4.
+*****  IF f_path IS NOT INITIAL.
+*****    CONCATENATE f_path '\' 'SALES_REG_ON_' sy-datum+6(2) '.' sy-datum+4(2) '.' sy-datum+0(4) '.XLS' INTO f_path.
+*****    CLEAR lv_len.
+*****    lv_len = size.
+*****    CALL METHOD cl_gui_frontend_services=>gui_download
+*****      EXPORTING
+*****        bin_filesize            = lv_len
+*****        filename                = f_path
+*****        filetype                = 'BIN'
+*****      CHANGING
+*****        data_tab                = binary_tab
+*****      EXCEPTIONS
+*****        file_write_error        = 1
+*****        no_batch                = 2
+*****        gui_refuse_filetransfer = 3
+*****        invalid_type            = 4
+*****        no_authority            = 5
+*****        unknown_error           = 6
+*****        header_not_allowed      = 7
+*****        separator_not_allowed   = 8
+*****        filesize_not_allowed    = 9
+*****        header_too_long         = 10
+*****        dp_error_create         = 11
+*****        dp_error_send           = 12
+*****        dp_error_write          = 13
+*****        unknown_dp_error        = 14
+*****        access_denied           = 15
+*****        dp_out_of_memory        = 16
+*****        disk_full               = 17
+*****        dp_timeout              = 18
+*****        file_not_found          = 19
+*****        dataprovider_exception  = 20
+*****        control_flush_error     = 21
+*****        not_supported_by_gui    = 22
+*****        error_no_gui            = 23
+*****        OTHERS                  = 24.
+*****  ELSE.
+*****    MESSAGE 'Please Select File Location' TYPE 'E'." DISPLAY LIKE 'E'.
+******    RETURN.
+*****  ENDIF."f_path is NOT INITIAL.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  ALV_VARIANT_F4
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      <--P_PA_VARI  text
+*----------------------------------------------------------------------*
+FORM alv_variant_f4  CHANGING p_pa_vari.
+***  CLEAR : rs_variant.
+***  rs_variant-report   = sy-repid.
+***  rs_variant-username = sy-uname.
+***  CALL FUNCTION 'REUSE_ALV_VARIANT_F4'
+***    EXPORTING
+***      is_variant = rs_variant
+***      i_save     = 'A'
+***    IMPORTING
+***      es_variant = rs_variant
+***    EXCEPTIONS
+***      OTHERS     = 1.
+***  IF sy-subrc = 0.
+***    pa_vari = rs_variant-variant.
+***  ENDIF.
+
+ENDFORM.

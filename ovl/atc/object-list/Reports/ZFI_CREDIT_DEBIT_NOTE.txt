@@ -1,0 +1,4051 @@
+*&---------------------------------------------------------------------*
+*& Report  ZFI_CREDIT_DEBIT_NOTE
+*&-------------------------------------------------------------------*
+*& TITLE: Credit Note/Debit Note/Cash Receipt/Cash Payment/Bank Reciept/Bank Voucher Printing
+*&-------------------------------------------------------------------*
+*& REPORT AUTHOR         : HARDIK PATEL,
+*& REPORT CREATION DATE  : 16/01/2015
+*& TRANSACTION CODE      :
+*& REQUEST NUMBER        :  DEVK901477
+*&-------------------------------------------------------------------*
+*&
+*&-------------------------------------------------------------------*
+
+REPORT zfi_credit_debit_note.
+*&---------------------------------------------------------------------*
+TABLES : bkpf.
+*&---------------------------------------------------------------------*
+
+*&---------------------------------------------------------------------*
+*DATA DECLARATION
+*&---------------------------------------------------------------------*
+TYPES : BEGIN OF t_check,
+          belnr TYPE bkpf-belnr,
+        END OF t_check.
+DATA : wa_check TYPE t_check.
+DATA : it_check TYPE STANDARD TABLE OF t_check.
+
+TYPES : BEGIN OF t_belnr,
+          belnr TYPE bkpf-belnr,
+          blart TYPE bkpf-blart,
+          awkey TYPE bkpf-awkey,
+        END OF t_belnr.
+DATA : wa_belnr TYPE t_belnr.
+DATA : it_belnr TYPE STANDARD TABLE OF t_belnr.
+
+TYPES: BEGIN OF t_vbak,
+         aubel TYPE vbrp-aubel,
+       END OF t_vbak.
+DATA : wa_vbrk TYPE t_vbak.
+DATA : it_vbrk TYPE STANDARD TABLE OF t_vbak.
+
+TYPES : BEGIN OF t_crdr,
+          belnr     TYPE bkpf-belnr,
+          name(50),
+          addr(200),
+          cst       TYPE j_1imovend-j_1icstno,
+          lst       TYPE j_1imovend-j_1ilstno,
+          pan       TYPE j_1imovend-j_1ipanno,
+          sern      TYPE j_1imovend-j_1isern,
+        END OF t_crdr.
+DATA : wa_crdr TYPE t_crdr.
+DATA : it_crdr TYPE STANDARD TABLE OF t_crdr.
+
+TYPES : BEGIN OF t_bkpf,
+          belnr         TYPE bkpf-belnr,
+          budat         TYPE bkpf-budat,
+          blart         TYPE bkpf-blart,
+          name(45),
+          addr(200),
+          total         TYPE kwert,
+          roundoff      TYPE kwert,
+          word(200),
+          waerk         TYPE bseg-pswsl,
+          plant(4),
+          name1(45),
+          bktxt         TYPE bkpf-bktxt,
+          prctr         TYPE bseg-prctr,
+          plantname(50),
+          kursf         TYPE bkpf-kursf,
+          hwaer         TYPE bkpf-hwaer,
+          bukrs         TYPE bkpf-bukrs,
+          xblnr         TYPE bkpf-xblnr,
+          bldat         TYPE bkpf-bldat,
+          awkey         TYPE bkpf-awkey,
+          bt(50),
+          cj(25),
+          pn(10),
+*        PN     TYPE TCJ_DOCUMENTS-D_POSTING_NUMB,
+          cst           TYPE j_1imovend-j_1icstno,
+          lst           TYPE j_1imovend-j_1ilstno,
+          pan           TYPE j_1imovend-j_1ipanno,
+          sern          TYPE j_1imovend-j_1isern,
+          taxc(50),
+          mwskz         TYPE bseg-mwskz,
+        END OF t_bkpf.
+DATA : wa_bkpf TYPE zwa_cr_db_bkpf ."T_BKPF.
+DATA : it_bkpf TYPE STANDARD TABLE OF zwa_cr_db_bkpf ."T_BKPF.
+DATA : v_adrnr1 TYPE t001w-adrnr. " added on 25.03.2021
+************** for plant address
+TYPES : BEGIN OF t_header1,
+          plant_name1(40),
+          plant_street(60),
+          plant_house_num1(10),
+          plant_house_num2(10),
+          plant_str_suppl1(40),
+          plant_str_suppl2(40),
+          plant_str_suppl3(40),
+          plant_city1(40),
+          plant_city2(40),
+          plant_post_code1(10),
+          plant_region(10),
+          plant_country(10),
+          tel_number(10),
+        END OF t_header1.
+DATA : wa_header1 TYPE t_header1.
+DATA : it_header1 TYPE STANDARD TABLE OF t_header1.
+**************
+
+TYPES : BEGIN OF t_bseg,
+          bukrs TYPE bseg-bukrs,
+          belnr TYPE bseg-belnr,
+          gjahr TYPE bseg-gjahr,
+          buzei TYPE bseg-buzei,
+*          sgtxt TYPE bseg-sgtxt,
+          sgtxt TYPE cukn-knblk,
+          dmbtr TYPE bseg-dmbtr,
+*          dmbtr(100),
+          pswsl TYPE bseg-pswsl,
+          koart TYPE bseg-koart,
+          shkzg TYPE bseg-shkzg,
+          kostl TYPE bseg-kostl,
+          hkont TYPE bseg-hkont,
+          prctr TYPE bseg-prctr,
+          aufnr TYPE bseg-aufnr,
+          kunnr TYPE bseg-kunnr,
+          lifnr TYPE bseg-lifnr,
+          wrbtr TYPE bseg-wrbtr,
+          xbilk TYPE bseg-xbilk,
+          mwskz TYPE bseg-mwskz,
+          ebeln TYPE bseg-ebeln,
+          zuonr TYPE bseg-zuonr,
+          ktosl TYPE bseg-ktosl,
+*        HSN_SAC type bseg-HSN_SAC,"Added by Raj on 19.11.2024
+*          bukrs TYPE bseg-bukrs,
+*          gjahr TYPE bseg-gjahr,
+*          buzei TYPE bseg-buzei,
+        END OF t_bseg.
+DATA : wa_bseg TYPE t_bseg.
+DATA : it_bseg TYPE STANDARD TABLE OF t_bseg.
+DATA : wa_bseg2 TYPE t_bseg.
+DATA : it_bseg2
+       TYPE STANDARD TABLE OF t_bseg.
+
+DATA : wa_fbseg TYPE t_bseg.
+DATA : it_fbseg TYPE STANDARD TABLE OF t_bseg.
+
+DATA : wa_bseg1 TYPE t_bseg.
+DATA : it_bseg1 TYPE STANDARD TABLE OF t_bseg.
+DATA : wa_bseg_gl TYPE t_bseg.
+DATA : it_bseg_gl TYPE STANDARD TABLE OF t_bseg.
+.
+
+DATA : wa_bseg3 TYPE t_bseg.
+DATA : it_bseg3 TYPE STANDARD TABLE OF t_bseg.
+
+*************Begin of changes Added by Raj on 16.07.2023*******************
+DATA : lv_string1 TYPE char200.
+DATA : lv_string2 TYPE char200.
+CONSTANTS : c_var_nameg TYPE rvari_vnam VALUE 'ZSD_REMARKG',
+            c_var_namep TYPE rvari_vnam VALUE 'ZSD_REMARKP'.
+
+TYPES: BEGIN OF ty_tvarvc,
+         sign TYPE tvarv_sign,
+         opti TYPE tvarv_opti,
+         low  TYPE tvarv_val,
+         high TYPE tvarv_val,
+       END OF ty_tvarvc.
+
+TYPES : BEGIN OF ty_tvarvcr,
+          sign TYPE tvarvc-sign,
+          opti TYPE tvarvc-opti,
+          low  TYPE  tvarvc-low,
+        END OF ty_tvarvcr.
+
+DATA: lt_acc_key  TYPE STANDARD TABLE OF ty_tvarvc,
+      lt_acc_key1 TYPE STANDARD TABLE OF ty_tvarvc,
+      lt_acc_key2 TYPE STANDARD TABLE OF ty_tvarvc,
+      lt_acc_key3 TYPE STANDARD TABLE OF ty_tvarvc,
+      lt_acc_keyg TYPE  ty_tvarvcr,
+      lt_acc_keyp TYPE ty_tvarvcr.
+DATA: lwa_acc_key TYPE ty_tvarvc.
+************End of changes Added by Raj on 16.07.2023******
+TYPES : BEGIN OF ty_bseg,
+
+          belnr TYPE bseg-belnr,
+          hkont TYPE bseg-hkont,
+          bukrs TYPE bseg-bukrs,
+          gjahr TYPE bseg-gjahr,
+          buzei TYPE bseg-buzei,
+*          sgtxt TYPE bseg-sgtxt,
+          sgtxt TYPE cukn-knblk,
+          dmbtr TYPE bseg-dmbtr,
+*          dmbtr(100),
+          pswsl TYPE bseg-pswsl,
+          koart TYPE bseg-koart,
+          shkzg TYPE bseg-shkzg,
+          kostl TYPE bseg-kostl,
+
+          prctr TYPE bseg-prctr,
+          aufnr TYPE bseg-aufnr,
+          kunnr TYPE bseg-kunnr,
+          lifnr TYPE bseg-lifnr,
+          wrbtr TYPE bseg-wrbtr,
+          xbilk TYPE bseg-xbilk,
+          mwskz TYPE bseg-mwskz,
+          ebeln TYPE bseg-ebeln,
+          zuonr TYPE bseg-zuonr,
+*          bukrs TYPE bseg-bukrs,
+*          gjahr TYPE bseg-gjahr,
+*          buzei TYPE bseg-buzei,
+        END OF ty_bseg.
+
+
+* TYPES : BEGIN OF ty_bsegs,
+*
+*          belnr TYPE bseg-belnr,
+*          hkont TYPE bseg-hkont,
+*          bukrs TYPE bseg-bukrs,
+*          gjahr TYPE bseg-gjahr,
+*          buzei TYPE bseg-buzei,
+**          sgtxt TYPE bseg-sgtxt,
+*          sgtxt TYPE cukn-knblk,
+*          dmbtr TYPE bseg-dmbtr,
+**          dmbtr(100),
+*          pswsl TYPE bseg-pswsl,
+*          koart TYPE bseg-koart,
+*          shkzg TYPE bseg-shkzg,
+*          kostl TYPE bseg-kostl,
+*
+*          prctr TYPE bseg-prctr,
+*          aufnr TYPE bseg-aufnr,
+*          kunnr TYPE bseg-kunnr,
+*          lifnr TYPE bseg-lifnr,
+*          wrbtr TYPE bseg-wrbtr,
+*          xbilk TYPE bseg-xbilk,
+*          mwskz TYPE bseg-mwskz,
+*          ebeln TYPE bseg-ebeln,
+*          zuonr TYPE bseg-zuonr,
+*          KTOSL type bseg-KTOSL,
+**          bukrs TYPE bseg-bukrs,
+**          gjahr TYPE bseg-gjahr,
+**          buzei TYPE bseg-buzei,
+*        END OF ty_bsegs.
+
+
+TYPES : BEGIN OF t_bsegsg,
+          bukrs TYPE bseg-bukrs,
+          belnr TYPE bseg-belnr,
+          gjahr TYPE bseg-gjahr,
+          buzei TYPE bseg-buzei,
+*          sgtxt TYPE bseg-sgtxt,
+          sgtxt TYPE cukn-knblk,
+          dmbtr TYPE bseg-dmbtr,
+*          dmbtr(100),
+          pswsl TYPE bseg-pswsl,
+          koart TYPE bseg-koart,
+          shkzg TYPE bseg-shkzg,
+          kostl TYPE bseg-kostl,
+          hkont TYPE bseg-hkont,
+          prctr TYPE bseg-prctr,
+          aufnr TYPE bseg-aufnr,
+          kunnr TYPE bseg-kunnr,
+          lifnr TYPE bseg-lifnr,
+          wrbtr TYPE bseg-wrbtr,
+          xbilk TYPE bseg-xbilk,
+          mwskz TYPE bseg-mwskz,
+          ebeln TYPE bseg-ebeln,
+          zuonr TYPE bseg-zuonr,
+          ktosl TYPE bseg-ktosl,
+        HSN_SAC type bseg-HSN_SAC,"Added by Raj on 19.11.2024
+*          bukrs TYPE bseg-bukrs,
+*          gjahr TYPE bseg-gjahr,
+*          buzei TYPE bseg-buzei,
+        END OF t_bsegsg.
+
+*DATA : wa_fbseg TYPE t_bsegsg.
+*DATA : it_fbseg TYPE STANDARD TABLE OF t_bsegsg.
+
+
+DATA : wa_bseg4 TYPE t_bsegsg.
+DATA : it_bseg4 TYPE STANDARD TABLE OF t_bsegsg.
+***************
+
+DATA : wa_fbseg1 TYPE t_bseg.
+DATA : it_fbseg1 TYPE STANDARD TABLE OF t_bseg.
+
+
+
+TYPES : BEGIN OF t_bsegs,
+          bukrs TYPE bseg-bukrs,
+          belnr TYPE bseg-belnr,
+          gjahr TYPE bseg-gjahr,
+          buzei TYPE bseg-buzei,
+*          sgtxt TYPE bseg-sgtxt,
+          sgtxt TYPE cukn-knblk,
+          dmbtr TYPE bseg-dmbtr,
+*          dmbtr(100),
+          pswsl TYPE bseg-pswsl,
+          koart TYPE bseg-koart,
+          shkzg TYPE bseg-shkzg,
+          kostl TYPE bseg-kostl,
+          hkont TYPE bseg-hkont,
+          prctr TYPE bseg-prctr,
+          aufnr TYPE bseg-aufnr,
+          kunnr TYPE bseg-kunnr,
+          lifnr TYPE bseg-lifnr,
+          wrbtr TYPE bseg-wrbtr,
+          xbilk TYPE bseg-xbilk,
+          mwskz TYPE bseg-mwskz,
+          ebeln TYPE bseg-ebeln,
+          zuonr TYPE bseg-zuonr,
+          ktosl TYPE bseg-ktosl,
+        HSN_SAC type bseg-HSN_SAC,"Added by Raj on 19.11.2024
+*          bukrs TYPE bseg-bukrs,
+*          gjahr TYPE bseg-gjahr,
+*          buzei TYPE bseg-buzei,
+        END OF t_bsegs.
+
+
+
+
+
+DATA : wa_fbseg2 TYPE t_bsegs.                   "Added by Raj on 19.11.2024
+DATA : it_fbseg2 TYPE STANDARD TABLE OF t_bsegs. "Added by Raj on 19.11.2024
+
+DATA : wa_fbseg3 TYPE t_bsegs.                   "Added by Raj on 19.11.2024
+DATA : it_fbseg3 TYPE STANDARD TABLE OF t_bsegs. "Added by Raj on 19.11.2024
+
+DATA: v_zuonr TYPE bseg-zuonr.
+TYPES : BEGIN OF t_sort,
+          hkont TYPE bseg-hkont,
+          belnr TYPE bseg-belnr,
+          sgtxt TYPE bseg-sgtxt,
+          dmbtr TYPE bseg-dmbtr,
+          pswsl TYPE bseg-pswsl,
+          koart TYPE bseg-koart,
+          shkzg TYPE bseg-shkzg,
+          kostl TYPE bseg-kostl,
+          prctr TYPE bseg-prctr,
+          aufnr TYPE bseg-aufnr,
+          kunnr TYPE bseg-kunnr,
+          lifnr TYPE bseg-lifnr,
+          wrbtr TYPE bseg-wrbtr,
+          xbilk TYPE bseg-xbilk,
+          mwskz TYPE bseg-mwskz,
+        END OF t_sort.
+DATA : wa_sort TYPE t_sort.
+DATA : it_sort TYPE STANDARD TABLE OF t_sort.
+
+TYPES : BEGIN OF t_gltot,
+          hkont TYPE bseg-hkont,
+          dmbtr TYPE bseg-dmbtr,
+          wrbtr TYPE bseg-wrbtr,
+        END OF t_gltot.
+DATA : wa_gltot TYPE t_gltot.
+DATA : it_gltot TYPE STANDARD TABLE OF t_gltot.
+
+TYPES : BEGIN OF t_bsak,
+          lifnr TYPE bsak-lifnr,
+          augbl TYPE bsak-augbl,
+          belnr TYPE bsak-belnr,
+          budat TYPE bsak-budat,
+          xblnr TYPE bsak-xblnr,
+          blart TYPE bsak-blart,
+          waers TYPE bsak-waers,
+          hkont TYPE bsak-hkont,
+        END OF t_bsak.
+DATA : wa_bsak TYPE t_bsak.
+DATA :  it_bsak TYPE STANDARD TABLE OF t_bsak.
+
+
+TYPES : BEGIN OF t_bsad,
+          kunnr TYPE bsad-kunnr,
+          augbl TYPE bsad-augbl,
+          belnr TYPE bsad-belnr,
+          budat TYPE bsad-budat,
+          xblnr TYPE bsad-xblnr,
+          blart TYPE bsad-blart,
+          waers TYPE bsad-waers,
+          hkont TYPE bsad-hkont,
+        END OF t_bsad.
+DATA : wa_bsad TYPE t_bsad.
+DATA :  it_bsad TYPE STANDARD TABLE OF t_bsad.
+
+TYPES : BEGIN OF t_doc,
+          belnr TYPE bseg-belnr,
+          shkzg TYPE bseg-shkzg,
+          dmbtr TYPE bseg-dmbtr,
+          pswsl TYPE bseg-pswsl,
+          sgtxt TYPE bseg-sgtxt,
+          hkont TYPE bseg-hkont,
+          qsskz TYPE bseg-qsskz,
+
+        END OF t_doc.
+DATA : wa_doc TYPE t_doc.
+DATA : it_doc TYPE STANDARD TABLE OF t_doc.
+
+TYPES : BEGIN OF t_doc1,
+          belnr TYPE regup-belnr,
+          vblnr TYPE regup-vblnr,
+          bukrs TYPE regup-bukrs,
+
+          gjahr TYPE regup-gjahr,
+          shkzg TYPE regup-shkzg,
+          xblnr TYPE regup-xblnr,
+          blart TYPE regup-blart,
+          budat TYPE regup-budat,
+          bldat TYPE regup-bldat,
+          pswbt TYPE regup-pswbt,
+          psskt TYPE regup-psskt,
+
+
+*          qsskz TYPE bseg-qsskz,
+
+        END OF t_doc1.
+DATA : wa_doc1 TYPE t_doc1.
+DATA : it_doc1 TYPE STANDARD TABLE OF t_doc1.
+
+
+DATA : lt_item  TYPE STANDARD TABLE OF with_item,
+       lwa_item TYPE with_item.
+
+TYPES : BEGIN OF t_item,
+          augbl  TYPE bsak-belnr,
+          blart  TYPE bsak-blart,
+          belnr  TYPE bsak-belnr,
+          budat  TYPE datum,
+          bldat  TYPE datum,
+          xblnr  TYPE bsak-sgtxt,
+          invamt TYPE bseg-dmbtr,
+          disamt TYPE bseg-dmbtr,
+          tdsamt TYPE bseg-dmbtr,
+          adjamt TYPE bseg-dmbtr,
+          txt50  TYPE skat-txt50,
+          sgtxt  TYPE bseg-sgtxt,
+        END OF t_item.
+DATA : wa_item TYPE t_item.
+DATA : it_item TYPE STANDARD TABLE OF t_item.
+DATA : wa_item1 TYPE t_item.
+DATA : it_item1 TYPE STANDARD TABLE OF t_item.
+DATA : wa_narr TYPE t_item.
+DATA : it_narr TYPE STANDARD TABLE OF t_item.
+
+TYPES : BEGIN OF t_header,
+          augbl         TYPE bsak-augbl,
+          glact         TYPE skat-txt50,
+          belnr         TYPE bsak-belnr,
+          budat         TYPE bkpf-budat,
+          chqdt         TYPE bkpf-budat,
+          chqam         TYPE bseg-dmbtr,
+          debitamt      TYPE bseg-dmbtr,
+          witamt        TYPE bseg-dmbtr,
+          blart         TYPE bkpf-blart,
+          pswsl         TYPE bkpf-hwaer,
+          sgtxt         TYPE bseg-sgtxt,
+          bnkac         TYPE skat-txt50,
+          name(35),
+          plantname(50),
+          wrbtr         TYPE bseg-dmbtr,
+          docc          TYPE bkpf-waers,
+          kursf         TYPE bkpf-kursf,
+          sgtxt1        TYPE bseg-sgtxt,
+          lifnr         TYPE lfa1-lifnr,
+          words         TYPE char200,
+        END OF t_header.
+DATA : wa_header TYPE t_header.
+DATA : it_header TYPE STANDARD TABLE OF t_header.
+
+TYPES : BEGIN OF t_sgtxt,
+          belnr TYPE bkpf-belnr,
+          sgtxt TYPE bseg-sgtxt,
+        END OF t_sgtxt.
+DATA : wa_sgtxt TYPE t_sgtxt.
+DATA : it_sgtxt TYPE STANDARD TABLE OF t_sgtxt.
+DATA : wa_sgtxt1 TYPE t_sgtxt.
+DATA : it_sgtxt1 TYPE STANDARD TABLE OF t_sgtxt.
+
+TYPES : BEGIN OF t_skat,
+          saknr TYPE skat-saknr,
+          txt50 TYPE skat-txt50,
+        END OF t_skat.
+DATA : wa_skat TYPE t_skat.
+DATA : it_skat TYPE STANDARD TABLE OF t_skat.
+
+***********
+TYPES : BEGIN OF t_t007s,
+          mwskz TYPE t007s-mwskz,
+          text1 TYPE t007s-text1,
+        END OF t_t007s.
+DATA : wa_t007s TYPE t_t007s.
+DATA : it_t007s TYPE STANDARD TABLE OF t_t007s.
+*******
+
+DATA: v_sgtxt TYPE skat-txt50.
+TYPES : BEGIN OF t_skat1,
+          saknr TYPE skat-saknr,
+          txt20 TYPE skat-txt20,
+        END OF t_skat1.
+DATA : wa_skat1 TYPE t_skat1.
+DATA : it_skat1 TYPE STANDARD TABLE OF t_skat1.
+*DATA : V_TXT20 TYPE SKAT-TXT20.
+
+TYPES : BEGIN OF t_addr,
+          adrnr      TYPE lfa1-adrnr,
+          name1      TYPE adrc-name1,
+          street     TYPE adrc-street,
+          house_num1 TYPE adrc-house_num1,
+          house_num2 TYPE adrc-house_num2,
+          str_suppl1 TYPE adrc-str_suppl1,
+          str_suppl2 TYPE adrc-str_suppl2,
+          str_suppl3 TYPE adrc-str_suppl3,
+          city1      TYPE adrc-city1,
+          city2      TYPE adrc-city2,
+          post_code1 TYPE adrc-post_code1,
+          region     TYPE adrc-region,
+          country    TYPE adrc-country,
+          cst        TYPE j_1imovend-j_1icstno,
+          lst        TYPE j_1imovend-j_1ilstno,
+          pan        TYPE j_1imovend-j_1ipanno,
+          sern       TYPE j_1imovend-j_1isern,
+          lifcust    TYPE bsik-lifnr,
+          belnr      TYPE bkpf-belnr,
+        END OF t_addr.
+DATA : wa_addr TYPE t_addr.
+DATA : it_addr TYPE STANDARD TABLE OF t_addr.
+
+TYPES : BEGIN OF t_code,
+          lifcust TYPE bsik-lifnr,
+          belnr   TYPE bkpf-belnr,
+        END OF t_code.
+DATA : wa_code TYPE t_code.
+DATA : it_code TYPE STANDARD TABLE OF t_code.
+
+TYPES : BEGIN OF t_texts,
+          head(200),
+          number(200),
+          date(200),
+        END OF t_texts.
+DATA : wa_texts TYPE t_texts.
+DATA : it_texts TYPE STANDARD TABLE OF t_texts.
+
+TYPES : BEGIN OF t_mseg,
+          mblnr TYPE mseg-mblnr,
+          matnr TYPE mseg-matnr,
+          menge TYPE mseg-menge,
+          meins TYPE mseg-meins,
+          ebeln TYPE mseg-ebeln,
+          ebelp TYPE mseg-ebelp,
+          dmbtr TYPE mseg-dmbtr,
+          waers TYPE mseg-waers,
+          lifnr TYPE mseg-lifnr,
+        END OF t_mseg.
+DATA : wa_mseg TYPE t_mseg.
+DATA : it_mseg TYPE STANDARD TABLE OF t_mseg.
+
+TYPES : BEGIN OF t_ekpo,
+          ebeln TYPE ekpo-ebeln,
+          ebelp TYPE ekpo-ebelp,
+          menge TYPE ekpo-menge,
+          matnr TYPE ekpo-matnr,
+          netwr TYPE ekpo-netwr,
+          netpr TYPE ekpo-netpr,
+          maktx TYPE makt-maktx,
+        END OF t_ekpo.
+DATA : wa_ekpo TYPE t_ekpo.
+DATA : it_ekpo TYPE STANDARD TABLE OF t_ekpo.
+
+TYPES : BEGIN OF t_purch,
+          id     TYPE i,
+          matnr  TYPE mseg-matnr,
+          maktx  TYPE makt-maktx,
+          piqty  TYPE ekpo-menge,
+          uom    TYPE mseg-meins,
+          grqty  TYPE mseg-menge,
+          porate TYPE ekpo-netpr,
+          pirate TYPE ekpo-netpr,
+          waers  TYPE mseg-waers,
+          mblnr  TYPE mseg-mblnr,
+          ebeln  TYPE ekpo-ebeln,
+          amount TYPE ekpo-netwr,
+        END OF t_purch.
+DATA : wa_purch TYPE t_purch.
+DATA : it_purch TYPE STANDARD TABLE OF t_purch.
+
+TYPES : BEGIN OF t_vendor,
+          lifnr TYPE lfa1-lifnr,
+          cst   TYPE j_1imovend-j_1icstno,
+          lst   TYPE j_1imovend-j_1ilstno,
+          pan   TYPE j_1imovend-j_1ipanno,
+          sern  TYPE j_1imovend-j_1isern,
+        END OF t_vendor.
+DATA : wa_vendor TYPE t_vendor.
+DATA : it_vendor TYPE STANDARD TABLE OF t_vendor.
+
+TYPES : BEGIN OF t_ekbe,
+          ebeln TYPE ekbe-ebeln,
+          belnr TYPE ekbe-belnr,
+          lfbnr TYPE ekbe-lfbnr,
+          ebelp TYPE ekbe-ebelp,
+        END OF t_ekbe.
+DATA : wa_ekbe TYPE t_ekbe.
+DATA : it_ekbe TYPE STANDARD TABLE OF t_ekbe.
+
+TYPES : BEGIN OF t_mblnr,
+          ebeln TYPE ekbe-ebeln,
+          ebelp TYPE ekbe-ebelp,
+          belnr TYPE ekbe-belnr,
+        END OF t_mblnr.
+DATA : wa_mblnr TYPE t_mblnr.
+DATA : it_mblnr TYPE STANDARD TABLE OF t_mblnr.
+
+TYPES : BEGIN OF t_vbrp,
+          sgtxt(200),
+          netwr      TYPE vbrk-netwr,
+          mwsbp      TYPE vbap-mwsbp,
+          waerk      TYPE vbrk-waerk,
+          shkzg(02),
+          "type vbap-mwsbp,
+        END OF t_vbrp.
+
+DATA : it_vbrp TYPE STANDARD TABLE OF t_vbrp,
+       wa_vbrp TYPE t_vbrp.
+DATA : v_sum TYPE vbrk-netwr.
+DATA : it_return TYPE STANDARD TABLE OF ddshretval.
+DATA : wa_return LIKE LINE OF it_return.
+DATA : v_blart TYPE bkpf-blart.
+DATA : v_shkzg TYPE bseg-shkzg.
+DATA : v_message(200).
+DATA : v_region TYPE t005u-bezei.
+DATA : v_country TYPE t005t-landx50.
+DATA : control_parameters  TYPE ssfctrlop.
+DATA : w_cnt TYPE i.
+DATA : w_cnt2 TYPE i.
+DATA : fname TYPE  rs38l_fnam.
+DATA : v_roundoff TYPE kwert.
+DATA : p1(50).
+DATA : v_in_words LIKE spell.
+DATA : v_waerk TYPE bseg-pswsl.
+DATA : roundoff TYPE kwert.
+DATA : flag TYPE i.
+DATA : v_dr TYPE bseg-dmbtr.
+DATA : v_cr TYPE bseg-dmbtr.
+DATA : v_wit TYPE bseg-dmbtr.
+DATA: v_disc TYPE bseg-dmbtr.
+DATA: vblnr TYPE regup-vblnr.
+DATA: blart TYPE regup-blart.
+DATA: bldat TYPE regup-bldat.
+DATA: budat TYPE regup-budat.
+DATA: xblnr TYPE regup-xblnr.
+DATA : v_cr1 TYPE bseg-dmbtr.
+DATA : v_wrbtr TYPE bseg-wrbtr.
+DATA : v_plant TYPE werks_d.
+DATA : v_bukrs TYPE bkpf-bukrs.
+DATA : v_cj TYPE bseg-hkont.
+DATA : v_awkey(10).
+DATA : v_maxbt TYPE maxbt.
+DATA : v_id TYPE i.
+DATA : v_we TYPE i.
+DATA :  v_tot TYPE maxbt.
+DATA : v_char(01).
+DATA : v_lifnr TYPE lifnr.
+DATA : v_kunnr TYPE kunnr.
+DATA : v_adrnr TYPE adrc-addrnumber.
+DATA : v_branrg(04).
+DATA : v_cgstin(15).
+DATA :total1 TYPE kwert.
+DATA :total2 TYPE kwert.
+DATA: sgtxt TYPE cukn-knblk .
+DATA : plant_address(200).
+DATA : v_mwskz TYPE t007s-mwskz.
+DATA : v_text1 TYPE t007s-text1.
+DATA : v_text2(100).
+DATA : v_text3(100).
+DATA : v_gstn(15).
+***** Added by Carina Jose on 25.03.2021
+DATA : v_fcompname(70).
+DATA : it_compaddr TYPE STANDARD TABLE OF zwa_invcomp_addr,
+       wa_compaddr TYPE zwa_invcomp_addr.
+DATA : v_butxt TYPE t001-butxt.
+DATA : v_cadrnr TYPE t001-adrnr.
+DATA : v_cregion TYPE adrc-region.
+DATA : v_ccountry TYPE adrc-country.
+TYPES: BEGIN OF ty_t001,
+         bukrs TYPE bukrs,
+       END OF ty_t001.
+DATA : gt_t001 TYPE STANDARD TABLE OF ty_t001,
+       wa_t001 TYPE ty_t001.
+***** End of changes by Carina Jose on 25.03.2021
+*===================== 16.03.2019
+DATA: wa_add_old TYPE zwa_address_old.
+
+************ Added changes by Carina Jose on 08/09/2021
+CONSTANTS : c_var_namecn TYPE rvari_vnam VALUE 'ZSD_CN_REMARKS',
+            c_type_pcn   TYPE rsscr_kind VALUE 'P'.
+
+CONSTANTS : c_var_namecn_1 TYPE rvari_vnam VALUE 'ZSD_CN_REMARKS_1',
+            c_type_pcn_1   TYPE rsscr_kind VALUE 'P'.
+DATA : v_cn_remarks(255).
+DATA : v_cn_remarks_1(255).
+************ End of changes by Carina Jose on 08/09/2021
+
+***** Added by Carina Jose on 08.04.2022
+CONSTANTS  : c_var_vno     TYPE rvari_vnam VALUE 'Z_VOUCH_NO'.
+CONSTANTS  : c_var_vdt     TYPE rvari_vnam VALUE 'Z_VOUCH_DT'.
+
+DATA : v_vno(200),
+       v_vdt(200).
+***** End of changes by Carina Jose on 08.04.2022
+
+*&---------------------------------------------------------------------*
+*SELECTION SCREEN
+*&---------------------------------------------------------------------*
+SELECTION-SCREEN : BEGIN OF BLOCK a1 WITH FRAME TITLE text-001.
+SELECT-OPTIONS : s_belnr FOR bkpf-belnr.
+PARAMETERS : p_bukrs TYPE bkpf-bukrs.
+PARAMETERS : p_gjahr TYPE j_1idocuyr.
+PARAMETERS : p_detail AS CHECKBOX.
+*PARAMETERS : P_SD AS CHECKBOX.
+SELECTION-SCREEN : END OF BLOCK a1.
+
+SELECTION-SCREEN : BEGIN OF BLOCK a2 WITH FRAME TITLE text-002.
+PARAMETERS : crdr RADIOBUTTON GROUP rad1 USER-COMMAND xyz DEFAULT 'X'.
+PARAMETERS : fb65 RADIOBUTTON GROUP rad1.
+PARAMETERS : vouc RADIOBUTTON GROUP rad1.
+PARAMETERS : bank RADIOBUTTON GROUP rad1.
+PARAMETERS : exp  RADIOBUTTON GROUP rad1.
+PARAMETERS : jv   RADIOBUTTON GROUP rad1.
+PARAMETERS : jv2   RADIOBUTTON GROUP rad1.
+PARAMETERS : sd   RADIOBUTTON GROUP rad1.
+PARAMETERS : fi   RADIOBUTTON GROUP rad1.
+PARAMETERS : cl   RADIOBUTTON GROUP rad1.
+PARAMETERS : fi1   RADIOBUTTON GROUP rad1.
+PARAMETERS : miro   RADIOBUTTON GROUP rad1.
+PARAMETERS : zp   RADIOBUTTON GROUP rad1.
+
+
+SELECTION-SCREEN : END OF BLOCK a2.
+
+*&---------------------------------------------------------------------*
+AT SELECTION-SCREEN OUTPUT.
+*&---------------------------------------------------------------------*
+  LOOP AT SCREEN.
+*    IF bank = 'X' OR exp = 'X' OR jv = 'X' OR jv2 = 'X'.
+    IF  exp = 'X' OR jv = 'X' OR jv2 = 'X'.
+      IF screen-name = 'P_DETAIL'.
+        screen-input = 0.
+        MODIFY SCREEN.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+
+*&---------------------------------------------------------------------*
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR s_belnr-low.
+*&---------------------------------------------------------------------*
+  PERFORM get_help CHANGING s_belnr-low.
+
+*&---------------------------------------------------------------------*
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR s_belnr-high.
+*&---------------------------------------------------------------------*
+  PERFORM get_help CHANGING s_belnr-high.
+
+*&---------------------------------------------------------------------*
+AT SELECTION-SCREEN.
+*&---------------------------------------------------------------------*
+  IF sy-ucomm = 'ONLI'.
+    IF s_belnr-low IS INITIAL.
+      MESSAGE : 'Enter Doc No' TYPE 'E'.
+      STOP.
+    ENDIF.
+    IF p_gjahr IS INITIAL.
+      MESSAGE : 'Enter Year' TYPE 'E'.
+      STOP.
+    ENDIF.
+    IF p_bukrs IS INITIAL.
+      MESSAGE : 'Enter Company Code' TYPE 'E'.
+      STOP.
+    ENDIF.
+
+    IF crdr = 'X' OR fi1 = 'X'.
+      SELECT belnr FROM bkpf INTO TABLE it_check WHERE blart IN ('KG','DG','KR','DR','RV','ZG') AND gjahr = p_gjahr AND bukrs = p_bukrs.
+      LOOP AT s_belnr.
+        READ TABLE it_check INTO wa_check WITH KEY belnr = s_belnr-low.
+        IF sy-subrc NE 0.
+          CONCATENATE 'Incorrect Doc No :- ' s_belnr-low INTO v_message SEPARATED BY space.
+          MESSAGE : v_message TYPE 'E'.
+          STOP.
+        ENDIF.
+      ENDLOOP.
+    ENDIF.
+
+    IF vouc = 'X'.
+      SELECT belnr FROM bkpf INTO TABLE it_check WHERE blart IN ('SK','CP','CR') AND gjahr = p_gjahr AND bukrs = p_bukrs.
+      LOOP AT s_belnr.
+        READ TABLE it_check INTO wa_check WITH KEY belnr = s_belnr-low.
+        IF sy-subrc NE 0.
+          CONCATENATE 'Incorrect Doc No :- ' s_belnr-low INTO v_message SEPARATED BY space.
+          MESSAGE : v_message TYPE 'E'.
+          STOP.
+        ENDIF.
+      ENDLOOP.
+    ENDIF.
+
+    IF bank = 'X'.
+      SELECT belnr FROM bkpf INTO TABLE it_check WHERE belnr = s_belnr-low AND gjahr = p_gjahr AND bukrs = p_bukrs.  "blart IN ('KZ','DZ','SA','UE')
+      LOOP AT s_belnr.
+        READ TABLE it_check INTO wa_check WITH KEY belnr = s_belnr-low.
+        IF sy-subrc NE 0.
+          CONCATENATE 'Incorrect Doc No :- ' s_belnr-low INTO v_message SEPARATED BY space.
+          MESSAGE : v_message TYPE 'E'.
+          STOP.
+        ENDIF.
+      ENDLOOP.
+    ENDIF.
+
+    IF exp = 'X'.
+      SELECT belnr FROM bkpf INTO TABLE it_check WHERE blart IN ('KR','DR','RE') AND gjahr = p_gjahr AND bukrs = p_bukrs.
+      LOOP AT s_belnr.
+        READ TABLE it_check INTO wa_check WITH KEY belnr = s_belnr-low.
+        IF sy-subrc NE 0.
+          CONCATENATE 'Incorrect Doc No :- ' s_belnr-low INTO v_message SEPARATED BY space.
+          MESSAGE : v_message TYPE 'E'.
+          STOP.
+        ENDIF.
+      ENDLOOP.
+    ENDIF.
+
+    IF zp = 'X'.
+      SELECT belnr FROM bkpf INTO TABLE it_check WHERE blart IN ('ZP') AND gjahr = p_gjahr AND bukrs = p_bukrs.
+      LOOP AT s_belnr.
+        READ TABLE it_check INTO wa_check WITH KEY belnr = s_belnr-low.
+        IF sy-subrc NE 0.
+          CONCATENATE 'Incorrect Doc No :- ' s_belnr-low INTO v_message SEPARATED BY space.
+          MESSAGE : v_message TYPE 'E'.
+          STOP.
+        ENDIF.
+      ENDLOOP.
+    ENDIF.
+
+
+  ENDIF.
+*&---------------------------------------------------------------------*
+*&      FORM  GET_HELP
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*      <--P_S_BELNR  TEXT
+*----------------------------------------------------------------------*
+FORM get_help  CHANGING p_belnr TYPE bkpf-belnr.
+  TYPES : BEGIN OF t_help,
+            belnr TYPE bkpf-belnr,
+          END OF t_help.
+  DATA : wa_help TYPE t_help.
+  DATA : it_help TYPE STANDARD TABLE OF t_help.
+
+  SELECT DISTINCT belnr FROM bkpf INTO TABLE it_help WHERE blart IN ('KR','KG','DR','DG','SK','KZ','DZ','RE').
+
+  CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
+    EXPORTING
+      retfield        = 'BELNR'
+      window_title    = 'Document Number'
+      value_org       = 'S'
+    TABLES
+      value_tab       = it_help
+      return_tab      = it_return
+    EXCEPTIONS
+      parameter_error = 1
+      no_values_found = 2
+      OTHERS          = 3.
+
+  READ TABLE it_return INTO wa_return INDEX 1.
+  p_belnr  = wa_return-fieldval.
+  CLEAR : wa_return.
+ENDFORM.                    " GET_HELP
+
+*&---------------------------------------------------------------------*
+START-OF-SELECTION.
+*&---------------------------------------------------------------------*
+  PERFORM authorization_check.
+  PERFORM get_vouchtext.
+  IF crdr = 'X' OR jv = 'X' OR jv2 = 'X' OR sd = 'X' OR fi = 'X' OR cl = 'X' OR fi1 = 'X' OR miro = 'X' OR fb65 = 'X'.
+    PERFORM get_data_crdr.
+    PERFORM get_item.
+    PERFORM concate_address.
+    PERFORM display_smartform_crdr.
+  ENDIF.
+  IF vouc = 'X'.
+    PERFORM get_data_vouc.
+    PERFORM get_item_vouc.
+    PERFORM display_smartform_vouc.
+  ENDIF.
+  IF bank = 'X'.
+    PERFORM get_data_bank.
+    PERFORM get_item_bank.
+    PERFORM display_smartform_bank.
+  ENDIF.
+  IF exp = 'X'.
+    PERFORM get_data_exp.
+    PERFORM get_item_exp.
+    PERFORM concate_address.
+    PERFORM display_smartform_exp.
+  ENDIF.
+
+  IF zp = 'X'.
+    PERFORM get_data_zp.
+    PERFORM get_item_zp.
+    PERFORM display_smartform_zp.
+  ENDIF.
+
+*&---------------------------------------------------------------------*
+*&      FORM  GET_DATA_CRDR
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM get_data_crdr.
+  CLEAR flag.
+  IF p_detail = 'X'.
+    flag = 1.
+  ENDIF.
+
+  IF crdr = 'X' OR sd = 'X' OR fi = 'X' OR cl = 'X' OR fi1 = 'X' OR miro = 'X' OR fb65 = 'X'.
+    SELECT belnr blart awkey FROM bkpf INTO TABLE it_belnr
+    WHERE belnr IN s_belnr AND gjahr = p_gjahr AND bukrs = p_bukrs AND blart IN ('KG','DG','KR','DR','RV','RE','ZG').
+  ELSEIF jv = 'X' OR jv2 = 'X'.
+    SELECT belnr blart awkey FROM bkpf INTO TABLE it_belnr
+    WHERE belnr IN s_belnr AND gjahr = p_gjahr AND bukrs = p_bukrs AND blart IN ('SA','KZ','DZ','AB','KP').
+  ENDIF.
+  LOOP AT it_belnr INTO wa_belnr.
+    IF wa_belnr-blart = 'KG' OR wa_belnr-blart = 'KR' OR wa_belnr-blart = 'ZG' .    "KR = VENDOR INV   , KG = VENDOR DEBIT NOTE
+      PERFORM get_vendor_address.                         "VENDOR ADDRESS
+    ENDIF.
+    IF wa_belnr-blart = 'DG' OR wa_belnr-blart = 'DR' OR wa_belnr-blart = 'RV' .    "DR = CUSTOMER INV , DG = CUSTOMER DEBIT NOTE
+      PERFORM get_customer_address.                       "CUSTOMER ADDRESS
+    ENDIF.
+    IF sd = 'X'  AND wa_belnr-blart = 'RV' .
+      PERFORM get_customer_address.
+    ELSEIF fi = 'X' AND wa_belnr-blart = 'RV'.
+      PERFORM get_customer_address.
+    ENDIF.
+    CLEAR wa_bkpf.
+  ENDLOOP.
+ENDFORM.                    " GET_DATA_CRDR
+*&---------------------------------------------------------------------*
+*&      FORM  GET_ITEM
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*
+*----------------------------------------------------------------------*
+FORM get_item.
+  IF miro = 'X'.
+    SELECT bukrs belnr gjahr buzei sgtxt dmbtr pswsl koart shkzg kostl hkont prctr aufnr kunnr lifnr wrbtr xbilk mwskz ebeln zuonr ktosl  FROM bseg
+           INTO TABLE it_bseg FOR ALL ENTRIES IN it_belnr WHERE belnr = it_belnr-belnr AND koart IN ('S','M') AND bukrs = p_bukrs AND gjahr = p_gjahr.
+  ELSE.
+    SELECT bukrs belnr gjahr buzei sgtxt dmbtr pswsl koart shkzg kostl hkont prctr aufnr kunnr lifnr wrbtr xbilk mwskz ebeln zuonr ktosl  FROM bseg
+          INTO TABLE it_bseg FOR ALL ENTRIES IN it_belnr WHERE belnr = it_belnr-belnr AND koart = 'S' AND bukrs = p_bukrs AND gjahr = p_gjahr.
+  ENDIF .
+
+  SELECT bukrs belnr gjahr buzei sgtxt dmbtr pswsl koart shkzg kostl hkont prctr aufnr kunnr lifnr wrbtr xbilk mwskz ebeln zuonr ktosl  FROM bseg
+         INTO TABLE it_fbseg FOR ALL ENTRIES IN it_belnr WHERE belnr = it_belnr-belnr AND koart = 'S' AND bukrs = p_bukrs AND gjahr = p_gjahr.
+
+  SELECT saknr txt50 FROM skat INTO TABLE it_skat FOR ALL ENTRIES IN it_fbseg WHERE saknr = it_fbseg-hkont AND spras = 'EN' AND ktopl = 'ASTL'.
+
+  SELECT mwskz text1 FROM t007s INTO TABLE it_t007s FOR ALL ENTRIES IN it_bseg WHERE mwskz = it_bseg-mwskz AND spras = 'EN' AND kalsm = 'TAXINN'.
+
+
+**************Begin of changes Added by Raj on 19.11.2024****************
+     SELECT bukrs belnr gjahr buzei sgtxt dmbtr pswsl koart shkzg kostl hkont prctr aufnr kunnr lifnr wrbtr xbilk mwskz ebeln zuonr ktosl HSN_SAC FROM bseg
+         INTO TABLE it_fbseg2 FOR ALL ENTRIES IN it_belnr WHERE belnr = it_belnr-belnr AND koart = 'S' AND bukrs = p_bukrs AND gjahr = p_gjahr.
+
+  SELECT saknr txt50 FROM skat INTO TABLE it_skat FOR ALL ENTRIES IN it_fbseg2 WHERE saknr = it_fbseg2-hkont AND spras = 'EN' AND ktopl = 'ASTL'.
+
+  SELECT mwskz text1 FROM t007s INTO TABLE it_t007s FOR ALL ENTRIES IN it_bseg WHERE mwskz = it_bseg-mwskz AND spras = 'EN' AND kalsm = 'TAXINN'.
+
+
+**************End of Changes Added by Raj on 19.11.2024******************
+ENDFORM.                    " GET_ITEM
+*&---------------------------------------------------------------------*
+*&      FORM  GET_VENDOR_ADDRESS
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM get_vendor_address .
+  SELECT SINGLE lifnr belnr FROM bsik INTO wa_code WHERE belnr = wa_belnr-belnr AND gjahr = p_gjahr AND bukrs = p_bukrs.
+  IF wa_code IS INITIAL.
+    SELECT SINGLE lifnr belnr FROM bsak INTO wa_code WHERE belnr = wa_belnr-belnr AND gjahr = p_gjahr AND bukrs = p_bukrs.
+  ENDIF.
+  IF NOT wa_code-lifcust IS INITIAL.
+    SELECT SINGLE lfa1~adrnr adrc~name1 adrc~street adrc~house_num1 adrc~house_num2 adrc~str_suppl1 adrc~str_suppl2
+           adrc~str_suppl3 adrc~city1 adrc~city2 adrc~post_code1 adrc~region adrc~country lfa1~stcd3 j_1imovend~j_1ilstno
+           j_1imovend~j_1ipanno j_1imovend~j_1isern
+           FROM lfa1 INNER JOIN adrc ON lfa1~adrnr = adrc~addrnumber
+           INNER JOIN j_1imovend ON lfa1~lifnr = j_1imovend~lifnr
+           INTO wa_addr WHERE lfa1~lifnr = wa_code-lifcust.
+    MOVE-CORRESPONDING wa_code TO wa_addr.
+    APPEND wa_addr TO it_addr.
+    CLEAR : wa_addr,wa_code.
+  ENDIF.
+ENDFORM.                    " GET_VENDOR_ADDRESS
+*&---------------------------------------------------------------------*
+*&      FORM  GET_CUSTOMER_ADDRESS
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM get_customer_address .
+  SELECT SINGLE kunnr belnr FROM bsid INTO wa_code WHERE belnr = wa_belnr-belnr AND gjahr = p_gjahr AND bukrs = p_bukrs.
+  IF wa_code IS INITIAL.
+    SELECT SINGLE kunnr belnr FROM bsad INTO wa_code WHERE belnr = wa_belnr-belnr AND gjahr = p_gjahr AND bukrs = p_bukrs.
+  ENDIF.
+  IF NOT wa_code-lifcust IS INITIAL.
+    SELECT SINGLE kna1~adrnr adrc~name1 adrc~street adrc~house_num1 adrc~house_num2 adrc~str_suppl1 adrc~str_suppl2
+           adrc~str_suppl3 adrc~city1 adrc~city2 adrc~post_code1 adrc~region adrc~country kna1~stcd3 j_1imocust~j_1ilstno
+           j_1imocust~j_1ipanno j_1imocust~j_1isern
+           FROM kna1 INNER JOIN adrc ON kna1~adrnr = adrc~addrnumber
+           INNER JOIN j_1imocust ON kna1~kunnr = j_1imocust~kunnr
+           INTO wa_addr WHERE kna1~kunnr = wa_code-lifcust.
+    MOVE-CORRESPONDING wa_code TO wa_addr.
+    APPEND wa_addr TO it_addr.
+    CLEAR : wa_addr,wa_code.
+  ENDIF.
+ENDFORM.                    " GET_CUSTOMER_ADDRESS
+*&---------------------------------------------------------------------*
+*&      FORM  CONCATE_ADDRESS
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM concate_address .
+  LOOP AT it_belnr INTO wa_belnr.
+    READ TABLE it_addr INTO wa_addr WITH KEY belnr = wa_belnr-belnr.
+    wa_crdr-belnr = wa_belnr-belnr.
+    wa_crdr-name = wa_addr-name1.
+    CONCATENATE wa_crdr-name ' (' wa_addr-lifcust ')' INTO wa_crdr-name.
+
+    IF NOT wa_addr-street IS INITIAL.
+      CONCATENATE wa_crdr-addr ',' wa_addr-street INTO wa_crdr-addr SEPARATED BY space.
+    ENDIF.
+    IF NOT wa_addr-house_num1 IS INITIAL.
+      CONCATENATE wa_crdr-addr ',' wa_addr-house_num1 INTO wa_crdr-addr SEPARATED BY space.
+    ENDIF.
+    IF NOT wa_addr-house_num2 IS INITIAL.
+      CONCATENATE wa_crdr-addr ',' wa_addr-house_num2 INTO wa_crdr-addr SEPARATED BY space.
+    ENDIF.
+    IF NOT wa_addr-str_suppl1 IS INITIAL.
+      CONCATENATE wa_crdr-addr ',' wa_addr-str_suppl1 INTO wa_crdr-addr SEPARATED BY space.
+    ENDIF.
+    IF NOT wa_addr-str_suppl2 IS INITIAL.
+      CONCATENATE wa_crdr-addr ',' wa_addr-str_suppl2 INTO wa_crdr-addr SEPARATED BY space.
+    ENDIF.
+    IF NOT wa_addr-str_suppl3 IS INITIAL.
+      CONCATENATE wa_crdr-addr ',' wa_addr-str_suppl3 INTO wa_crdr-addr SEPARATED BY space.
+    ENDIF.
+    IF NOT wa_addr-city1 IS INITIAL.
+      CONCATENATE wa_crdr-addr ',' wa_addr-city1 INTO wa_crdr-addr SEPARATED BY space.
+    ENDIF.
+    IF NOT wa_addr-city2 IS INITIAL.
+      CONCATENATE wa_crdr-addr ',' wa_addr-city2 INTO wa_crdr-addr SEPARATED BY space.
+    ENDIF.
+    IF NOT wa_addr-post_code1 IS INITIAL.
+      CONCATENATE wa_crdr-addr '-' wa_addr-post_code1 INTO wa_crdr-addr SEPARATED BY space.
+    ENDIF.
+
+    SELECT SINGLE bezei FROM t005u INTO v_region WHERE bland EQ wa_addr-region AND land1 = wa_addr-country AND spras = 'EN'.
+    SELECT SINGLE landx50 FROM t005t INTO v_country WHERE land1 = wa_addr-country AND spras = 'EN'.
+
+    IF NOT v_region IS INITIAL.
+      CONCATENATE wa_crdr-addr ',' v_region INTO wa_crdr-addr SEPARATED BY space.
+    ENDIF.
+    IF NOT v_country IS INITIAL.
+      CONCATENATE wa_crdr-addr ',' v_country INTO wa_crdr-addr SEPARATED BY space.
+    ENDIF.
+    CLEAR : v_region,v_country.
+    CONDENSE wa_crdr-addr.
+    IF wa_crdr-addr+0(1) = ','.
+      wa_crdr-addr = wa_crdr-addr+1(198).
+    ENDIF.
+*IF NOT WA_ADDR-CST IS INITIAL.
+*      CONCATENATE WA_BKPF-ADDR ' , CST : ' WA_ADDR-CST INTO WA_BKPF-ADDR.
+*ENDIF.
+*IF NOT WA_ADDR-LST IS INITIAL.
+*      CONCATENATE WA_BKPF-ADDR ' , LST : ' WA_ADDR-LST INTO WA_BKPF-ADDR.
+*ENDIF.
+    wa_crdr-cst  = wa_addr-cst.
+*    v_gstn  = wa_addr-cst.
+    wa_crdr-lst  = wa_addr-lst.
+    wa_crdr-pan  = wa_addr-pan.
+    wa_crdr-sern = wa_addr-sern.
+    APPEND wa_crdr TO it_crdr.
+    CLEAR : wa_belnr,wa_crdr,wa_addr.
+  ENDLOOP.
+ENDFORM.                    " CONCATE_ADDRESS
+*&---------------------------------------------------------------------*
+*&      FORM  DISPLAY_SMARTFORM_CRDR
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM display_smartform_crdr.
+  IF crdr = 'X' OR cl = 'X' OR miro = 'X'.
+    CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
+      EXPORTING
+        formname           = 'ZFI_CREDIT_DEBIT_NOTE'
+      IMPORTING
+        fm_name            = fname
+      EXCEPTIONS
+        no_form            = 1
+        no_function_module = 2
+        OTHERS             = 3.
+    IF sy-subrc <> 0.
+      MESSAGE 'WRONG SMARTFORM NAME' TYPE 'E'.
+    ENDIF.
+  ELSEIF jv = 'X'.
+    CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
+      EXPORTING
+        formname           = 'ZFI_JOURNAL_VOUCHER'
+      IMPORTING
+        fm_name            = fname
+      EXCEPTIONS
+        no_form            = 1
+        no_function_module = 2
+        OTHERS             = 3.
+    IF sy-subrc <> 0.
+      MESSAGE 'WRONG SMARTFORM NAME' TYPE 'E'.
+    ENDIF.
+*ENDIF.
+
+  ELSEIF jv2 = 'X'.
+    CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
+      EXPORTING
+        formname           = 'ZFI_JOURNAL_VOUCHER1'
+      IMPORTING
+        fm_name            = fname
+      EXCEPTIONS
+        no_form            = 1
+        no_function_module = 2
+        OTHERS             = 3.
+    IF sy-subrc <> 0.
+      MESSAGE 'WRONG SMARTFORM NAME' TYPE 'E'.
+    ENDIF.
+
+  ELSEIF sd = 'X'.
+    CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
+      EXPORTING
+        formname           = 'ZFI_CREDIT_DEBIT_SD'
+      IMPORTING
+        fm_name            = fname
+      EXCEPTIONS
+        no_form            = 1
+        no_function_module = 2
+        OTHERS             = 3.
+    IF sy-subrc <> 0.
+      MESSAGE 'WRONG SMARTFORM NAME' TYPE 'E'.
+    ENDIF.
+
+  ELSEIF fi = 'X'.
+    CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
+      EXPORTING
+        formname           = 'ZFI_CREDIT_DEBIT_NOTE1'
+      IMPORTING
+        fm_name            = fname
+      EXCEPTIONS
+        no_form            = 1
+        no_function_module = 2
+        OTHERS             = 3.
+    IF sy-subrc <> 0.
+      MESSAGE 'WRONG SMARTFORM NAME' TYPE 'E'.
+    ENDIF.
+
+
+  ELSEIF fi1 = 'X'.
+    CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
+      EXPORTING
+        formname           = 'ZFI_CREDIT_DEBIT_NOTE_FI'
+      IMPORTING
+        fm_name            = fname
+      EXCEPTIONS
+        no_form            = 1
+        no_function_module = 2
+        OTHERS             = 3.
+    IF sy-subrc <> 0.
+      MESSAGE 'WRONG SMARTFORM NAME' TYPE 'E'.
+    ENDIF.
+
+  ELSEIF fb65 = 'X'.
+***********    Added changes by Carina Jose on 07/09/2021
+    SELECT SINGLE  low
+      INTO v_cn_remarks
+                  FROM tvarvc
+                  WHERE name = c_var_namecn AND
+                        type = c_type_pcn.
+    SELECT SINGLE  low
+   INTO v_cn_remarks_1
+               FROM tvarvc
+               WHERE name = c_var_namecn_1 AND
+                     type = c_type_pcn_1.
+***********    End of changes by Carina Jose on 07/09/2021
+    CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
+      EXPORTING
+        formname           = 'ZFI_FB65_FORM'
+      IMPORTING
+        fm_name            = fname
+      EXCEPTIONS
+        no_form            = 1
+        no_function_module = 2
+        OTHERS             = 3.
+    IF sy-subrc <> 0.
+      MESSAGE 'WRONG SMARTFORM NAME' TYPE 'E'.
+    ENDIF.
+
+
+  ENDIF.
+
+
+  DESCRIBE TABLE it_belnr LINES w_cnt.
+
+  LOOP AT it_belnr INTO wa_belnr.
+    wa_texts-number = v_vno. " Added by Carina Jose on 08.04.2022
+    wa_texts-date = v_vdt.   " Added by Carina Jose on 08.04.2022
+
+    IF wa_belnr-blart = 'KR' OR wa_belnr-blart = 'DG'.
+      wa_texts-head = 'CREDIT NOTE'.
+*      wa_texts-number = 'VOUCHER NUMBER'. " Added by Carina Jose on 08.04.2022
+*      wa_texts-date = 'VOUCHER DATE'. " Added by Carina Jose on 08.04.2022
+    ENDIF.
+    IF wa_belnr-blart = 'KG' OR wa_belnr-blart = 'RE' OR wa_belnr-blart = 'DR' OR wa_belnr-blart = 'ZG'.
+      wa_texts-head = 'DEBIT NOTE'.
+*      wa_texts-number = 'VOUCHER NUMBER'." Added by Carina Jose on 08.04.2022
+*      wa_texts-date = 'VOUCHER DATE'. " Added by Carina Jose on 08.04.2022
+    ENDIF.
+*    IF wa_belnr-blart = 'DR'. "commneted by Carina Jose on 13.04.2022
+*      wa_texts-head = 'DEBIT NOTE'. "commneted by Carina Jose on 13.04.2022
+*      wa_texts-number = 'VOUCHER NUMBER'. " Added by Carina Jose on 08.04.2022
+*      wa_texts-date = 'VOUCHER DATE'. " Added by Carina Jose on 08.04.2022
+*    ENDIF. "commneted by Carina Jose on 13.04.2022
+
+*    IF wa_belnr-blart = 'DG'. "commneted by Carina Jose on 13.04.2022
+*      wa_texts-head = 'CREDIT NOTE'.  "commneted by Carina Jose on 13.04.2022
+*      wa_texts-number = 'VOUCHER NUMBER'. " Added by Carina Jose on 08.04.2022
+*      wa_texts-date = 'VOUCHER DATE'. " Added by Carina Jose on 08.04.2022
+*    ENDIF. "commneted by Carina Jose on 13.04.2022
+*    IF sd = 'X'."commneted by Carina Jose on 13.04.2022
+*      IF wa_belnr-blart = 'RV'. "commneted by Carina Jose on 13.04.2022
+*        wa_texts-head = 'CREDIT NOTE'.
+*        wa_texts-number = 'VOUCHER NUMBER'. " Added by Carina Jose on 08.04.2022
+*        wa_texts-date = 'VOUCHER DATE'. " Added by Carina Jose on 08.04.2022
+*      ENDIF. "commneted by Carina Jose on 13.04.2022
+*    ENDIF. "commneted by Carina Jose on 13.04.2022
+
+    IF fi = 'X'.
+      IF wa_belnr-blart = 'RV'.
+        wa_texts-head = 'SERVICE INVOICE'.
+*        wa_texts-number = 'VOUCHER NUMBER'. " Added by Carina Jose on 08.04.2022
+*        wa_texts-date = 'VOUCHER DATE'. " Added by Carina Jose on 08.04.2022
+      ENDIF.
+
+    ENDIF.
+
+*    IF crdr = 'X' AND wa_belnr-blart = 'RV'. "commneted by Carina Jose on 13.04.2022
+*      wa_texts-number = 'VOUCHER NUMBER'. " Added by Carina Jose on 08.04.2022
+*      wa_texts-date = 'VOUCHER DATE'. " Added by Carina Jose on 08.04.2022
+*    ENDIF. "commneted by Carina Jose on 13.04.2022
+
+    IF jv = 'X'.
+      IF wa_belnr-blart = 'SA' OR wa_belnr-blart = 'AB' OR wa_belnr-blart = 'KP'.
+        wa_texts-head = 'JOURNAL VOUCHER'.
+*        wa_texts-number = 'VOUCHER NUMBER'. " Added by Carina Jose on 08.04.2022
+*        wa_texts-date = 'VOUCHER DATE'. " Added by Carina Jose on 08.04.2022
+      ENDIF.
+    ELSE.
+      IF wa_belnr-blart = 'SA' OR wa_belnr-blart = 'KZ' OR wa_belnr-blart = 'DZ'.
+        wa_texts-head = 'BANK PAYMENT VOUCHER'.
+*        wa_texts-number = 'VOUCHER NUMBER'. " Added by Carina Jose on 08.04.2022
+*        wa_texts-date = 'VOUCHER DATE'. " Added by Carina Jose on 08.04.2022
+      ENDIF.
+    ENDIF.
+
+    IF fb65 = 'X'.
+      wa_texts-head = 'DEBIT NOTE'.
+*      wa_texts-number = 'VOUCHER NUMBER'. " Added by Carina Jose on 08.04.2022
+*      wa_texts-date = 'VOUCHER DATE'. " Added by Carina Jose on 08.04.2022
+    ENDIF.
+*******    Added by Carina Jose on 23.12.2021
+*    IF fi1 = 'X'.
+*    IF wa_belnr-blart = 'ZG'. "commneted by Carina Jose on 13.04.2022
+*      wa_texts-head = 'DEBIT NOTE'."commneted by Carina Jose on 13.04.2022
+*      wa_texts-number = 'VOUCHER NUMBER'. " Added by Carina Jose on 08.04.2022
+*      wa_texts-date = 'VOUCHER DATE'. " Added by Carina Jose on 08.04.2022
+*    ENDIF. "commneted by Carina Jose on 13.04.2022
+*    ENDIF.
+******    End of changes by Carina Jose on 23.12.2021
+
+
+
+    CONDENSE wa_texts-head.
+    CONDENSE wa_texts-number.
+    CONDENSE wa_texts-date.
+
+    IF w_cnt GT 1.
+      w_cnt2 = sy-tabix .
+      CASE w_cnt2.
+        WHEN 1.
+          control_parameters-no_open   = space .
+          control_parameters-no_close  = 'X' .
+        WHEN w_cnt .
+          control_parameters-no_open   = 'X' .
+          control_parameters-no_close  = space .
+        WHEN OTHERS.
+          control_parameters-no_open   = 'X' .
+          control_parameters-no_close  = 'X' .
+      ENDCASE.
+    ENDIF.
+
+    LOOP AT it_bseg INTO wa_bseg WHERE belnr = wa_belnr-belnr.
+      IF wa_bseg-shkzg = 'H'.
+        READ TABLE it_skat INTO wa_skat WITH KEY saknr = wa_bseg-hkont.
+        IF v_sgtxt IS INITIAL.
+          v_sgtxt = wa_skat-txt50.
+          v_zuonr = wa_bseg-zuonr.
+        ENDIF.
+
+      ENDIF.
+    ENDLOOP.
+    IF wa_belnr-blart = 'RV'.
+      READ TABLE it_bseg INTO wa_bseg WITH KEY belnr = wa_belnr-belnr.
+      IF wa_bseg-shkzg = 'S'.
+        wa_texts-head = 'CREDIT NOTE'.
+      ELSE.
+        wa_texts-head = 'DEBIT NOTE'.
+*        CLEAR : v_cn_remarks. " added by Carina Jose on 30.09.2021
+      ENDIF.
+    ENDIF.
+*sort it_bseg by shkzg.
+    LOOP AT it_bseg INTO wa_bseg WHERE belnr = wa_belnr-belnr.
+
+
+      IF jv2 = 'X'.
+* DELETE IT_BSEG WHERE SHKZG = 'H'.
+      ENDIF.
+      IF wa_bseg-shkzg = 'H'.
+        total1 = total1 + wa_bseg-wrbtr.
+      ENDIF.
+      IF wa_bseg-shkzg = 'S'.
+        total2 = total2 + wa_bseg-wrbtr.
+      ENDIF.
+      IF total1 < 0.
+        total1 = total1 * -1.
+      ENDIF.
+      IF total2 < 0.
+        total2 = total2 * -1.
+      ENDIF.
+      AT END OF belnr.
+        wa_bkpf-total = total1 - total2.
+        IF wa_bkpf-total < 0.
+          wa_bkpf-total = wa_bkpf-total * -1.
+        ENDIF.
+      ENDAT.
+      IF fi = 'X' .
+        READ TABLE it_skat INTO wa_skat WITH KEY saknr = wa_bseg-hkont.
+        IF wa_bseg-sgtxt IS INITIAL.
+          wa_bseg-sgtxt = wa_skat-txt50.
+        ENDIF.
+      ENDIF.
+      IF crdr = 'X' OR miro = 'X' OR fb65 = 'X' .
+        READ TABLE it_skat INTO wa_skat WITH KEY saknr = wa_bseg-hkont.
+        IF wa_bseg-sgtxt IS INITIAL.
+          wa_bseg-sgtxt = wa_skat-txt50.
+        ENDIF.
+        READ TABLE it_t007s INTO wa_t007s WITH KEY mwskz = wa_bseg-mwskz.
+        IF sy-subrc = 0.
+          v_mwskz = wa_t007s-mwskz.
+          v_text1 = wa_t007s-text1.
+          CONCATENATE 'Tax Code:' v_mwskz 'Descpration :' v_text1 INTO v_text2 SEPARATED BY space.
+        ENDIF.
+      ENDIF.
+      IF cl =  'X'.
+*       DATA : lines1 TYPE STANDARD TABLE OF tline.
+*      DATA : wa_lines1 TYPE tline.
+*      DATA : v_vbeln1(70).
+*      CONCATENATE wa_bseg-bukrs wa_bseg-belnr wa_bseg-gjahr wa_bseg-buzei into v_vbeln1.
+***********      added for long text
+*       CALL FUNCTION 'READ_TEXT'
+*        EXPORTING
+*          client                  = sy-mandt
+*          id                      = '0001'
+*          language                = sy-langu
+*          name                    = v_vbeln1
+*          object                  = 'DOC_ITEM'
+*        TABLES
+*          lines                   = lines1
+*        EXCEPTIONS
+*          id                      = 1
+*          language                = 2
+*          name                    = 3
+*          not_found               = 4
+*          object                  = 5
+*          reference_check         = 6
+*          wrong_access_to_archive = 7
+*          OTHERS                  = 8.
+*      IF sy-subrc EQ 0.
+*        LOOP AT lines1 INTO wa_lines1.
+*          MOVE wa_lines1-tdline TO SGTXT.
+*          CONCATENATE SGTXT WA_BSEG-SGTXT INTO WA_BSEG-SGTXT.
+*         ENDLOOP.
+*          MOVE-CORRESPONDING wa_bseg TO wa_bseg1.
+*         APPEND wa_bseg1 TO it_bseg1.
+*      CLEAR : wa_bseg,wa_bseg1,wa_skat.
+*
+*     ELSE.
+*      MOVE-CORRESPONDING wa_bseg TO wa_bseg1.
+*      IF WA_BSEG-SGTXT IS INITIAL.
+*        MOVE WA_BSEG-ZUONR TO WA_BSEG1-SGTXT.
+*      ENDIF.
+*      APPEND wa_bseg1 TO it_bseg1.
+*      CLEAR : wa_bseg,wa_bseg1,wa_skat.
+*     ENDIF.
+*     ENDIF.
+        MOVE-CORRESPONDING wa_bseg TO wa_bseg1.
+        IF wa_bseg-sgtxt IS INITIAL.
+          MOVE wa_bseg-zuonr TO wa_bseg1-sgtxt.
+        ENDIF.
+        APPEND wa_bseg1 TO it_bseg1.
+        MOVE-CORRESPONDING wa_bseg TO wa_bseg3.
+        wa_bseg3-hkont = wa_bseg-hkont.
+        APPEND wa_bseg3 TO it_bseg3.
+        CLEAR : wa_bseg,wa_bseg1,wa_skat,wa_bseg3.
+      ENDIF.
+********************
+      IF cl <> 'X'.
+        MOVE-CORRESPONDING wa_bseg TO wa_bseg1.
+
+        APPEND wa_bseg1 TO it_bseg1.
+
+        MOVE-CORRESPONDING wa_bseg TO wa_bseg3.
+        wa_bseg3-hkont = wa_bseg-hkont.
+        APPEND wa_bseg3 TO it_bseg3.
+        CLEAR : wa_bseg,wa_bseg1,wa_skat,wa_bseg3.
+      ENDIF.
+    ENDLOOP.
+
+    LOOP AT it_fbseg INTO wa_fbseg WHERE belnr = wa_belnr-belnr.
+
+
+***************
+      IF fi1 = 'X'.
+        DATA: lv_len  TYPE i, "String Length
+              lv_rmd  TYPE i, "Remainder of String Length / 255
+              lv_pos  TYPE i, "String position
+              lv_fct  TYPE i, "Integer: Roundown(String Length/255)
+              lv_pfct TYPE p  LENGTH 4 DECIMALS 2. "*---Get length of input string
+        lv_len =  strlen( wa_fbseg-sgtxt )."*---Split string into itab of field length 255 char
+        IF sy-tabix = 1.
+          DATA : lines1 TYPE STANDARD TABLE OF tline.
+          DATA : wa_lines1 TYPE tline.
+          DATA : v_vbeln1(70).
+          CONCATENATE wa_fbseg-bukrs wa_fbseg-belnr wa_fbseg-gjahr wa_fbseg-buzei INTO v_vbeln1.
+**********      added for long text
+          CALL FUNCTION 'READ_TEXT'
+            EXPORTING
+              client                  = sy-mandt
+              id                      = '0001'
+              language                = sy-langu
+              name                    = v_vbeln1
+              object                  = 'DOC_ITEM'
+            TABLES
+              lines                   = lines1
+            EXCEPTIONS
+              id                      = 1
+              language                = 2
+              name                    = 3
+              not_found               = 4
+              object                  = 5
+              reference_check         = 6
+              wrong_access_to_archive = 7
+              OTHERS                  = 8.
+          IF sy-subrc EQ 0.
+            LOOP AT lines1 INTO wa_lines1.
+              MOVE wa_lines1-tdline TO wa_fbseg-sgtxt.
+*          CONCATENATE WA_FBSEG-SGTXT SGTXT INTO WA_FBSEG-SGTXT.
+              IF sy-tabix = 1.
+                MOVE-CORRESPONDING wa_fbseg TO wa_fbseg1.
+              ELSE.
+                wa_fbseg1-sgtxt = wa_fbseg-sgtxt.
+              ENDIF.
+
+              APPEND wa_fbseg1 TO it_fbseg1.
+              CLEAR: wa_fbseg1.
+            ENDLOOP.
+*          MOVE-CORRESPONDING wa_Fbseg TO wa_Fbseg1.
+*         APPEND wa_Fbseg1 TO it_Fbseg1.
+            CLEAR : wa_fbseg,wa_fbseg1,wa_skat.
+
+          ELSE.
+            IF wa_fbseg-sgtxt IS INITIAL.
+              READ TABLE it_skat INTO wa_skat WITH KEY saknr = wa_fbseg-hkont.
+*            IF wa_bseg-sgtxt IS INITIAL.
+              wa_fbseg-sgtxt = wa_skat-txt50.
+*            ENDIF.
+            ENDIF.
+
+            MOVE-CORRESPONDING wa_fbseg TO wa_fbseg1.
+
+            APPEND wa_fbseg1 TO it_fbseg1.
+            CLEAR : wa_fbseg,wa_fbseg1,wa_skat.
+          ENDIF.
+        ELSE.
+          IF wa_fbseg-sgtxt IS INITIAL.
+            READ TABLE it_skat INTO wa_skat WITH KEY saknr = wa_fbseg-hkont.
+*            IF wa_bseg-sgtxt IS INITIAL.
+            wa_fbseg-sgtxt = wa_skat-txt50.
+*            ENDIF.
+          ENDIF.
+          MOVE-CORRESPONDING wa_fbseg TO wa_fbseg1.
+
+          APPEND wa_fbseg1 TO it_fbseg1.
+          CLEAR : wa_fbseg,wa_fbseg1,wa_skat.
+        ENDIF.
+      ENDIF.
+      CLEAR: wa_skat.
+* DELETE IT_FBSEG WHERE SHKZG = 'H'.
+
+      IF NOT wa_fbseg-kostl IS INITIAL.
+        IF wa_bkpf-plant IS INITIAL.
+          wa_bkpf-plant = wa_fbseg-kostl+0(4).
+          IF wa_bkpf-plant = '200N'.
+            wa_bkpf-plant = '2000'.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+      IF NOT wa_fbseg-prctr IS INITIAL.
+        IF wa_bkpf-plant IS INITIAL.
+          wa_bkpf-plant = wa_fbseg-prctr+0(4).
+
+          IF wa_bkpf-plant = '200N'.
+            wa_bkpf-plant = '2000'.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+      IF fi1 <> 'X'.
+        MOVE-CORRESPONDING wa_fbseg TO wa_fbseg1.
+        APPEND wa_fbseg1 TO it_fbseg1.
+        CLEAR : wa_fbseg,wa_fbseg1.
+      ENDIF.
+    ENDLOOP.
+
+    SELECT SINGLE name1 adrnr FROM t001w INTO (wa_bkpf-name1,v_adrnr1) WHERE werks = wa_bkpf-plant.
+    SELECT SINGLE name1 FROM adrc INTO wa_bkpf-plantname WHERE addrnumber = v_adrnr1.
+    CONCATENATE  wa_bkpf-name1 ' ('  wa_bkpf-plant ')' INTO wa_bkpf-name1.
+
+    SELECT SINGLE bkpf~belnr bkpf~bukrs bkpf~gjahr bkpf~waers bkpf~kursf bkpf~hwaer bkpf~xblnr bkpf~bldat bkpf~budat bkpf~blart
+      FROM bkpf INNER JOIN t001 ON bkpf~bukrs = t001~bukrs AND t001~spras = 'EN'
+      INTO (wa_bkpf-belnr,wa_bkpf-bukrs,wa_bkpf-gjahr,wa_bkpf-waerk,wa_bkpf-kursf,wa_bkpf-hwaer,wa_bkpf-xblnr,wa_bkpf-bldat,wa_bkpf-budat,wa_bkpf-blart)
+      WHERE bkpf~belnr = wa_belnr-belnr
+       AND  bkpf~bukrs =  p_bukrs
+       AND  bkpf~gjahr = p_gjahr.
+
+
+************** Added by Carina Jose on 22.10.2021
+    IF wa_bkpf-blart = 'RV' AND fb65 = 'X'.
+      SELECT SINGLE irn FROM /mvn/e_inv_t_log
+        INTO @DATA(v_irn)
+        WHERE doc_no = @wa_bkpf-xblnr
+        AND   fis_yr = @p_gjahr  " Added by Carina Jose on 08.04.2022
+        AND   comp_code = @p_bukrs. " Added by Carina Jose on 08.04.2022
+    ELSE.
+      SELECT SINGLE irn FROM /mvn/e_inv_t_log
+       INTO @v_irn
+       WHERE doc_no = @wa_bkpf-belnr
+       AND   fis_yr = @p_gjahr  " Added by Carina Jose on 08.04.2022
+       AND   comp_code = @p_bukrs. " Added by Carina Jose on 08.04.2022.
+    ENDIF.
+    IF v_irn IS INITIAL OR wa_texts-head = 'DEBIT NOTE'. " Remarks Not require in debit note print
+      CLEAR : v_cn_remarks,v_cn_remarks_1.
+    ENDIF.
+
+**************  End of changes on 22.10.2021
+
+*****************************     plant address
+*===========16.03.2019
+******* Added  for company address by Carina Jose on 25.03.2021
+    CLEAR : wa_add_old.
+    CLEAR : lv_string1 , "Added by Raj on 16.08.2023
+         lv_string2 .
+    CALL FUNCTION 'Z_FM_SD_ADDRESS_OLD'
+      EXPORTING
+        im_werks    = p_bukrs
+        im_fromdate = wa_bkpf-budat
+        im_typeind  = 'C'
+      IMPORTING
+        wa_add      = wa_add_old.
+
+
+
+
+    IF p_bukrs = '7000'.
+
+
+************************For CIN Number Changes*******************************
+      IF wa_add_old IS NOT INITIAL AND wa_add_old-fcompname IS INITIAL.
+        wa_compaddr-cin             = wa_add_old-cin.
+      ELSEIF wa_add_old IS NOT INITIAL AND wa_add_old-fcompname2  IS INITIAL.
+        wa_compaddr-cin             = wa_add_old-cin.
+      ELSEIF wa_add_old IS NOT INITIAL AND wa_add_old-fcompname2  IS NOT INITIAL AND wa_add_old-fcompname3  IS NOT INITIAL.
+        wa_compaddr-cin             = wa_add_old-cin.
+      ELSE.
+        SELECT SINGLE paval FROM t001z INTO wa_compaddr-cin WHERE bukrs = p_bukrs AND party = 'CIN'.
+      ENDIF.
+*************************For CIN Number Changes*******************************
+*************************Remaining Fields*****************************************
+      IF wa_add_old IS NOT INITIAL AND wa_add_old-fcompname IS INITIAL.
+        v_butxt = wa_add_old-name1.
+        wa_compaddr-street = wa_add_old-street.
+        wa_compaddr-street_address1 = wa_add_old-str_suppl1.
+        wa_compaddr-city_address1      = wa_add_old-city1.
+        wa_compaddr-city_address2      = wa_add_old-city2.
+        wa_compaddr-pincode = wa_add_old-post_code1.
+        SELECT SINGLE bezei FROM t005u INTO wa_compaddr-state_address1 WHERE bland EQ wa_add_old-region AND land1 = wa_add_old-country AND spras = 'EN'.
+*    wa_compaddr-state_address1     = wa_add_old-region.
+*    wa_compaddr-country_addr    =  wa_add_old-country.
+        SELECT SINGLE landx50 FROM t005t INTO wa_compaddr-country_addr WHERE land1 = wa_add_old-country AND spras = 'EN'.
+        wa_compaddr-tel_number      = wa_add_old-tel_number.
+        wa_compaddr-fax_number      = wa_add_old-fax_number.
+        wa_compaddr-email           = wa_add_old-email.
+        wa_compaddr-website         = wa_add_old-website.
+        wa_compaddr-panno           = wa_add_old-panno.
+*        wa_compaddr-cin             = wa_add_old-cin.
+
+      ELSE.
+**********Begin of changes Added by Raj on 16.08.2023***************
+        SELECT SINGLE  sign
+          opti
+          low
+           INTO lt_acc_keyg
+               FROM tvarvc
+               WHERE name = c_var_nameg.
+
+
+        SELECT SINGLE sign
+               opti
+               low
+                INTO  lt_acc_keyp
+                    FROM tvarvc
+                    WHERE name = c_var_namep.
+        lv_string1 = lt_acc_keyg.
+        lv_string2 = lt_acc_keyp.
+**********End of changes Added by Raj on 16.08.2023*****************
+        wa_compaddr-fcompname = wa_add_old-fcompname.
+        v_fcompname = wa_add_old-fcompname.
+        SELECT SINGLE butxt adrnr  FROM t001 INTO ( v_butxt, v_cadrnr )  WHERE bukrs = p_bukrs.
+        SELECT SINGLE street post_code1 str_suppl1 city1 city2 region country tel_number fax_number FROM adrc
+          INTO ( wa_compaddr-street, wa_compaddr-pincode, wa_compaddr-street_address1, wa_compaddr-city_address1,wa_compaddr-city_address2, v_cregion,
+                 v_ccountry,wa_compaddr-tel_number,wa_compaddr-fax_number )
+          WHERE addrnumber = v_cadrnr.
+
+        SELECT SINGLE smtp_addr FROM adr6 INTO ( wa_compaddr-email )  WHERE addrnumber = v_cadrnr.
+        SELECT SINGLE uri_srch FROM adr12 INTO ( wa_compaddr-website )  WHERE addrnumber = v_cadrnr.
+        TRANSLATE wa_compaddr-website TO LOWER CASE.
+        SELECT SINGLE paval FROM t001z INTO wa_compaddr-panno WHERE bukrs = p_bukrs AND party = 'J_1I02'.
+*        SELECT SINGLE paval FROM t001z INTO wa_compaddr-cin WHERE bukrs = p_bukrs AND party = 'CIN'.
+        SELECT SINGLE bezei FROM t005u INTO wa_compaddr-state_address1 WHERE bland EQ v_cregion AND land1 = v_ccountry AND spras = 'EN'.
+        SELECT SINGLE landx50 FROM t005t INTO wa_compaddr-country_addr WHERE land1 = v_ccountry AND spras = 'EN'.
+      ENDIF.
+*endif.
+
+
+    ELSE.
+      IF wa_add_old IS NOT INITIAL AND wa_add_old-fcompname IS INITIAL.
+        v_butxt = wa_add_old-name1.
+        wa_compaddr-street = wa_add_old-street.
+        wa_compaddr-street_address1 = wa_add_old-str_suppl1.
+        wa_compaddr-city_address1      = wa_add_old-city1.
+        wa_compaddr-city_address2      = wa_add_old-city2.
+        wa_compaddr-pincode = wa_add_old-post_code1.
+        SELECT SINGLE bezei FROM t005u INTO wa_compaddr-state_address1 WHERE bland EQ wa_add_old-region AND land1 = wa_add_old-country AND spras = 'EN'.
+*    wa_compaddr-state_address1     = wa_add_old-region.
+*    wa_compaddr-country_addr    =  wa_add_old-country.
+        SELECT SINGLE landx50 FROM t005t INTO wa_compaddr-country_addr WHERE land1 = wa_add_old-country AND spras = 'EN'.
+        wa_compaddr-tel_number      = wa_add_old-tel_number.
+        wa_compaddr-fax_number      = wa_add_old-fax_number.
+        wa_compaddr-email           = wa_add_old-email.
+        wa_compaddr-website         = wa_add_old-website.
+        wa_compaddr-panno           = wa_add_old-panno.
+        wa_compaddr-cin             = wa_add_old-cin.
+
+      ELSE.
+**********Begin of changes Added by Raj on 16.08.2023***************
+        SELECT SINGLE  sign
+          opti
+          low
+           INTO lt_acc_keyg
+               FROM tvarvc
+               WHERE name = c_var_nameg.
+
+
+        SELECT SINGLE sign
+               opti
+               low
+                INTO  lt_acc_keyp
+                    FROM tvarvc
+                    WHERE name = c_var_namep.
+        lv_string1 = lt_acc_keyg.
+        lv_string2 = lt_acc_keyp.
+**********End of changes Added by Raj on 16.08.2023*****************
+        wa_compaddr-fcompname = wa_add_old-fcompname.
+        v_fcompname = wa_add_old-fcompname.
+        SELECT SINGLE butxt adrnr  FROM t001 INTO ( v_butxt, v_cadrnr )  WHERE bukrs = p_bukrs.
+        SELECT SINGLE street post_code1 str_suppl1 city1 city2 region country tel_number fax_number FROM adrc
+          INTO ( wa_compaddr-street, wa_compaddr-pincode, wa_compaddr-street_address1, wa_compaddr-city_address1,wa_compaddr-city_address2, v_cregion,
+                 v_ccountry,wa_compaddr-tel_number,wa_compaddr-fax_number )
+          WHERE addrnumber = v_cadrnr.
+
+        SELECT SINGLE smtp_addr FROM adr6 INTO ( wa_compaddr-email )  WHERE addrnumber = v_cadrnr.
+        SELECT SINGLE uri_srch FROM adr12 INTO ( wa_compaddr-website )  WHERE addrnumber = v_cadrnr.
+        TRANSLATE wa_compaddr-website TO LOWER CASE.
+        SELECT SINGLE paval FROM t001z INTO wa_compaddr-panno WHERE bukrs = p_bukrs AND party = 'J_1I02'.
+        SELECT SINGLE paval FROM t001z INTO wa_compaddr-cin WHERE bukrs = p_bukrs AND party = 'CIN'.
+        SELECT SINGLE bezei FROM t005u INTO wa_compaddr-state_address1 WHERE bland EQ v_cregion AND land1 = v_ccountry AND spras = 'EN'.
+        SELECT SINGLE landx50 FROM t005t INTO wa_compaddr-country_addr WHERE land1 = v_ccountry AND spras = 'EN'.
+      ENDIF.
+    ENDIF.
+
+
+
+******* End of changes by Carina Jose on 25.03.2021
+    CLEAR : wa_add_old.
+    CALL FUNCTION 'Z_FM_SD_ADDRESS_OLD'
+      EXPORTING
+        im_werks    = wa_bkpf-plant
+        im_fromdate = wa_bkpf-budat
+        im_typeind  = 'P'
+      IMPORTING
+        wa_add      = wa_add_old.
+
+    IF wa_add_old IS NOT INITIAL  AND wa_add_old-fcompname IS INITIAL.
+      wa_header1-plant_name1 = wa_add_old-name1.
+      wa_bkpf-plantname   =  wa_add_old-name1.
+      wa_header1-plant_street = wa_add_old-street.
+      wa_header1-plant_house_num1 = wa_add_old-house_num1.
+      wa_header1-plant_house_num2 = wa_add_old-house_num2.
+      wa_header1-plant_str_suppl1 = wa_add_old-str_suppl1.
+      wa_header1-plant_str_suppl2 = wa_add_old-str_suppl2.
+      wa_header1-plant_str_suppl3 = wa_add_old-str_suppl3.
+      wa_header1-plant_city1      = wa_add_old-city1.
+      wa_header1-plant_city2      = wa_add_old-city2.
+      wa_header1-plant_post_code1 = wa_add_old-post_code1.
+      wa_header1-plant_region     = wa_add_old-region.
+      wa_header1-plant_country    =  wa_add_old-country.
+      wa_header1-tel_number      = wa_add_old-tel_number.
+    ELSE.
+*      v_fcompname = wa_add_old-fcompname.
+    ENDIF.
+
+    IF wa_header1-plant_name1 IS INITIAL.
+      SELECT SINGLE t001w~adrnr adrc~name1 adrc~street adrc~house_num1 adrc~house_num2 adrc~str_suppl1 adrc~str_suppl2
+                adrc~str_suppl3 adrc~city1 adrc~city2 adrc~post_code1 adrc~region adrc~country adrc~tel_number
+                FROM t001w INNER JOIN adrc ON t001w~adrnr = adrc~addrnumber
+                INTO (v_adrnr,wa_header1-plant_name1,wa_header1-plant_street,wa_header1-plant_house_num1,wa_header1-plant_house_num2,
+                wa_header1-plant_str_suppl1,wa_header1-plant_str_suppl2,wa_header1-plant_str_suppl3,wa_header1-plant_city1,wa_header1-plant_city2,
+                wa_header1-plant_post_code1,wa_header1-plant_region,wa_header1-plant_country,wa_header1-tel_number)
+                WHERE t001w~werks = wa_bkpf-plant.
+    ENDIF.
+
+*    SELECT SINGLE t001w~adrnr adrc~name1 adrc~street adrc~house_num1 adrc~house_num2 adrc~str_suppl1 adrc~str_suppl2
+*              adrc~str_suppl3 adrc~city1 adrc~city2 adrc~post_code1 adrc~region adrc~country adrc~tel_number
+*              FROM t001w INNER JOIN adrc ON t001w~adrnr = adrc~addrnumber
+*              INTO (v_adrnr,wa_header1-plant_name1,wa_header1-plant_street,wa_header1-plant_house_num1,wa_header1-plant_house_num2,
+*              wa_header1-plant_str_suppl1,wa_header1-plant_str_suppl2,wa_header1-plant_str_suppl3,wa_header1-plant_city1,wa_header1-plant_city2,
+*              wa_header1-plant_post_code1,wa_header1-plant_region,wa_header1-plant_country,wa_header1-tel_number)
+*              WHERE t001w~werks = wa_bkpf-plant.
+
+*    IF p_bukrs = '1000'.
+*      CONCATENATE wa_header1-plant_region 'AP' INTO v_branrg.
+*    ELSE.
+*      CONCATENATE wa_header1-plant_region 'RC' INTO v_branrg.
+*    ENDIF.
+*    IF v_branrg = 'TGAP'.
+*      v_branrg = 'TSAP'.
+*    ENDIF.
+
+    " Added by Carina Jose
+    SELECT SINGLE j_1bbranch
+    INTO v_branrg
+    FROM t001w
+    WHERE werks = wa_bkpf-plant.
+    "End of changes by Carina Jose
+
+    SELECT SINGLE gstin FROM j_1bbranch INTO v_cgstin WHERE branch = v_branrg.
+*    V_CSTCODE = V_CGSTIN.
+
+
+
+    IF NOT wa_header1-plant_house_num1 IS INITIAL.
+      IF NOT plant_address IS INITIAL.
+        CONCATENATE plant_address ',' wa_header1-plant_house_num1 INTO plant_address SEPARATED BY space.
+      ELSE.
+        plant_address = wa_header1-plant_house_num1.
+      ENDIF.
+    ENDIF.
+
+    IF NOT wa_header1-plant_house_num2 IS INITIAL.
+      IF NOT plant_address IS INITIAL.
+        CONCATENATE plant_address ',' wa_header1-plant_house_num2 INTO plant_address SEPARATED BY space.
+      ELSE.
+        plant_address = wa_header1-plant_house_num2.
+      ENDIF.
+    ENDIF.
+*****    Added by Carina Jose on 23.12.2020
+    IF NOT wa_header1-plant_street IS INITIAL.
+      IF NOT plant_address IS INITIAL.
+        CONCATENATE plant_address ','  wa_header1-plant_street INTO plant_address SEPARATED BY space.
+      ELSE.
+        plant_address =  wa_header1-plant_street.
+      ENDIF.
+    ENDIF.
+*****    End of changes by Carina Jose on 23.12.2020
+
+    IF NOT wa_header1-plant_str_suppl1 IS INITIAL.
+      IF NOT plant_address IS INITIAL.
+        CONCATENATE plant_address ',' wa_header1-plant_str_suppl1 INTO plant_address SEPARATED BY space.
+      ELSE.
+        plant_address = wa_header1-plant_str_suppl1.
+      ENDIF.
+    ENDIF.
+
+    IF NOT wa_header1-plant_str_suppl2 IS INITIAL.
+      IF NOT plant_address IS INITIAL.
+        CONCATENATE plant_address ',' wa_header1-plant_str_suppl2 INTO plant_address SEPARATED BY space.
+      ELSE.
+        plant_address = wa_header1-plant_str_suppl2.
+      ENDIF.
+    ENDIF.
+
+    IF NOT wa_header1-plant_str_suppl3 IS INITIAL.
+      IF NOT plant_address IS INITIAL.
+        CONCATENATE plant_address ',' wa_header1-plant_str_suppl3 INTO plant_address SEPARATED BY space.
+      ELSE.
+        plant_address = wa_header1-plant_str_suppl3.
+      ENDIF.
+    ENDIF.
+
+    IF NOT wa_header1-plant_city1 IS INITIAL.
+      IF NOT plant_address IS INITIAL.
+        CONCATENATE plant_address ',' wa_header1-plant_city1 INTO plant_address SEPARATED BY space.
+      ELSE.
+        plant_address = wa_header1-plant_city1.
+      ENDIF.
+    ENDIF.
+
+    IF NOT wa_header1-plant_city2 IS INITIAL.
+      IF NOT plant_address IS INITIAL.
+        CONCATENATE plant_address ',' wa_header1-plant_city2 INTO plant_address SEPARATED BY space.
+      ELSE.
+        plant_address = wa_header1-plant_city2.
+      ENDIF.
+    ENDIF.
+
+    IF NOT wa_header1-plant_post_code1 IS INITIAL.
+      IF NOT plant_address IS INITIAL.
+        CONCATENATE plant_address '-' wa_header1-plant_post_code1 INTO plant_address SEPARATED BY space.
+      ELSE.
+        plant_address = wa_header1-plant_post_code1.
+      ENDIF.
+    ENDIF.
+
+    IF NOT wa_header1-tel_number IS INITIAL.
+      IF NOT plant_address IS INITIAL.
+        CONCATENATE plant_address ',' 'PH:' wa_header1-tel_number INTO plant_address SEPARATED BY space.
+      ELSE.
+        plant_address = wa_header1-tel_number.
+      ENDIF.
+    ENDIF.
+
+*  IF NOT wa_header1-smtp_addr IS INITIAL.
+*    IF NOT plant_address IS INITIAL.
+*      CONCATENATE plant_address ',' 'EMAIL' '-' wa_header1-smtp_addr INTO plant_address.
+*    ELSE.
+*      plant_address = wa_header1-smtp_addr.
+*    ENDIF.
+*  ENDIF.
+
+    SELECT SINGLE bezei FROM t005u INTO v_region WHERE bland EQ wa_header1-plant_region AND land1 = wa_header1-plant_country AND spras = 'EN'.
+    SELECT SINGLE landx50 FROM t005t INTO v_country WHERE land1 = wa_header1-plant_country AND spras = 'EN'.
+
+    IF NOT v_region IS INITIAL.
+      IF NOT plant_address IS INITIAL.
+        CONCATENATE plant_address ',' v_region INTO plant_address SEPARATED BY space.
+      ELSE.
+        plant_address = v_region.
+      ENDIF.
+    ENDIF.
+
+    IF NOT v_country IS INITIAL.
+      IF NOT plant_address IS INITIAL.
+        CONCATENATE plant_address ',' v_country INTO plant_address SEPARATED BY space.
+      ELSE.
+        plant_address = v_country.
+      ENDIF.
+    ENDIF.
+
+**********************
+
+    IF wa_bkpf-kursf IS INITIAL.
+      wa_bkpf-kursf = 1.
+    ENDIF.
+    IF sd = 'X'.
+      SELECT SINGLE aubel FROM vbrp INTO wa_vbrk-aubel
+        WHERE vbeln = wa_bkpf-xblnr.
+
+      SELECT SINGLE waerk FROM vbak INTO (wa_vbrp-waerk)
+        WHERE vbeln = wa_vbrk-aubel.
+
+      SELECT SINGLE SUM( netwr ) SUM( mwsbp ) FROM vbap INTO (wa_vbrp-netwr,wa_vbrp-mwsbp)
+      WHERE vbeln = wa_vbrk-aubel
+      GROUP BY vbeln.
+      v_sum = wa_vbrp-netwr + wa_vbrp-mwsbp.
+      wa_vbrp-netwr = v_sum.
+      IF wa_vbrp-netwr < 0.
+        wa_vbrp-shkzg = 'DR'.
+        wa_texts-head = 'DEBIT NOTE'.
+      ELSE.
+        wa_vbrp-shkzg = 'CR'.
+        wa_texts-head = 'CREDIT NOTE'.
+      ENDIF.
+      v_tot = wa_vbrp-netwr.
+      IF v_tot < 0.
+        v_tot = v_tot * -1.
+      ENDIF.
+      IF wa_vbrp-waerk = 'INR'.
+        v_maxbt = v_tot.
+        CALL FUNCTION 'HR_IN_CHG_INR_WRDS'
+          EXPORTING
+            amt_in_num   = v_maxbt
+          IMPORTING
+            amt_in_words = wa_bkpf-word.
+        IF sy-subrc <> 0.
+        ENDIF.
+        TRANSLATE wa_bkpf-word TO UPPER CASE.
+        CONCATENATE wa_bkpf-word 'ONLY' INTO wa_bkpf-word SEPARATED BY space.
+      ELSE.
+        p1 = v_tot.
+        CONDENSE p1.
+        CALL FUNCTION 'SPELL_AMOUNT'
+          EXPORTING
+            amount    = p1
+            currency  = wa_vbrp-waerk
+            filler    = ' '
+            language  = sy-langu
+          IMPORTING
+            in_words  = v_in_words
+          EXCEPTIONS
+            not_found = 1
+            too_large = 2
+            OTHERS    = 3.
+        IF sy-subrc = 0.
+          wa_bkpf-word = v_in_words-word.
+          IF NOT v_in_words-decword IS INITIAL.
+            CONCATENATE wa_bkpf-word 'AND' v_in_words-decword
+            'ONLY' INTO wa_bkpf-word SEPARATED BY space.
+          ELSE.
+            CONCATENATE wa_bkpf-word 'ONLY' INTO wa_bkpf-word SEPARATED BY space.
+          ENDIF.
+          CONDENSE wa_bkpf-word.
+        ENDIF.
+      ENDIF.
+
+      APPEND wa_vbrp TO it_vbrp.
+
+      DATA : lines TYPE STANDARD TABLE OF tline.
+      DATA : wa_lines TYPE tline.
+      DATA : v_vbeln(70).
+      v_vbeln = wa_vbrk-aubel.
+
+      CALL FUNCTION 'READ_TEXT'
+        EXPORTING
+          client                  = sy-mandt
+          id                      = '0001'
+          language                = sy-langu
+          name                    = v_vbeln
+          object                  = 'VBBK'
+        TABLES
+          lines                   = lines
+        EXCEPTIONS
+          id                      = 1
+          language                = 2
+          name                    = 3
+          not_found               = 4
+          object                  = 5
+          reference_check         = 6
+          wrong_access_to_archive = 7
+          OTHERS                  = 8.
+      IF sy-subrc EQ 0.
+        LOOP AT lines INTO wa_lines.
+          MOVE wa_lines-tdline TO wa_vbrp-sgtxt.
+          APPEND wa_vbrp TO it_vbrp.
+        ENDLOOP.
+      ENDIF.
+      DELETE it_vbrp WHERE sgtxt = ' '.
+    ENDIF.
+*  ENDIF.
+    IF crdr = 'X' AND wa_belnr-blart = 'RV'.
+*    clear : v_text2,v_text1.
+      SELECT SINGLE aubel FROM vbrp INTO wa_vbrk-aubel
+        WHERE vbeln = wa_bkpf-xblnr.
+*      DATA : lines TYPE STANDARD TABLE OF tline.
+*      DATA : wa_lines TYPE tline.
+*      DATA : v_vbeln(70).
+      v_vbeln = wa_vbrk-aubel.
+
+      CALL FUNCTION 'READ_TEXT'
+        EXPORTING
+          client                  = sy-mandt
+          id                      = '0001'
+          language                = sy-langu
+          name                    = v_vbeln
+          object                  = 'VBBK'
+        TABLES
+          lines                   = lines
+        EXCEPTIONS
+          id                      = 1
+          language                = 2
+          name                    = 3
+          not_found               = 4
+          object                  = 5
+          reference_check         = 6
+          wrong_access_to_archive = 7
+          OTHERS                  = 8.
+      IF sy-subrc EQ 0.
+        LOOP AT lines INTO wa_lines.
+          MOVE wa_lines-tdline TO wa_vbrp-sgtxt.
+
+          APPEND wa_vbrp TO it_vbrp.
+        ENDLOOP.
+      ENDIF.
+      DELETE it_vbrp WHERE sgtxt = ' '.
+      LOOP AT it_vbrp INTO wa_vbrp.
+        v_text3 = wa_vbrp-sgtxt.
+      ENDLOOP.
+      CONCATENATE v_text2 'Remarks :' v_text3 INTO v_text2 SEPARATED BY space.
+    ENDIF.
+
+    READ TABLE it_crdr INTO wa_crdr WITH KEY belnr = wa_belnr-belnr.
+    wa_bkpf-addr = wa_crdr-addr.
+    wa_bkpf-name = wa_crdr-name.
+    wa_bkpf-cst = wa_crdr-cst.
+
+*CALL FUNCTION 'J_1I6_ROUND_TO_NEAREST_AMT'
+*  EXPORTING
+*    I_AMOUNT = WA_BKPF-TOTAL
+*  IMPORTING
+*    E_AMOUNT = V_ROUNDOFF.
+*WA_BKPF-ROUNDOFF = V_ROUNDOFF - WA_BKPF-TOTAL.
+*WA_BKPF-TOTAL = V_ROUNDOFF.
+
+    IF jv = 'X'.
+      wa_bkpf-total = wa_bkpf-total / 2.
+    ELSE.
+****Begin of changes 4806 Raj Kumar
+*      wa_bkpf-total = total1.
+      wa_bkpf-total = total2 - total1.
+      IF wa_bkpf-total LT '0'.
+        wa_bkpf-total = wa_bkpf-total * -1.
+      ENDIF.
+*****End of changes 4806 Raj Kumar
+      IF wa_bkpf-waerk = 'INR'.
+        v_maxbt = wa_bkpf-total.
+        CALL FUNCTION 'HR_IN_CHG_INR_WRDS'
+          EXPORTING
+            amt_in_num   = v_maxbt
+          IMPORTING
+            amt_in_words = wa_bkpf-word.
+        IF sy-subrc <> 0.
+        ENDIF.
+        TRANSLATE wa_bkpf-word TO UPPER CASE.
+        CONCATENATE wa_bkpf-word 'ONLY' INTO wa_bkpf-word SEPARATED BY space.
+      ELSE.
+        p1 = wa_bkpf-total.
+        CONDENSE p1.
+        CALL FUNCTION 'SPELL_AMOUNT'
+          EXPORTING
+            amount    = p1
+            currency  = wa_bkpf-waerk
+            filler    = ' '
+            language  = sy-langu
+          IMPORTING
+            in_words  = v_in_words
+          EXCEPTIONS
+            not_found = 1
+            too_large = 2
+            OTHERS    = 3.
+        IF sy-subrc = 0.
+          wa_bkpf-word = v_in_words-word.
+          IF NOT v_in_words-decword IS INITIAL.
+            CONCATENATE wa_bkpf-word 'AND' v_in_words-decword
+            'ONLY' INTO wa_bkpf-word SEPARATED BY space.
+          ELSE.
+            CONCATENATE wa_bkpf-word 'ONLY' INTO wa_bkpf-word SEPARATED BY space.
+          ENDIF.
+          CONDENSE wa_bkpf-word.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+    IF sd NE 'X' AND jv2 NE 'X'.
+      IF wa_bkpf-waerk = 'INR'.
+        v_maxbt = wa_bkpf-total.
+        CALL FUNCTION 'HR_IN_CHG_INR_WRDS'
+          EXPORTING
+            amt_in_num   = v_maxbt
+          IMPORTING
+            amt_in_words = wa_bkpf-word.
+        IF sy-subrc <> 0.
+        ENDIF.
+        TRANSLATE wa_bkpf-word TO UPPER CASE.
+        CONCATENATE wa_bkpf-word 'ONLY' INTO wa_bkpf-word SEPARATED BY space.
+      ELSE.
+        p1 = wa_bkpf-total.
+        CONDENSE p1.
+        CALL FUNCTION 'SPELL_AMOUNT'
+          EXPORTING
+            amount    = p1
+            currency  = wa_bkpf-waerk
+            filler    = ' '
+            language  = sy-langu
+          IMPORTING
+            in_words  = v_in_words
+          EXCEPTIONS
+            not_found = 1
+            too_large = 2
+            OTHERS    = 3.
+        IF sy-subrc = 0.
+          wa_bkpf-word = v_in_words-word.
+          IF NOT v_in_words-decword IS INITIAL.
+            CONCATENATE wa_bkpf-word 'AND' v_in_words-decword
+            'ONLY' INTO wa_bkpf-word SEPARATED BY space.
+          ELSE.
+            CONCATENATE wa_bkpf-word 'ONLY' INTO wa_bkpf-word SEPARATED BY space.
+          ENDIF.
+          CONDENSE wa_bkpf-word.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+
+
+
+********************Begin of Changes Added by Raj on 20.11.2024*******************************
+
+if fb65 = 'X'.
+
+  it_fbseg3[] = it_fbseg2[].
+  refresh it_fbseg2.
+    loop at it_fbseg1 into wa_fbseg1.
+      MOVE-CORRESPONDING wa_fbseg1 to wa_fbseg2.
+      READ TABLE it_fbseg3 into wa_fbseg3 with key hkont = wa_fbseg1-hkont.
+      wa_fbseg2-hsn_sac =  wa_fbseg3-hsn_sac.
+      append wa_fbseg2 to it_fbseg2.
+      clear:wa_fbseg2, wa_fbseg1, wa_fbseg3.
+      ENDLOOP.
+
+    IF w_cnt = 1.
+      CALL FUNCTION fname
+        EXPORTING
+          wa_bkpf          = wa_bkpf
+          it_bseg          = it_bseg1
+          wa_texts         = wa_texts
+          it_fbseg         = it_fbseg2
+          it_vbrp          = it_vbrp
+          flag             = flag
+          it_skat          = it_skat
+          v_sgtxt          = v_sgtxt
+          v_zuonr          = v_zuonr
+          p_bukrs          = p_bukrs
+          p_gjahr          = p_gjahr
+          plant_address    = plant_address
+          v_mwskz          = v_mwskz
+          v_text1          = v_text1
+          v_text2          = v_text2
+          v_cgstin         = v_cgstin
+          v_gstn           = v_gstn
+          v_fcompname      = v_fcompname " Added by Carina Jose on 25.03.2021
+          v_butxt          = v_butxt   " Added by Carina Jose on 25.03.2021
+          wa_compaddr      = wa_compaddr " Added by Carina Jose on 25.03.2021
+          v_cn_remarks     = v_cn_remarks  " Added by Carina Jose on 08/09/2021
+          v_cn_remarks_1   = v_cn_remarks_1  " Added by  on 04/05/2021
+          lv_string1       = lv_string1
+          lv_string2       = lv_string2
+        EXCEPTIONS
+          formatting_error = 1
+          internal_error   = 2
+          send_error       = 3
+          user_canceled    = 4
+          OTHERS           = 5.
+      IF sy-subrc <> 0.
+        MESSAGE  'ERROR RELATED TO SMARTFORM OR PAGE FORMAT OR PRINTER' TYPE 'E'.
+      ENDIF.
+    ENDIF.
+
+    IF w_cnt GT 1.
+      CALL FUNCTION fname
+        EXPORTING
+          control_parameters = control_parameters
+          wa_bkpf            = wa_bkpf
+          it_bseg            = it_bseg1
+          wa_texts           = wa_texts
+          it_fbseg           = it_fbseg2
+          it_vbrp            = it_vbrp
+          flag               = flag
+          it_skat            = it_skat
+          v_sgtxt            = v_sgtxt
+          v_zuonr            = v_zuonr
+          p_bukrs            = p_bukrs
+          p_gjahr            = p_gjahr
+          plant_address      = plant_address
+          v_mwskz            = v_mwskz
+          v_text1            = v_text1
+          v_text2            = v_text2
+          v_cgstin           = v_cgstin
+          v_gstn             = v_gstn
+          v_fcompname        = v_fcompname " Added by Carina Jose on 25.03.2021
+          v_butxt            = v_butxt   " Added by Carina Jose on 25.03.2021
+          wa_compaddr        = wa_compaddr " Added by Carina Jose on 25.03.2021
+          v_cn_remarks       = v_cn_remarks  " Added by Carina Jose on 08/09/2021
+          v_cn_remarks_1     = v_cn_remarks_1  " Add by 04/05/2021
+          lv_string1         = lv_string1
+          lv_string2         = lv_string2
+        EXCEPTIONS
+          formatting_error   = 1
+          internal_error     = 2
+          send_error         = 3
+          user_canceled      = 4
+          OTHERS             = 5.
+      IF sy-subrc <> 0.
+        MESSAGE  'ERROR RELATED TO SMARTFORM OR PAGE FORMAT OR PRINTER' TYPE 'E'.
+      ENDIF.
+    ENDIF.
+
+    CLEAR : wa_bkpf,wa_texts,p1,v_waerk,v_in_words,v_roundoff,wa_belnr,wa_crdr,v_maxbt,v_sgtxt,v_zuonr,total1,total2, plant_address, v_fcompname.
+    REFRESH : it_bseg1,it_fbseg1,it_fbseg2,it_fbseg3.
+
+else.
+*******************End of Changes Added by Raj on 20.11.2024*******************************
+
+    IF w_cnt = 1.
+      CALL FUNCTION fname
+        EXPORTING
+          wa_bkpf          = wa_bkpf
+          it_bseg          = it_bseg1
+          wa_texts         = wa_texts
+          it_fbseg         = it_fbseg1
+          it_vbrp          = it_vbrp
+          flag             = flag
+          it_skat          = it_skat
+          v_sgtxt          = v_sgtxt
+          v_zuonr          = v_zuonr
+          p_bukrs          = p_bukrs
+          p_gjahr          = p_gjahr
+          plant_address    = plant_address
+          v_mwskz          = v_mwskz
+          v_text1          = v_text1
+          v_text2          = v_text2
+          v_cgstin         = v_cgstin
+          v_gstn           = v_gstn
+          v_fcompname      = v_fcompname " Added by Carina Jose on 25.03.2021
+          v_butxt          = v_butxt   " Added by Carina Jose on 25.03.2021
+          wa_compaddr      = wa_compaddr " Added by Carina Jose on 25.03.2021
+          v_cn_remarks     = v_cn_remarks  " Added by Carina Jose on 08/09/2021
+          v_cn_remarks_1   = v_cn_remarks_1  " Added by  on 04/05/2021
+          lv_string1       = lv_string1
+          lv_string2       = lv_string2
+        EXCEPTIONS
+          formatting_error = 1
+          internal_error   = 2
+          send_error       = 3
+          user_canceled    = 4
+          OTHERS           = 5.
+      IF sy-subrc <> 0.
+        MESSAGE  'ERROR RELATED TO SMARTFORM OR PAGE FORMAT OR PRINTER' TYPE 'E'.
+      ENDIF.
+    ENDIF.
+
+    IF w_cnt GT 1.
+      CALL FUNCTION fname
+        EXPORTING
+          control_parameters = control_parameters
+          wa_bkpf            = wa_bkpf
+          it_bseg            = it_bseg1
+          wa_texts           = wa_texts
+          it_fbseg           = it_fbseg1
+          it_vbrp            = it_vbrp
+          flag               = flag
+          it_skat            = it_skat
+          v_sgtxt            = v_sgtxt
+          v_zuonr            = v_zuonr
+          p_bukrs            = p_bukrs
+          p_gjahr            = p_gjahr
+          plant_address      = plant_address
+          v_mwskz            = v_mwskz
+          v_text1            = v_text1
+          v_text2            = v_text2
+          v_cgstin           = v_cgstin
+          v_gstn             = v_gstn
+          v_fcompname        = v_fcompname " Added by Carina Jose on 25.03.2021
+          v_butxt            = v_butxt   " Added by Carina Jose on 25.03.2021
+          wa_compaddr        = wa_compaddr " Added by Carina Jose on 25.03.2021
+          v_cn_remarks       = v_cn_remarks  " Added by Carina Jose on 08/09/2021
+          v_cn_remarks_1     = v_cn_remarks_1  " Add by 04/05/2021
+          lv_string1         = lv_string1
+          lv_string2         = lv_string2
+        EXCEPTIONS
+          formatting_error   = 1
+          internal_error     = 2
+          send_error         = 3
+          user_canceled      = 4
+          OTHERS             = 5.
+      IF sy-subrc <> 0.
+        MESSAGE  'ERROR RELATED TO SMARTFORM OR PAGE FORMAT OR PRINTER' TYPE 'E'.
+      ENDIF.
+    ENDIF.
+
+    CLEAR : wa_bkpf,wa_texts,p1,v_waerk,v_in_words,v_roundoff,wa_belnr,wa_crdr,v_maxbt,v_sgtxt,v_zuonr,total1,total2, plant_address, v_fcompname.
+    REFRESH : it_bseg1,it_fbseg1.
+
+
+
+  endif.
+
+
+
+
+  ENDLOOP.
+ENDFORM.                    " DISPLAY_SMARTFORM_CRDR
+*&---------------------------------------------------------------------*
+*&      FORM  GET_DATA_VOUC
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM get_data_vouc .
+  CLEAR flag.
+  IF p_detail = 'X'.
+    flag = 1.
+  ENDIF.
+  SELECT belnr blart awkey FROM bkpf INTO TABLE it_belnr WHERE belnr IN s_belnr AND blart IN ('SK','CP','CR')
+     AND gjahr = p_gjahr AND bukrs = p_bukrs.
+ENDFORM.                    " GET_DATA_VOUC
+*&---------------------------------------------------------------------*
+*&      FORM  DISPLAY_SMARTFORM_VOUC
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM display_smartform_vouc .
+
+  CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
+    EXPORTING
+      formname           = 'ZFI_CASH_RECEIPT_VOUCHER'
+    IMPORTING
+      fm_name            = fname
+    EXCEPTIONS
+      no_form            = 1
+      no_function_module = 2
+      OTHERS             = 3.
+  IF sy-subrc <> 0.
+    MESSAGE 'WRONG SMARTFORM NAME' TYPE 'E'.
+  ENDIF.
+
+  DESCRIBE TABLE it_belnr LINES w_cnt.
+
+  LOOP AT it_belnr INTO wa_belnr.
+
+    IF w_cnt GT 1.
+      w_cnt2 = sy-tabix .
+      CASE w_cnt2.
+        WHEN 1.
+          control_parameters-no_open   = space .
+          control_parameters-no_close  = 'X' .
+        WHEN w_cnt .
+          control_parameters-no_open   = 'X' .
+          control_parameters-no_close  = space .
+        WHEN OTHERS.
+          control_parameters-no_open   = 'X' .
+          control_parameters-no_close  = 'X' .
+      ENDCASE.
+    ENDIF.
+
+
+
+    READ TABLE it_bseg INTO wa_bseg WITH KEY belnr = wa_belnr-belnr.
+    v_char =  wa_bseg-shkzg.
+*IF WA_BELNR-BLART = 'CR' OR WA_BELNR-BLART = 'SK'.
+    IF v_char = 'S'.
+      wa_texts-head = 'CASH RECIEPT VOUCHER'.
+    ELSE.
+      wa_texts-head = 'CASH PAYMENT VOUCHER'.
+    ENDIF.
+    CONDENSE wa_texts-head.
+    CONDENSE wa_texts-number.
+    CONDENSE wa_texts-date.
+
+*    IF w_cnt GT 1.
+*      w_cnt2 = sy-tabix .
+*      CASE w_cnt2.
+*        WHEN 1.
+*          control_parameters-no_open   = space .
+*          control_parameters-no_close  = 'X' .
+*        WHEN w_cnt .
+*          control_parameters-no_open   = 'X' .
+*          control_parameters-no_close  = space .
+*        WHEN OTHERS.
+*          control_parameters-no_open   = 'X' .
+*          control_parameters-no_close  = 'X' .
+*      ENDCASE.
+*    ENDIF.
+    LOOP AT it_bseg INTO wa_bseg WHERE belnr = wa_belnr-belnr.
+      IF v_char = 'S' .
+        IF v_zuonr IS INITIAL.
+          v_zuonr = wa_bseg-zuonr.
+        ENDIF.
+      ENDIF.
+      IF wa_belnr-blart = 'CR'.
+        IF wa_bseg-koart = 'D'.
+          MOVE-CORRESPONDING wa_bseg TO wa_bseg1.
+          APPEND wa_bseg1 TO it_bseg1.
+          wa_bkpf-total = wa_bkpf-total + wa_bseg-wrbtr.
+        ENDIF.
+      ELSEIF wa_belnr-blart = 'CP'.
+        IF wa_bseg-koart = 'K'.
+          MOVE-CORRESPONDING wa_bseg TO wa_bseg1.
+          APPEND wa_bseg1 TO it_bseg1.
+          wa_bkpf-total = wa_bkpf-total + wa_bseg-wrbtr.
+        ENDIF.
+      ELSE.
+        IF wa_bseg-shkzg = 'S'.
+          MOVE-CORRESPONDING wa_bseg TO wa_bseg1.
+          APPEND wa_bseg1 TO it_bseg1.
+          wa_bkpf-total = wa_bkpf-total + wa_bseg-wrbtr.
+        ENDIF.
+      ENDIF.
+
+      CLEAR : wa_bseg,wa_bseg1.
+    ENDLOOP.
+
+    LOOP AT it_fbseg INTO wa_fbseg WHERE belnr = wa_belnr-belnr.
+      IF NOT wa_fbseg-kostl IS INITIAL.
+        IF wa_bkpf-plant IS INITIAL.
+          wa_bkpf-plant = wa_fbseg-kostl+0(4).
+          IF wa_bkpf-plant = '200N'.
+            wa_bkpf-plant = '2000'.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+      IF NOT wa_fbseg-prctr IS INITIAL.
+        IF wa_bkpf-plant IS INITIAL.
+          wa_bkpf-plant = wa_fbseg-prctr+0(4).
+          IF wa_bkpf-plant = '200N'.
+            wa_bkpf-plant = '2000'.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+      IF NOT wa_fbseg-prctr IS INITIAL.
+        IF wa_bkpf-prctr IS INITIAL.
+          wa_bkpf-prctr = wa_fbseg-prctr.
+        ENDIF.
+      ENDIF.
+      SHIFT wa_fbseg-aufnr LEFT DELETING LEADING '0'.
+      MOVE-CORRESPONDING wa_fbseg TO wa_fbseg1.
+      APPEND wa_fbseg1 TO it_fbseg1.
+      CLEAR : wa_fbseg,wa_fbseg1.
+    ENDLOOP.
+
+    SELECT SINGLE bkpf~belnr bkpf~bukrs bkpf~gjahr t001~butxt bkpf~waers bkpf~kursf bkpf~hwaer bkpf~xblnr bkpf~bldat bkpf~budat bkpf~awkey
+      FROM bkpf INNER JOIN t001 ON bkpf~bukrs = t001~bukrs AND t001~spras = 'EN'
+      INTO (wa_bkpf-belnr,wa_bkpf-bukrs,wa_bkpf-gjahr,wa_bkpf-plantname,wa_bkpf-waerk,wa_bkpf-kursf,wa_bkpf-hwaer,wa_bkpf-xblnr,
+            wa_bkpf-bldat,wa_bkpf-budat,wa_bkpf-awkey)
+      WHERE bkpf~belnr = wa_belnr-belnr
+       AND  bkpf~bukrs =  p_bukrs
+      AND    bkpf~gjahr = p_gjahr.
+    v_awkey = wa_bkpf-awkey+0(10).
+
+    SELECT SINGLE tcj_trans_names~long_text tcj_cj_names~cajo_name  tcj_documents~d_posting_numb FROM bkpf
+        INNER JOIN tcj_positions ON tcj_positions~posting_number = v_awkey AND tcj_positions~comp_code = p_bukrs
+        INNER JOIN tcj_documents ON tcj_documents~posting_number = tcj_positions~posting_number
+        INNER JOIN tcj_trans_names ON tcj_trans_names~transact_number = tcj_positions~transact_number AND tcj_trans_names~langu = 'EN'
+        INNER JOIN tcj_cj_names ON tcj_positions~cajo_number = tcj_cj_names~cajo_number
+        AND tcj_cj_names~comp_code = wa_bkpf-bukrs AND tcj_cj_names~langu = 'EN'
+        INTO (wa_bkpf-bt,wa_bkpf-cj,wa_bkpf-pn) WHERE bkpf~awkey = wa_bkpf-awkey.
+
+*******  Added on 16.04.2021
+    CLEAR : wa_add_old.
+    CALL FUNCTION 'Z_FM_SD_ADDRESS_OLD'
+      EXPORTING
+        im_werks    = p_bukrs
+        im_fromdate = wa_bkpf-budat
+        im_typeind  = 'C'
+      IMPORTING
+        wa_add      = wa_add_old.
+
+
+    IF wa_add_old IS NOT INITIAL AND wa_add_old-fcompname IS INITIAL.
+*      wa_bkpf-plantname = wa_add_old-name1.
+      wa_bkpf-plantname = wa_add_old-name1.
+      v_butxt = wa_add_old-name1.
+    ELSE.
+      v_fcompname = wa_add_old-fcompname.
+      SELECT SINGLE butxt adrnr  FROM t001 INTO ( v_butxt, v_cadrnr )  WHERE bukrs = p_bukrs.
+    ENDIF.
+******* End of changes on 16.04.2021
+
+*  SELECT SINGLE TCJ_TRANS_NAMES~LONG_TEXT TCJ_CJ_NAMES~CAJO_NAME  FROM BKPF
+*    INNER JOIN TCJ_POSITIONS ON TCJ_POSITIONS~POSTING_NUMBER = V_AWKEY AND TCJ_POSITIONS~COMP_CODE = P_BUKRS
+*    INNER JOIN TCJ_TRANS_NAMES ON TCJ_TRANS_NAMES~TRANSACT_NUMBER = TCJ_POSITIONS~TRANSACT_NUMBER
+*    INNER JOIN TCJ_CJ_NAMES ON TCJ_POSITIONS~CAJO_NUMBER = TCJ_CJ_NAMES~CAJO_NUMBER
+*    AND TCJ_CJ_NAMES~COMP_CODE = WA_BKPF-BUKRS AND TCJ_CJ_NAMES~LANGU = 'EN'
+*    INTO (WA_BKPF-BT,WA_BKPF-CJ) WHERE BKPF~AWKEY = WA_BKPF-AWKEY.
+
+    CONCATENATE  wa_bkpf-plantname ' ('  wa_bkpf-bukrs ')' INTO wa_bkpf-plantname.
+
+    SELECT SINGLE name1 FROM t001w INTO wa_bkpf-name1 WHERE werks = wa_bkpf-plant.
+    CONCATENATE wa_bkpf-name1 ' (' wa_bkpf-plant ')' INTO wa_bkpf-name1.
+
+    IF wa_bkpf-kursf IS INITIAL.
+      wa_bkpf-kursf = 1.
+    ENDIF.
+
+    READ TABLE it_crdr INTO wa_crdr WITH KEY belnr = wa_belnr-belnr.
+    wa_bkpf-addr = wa_crdr-addr.
+    wa_bkpf-name = wa_crdr-name.
+
+*CALL FUNCTION 'J_1I6_ROUND_TO_NEAREST_AMT'
+*  EXPORTING
+*    I_AMOUNT = WA_BKPF-TOTAL
+*  IMPORTING
+*    E_AMOUNT = V_ROUNDOFF.
+*
+*WA_BKPF-ROUNDOFF = V_ROUNDOFF - WA_BKPF-TOTAL.
+*WA_BKPF-TOTAL = V_ROUNDOFF.
+
+    IF wa_bkpf-waerk = 'INR'.
+      v_maxbt = wa_bkpf-total.
+      CALL FUNCTION 'HR_IN_CHG_INR_WRDS'
+        EXPORTING
+          amt_in_num   = v_maxbt
+        IMPORTING
+          amt_in_words = wa_bkpf-word.
+      IF sy-subrc <> 0.
+      ENDIF.
+      TRANSLATE wa_bkpf-word TO UPPER CASE.
+      CONCATENATE wa_bkpf-word 'ONLY' INTO wa_bkpf-word SEPARATED BY space.
+    ELSE.
+      p1 = wa_bkpf-total.
+      CONDENSE p1.
+      CALL FUNCTION 'SPELL_AMOUNT'
+        EXPORTING
+          amount    = p1
+          currency  = wa_bkpf-waerk
+          filler    = ' '
+          language  = sy-langu
+        IMPORTING
+          in_words  = v_in_words
+        EXCEPTIONS
+          not_found = 1
+          too_large = 2
+          OTHERS    = 3.
+      IF sy-subrc = 0.
+        wa_bkpf-word = v_in_words-word.
+        IF NOT v_in_words-decword IS INITIAL.
+          CONCATENATE wa_bkpf-word 'AND' v_in_words-decword
+          'ONLY' INTO wa_bkpf-word SEPARATED BY space.
+        ELSE.
+          CONCATENATE wa_bkpf-word 'ONLY' INTO wa_bkpf-word SEPARATED BY space.
+        ENDIF.
+        CONDENSE wa_bkpf-word.
+      ENDIF.
+    ENDIF.
+
+    IF w_cnt = 1.
+      CALL FUNCTION fname
+        EXPORTING
+          wa_bkpf          = wa_bkpf
+          it_bseg          = it_bseg1
+          wa_texts         = wa_texts
+          it_fbseg         = it_fbseg1
+          flag             = flag
+          it_skat          = it_skat
+          v_zuonr          = v_zuonr
+          p_gjahr          = p_gjahr
+          p_bukrs          = p_bukrs
+          v_butxt          = v_butxt
+          v_fcompname      = v_fcompname
+        EXCEPTIONS
+          formatting_error = 1
+          internal_error   = 2
+          send_error       = 3
+          user_canceled    = 4
+          OTHERS           = 5.
+      IF sy-subrc <> 0.
+        MESSAGE  'ERROR RELATED TO SMARTFORM OR PAGE FORMAT OR PRINTER' TYPE 'E'.
+      ENDIF.
+    ENDIF.
+
+    IF w_cnt GT 1.
+      CALL FUNCTION fname
+        EXPORTING
+          control_parameters = control_parameters
+          wa_bkpf            = wa_bkpf
+          it_bseg            = it_bseg1
+          wa_texts           = wa_texts
+          it_fbseg           = it_fbseg1
+          flag               = flag
+          it_skat            = it_skat
+          v_zuonr            = v_zuonr
+          p_gjahr            = p_gjahr
+          p_bukrs            = p_bukrs
+          v_butxt            = v_butxt
+          v_fcompname        = v_fcompname
+        EXCEPTIONS
+          formatting_error   = 1
+          internal_error     = 2
+          send_error         = 3
+          user_canceled      = 4
+          OTHERS             = 5.
+      IF sy-subrc <> 0.
+        MESSAGE  'ERROR RELATED TO SMARTFORM OR PAGE FORMAT OR PRINTER' TYPE 'E'.
+      ENDIF.
+    ENDIF.
+
+
+    CLEAR : wa_bkpf,wa_texts,p1,v_waerk,v_in_words,v_roundoff,v_bukrs,wa_belnr,wa_crdr,v_awkey.
+    REFRESH : it_bseg1,it_fbseg1.
+  ENDLOOP.
+ENDFORM.                    " DISPLAY_SMARTFORM_VOUC
+*&---------------------------------------------------------------------*
+*&      FORM  GET_DATA_BANK
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM get_data_bank .
+  CLEAR flag.
+  IF p_detail = 'X'.
+    flag = 1.
+  ENDIF.
+  SELECT belnr budat blart FROM bkpf INTO TABLE it_bkpf WHERE belnr IN s_belnr AND blart IN ('KZ','DZ','SA','UE','ZP')
+    AND gjahr = p_gjahr AND bukrs = p_bukrs.  " GET BKPF DATA
+ENDFORM.                    " GET_DATA_BANK
+*&---------------------------------------------------------------------*
+*&      FORM  DISPLAY_SMARTFORM_BANK
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM display_smartform_bank .
+  CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
+    EXPORTING
+      formname           = 'ZFI_BANK_RECEIPT_VOUCHER'
+    IMPORTING
+      fm_name            = fname
+    EXCEPTIONS
+      no_form            = 1
+      no_function_module = 2
+      OTHERS             = 3.
+  IF sy-subrc <> 0.
+    MESSAGE 'WRONG SMARTFORM NAME' TYPE 'E'.
+  ENDIF.
+  DESCRIBE TABLE it_header LINES w_cnt.
+
+  LOOP AT it_header INTO wa_header.
+    CLEAR v_maxbt.
+    SELECT SINGLE * FROM bkpf INTO @DATA(ls_bkpf) WHERE belnr EQ @wa_header-belnr.
+    IF ls_bkpf-waers = 'INR'.
+      v_maxbt = wa_header-wrbtr.
+      CALL FUNCTION 'HR_IN_CHG_INR_WRDS'
+        EXPORTING
+          amt_in_num   = v_maxbt
+        IMPORTING
+          amt_in_words = wa_header-words.
+      IF sy-subrc <> 0.
+      ENDIF.
+      TRANSLATE wa_header-words TO UPPER CASE.
+      CONCATENATE wa_header-words 'ONLY' INTO wa_header-words SEPARATED BY space.
+    ENDIF.
+    IF wa_header-blart = 'KZ' OR wa_header-blart = 'SA'.
+      wa_texts-head = 'Bank Payment Voucher'.
+    ELSE.
+      wa_texts-head = 'Bank Receipt Voucher'.
+    ENDIF.
+*    wa_texts-number = 'Voucher No'.
+*    wa_texts-date = 'Voucher Date'.
+
+    wa_texts-number = v_vno. " Added by Carina Jose on 08.04.2022
+    wa_texts-date = v_vdt. " Added by Carina Jose on 08.04.2022
+
+    CONDENSE wa_texts-head.
+    CONDENSE wa_texts-number.
+    CONDENSE wa_texts-date.
+
+    LOOP AT it_item INTO wa_item WHERE augbl = wa_header-belnr.
+*IF WA_ITEM-AUGBL NE WA_ITEM-BELNR.
+*IF WA_ITEM-AUGBL NE WA_ITEM-BELNR.
+      MOVE-CORRESPONDING wa_item TO wa_item1.
+      APPEND wa_item1 TO it_item1.
+      CLEAR : wa_item,wa_item1.
+*ELSE.
+*MOVE-CORRESPONDING WA_ITEM TO WA_NARR.
+*APPEND WA_NARR TO IT_NARR.
+*CLEAR : WA_ITEM,WA_NARR.
+*ENDIF.
+    ENDLOOP.
+
+    IF wa_header-kursf IS INITIAL.
+      wa_header-kursf = 1.
+    ENDIF.
+
+    IF w_cnt GT 1.
+      w_cnt2 = sy-tabix .
+      CASE w_cnt2.
+        WHEN 1.
+          control_parameters-no_open   = space .
+          control_parameters-no_close  = 'X' .
+        WHEN w_cnt .
+          control_parameters-no_open   = 'X' .
+          control_parameters-no_close  = space .
+        WHEN OTHERS.
+          control_parameters-no_open   = 'X' .
+          control_parameters-no_close  = 'X' .
+      ENDCASE.
+    ENDIF.
+
+    IF w_cnt = 1.
+      CALL FUNCTION fname
+        EXPORTING
+          wa_header        = wa_header
+          it_item          = it_item1
+          wa_texts         = wa_texts
+          it_narr          = it_narr
+          v_fcompname      = v_fcompname
+          v_butxt          = v_butxt
+        EXCEPTIONS
+          formatting_error = 1
+          internal_error   = 2
+          send_error       = 3
+          user_canceled    = 4
+          OTHERS           = 5.
+      IF sy-subrc <> 0.
+      ENDIF.
+    ENDIF.
+
+    IF w_cnt GT 1.
+      CALL FUNCTION fname
+        EXPORTING
+          control_parameters = control_parameters
+          wa_header          = wa_header
+          it_item            = it_item1
+          wa_texts           = wa_texts
+          it_narr            = it_narr
+          v_fcompname        = v_fcompname
+          v_butxt            = v_butxt
+        EXCEPTIONS
+          formatting_error   = 1
+          internal_error     = 2
+          send_error         = 3
+          user_canceled      = 4
+          OTHERS             = 5.
+      IF sy-subrc <> 0.
+      ENDIF.
+    ENDIF.
+
+
+    CLEAR : wa_header,wa_texts,p1,v_waerk.
+    REFRESH : it_item1.
+  ENDLOOP.
+ENDFORM.                    " DISPLAY_SMARTFORM_BANK
+*&---------------------------------------------------------------------*
+*&      FORM  GET_ITEM_VOUC
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM get_item_vouc .
+
+  SELECT bukrs belnr gjahr buzei sgtxt dmbtr pswsl koart shkzg kostl hkont prctr aufnr kunnr lifnr wrbtr xbilk mwskz ebeln zuonr ktosl FROM bseg
+         INTO TABLE it_bseg FOR ALL ENTRIES IN it_belnr WHERE belnr = it_belnr-belnr AND bukrs = p_bukrs AND gjahr = p_gjahr.
+
+  SELECT bukrs belnr gjahr buzei sgtxt dmbtr pswsl koart shkzg kostl hkont prctr aufnr kunnr lifnr wrbtr xbilk mwskz FROM bseg
+         INTO TABLE it_fbseg FOR ALL ENTRIES IN it_belnr WHERE belnr = it_belnr-belnr AND bukrs = p_bukrs AND gjahr = p_gjahr.
+
+  SELECT saknr txt50 FROM skat INTO TABLE it_skat FOR ALL ENTRIES IN it_fbseg WHERE saknr = it_fbseg-hkont AND spras = 'EN' AND ktopl = 'ASTL'.
+ENDFORM.                    " GET_ITEM_VOUC
+*&---------------------------------------------------------------------*
+*&      FORM  GET_ITEM_BANK
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM get_item_bank .
+  SELECT bukrs belnr gjahr buzei sgtxt dmbtr pswsl koart shkzg kostl hkont prctr aufnr kunnr lifnr wrbtr xbilk mwskz ebeln zuonr ktosl
+     FROM bseg
+     INTO TABLE it_bseg FOR ALL ENTRIES IN it_bkpf WHERE belnr = it_bkpf-belnr AND shkzg = 'H' AND bukrs = p_bukrs AND gjahr = p_gjahr.
+  SORT it_bseg BY belnr.
+*************ADDED 06.05.2015
+  SELECT bukrs belnr gjahr buzei sgtxt dmbtr pswsl koart shkzg kostl hkont prctr aufnr kunnr lifnr wrbtr xbilk mwskz ebeln zuonr ktosl
+     FROM bseg
+     INTO TABLE it_bseg2 FOR ALL ENTRIES IN it_bkpf WHERE belnr = it_bkpf-belnr AND shkzg = 'S' AND bukrs = p_bukrs AND gjahr = p_gjahr.
+  SORT it_bseg2 BY belnr.
+*******************
+*******  Added by Carina Jose on 28.12.2021
+  LOOP AT it_bkpf INTO wa_bkpf.
+*&-------------------------------------------------- CUSTOMER PAYMENT -----------------------------------------------------------------&*
+
+    IF wa_bkpf-blart EQ 'DZ'.
+      IF it_bseg IS NOT INITIAL.
+        SELECT kunnr augbl belnr budat xblnr blart waers hkont FROM bsad INTO TABLE it_bsad
+               FOR ALL ENTRIES IN it_bseg WHERE augbl = it_bseg-belnr AND bukrs = p_bukrs AND gjahr = p_gjahr.
+      ENDIF.
+      IF it_bsad IS INITIAL.
+        SELECT kunnr augbl belnr FROM bsid INTO TABLE it_bsad FOR ALL ENTRIES IN it_bseg WHERE belnr = it_bseg-belnr AND bukrs = p_bukrs.
+      ENDIF.
+      IF it_bsad IS NOT INITIAL.
+        SELECT belnr shkzg wrbtr pswsl sgtxt hkont qsskz FROM bseg INTO TABLE it_doc FOR ALL ENTRIES IN it_bsad
+               WHERE belnr EQ it_bsad-belnr AND koart = 'K' AND bukrs = p_bukrs AND gjahr = p_gjahr.
+        SORT it_doc BY belnr.
+
+        SELECT * FROM with_item INTO TABLE lt_item FOR ALL ENTRIES IN it_doc
+          WHERE belnr = it_doc-belnr AND gjahr = p_gjahr AND bukrs = p_bukrs.
+        SORT lt_item BY belnr.
+
+        SELECT saknr txt50 FROM skat INTO TABLE it_skat FOR ALL ENTRIES IN it_bsad WHERE saknr = it_bsad-hkont AND spras = 'EN' AND ktopl = 'ASTL'.
+        SORT it_skat BY saknr.
+        DELETE ADJACENT DUPLICATES FROM it_skat COMPARING saknr.
+      ENDIF.
+
+      LOOP AT it_doc INTO wa_doc WHERE belnr = wa_bkpf-belnr.
+        READ TABLE it_bseg INTO wa_bseg WITH KEY belnr = wa_doc-belnr.
+        READ TABLE it_bsad INTO wa_bsad WITH KEY belnr = wa_doc-belnr.
+        IF wa_bseg-belnr NE wa_doc-belnr.
+          READ TABLE lt_item INTO lwa_item WITH KEY belnr = wa_doc-belnr.
+*IF WA_DOC-HKONT = '0036010112'.
+*  V_DR = V_DR + WA_DOC-DMBTR.
+* ENDIF.
+          IF wa_doc-shkzg = 'S'.
+            v_dr = v_dr + wa_doc-dmbtr.
+          ENDIF.
+          IF wa_bsak-blart = 'KG'.
+            v_dr = v_dr * -1.
+          ENDIF.
+*IF WA_DOC-HKONT <> '0036010112'.
+          IF lwa_item-wt_qbshha IS NOT INITIAL.
+            v_cr1 = lwa_item-wt_qbshh * -1.
+            v_cr = v_cr + v_cr1.
+          ENDIF.
+          IF wa_doc-shkzg = 'H'.
+            v_dr = v_dr + wa_doc-dmbtr.
+          ENDIF.
+*ENDIF.
+
+
+          wa_item-sgtxt = wa_bseg-sgtxt.
+          AT END OF belnr.
+            READ TABLE it_bsad INTO wa_bsad WITH KEY belnr = wa_doc-belnr.
+            READ TABLE it_skat INTO wa_skat WITH KEY saknr = wa_bsad-hkont.
+            wa_item-augbl  = wa_bsad-augbl.
+            wa_item-blart  = wa_bsad-blart.
+            wa_item-belnr  = wa_doc-belnr.
+            wa_item-budat  = wa_bsad-budat.
+            wa_item-xblnr  = wa_bsad-xblnr.
+            wa_item-invamt = v_dr + v_cr.
+            wa_item-tdsamt = v_cr * -1.
+            wa_item-adjamt = wa_item-invamt - v_cr.
+            wa_item-txt50 = wa_skat-txt50.
+            APPEND wa_item TO it_item.
+            CLEAR : wa_item,v_dr,v_cr,v_cr1.
+          ENDAT.
+          CLEAR : wa_doc,wa_bsad,wa_skat,wa_bseg.
+        ENDIF.
+      ENDLOOP.
+      CLEAR : v_dr,v_cr.
+
+      REFRESH it_skat.
+*DELETE IT_ITEM WHERE BLART = 'KZ'.
+
+      SELECT belnr sgtxt FROM bseg INTO TABLE it_sgtxt1 FOR ALL ENTRIES IN it_bkpf WHERE belnr = it_bkpf-belnr AND bukrs = p_bukrs AND gjahr = p_gjahr.
+      LOOP AT it_sgtxt1 INTO wa_sgtxt1.
+        IF NOT wa_sgtxt1-sgtxt IS INITIAL.
+          MOVE-CORRESPONDING wa_sgtxt1 TO wa_sgtxt.
+          APPEND wa_sgtxt1 TO it_sgtxt.
+          CLEAR : wa_sgtxt.
+        ENDIF.
+        CLEAR : wa_sgtxt1.
+      ENDLOOP.
+
+      SELECT saknr txt50 FROM skat INTO TABLE it_skat FOR ALL ENTRIES IN it_bseg2 WHERE saknr = it_bseg2-hkont AND spras = 'EN' AND ktopl = 'ASTL'.
+      SORT it_skat BY saknr.
+      DELETE ADJACENT DUPLICATES FROM it_skat COMPARING saknr.
+***************** ADDED 05.06.2015
+      SELECT saknr txt50 FROM skat INTO TABLE it_skat1 FOR ALL ENTRIES IN it_bseg WHERE saknr = it_bseg-hkont AND spras = 'EN' AND ktopl = 'ASTL'.
+      SORT it_skat1 BY saknr.
+      DELETE ADJACENT DUPLICATES FROM it_skat1 COMPARING saknr.
+**********
+
+
+      LOOP AT it_bseg2 INTO wa_bseg2 WHERE belnr = wa_bkpf-belnr.
+        IF wa_bseg2-koart = 'S' AND wa_bseg2-ktosl = ' '.
+          v_cr = v_cr + wa_bseg2-dmbtr.
+          v_wrbtr = v_wrbtr + wa_bseg2-wrbtr.
+        ELSEIF wa_bseg2-koart = 'S' AND wa_bseg2-ktosl = 'WIT'.                     "Added by Nitin on 12/12/2022
+          v_wit = v_wit + wa_bseg2-wrbtr.
+        ENDIF.
+        IF NOT wa_bseg2-prctr IS INITIAL.
+          IF v_plant IS INITIAL.
+            v_plant = wa_bseg2-prctr+0(4).
+            IF v_plant = '200N'.
+              v_plant = '2000'.
+            ENDIF.
+          ENDIF.
+          IF wa_skat IS INITIAL.
+            READ TABLE it_skat INTO wa_skat WITH KEY saknr = wa_bseg2-hkont.
+          ENDIF.
+        ENDIF.
+        IF NOT wa_bseg2-kostl IS INITIAL.
+          IF v_plant IS INITIAL.
+            v_plant = wa_bseg2-kostl+0(4).
+            IF v_plant = '200N'.
+              v_plant = '2000'.
+            ENDIF.
+          ENDIF.
+
+        ENDIF.
+        IF wa_skat IS INITIAL.
+          READ TABLE it_skat INTO wa_skat WITH KEY saknr = wa_bseg2-hkont.
+        ENDIF.
+        AT END OF belnr.
+          READ TABLE it_sgtxt INTO wa_sgtxt WITH KEY belnr = wa_bseg2-belnr.
+          READ TABLE it_bkpf INTO wa_bkpf WITH KEY belnr = wa_bseg2-belnr.
+          READ TABLE it_item INTO wa_item WITH KEY augbl = wa_bseg2-belnr.
+          READ TABLE it_bsad INTO wa_bsad WITH KEY augbl = wa_bseg2-belnr.
+          SELECT SINGLE waers hwaer kursf FROM bkpf INTO (wa_header-docc,wa_header-pswsl,wa_header-kursf) WHERE belnr = wa_bseg2-belnr.
+          wa_header-belnr = wa_bseg2-belnr.
+          wa_header-glact = wa_skat-txt50.
+          IF v_kunnr IS INITIAL.
+            SELECT SINGLE kunnr FROM bseg INTO v_kunnr WHERE koart IN ('K','D') AND belnr = wa_bseg2-belnr AND bukrs = p_bukrs AND gjahr = p_gjahr.
+          ENDIF.
+          wa_header-belnr = wa_bseg2-belnr.
+          wa_header-budat = wa_bkpf-budat.
+          wa_header-chqdt = wa_bkpf-budat.
+          wa_header-chqam = v_cr.
+          wa_header-wrbtr = v_wrbtr.
+          wa_header-blart = wa_bkpf-blart.
+          wa_header-sgtxt1 = wa_sgtxt-sgtxt.
+          wa_header-witamt = v_wit.                           "Added by Nitin on 12/12/2022
+*WA_HEADER-SGTXT = WA_BSEG-ZUONR.
+          SELECT SINGLE zuonr FROM bseg INTO wa_header-sgtxt WHERE belnr = wa_bseg2-belnr AND bukrs = p_bukrs AND gjahr = p_gjahr AND shkzg = 'H'.
+          CONDENSE wa_header-sgtxt.
+*          IF NOT wa_bsak-lifnr IS INITIAL.
+*            SELECT SINGLE name1 FROM lfa1 INTO wa_header-bnkac WHERE lifnr = wa_bsak-lifnr.
+*          ELSE.
+*            SELECT SINGLE name1 FROM lfa1 INTO wa_header-bnkac WHERE lifnr = v_lifnr.
+*          ENDIF.
+          IF NOT wa_bsad-kunnr IS INITIAL.
+            SELECT SINGLE name1 FROM kna1 INTO wa_header-bnkac WHERE kunnr = wa_bsad-kunnr.
+          ELSE.
+            SELECT SINGLE name1 FROM kna1 INTO wa_header-bnkac WHERE kunnr = v_kunnr.
+          ENDIF.
+          IF wa_header-bnkac IS INITIAL.
+            LOOP AT it_bseg INTO wa_bseg WHERE belnr = wa_bkpf-belnr.
+              READ TABLE it_skat1 INTO wa_skat1 WITH KEY saknr = wa_bseg-hkont.
+              wa_header-bnkac    = wa_skat1-txt20.
+            ENDLOOP.
+          ENDIF.
+          "Added by Nitin on 15/12/2022 debitamt changes
+          IF wa_header-debitamt IS INITIAL.
+            LOOP AT it_bseg INTO wa_bseg WHERE belnr = wa_bkpf-belnr.
+              wa_header-debitamt = wa_bseg-dmbtr.
+            ENDLOOP.
+          ENDIF.
+          "Added by Nitin on 15/12/2022
+          SELECT SINGLE name1 FROM t001w INTO wa_header-name WHERE werks = v_plant.
+          CONCATENATE wa_header-name  ' (' v_plant ')' INTO wa_header-name.
+          SELECT SINGLE bkpf~bukrs t001~butxt FROM bkpf INNER JOIN t001 ON bkpf~bukrs = t001~bukrs AND t001~spras = 'EN'
+                 INTO (v_bukrs,wa_header-plantname) WHERE bkpf~belnr = wa_bseg2-belnr AND  bkpf~bukrs = p_bukrs.
+
+          v_butxt  = wa_header-plantname.
+
+*WA_HEADER-BNKAC = WA_ITEM-TXT50.
+          CLEAR : wa_add_old.
+          CALL FUNCTION 'Z_FM_SD_ADDRESS_OLD'
+            EXPORTING
+              im_werks    = v_bukrs
+              im_fromdate = wa_bkpf-budat
+              im_typeind  = 'C'
+            IMPORTING
+              wa_add      = wa_add_old.
+
+          IF wa_add_old IS NOT INITIAL  AND wa_add_old-fcompname IS INITIAL.
+            wa_header-plantname = wa_add_old-name1.
+            wa_bkpf-plantname   =  wa_add_old-name1.
+            v_butxt = wa_add_old-name1.
+*      wa_header-plant_street = wa_add_old-street.
+*      wa_header-plant_house_num1 = wa_add_old-house_num1.
+*      wa_header-plant_house_num2 = wa_add_old-house_num2.
+*      wa_header-plant_str_suppl1 = wa_add_old-str_suppl1.
+*      wa_header-plant_str_suppl2 = wa_add_old-str_suppl2.
+*      wa_header-plant_str_suppl3 = wa_add_old-str_suppl3.
+*      wa_header-plant_city1      = wa_add_old-city1.
+*      wa_header-plant_city2      = wa_add_old-city2.
+*      wa_header-plant_post_code1 = wa_add_old-post_code1.
+*      wa_header-plant_region     = wa_add_old-region.
+*      wa_header-plant_country    =  wa_add_old-country.
+*      wa_header-tel_number      = wa_add_old-tel_number.
+          ELSE.
+            v_fcompname = wa_add_old-fcompname.
+          ENDIF.
+          CONCATENATE  wa_header-plantname ' ('  v_bukrs ')' INTO wa_header-plantname.
+          CONDENSE wa_header-name.
+          CONDENSE wa_header-plantname.
+          APPEND wa_header TO it_header.
+          CLEAR : wa_header,v_cr,v_wrbtr,v_plant,wa_skat,v_lifnr.
+        ENDAT.
+        CLEAR : wa_bseg,wa_sgtxt,wa_bkpf,wa_item,wa_bsad,v_bukrs,wa_bseg2.
+      ENDLOOP.
+
+*&-------------------------------------------------- VENDOR PAYMENT -----------------------------------------------------------------&*
+
+    ELSE.
+      IF it_bseg IS NOT INITIAL.
+        SELECT lifnr augbl belnr budat xblnr blart waers hkont FROM bsak INTO TABLE it_bsak
+               FOR ALL ENTRIES IN it_bseg WHERE augbl = it_bseg-belnr AND bukrs = p_bukrs AND gjahr = p_gjahr.
+      ENDIF.
+      IF it_bsak IS INITIAL.
+        SELECT lifnr augbl belnr FROM bsik INTO TABLE it_bsak FOR ALL ENTRIES IN it_bseg WHERE augbl = it_bseg-belnr AND bukrs = p_bukrs.
+      ENDIF.
+      IF it_bsak IS NOT INITIAL.
+        SELECT belnr shkzg wrbtr pswsl sgtxt hkont qsskz FROM bseg INTO TABLE it_doc FOR ALL ENTRIES IN it_bsak
+               WHERE belnr EQ it_bsak-belnr AND koart = 'K' AND bukrs = p_bukrs AND gjahr = p_gjahr.
+        SORT it_doc BY belnr.
+
+        SELECT * FROM with_item INTO TABLE lt_item FOR ALL ENTRIES IN it_doc
+          WHERE belnr = it_doc-belnr AND gjahr = p_gjahr AND bukrs = p_bukrs.
+        SORT lt_item BY belnr.
+
+
+
+        SELECT saknr txt50 FROM skat INTO TABLE it_skat FOR ALL ENTRIES IN it_bsak WHERE saknr = it_bsak-hkont AND spras = 'EN' AND ktopl = 'ASTL'.
+        SORT it_skat BY saknr.
+        DELETE ADJACENT DUPLICATES FROM it_skat COMPARING saknr.
+      ENDIF.
+
+      LOOP AT it_doc INTO wa_doc WHERE belnr = wa_bkpf-belnr.
+        READ TABLE it_bseg INTO wa_bseg WITH KEY belnr = wa_doc-belnr.
+        READ TABLE it_bsak INTO wa_bsak WITH KEY belnr = wa_doc-belnr.
+        IF wa_bseg-belnr NE wa_doc-belnr.
+          READ TABLE lt_item INTO lwa_item WITH KEY belnr = wa_doc-belnr.
+*IF WA_DOC-HKONT = '0036010112'.
+*  V_DR = V_DR + WA_DOC-DMBTR.
+* ENDIF.
+          IF wa_doc-shkzg = 'S'.
+            v_dr = v_dr + wa_doc-dmbtr.
+          ENDIF.
+          IF wa_bsak-blart = 'KG'.
+            v_dr = v_dr * -1.
+          ENDIF.
+*IF WA_DOC-HKONT <> '0036010112'.
+          IF lwa_item-wt_qbshha IS NOT INITIAL.
+            v_cr1 = lwa_item-wt_qbshh * -1.
+            v_cr = v_cr + v_cr1.
+          ENDIF.
+          IF wa_doc-shkzg = 'H'.
+            v_dr = v_dr + wa_doc-dmbtr.
+          ENDIF.
+*ENDIF.
+
+
+          wa_item-sgtxt = wa_bseg-sgtxt.
+          AT END OF belnr.
+            READ TABLE it_bsak INTO wa_bsak WITH KEY belnr = wa_doc-belnr.
+            READ TABLE it_skat INTO wa_skat WITH KEY saknr = wa_bsak-hkont.
+            wa_item-augbl  = wa_bsak-augbl.
+            wa_item-blart  = wa_bsak-blart.
+            wa_item-belnr  = wa_doc-belnr.
+            wa_item-budat  = wa_bsak-budat.
+            wa_item-xblnr  = wa_bsak-xblnr.
+            wa_item-invamt = v_dr + v_cr.
+            wa_item-tdsamt = v_cr * -1.
+            wa_item-adjamt = wa_item-invamt - v_cr.
+            wa_item-txt50 = wa_skat-txt50.
+            APPEND wa_item TO it_item.
+            CLEAR : wa_item,v_dr,v_cr,v_cr1.
+          ENDAT.
+          CLEAR : wa_doc,wa_bsak,wa_skat,wa_bseg.
+        ENDIF.
+      ENDLOOP.
+      CLEAR : v_dr,v_cr.
+
+      REFRESH it_skat.
+*DELETE IT_ITEM WHERE BLART = 'KZ'.
+
+      SELECT belnr sgtxt FROM bseg INTO TABLE it_sgtxt1 FOR ALL ENTRIES IN it_bkpf WHERE belnr = it_bkpf-belnr AND bukrs = p_bukrs AND gjahr = p_gjahr.
+      LOOP AT it_sgtxt1 INTO wa_sgtxt1.
+        IF NOT wa_sgtxt1-sgtxt IS INITIAL.
+          MOVE-CORRESPONDING wa_sgtxt1 TO wa_sgtxt.
+          APPEND wa_sgtxt1 TO it_sgtxt.
+          CLEAR : wa_sgtxt.
+        ENDIF.
+        CLEAR : wa_sgtxt1.
+      ENDLOOP.
+
+      SELECT saknr txt50 FROM skat INTO TABLE it_skat FOR ALL ENTRIES IN it_bseg WHERE saknr = it_bseg-hkont AND spras = 'EN' AND ktopl = 'ASTL'.
+      SORT it_skat BY saknr.
+      DELETE ADJACENT DUPLICATES FROM it_skat COMPARING saknr.
+***************** ADDED 05.06.2015
+      SELECT saknr txt50 FROM skat INTO TABLE it_skat1 FOR ALL ENTRIES IN it_bseg2 WHERE saknr = it_bseg2-hkont AND spras = 'EN' AND ktopl = 'ASTL'.
+      SORT it_skat1 BY saknr.
+      DELETE ADJACENT DUPLICATES FROM it_skat1 COMPARING saknr.
+**********
+
+
+      LOOP AT it_bseg INTO wa_bseg WHERE belnr = wa_bkpf-belnr.
+        IF wa_bseg-koart = 'S' AND wa_bseg-ktosl = ' '.
+          v_cr = v_cr + wa_bseg-dmbtr.
+          v_wrbtr = v_wrbtr + wa_bseg-wrbtr.
+        ELSEIF wa_bseg-koart = 'S' AND wa_bseg-ktosl = 'WIT'.                 "Added By Nitin on 12/12/2022
+          v_wit = v_wit + wa_bseg-dmbtr.
+        ENDIF.
+        IF NOT wa_bseg-prctr IS INITIAL.
+          IF v_plant IS INITIAL.
+            v_plant = wa_bseg-prctr+0(4).
+            IF v_plant = '200N'.
+              v_plant = '2000'.
+            ENDIF.
+          ENDIF.
+
+        ENDIF.
+        IF wa_skat IS INITIAL.
+          READ TABLE it_skat INTO wa_skat WITH KEY saknr = wa_bseg-hkont.
+        ENDIF.
+        IF NOT wa_bseg-kostl IS INITIAL.
+          IF v_plant IS INITIAL.
+            v_plant = wa_bseg-kostl+0(4).
+            IF v_plant = '200N'.
+              v_plant = '2000'.
+            ENDIF.
+          ENDIF.
+          IF wa_skat IS INITIAL.
+            READ TABLE it_skat INTO wa_skat WITH KEY saknr = wa_bseg-hkont.
+          ENDIF.
+        ENDIF.
+        AT END OF belnr.
+          READ TABLE it_sgtxt INTO wa_sgtxt WITH KEY belnr = wa_bseg-belnr.
+          READ TABLE it_bkpf INTO wa_bkpf WITH KEY belnr = wa_bseg-belnr.
+          READ TABLE it_item INTO wa_item WITH KEY augbl = wa_bseg-belnr.
+          READ TABLE it_bsak INTO wa_bsak WITH KEY augbl = wa_bseg-belnr.
+          SELECT SINGLE waers hwaer kursf FROM bkpf INTO (wa_header-docc,wa_header-pswsl,wa_header-kursf) WHERE belnr = wa_bseg-belnr.
+          wa_header-belnr = wa_bseg-belnr.
+          wa_header-glact = wa_skat-txt50.
+          IF v_lifnr IS INITIAL.
+            SELECT SINGLE lifnr FROM bseg INTO v_lifnr WHERE koart IN ('K','D') AND belnr = wa_bseg-belnr AND bukrs = p_bukrs AND gjahr = p_gjahr.
+          ENDIF.
+          wa_header-belnr = wa_bseg-belnr.
+          wa_header-budat = wa_bkpf-budat.
+          wa_header-chqdt = wa_bkpf-budat.
+          wa_header-chqam = v_cr.
+          wa_header-witamt = v_wit.                                     "Added by Nitin on 12/12/2022
+          wa_header-wrbtr = v_wrbtr.
+          wa_header-blart = wa_bkpf-blart.
+          wa_header-sgtxt1 = wa_sgtxt-sgtxt.
+*WA_HEADER-PSWSL = WA_BSEG-PSWSL.
+*WA_HEADER-SGTXT = WA_BSEG-ZUONR.
+          SELECT SINGLE zuonr FROM bseg INTO wa_header-sgtxt WHERE belnr = wa_bseg-belnr AND bukrs = p_bukrs AND gjahr = p_gjahr AND shkzg = 'H'.
+          CONDENSE wa_header-sgtxt.
+          IF NOT wa_bsak-lifnr IS INITIAL.
+            SELECT SINGLE name1 FROM lfa1 INTO wa_header-bnkac WHERE lifnr = wa_bsak-lifnr.
+          ELSE.
+            SELECT SINGLE name1 FROM lfa1 INTO wa_header-bnkac WHERE lifnr = v_lifnr.
+          ENDIF.
+          IF wa_header-bnkac IS INITIAL.
+            LOOP AT it_bseg2 INTO wa_bseg2.
+              READ TABLE it_skat1 INTO wa_skat1 WITH KEY saknr = wa_bseg2-hkont.
+              wa_header-bnkac    = wa_skat1-txt20.
+            ENDLOOP.
+          ENDIF.
+          "Added by Nitin on 15/12/2022 debitamt changes
+          IF wa_header-debitamt IS INITIAL.
+            LOOP AT it_bseg2 INTO wa_bseg2.
+              wa_header-debitamt = wa_bseg2-dmbtr.
+            ENDLOOP.
+          ENDIF.
+          "Added by Nitin on 15/12/2022
+          SELECT SINGLE name1 FROM t001w INTO wa_header-name WHERE werks = v_plant.
+          CONCATENATE wa_header-name  ' (' v_plant ')' INTO wa_header-name.
+          SELECT SINGLE bkpf~bukrs t001~butxt FROM bkpf INNER JOIN t001 ON bkpf~bukrs = t001~bukrs AND t001~spras = 'EN'
+                 INTO (v_bukrs,wa_header-plantname) WHERE bkpf~belnr = wa_bseg-belnr AND  bkpf~bukrs = p_bukrs.
+
+          v_butxt  = wa_header-plantname.
+
+*WA_HEADER-BNKAC = WA_ITEM-TXT50.
+          CLEAR : wa_add_old.
+          CALL FUNCTION 'Z_FM_SD_ADDRESS_OLD'
+            EXPORTING
+              im_werks    = v_bukrs
+              im_fromdate = wa_bkpf-budat
+              im_typeind  = 'C'
+            IMPORTING
+              wa_add      = wa_add_old.
+
+          IF wa_add_old IS NOT INITIAL  AND wa_add_old-fcompname IS INITIAL.
+            wa_header-plantname = wa_add_old-name1.
+            wa_bkpf-plantname   =  wa_add_old-name1.
+            v_butxt = wa_add_old-name1.
+*      wa_header-plant_street = wa_add_old-street.
+*      wa_header-plant_house_num1 = wa_add_old-house_num1.
+*      wa_header-plant_house_num2 = wa_add_old-house_num2.
+*      wa_header-plant_str_suppl1 = wa_add_old-str_suppl1.
+*      wa_header-plant_str_suppl2 = wa_add_old-str_suppl2.
+*      wa_header-plant_str_suppl3 = wa_add_old-str_suppl3.
+*      wa_header-plant_city1      = wa_add_old-city1.
+*      wa_header-plant_city2      = wa_add_old-city2.
+*      wa_header-plant_post_code1 = wa_add_old-post_code1.
+*      wa_header-plant_region     = wa_add_old-region.
+*      wa_header-plant_country    =  wa_add_old-country.
+*      wa_header-tel_number      = wa_add_old-tel_number.
+          ELSE.
+            v_fcompname = wa_add_old-fcompname.
+          ENDIF.
+          CONCATENATE  wa_header-plantname ' ('  v_bukrs ')' INTO wa_header-plantname.
+          CONDENSE wa_header-name.
+          CONDENSE wa_header-plantname.
+          APPEND wa_header TO it_header.
+          CLEAR : wa_header,v_cr,v_wrbtr,v_plant,wa_skat,v_lifnr.
+        ENDAT.
+        CLEAR : wa_bseg,wa_sgtxt,wa_bkpf,wa_item,wa_bsak,v_bukrs.
+      ENDLOOP.
+
+    ENDIF.
+    CLEAR : wa_bkpf.
+  ENDLOOP.
+*******  End of changes on 28.12.2021
+
+
+
+
+
+
+ENDFORM.                    " GET_ITEM_BANK
+*&---------------------------------------------------------------------*
+*&      FORM  GET_DATA_EXP
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM get_data_exp .
+  SELECT belnr blart awkey FROM bkpf INTO TABLE it_belnr WHERE belnr IN s_belnr AND blart IN ('KR','DR','RE')
+     AND gjahr = p_gjahr AND bukrs = p_bukrs.
+  LOOP AT it_belnr INTO wa_belnr.
+    IF wa_belnr-blart = 'KR'. "OR WA_BELNR-BLART = 'KG'.    "KR = VENDOR INV   , KG = VENDOR DEBIT NOTE
+      PERFORM get_vendor_address.                         "VENDOR ADDRESS
+    ENDIF.
+    IF wa_belnr-blart = 'DR'. "OR WA_BELNR-BLART = 'DG'.    "DR = CUSTOMER INV , DG = CUSTOMER DEBIT NOTE
+      PERFORM get_customer_address.                       "CUSTOMER ADDRESS
+    ENDIF.
+    CLEAR wa_bkpf.
+  ENDLOOP.
+ENDFORM.                    " GET_DATA_EXP
+*&---------------------------------------------------------------------*
+*&      FORM  GET_ITEM_EXP
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM get_item_exp .
+  SELECT bukrs belnr gjahr buzei sgtxt dmbtr pswsl koart shkzg kostl hkont prctr aufnr kunnr lifnr wrbtr xbilk mwskz ebeln FROM bseg
+         INTO CORRESPONDING FIELDS OF TABLE it_bseg FOR ALL ENTRIES IN it_belnr WHERE belnr = it_belnr-belnr AND bukrs = p_bukrs AND gjahr = p_gjahr.
+
+*SELECT EBELN BELNR LFBNR EBELP FROM EKBE INTO TABLE IT_EKBE FOR ALL ENTRIES IN IT_BELNR WHERE BELNR = IT_BELNR-AWKEY+0(10) AND VGABE = 2
+*  AND GJAHR = P_GJAHR.
+  SELECT ebeln belnr lfbnr ebelp FROM ekbe INTO TABLE it_ekbe FOR ALL ENTRIES IN it_bseg WHERE ebeln = it_bseg-ebeln
+    AND gjahr = p_gjahr.
+  SORT it_ekbe BY ebeln ebelp.
+  DELETE ADJACENT DUPLICATES FROM it_ekbe.
+
+  IF it_ekbe IS NOT INITIAL.
+    SELECT ebeln ebelp belnr FROM ekbe INTO TABLE it_mblnr FOR ALL ENTRIES IN it_ekbe WHERE ebeln = it_ekbe-ebeln AND ebelp = it_ekbe-ebelp
+           AND vgabe = 1 AND gjahr = p_gjahr.
+    SORT it_mblnr BY belnr.
+    DELETE ADJACENT DUPLICATES FROM it_mblnr.
+  ENDIF.
+
+*SELECT EBELN EBELP BELNR FROM EKBZ INTO TABLE IT_MBLNR FOR ALL ENTRIES IN IT_BSEG WHERE EBELN = IT_BSEG-EBELN
+*  AND GJAHR = P_GJAHR.
+  IF it_mblnr IS NOT INITIAL.
+    SELECT mblnr matnr menge meins ebeln ebelp dmbtr waers lifnr FROM mseg INTO TABLE it_mseg FOR ALL ENTRIES IN it_mblnr
+           WHERE mblnr = it_mblnr-belnr AND gjahr = p_gjahr.
+  ENDIF.
+  IF it_mseg IS NOT INITIAL.
+    SELECT lfa1~lifnr j_1imovend~j_1icstno j_1imovend~j_1ilstno j_1imovend~j_1ipanno j_1imovend~j_1isern
+           FROM lfa1 INNER JOIN j_1imovend ON lfa1~lifnr = j_1imovend~lifnr
+           INTO TABLE it_vendor FOR ALL ENTRIES IN it_mseg WHERE lfa1~lifnr = it_mseg-lifnr.
+
+
+    SELECT ekpo~ebeln ekpo~ebelp ekpo~menge ekpo~matnr ekpo~netwr ekpo~netpr makt~maktx FROM ekpo INNER JOIN makt ON ekpo~matnr = makt~matnr
+           INTO TABLE it_ekpo FOR ALL ENTRIES IN it_mseg WHERE ekpo~ebeln = it_mseg-ebeln.
+  ENDIF.
+  SELECT saknr txt50 FROM skat INTO TABLE it_skat FOR ALL ENTRIES IN it_bseg WHERE saknr = it_bseg-hkont AND spras = 'EN' AND ktopl = 'ASTL'.
+ENDFORM.                    " GET_ITEM_EXP
+*&---------------------------------------------------------------------*
+*&      FORM  DISPLAY_SMARTFORM_EXP
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM display_smartform_exp .
+
+  CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
+    EXPORTING
+      formname           = 'ZFI_EXPENSE_VOUCHER'
+    IMPORTING
+      fm_name            = fname
+    EXCEPTIONS
+      no_form            = 1
+      no_function_module = 2
+      OTHERS             = 3.
+  IF sy-subrc <> 0.
+    MESSAGE 'WRONG SMARTFORM NAME' TYPE 'E'.
+  ENDIF.
+
+  DESCRIBE TABLE it_belnr LINES w_cnt.
+
+  LOOP AT it_belnr INTO wa_belnr.
+    wa_texts-number = v_vno. " Added by Carina Jose on 08.04.2022
+    wa_texts-date = v_vdt.   " Added by Carina Jose on 08.04.2022
+    IF wa_belnr-blart = 'KR' OR wa_belnr-blart = 'DR'.
+      wa_texts-head = 'EXPENSE VOUCHER'.
+*      wa_texts-number = 'VOUCHER NUMBER'.
+*      wa_texts-date = 'VOUCHER DATE'.
+    ELSE.
+      wa_texts-head = 'PURCHASE VOUCHER'.
+*      wa_texts-number = 'VOUCHER NUMBER'.
+*      wa_texts-date = 'VOUCHER DATE'.
+    ENDIF.
+    CONDENSE wa_texts-head.
+    CONDENSE wa_texts-number.
+    CONDENSE wa_texts-date.
+
+    IF w_cnt GT 1.
+      w_cnt2 = sy-tabix .
+      CASE w_cnt2.
+        WHEN 1.
+          control_parameters-no_open   = space .
+          control_parameters-no_close  = 'X' .
+        WHEN w_cnt .
+          control_parameters-no_open   = 'X' .
+          control_parameters-no_close  = space .
+        WHEN OTHERS.
+          control_parameters-no_open   = 'X' .
+          control_parameters-no_close  = 'X' .
+      ENDCASE.
+    ENDIF.
+
+    LOOP AT it_bseg INTO wa_bseg WHERE belnr = wa_belnr-belnr.
+      IF NOT wa_bseg-kostl IS INITIAL.
+        IF wa_bkpf-plant IS INITIAL.
+          wa_bkpf-plant = wa_bseg-kostl+0(4).
+          IF wa_bkpf-plant = '200N'.
+            wa_bkpf-plant = '2000'.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+      IF NOT wa_bseg-prctr IS INITIAL.
+        IF wa_bkpf-prctr IS INITIAL.
+          wa_bkpf-prctr = wa_bseg-prctr.
+        ENDIF.
+        IF wa_bkpf-plant IS INITIAL.
+          wa_bkpf-plant = wa_bseg-prctr+0(4).
+          IF wa_bkpf-plant = '200N'.
+            wa_bkpf-plant = '2000'.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+      IF ( ( wa_bseg-koart = 'K' OR wa_bseg-koart = 'D' ) AND wa_belnr-blart NE 'WE' ).
+        wa_bkpf-total = wa_bkpf-total + wa_bseg-wrbtr.
+        wa_bkpf-mwskz = wa_bseg-mwskz.
+        SELECT SINGLE text1 FROM t007s INTO wa_bkpf-taxc WHERE mwskz = wa_bseg-mwskz AND spras = 'EN' AND kalsm = 'TAXINN'.
+      ENDIF.
+      IF wa_belnr-blart = 'RE'.
+        IF wa_bkpf-mwskz IS INITIAL.
+          wa_bkpf-mwskz = wa_bseg-mwskz.
+          SELECT SINGLE text1 FROM t007s INTO wa_bkpf-taxc WHERE mwskz = wa_bseg-mwskz AND spras = 'EN' AND kalsm = 'TAXINN'.
+        ENDIF.
+      ENDIF.
+      MOVE-CORRESPONDING wa_bseg TO wa_bseg1.
+      APPEND wa_bseg1 TO it_bseg1.
+      CLEAR : wa_bseg,wa_bseg1.
+    ENDLOOP.
+*************************************************************************************
+    MOVE-CORRESPONDING it_bseg1 TO it_sort.
+    SORT it_sort BY hkont.
+    LOOP AT it_sort INTO wa_sort.
+      wa_gltot-dmbtr = wa_gltot-dmbtr + wa_sort-dmbtr.
+      wa_gltot-wrbtr = wa_gltot-wrbtr + wa_sort-wrbtr.
+      AT END OF hkont.
+        wa_gltot-hkont = wa_sort-hkont.
+        APPEND wa_gltot TO it_gltot.
+        CLEAR wa_gltot.
+      ENDAT.
+      CLEAR : wa_sort.
+    ENDLOOP.
+
+    LOOP AT it_gltot INTO wa_gltot.
+      READ TABLE it_bseg1 INTO wa_bseg1 WITH KEY hkont = wa_gltot-hkont.
+      MOVE-CORRESPONDING wa_bseg1 TO wa_fbseg1.
+      IF sy-tabix <> 1.
+        CLEAR wa_fbseg1-lifnr.
+        CLEAR wa_fbseg1-kunnr.
+      ENDIF.
+      wa_fbseg1-dmbtr = wa_gltot-dmbtr.
+      wa_fbseg1-wrbtr = wa_gltot-wrbtr.
+      APPEND wa_fbseg1 TO it_fbseg1.
+      CLEAR : wa_gltot,wa_bseg1,wa_fbseg1.
+    ENDLOOP.
+*************************************************************************************
+
+    SELECT SINGLE name1 FROM t001w INTO wa_bkpf-name1 WHERE werks = wa_bkpf-plant.
+    CONCATENATE  wa_bkpf-name1 ' ('  wa_bkpf-plant ')' INTO wa_bkpf-name1.
+
+    SELECT SINGLE bkpf~belnr bkpf~bukrs bkpf~gjahr t001~butxt bkpf~waers bkpf~kursf bkpf~hwaer bkpf~xblnr bkpf~bldat bkpf~budat bkpf~awkey
+      FROM bkpf INNER JOIN t001 ON bkpf~bukrs = t001~bukrs AND t001~spras = 'EN'
+      INTO (wa_bkpf-belnr,wa_bkpf-bukrs,wa_bkpf-gjahr,wa_bkpf-plantname,wa_bkpf-waerk,wa_bkpf-kursf,wa_bkpf-hwaer,wa_bkpf-xblnr,
+            wa_bkpf-bldat,wa_bkpf-budat,wa_bkpf-awkey)
+      WHERE bkpf~belnr = wa_belnr-belnr
+      AND   bkpf~bukrs =  p_bukrs
+      AND   bkpf~gjahr = p_gjahr.
+*******  Added on 16.04.2021
+    v_butxt = wa_bkpf-plantname.
+    CLEAR : wa_add_old.
+    CALL FUNCTION 'Z_FM_SD_ADDRESS_OLD'
+      EXPORTING
+        im_werks    = p_bukrs
+        im_fromdate = wa_bkpf-budat
+        im_typeind  = 'C'
+      IMPORTING
+        wa_add      = wa_add_old.
+
+
+    IF wa_add_old IS NOT INITIAL AND wa_add_old-fcompname IS INITIAL.
+      wa_bkpf-plantname = wa_add_old-name1.
+      v_butxt = wa_add_old-name1.
+    ELSE.
+      v_fcompname = wa_add_old-fcompname.
+    ENDIF.
+******* End of changes on 16.04.2021
+    IF wa_bkpf-kursf IS INITIAL.
+      wa_bkpf-kursf = 1.
+    ENDIF.
+
+    READ TABLE it_crdr INTO wa_crdr WITH KEY belnr = wa_belnr-belnr.
+    wa_bkpf-addr  = wa_crdr-addr.
+    wa_bkpf-name  = wa_crdr-name.
+    wa_bkpf-cst   = wa_crdr-cst.
+    wa_bkpf-lst   = wa_crdr-lst.
+    wa_bkpf-pan   = wa_crdr-pan.
+    wa_bkpf-sern  = wa_crdr-sern.
+
+    IF wa_belnr-blart = 'RE'.
+      v_we = 1.
+*READ TABLE IT_EKBE INTO WA_EKBE WITH KEY BELNR = WA_BELNR-AWKEY+0(10).
+      SORT it_ekbe BY ebeln.
+      DELETE ADJACENT DUPLICATES FROM it_ekpo COMPARING matnr.
+      LOOP AT it_ekbe INTO wa_ekbe WHERE belnr = wa_belnr-awkey+0(10).
+
+*LOOP AT IT_EKBE INTO WA_EKBE.
+*LOOP AT IT_EKPO INTO WA_EKPO.
+        READ TABLE it_mblnr INTO wa_mblnr WITH KEY ebeln = wa_ekbe-ebeln ebelp = wa_ekbe-ebelp.
+        READ TABLE it_ekpo INTO wa_ekpo WITH KEY ebeln = wa_ekbe-ebeln ebelp = wa_ekbe-ebelp.
+*READ TABLE IT_EKBE INTO WA_EKBE WITH KEY EBELN = WA_EKPO-EBELN EBELP = WA_EKPO-EBELP.
+        READ TABLE it_mseg INTO wa_mseg WITH KEY ebeln = wa_ekbe-ebeln ebelp = wa_ekbe-ebelp mblnr = wa_mblnr-belnr.
+*READ TABLE IT_MSEG INTO WA_MSEG WITH KEY EBELN = WA_EKPO-EBELN EBELP = WA_EKPO-EBELP MBLNR = WA_MBLNR-BELNR.
+        READ TABLE it_vendor INTO wa_vendor WITH KEY lifnr = wa_mseg-lifnr.
+        IF wa_bkpf-cst IS INITIAL.
+          wa_bkpf-cst   = wa_vendor-cst.
+        ENDIF.
+        IF wa_bkpf-lst IS INITIAL.
+          wa_bkpf-lst   = wa_vendor-lst.
+        ENDIF.
+        IF wa_bkpf-pan IS INITIAL.
+          wa_bkpf-pan   = wa_vendor-pan.
+        ENDIF.
+        IF wa_bkpf-sern IS INITIAL.
+          wa_bkpf-sern  = wa_vendor-sern.
+        ENDIF.
+
+        IF wa_bkpf-cj IS INITIAL .
+*            wa_bkpf-cj    = wa_mseg-ebeln.
+          wa_bkpf-cj    = wa_ekpo-ebeln.
+        ENDIF.
+        AT END OF ebeln.
+          IF wa_bkpf-cj IS INITIAL .
+*            wa_bkpf-cj    = wa_mseg-ebeln.
+            wa_bkpf-cj    = wa_ekpo-ebeln.
+
+          ELSE.
+            CONCATENATE wa_bkpf-cj ',' wa_mseg-ebeln INTO wa_bkpf-cj.
+          ENDIF.
+        ENDAT.
+        CONDENSE wa_bkpf-cj.
+
+        IF wa_bkpf-bt IS INITIAL.
+          SELECT SINGLE waers FROM ekko INTO wa_bkpf-bt WHERE ebeln = wa_ekbe-ebeln.
+          CONDENSE wa_bkpf-bt.
+        ENDIF.
+        v_id = v_id + 1.
+        wa_purch-id     = v_id.
+        wa_purch-matnr  = wa_mseg-matnr.
+        wa_purch-maktx  = wa_ekpo-maktx.
+        wa_purch-piqty  = wa_ekpo-menge.
+        wa_purch-uom    = wa_mseg-meins.
+        wa_purch-grqty  = wa_mseg-menge.
+        wa_purch-porate = wa_ekpo-netpr.
+        wa_purch-pirate = wa_ekpo-netpr.
+        wa_purch-waers  = wa_mseg-waers.
+        wa_purch-mblnr  = wa_mseg-mblnr.
+        wa_purch-ebeln  = wa_mseg-mblnr.
+        wa_purch-amount = wa_mseg-dmbtr.
+*WA_PURCH-AMOUNT = WA_PURCH-GRQTY * WA_PURCH-PORATE.
+        APPEND : wa_purch TO it_purch.
+        CLEAR : wa_purch,wa_ekpo,wa_mseg,wa_vendor,wa_ekbe,wa_mblnr.
+      ENDLOOP.
+    ENDIF.
+
+*CALL FUNCTION 'J_1I6_ROUND_TO_NEAREST_AMT'
+*  EXPORTING
+*    I_AMOUNT = WA_BKPF-TOTAL
+*  IMPORTING
+*    E_AMOUNT = V_ROUNDOFF.
+*WA_BKPF-ROUNDOFF = V_ROUNDOFF - WA_BKPF-TOTAL.
+*WA_BKPF-TOTAL = V_ROUNDOFF.
+
+    IF wa_bkpf-cj IS INITIAL.
+      LOOP AT it_ekbe INTO wa_ekbe.
+        READ TABLE it_ekpo INTO wa_ekpo WITH KEY ebeln = wa_ekbe-ebeln ebelp = wa_ekbe-ebelp.
+        wa_bkpf-cj    = wa_ekpo-ebeln.
+      ENDLOOP.
+    ENDIF.
+    IF wa_bkpf-waerk = 'INR'.
+      v_maxbt = wa_bkpf-total.
+      CALL FUNCTION 'HR_IN_CHG_INR_WRDS'
+        EXPORTING
+          amt_in_num   = v_maxbt
+        IMPORTING
+          amt_in_words = wa_bkpf-word.
+      IF sy-subrc <> 0.
+      ENDIF.
+      TRANSLATE wa_bkpf-word TO UPPER CASE.
+      CONCATENATE wa_bkpf-word 'ONLY' INTO wa_bkpf-word SEPARATED BY space.
+    ELSE.
+      p1 = wa_bkpf-total.
+      CONDENSE p1.
+      CALL FUNCTION 'SPELL_AMOUNT'
+        EXPORTING
+          amount    = p1
+          currency  = wa_bkpf-waerk
+          filler    = ' '
+          language  = sy-langu
+        IMPORTING
+          in_words  = v_in_words
+        EXCEPTIONS
+          not_found = 1
+          too_large = 2
+          OTHERS    = 3.
+      IF sy-subrc = 0.
+        wa_bkpf-word = v_in_words-word.
+        IF NOT v_in_words-decword IS INITIAL.
+          CONCATENATE wa_bkpf-word 'AND' v_in_words-decword
+          'ONLY' INTO wa_bkpf-word SEPARATED BY space.
+        ELSE.
+          CONCATENATE wa_bkpf-word 'ONLY' INTO wa_bkpf-word SEPARATED BY space.
+        ENDIF.
+        CONDENSE wa_bkpf-word.
+      ENDIF.
+    ENDIF.
+
+    IF w_cnt = 1.
+      CALL FUNCTION fname
+        EXPORTING
+          wa_bkpf          = wa_bkpf
+          it_bseg          = it_fbseg1
+          wa_texts         = wa_texts
+          it_fbseg         = it_fbseg1
+          flag             = flag
+          it_skat          = it_skat
+          v_we             = v_we
+          it_purch         = it_purch
+          p_gjahr          = p_gjahr
+          p_bukrs          = p_bukrs
+          v_fcompname      = v_fcompname
+          v_butxt          = v_butxt
+        EXCEPTIONS
+          formatting_error = 1
+          internal_error   = 2
+          send_error       = 3
+          user_canceled    = 4
+          OTHERS           = 5.
+      IF sy-subrc <> 0.
+        MESSAGE  'ERROR RELATED TO SMARTFORM OR PAGE FORMAT OR PRINTER' TYPE 'E'.
+      ENDIF.
+    ENDIF.
+
+    IF w_cnt GT 1.
+      CALL FUNCTION fname
+        EXPORTING
+          control_parameters = control_parameters
+          wa_bkpf            = wa_bkpf
+          it_bseg            = it_fbseg1
+          wa_texts           = wa_texts
+          it_fbseg           = it_fbseg1
+          flag               = flag
+          it_skat            = it_skat
+          v_we               = v_we
+          it_purch           = it_purch
+          p_gjahr            = p_gjahr
+          p_bukrs            = p_bukrs
+          v_fcompname        = v_fcompname
+          v_butxt            = v_butxt
+        EXCEPTIONS
+          formatting_error   = 1
+          internal_error     = 2
+          send_error         = 3
+          user_canceled      = 4
+          OTHERS             = 5.
+      IF sy-subrc <> 0.
+        MESSAGE  'ERROR RELATED TO SMARTFORM OR PAGE FORMAT OR PRINTER' TYPE 'E'.
+      ENDIF.
+    ENDIF.
+
+
+    CLEAR : wa_bkpf,wa_texts,p1,v_waerk,v_in_words,v_roundoff,wa_belnr,wa_crdr,v_maxbt,v_awkey,v_id,v_we,wa_ekbe.
+    REFRESH : it_bseg1,it_sort,it_gltot,it_purch,it_fbseg1.
+  ENDLOOP.
+ENDFORM.                    " DISPLAY_SMARTFORM_EXP
+*&---------------------------------------------------------------------*
+*&      Form  GET_DATA_ZP
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM get_data_zp .
+  CLEAR flag.
+  IF p_detail = 'X'.
+    flag = 1.
+  ENDIF.
+  SELECT belnr budat blart FROM bkpf INTO TABLE it_bkpf WHERE belnr IN s_belnr AND blart IN ('ZP')
+    AND gjahr = p_gjahr AND bukrs = p_bukrs.  " GET BKPF DATA
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  GET_ITEM_ZP
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM get_item_zp .
+  SELECT bukrs belnr gjahr buzei sgtxt dmbtr pswsl koart shkzg kostl hkont prctr aufnr kunnr lifnr wrbtr xbilk mwskz zuonr
+     FROM bseg
+     INTO TABLE it_bseg FOR ALL ENTRIES IN it_bkpf WHERE belnr = it_bkpf-belnr AND shkzg = 'H' AND bukrs = p_bukrs AND gjahr = p_gjahr.
+  SORT it_bseg BY belnr.
+*************ADDED 06.05.2015
+  SELECT bukrs belnr gjahr buzei sgtxt dmbtr pswsl koart shkzg kostl hkont prctr aufnr kunnr lifnr wrbtr xbilk mwskz zuonr
+     FROM bseg
+     INTO TABLE it_bseg2 FOR ALL ENTRIES IN it_bkpf WHERE belnr = it_bkpf-belnr AND shkzg = 'S' AND bukrs = p_bukrs AND gjahr = p_gjahr.
+  SORT it_bseg2 BY belnr.
+*******************
+  IF it_bseg IS NOT INITIAL.
+    SELECT lifnr augbl belnr budat xblnr blart waers hkont FROM bsak INTO TABLE it_bsak
+           FOR ALL ENTRIES IN it_bseg WHERE augbl = it_bseg-belnr AND bukrs = p_bukrs AND gjahr = p_gjahr.
+  ENDIF.
+  IF it_bsak IS INITIAL.
+    SELECT lifnr belnr FROM bsik INTO TABLE it_bsak FOR ALL ENTRIES IN it_bseg WHERE belnr = it_bseg-belnr AND bukrs = p_bukrs.
+  ENDIF.
+  IF it_bsak IS NOT INITIAL.
+    SELECT belnr vblnr bukrs gjahr shkzg xblnr blart budat bldat pswbt psskt   FROM regup INTO TABLE it_doc1 FOR ALL ENTRIES IN it_bsak
+           WHERE vblnr EQ it_bsak-belnr AND  bukrs = p_bukrs AND laufd = it_bsak-budat.
+    SORT it_doc1 BY belnr.
+*
+*    SELECT * FROM with_item INTO TABLE lt_item FOR ALL ENTRIES IN it_doc
+*      WHERE belnr = it_doc-belnr AND gjahr = p_gjahr AND bukrs = p_bukrs.
+*    SORT lt_item BY belnr.
+
+    SELECT saknr txt50 FROM skat INTO TABLE it_skat FOR ALL ENTRIES IN it_bsak WHERE saknr = it_bsak-hkont  AND spras = 'EN' AND ktopl = 'ASTL'.
+    SORT it_skat BY saknr.
+    DELETE ADJACENT DUPLICATES FROM it_skat COMPARING saknr.
+  ENDIF.
+
+  LOOP AT it_doc1 INTO wa_doc1.
+    READ TABLE it_bseg INTO wa_bseg WITH KEY belnr = wa_doc1-belnr.
+    READ TABLE it_bsak INTO wa_bsak WITH KEY belnr = wa_doc1-belnr.
+    IF wa_bseg-belnr NE wa_doc1-belnr.
+      READ TABLE lt_item INTO lwa_item WITH KEY belnr = wa_doc1-belnr.
+*IF WA_DOC-HKONT = '0036010112'.
+*  V_DR = V_DR + WA_DOC-DMBTR.
+* ENDIF.
+      IF wa_doc1-shkzg = 'S'.
+        v_dr = ( v_dr + wa_doc1-pswbt ) * -1.
+        v_disc = ( v_disc + wa_doc1-psskt ) * -1 .
+      ENDIF.
+*      IF wa_bsak-blart = 'KG'.
+*        v_dr = v_dr * -1.
+*      ENDIF.
+*IF WA_DOC-HKONT <> '0036010112'.
+*      IF lwa_item-wt_qbshha IS NOT INITIAL.
+*        v_cr1 = lwa_item-wt_qbshh * -1.
+*        v_cr = v_cr + v_cr1.
+*      ENDIF.
+      IF wa_doc1-shkzg = 'H'.
+        v_dr = v_dr + wa_doc1-pswbt.
+        v_disc = v_disc + wa_doc1-psskt.
+      ENDIF.
+      vblnr = wa_doc1-vblnr.
+      blart = wa_doc1-blart.
+      budat = wa_doc1-budat.
+      bldat = wa_doc1-bldat.
+      xblnr = wa_doc1-xblnr.
+
+*ENDIF.
+
+
+      wa_item-sgtxt = wa_bseg-sgtxt.
+      AT END OF belnr.
+        READ TABLE it_bsak INTO wa_bsak WITH KEY belnr = wa_doc1-belnr.
+        READ TABLE it_skat INTO wa_skat WITH KEY saknr = wa_bsak-hkont.
+        wa_item-augbl  = vblnr.
+        wa_item-blart  = blart.
+        wa_item-belnr  = wa_doc1-belnr.
+        wa_item-budat  = budat.
+        wa_item-bldat  = bldat.
+        wa_item-xblnr  = xblnr.
+        wa_item-invamt = v_dr + v_cr.
+        wa_item-disamt = v_disc.
+        wa_item-tdsamt = v_cr * -1.
+        wa_item-adjamt = wa_item-invamt - v_cr - v_disc.
+        wa_item-txt50 = wa_skat-txt50.
+        APPEND wa_item TO it_item.
+        CLEAR : wa_item,v_dr,v_cr,v_cr1,vblnr,v_disc,blart,budat,bldat,xblnr.
+      ENDAT.
+      CLEAR : wa_doc,wa_bsak,wa_skat,wa_bseg.
+    ENDIF.
+  ENDLOOP.
+  CLEAR : v_dr,v_cr.
+
+  REFRESH it_skat.
+*DELETE IT_ITEM WHERE BLART = 'KZ'.
+
+  SELECT belnr sgtxt FROM bseg INTO TABLE it_sgtxt1 FOR ALL ENTRIES IN it_bkpf WHERE belnr = it_bkpf-belnr AND bukrs = p_bukrs AND gjahr = p_gjahr.
+  LOOP AT it_sgtxt1 INTO wa_sgtxt1.
+    IF NOT wa_sgtxt1-sgtxt IS INITIAL.
+      MOVE-CORRESPONDING wa_sgtxt1 TO wa_sgtxt.
+      APPEND wa_sgtxt1 TO it_sgtxt.
+      CLEAR : wa_sgtxt.
+    ENDIF.
+    CLEAR : wa_sgtxt1.
+  ENDLOOP.
+  it_bseg_gl[] = it_bseg[].
+  DELETE it_bseg_gl WHERE xbilk = ' '.
+
+  SELECT saknr txt50 FROM skat INTO TABLE it_skat FOR ALL ENTRIES IN it_bseg_gl WHERE saknr = it_bseg_gl-hkont AND spras = 'EN' AND ktopl = 'ASTL'.
+  SORT it_skat BY saknr.
+  DELETE ADJACENT DUPLICATES FROM it_skat COMPARING saknr.
+***************** ADDED 05.06.2015
+  SELECT saknr txt50 FROM skat INTO TABLE it_skat1 FOR ALL ENTRIES IN it_bseg2 WHERE saknr = it_bseg2-hkont AND spras = 'EN' AND ktopl = 'ASTL'.
+  SORT it_skat1 BY saknr.
+  DELETE ADJACENT DUPLICATES FROM it_skat1 COMPARING saknr.
+**********
+
+
+  LOOP AT it_bseg INTO wa_bseg.
+    IF wa_bseg-koart = 'S' AND wa_bseg-xbilk = 'X'.
+      v_cr = v_cr + wa_bseg-dmbtr.
+      v_wrbtr = v_wrbtr + wa_bseg-wrbtr.
+    ENDIF.
+    IF NOT wa_bseg-prctr IS INITIAL AND wa_bseg-xbilk = 'X'.
+      IF v_plant IS INITIAL.
+        v_plant = wa_bseg-prctr+0(4).
+        IF v_plant = '200N'.
+          v_plant = '2000'.
+        ENDIF.
+      ENDIF.
+      IF wa_skat IS INITIAL.
+        READ TABLE it_skat INTO wa_skat WITH KEY saknr = wa_bseg-hkont.
+      ENDIF.
+    ENDIF.
+    IF NOT wa_bseg-kostl IS INITIAL AND wa_bseg-xbilk = 'X'.
+      IF v_plant IS INITIAL.
+        v_plant = wa_bseg-kostl+0(4).
+        IF v_plant = '200N'.
+          v_plant = '2000'.
+        ENDIF.
+      ENDIF.
+      IF wa_skat IS INITIAL.
+        READ TABLE it_skat INTO wa_skat WITH KEY saknr = wa_bseg-hkont.
+      ENDIF.
+    ENDIF.
+    AT END OF belnr.
+      READ TABLE it_sgtxt INTO wa_sgtxt WITH KEY belnr = wa_bseg-belnr.
+      READ TABLE it_bkpf INTO wa_bkpf WITH KEY belnr = wa_bseg-belnr.
+      READ TABLE it_item INTO wa_item WITH KEY augbl = wa_bseg-belnr.
+      READ TABLE it_bsak INTO wa_bsak WITH KEY augbl = wa_bseg-belnr.
+      SELECT SINGLE waers hwaer kursf FROM bkpf INTO (wa_header-docc,wa_header-pswsl,wa_header-kursf) WHERE belnr = wa_bseg-belnr.
+      wa_header-belnr = wa_bseg-belnr.
+      wa_header-glact = wa_skat-txt50.
+      IF v_lifnr IS INITIAL.
+        SELECT SINGLE lifnr FROM bseg INTO v_lifnr WHERE koart IN ('K','D') AND belnr = wa_bseg-belnr AND bukrs = p_bukrs AND gjahr = p_gjahr.
+      ENDIF.
+      wa_header-belnr = wa_bseg-belnr.
+      wa_header-budat = wa_bkpf-budat.
+      wa_header-chqdt = wa_bkpf-budat.
+      wa_header-chqam = v_cr.
+      wa_header-wrbtr = v_wrbtr.
+      wa_header-blart = wa_bkpf-blart.
+      wa_header-sgtxt1 = wa_sgtxt-sgtxt.
+      wa_header-lifnr = v_lifnr.
+      wa_header-witamt = v_wit.                               "Added by Nitin on 12/12/2022
+*WA_HEADER-SGTXT = WA_BSEG-ZUONR.
+      SELECT SINGLE zuonr FROM bseg INTO wa_header-sgtxt WHERE belnr = wa_bseg-belnr AND bukrs = p_bukrs AND gjahr = p_gjahr AND shkzg = 'S'.
+      CONDENSE wa_header-sgtxt.
+      IF NOT wa_bsak-lifnr IS INITIAL.
+        SELECT SINGLE name1 FROM lfa1 INTO wa_header-bnkac WHERE lifnr = wa_bsak-lifnr.
+      ELSE.
+        SELECT SINGLE name1 FROM lfa1 INTO wa_header-bnkac WHERE lifnr = v_lifnr.
+      ENDIF.
+      IF wa_header-bnkac IS INITIAL.
+        LOOP AT it_bseg2 INTO wa_bseg2.
+          READ TABLE it_skat1 INTO wa_skat1 WITH KEY saknr = wa_bseg2-hkont.
+          wa_header-bnkac = wa_skat1-txt20.
+          wa_header-debitamt = wa_bseg2-dmbtr.
+        ENDLOOP.
+      ENDIF.
+      SELECT SINGLE name1 FROM t001w INTO wa_header-name WHERE werks = v_plant.
+      CONCATENATE wa_header-name  ' (' v_plant ')' INTO wa_header-name.
+      SELECT SINGLE bkpf~bukrs t001~butxt FROM bkpf INNER JOIN t001 ON bkpf~bukrs = t001~bukrs AND t001~spras = 'EN'
+             INTO (v_bukrs,wa_header-plantname) WHERE bkpf~belnr = wa_bseg-belnr AND  bkpf~bukrs = p_bukrs.
+      CONCATENATE  wa_header-plantname ' ('  v_bukrs ')' INTO wa_header-plantname.
+      CONDENSE wa_header-name.
+      CONDENSE wa_header-plantname.
+*******  Added on 16.04.2021
+      CLEAR : wa_add_old.
+      CALL FUNCTION 'Z_FM_SD_ADDRESS_OLD'
+        EXPORTING
+          im_werks    = p_bukrs
+          im_fromdate = wa_bkpf-budat
+          im_typeind  = 'C'
+        IMPORTING
+          wa_add      = wa_add_old.
+
+
+      IF wa_add_old IS NOT INITIAL AND wa_add_old-fcompname IS INITIAL.
+        wa_header-plantname = wa_add_old-name1.
+        v_butxt  = wa_header-plantname.
+      ELSE.
+        v_fcompname = wa_add_old-fcompname.
+      ENDIF.
+******* End of changes on 16.04.2021
+*WA_HEADER-BNKAC = WA_ITEM-TXT50.
+      v_butxt  = wa_header-plantname.
+      APPEND wa_header TO it_header.
+      CLEAR : wa_header,v_cr,v_wrbtr,v_plant,wa_skat,v_lifnr.
+    ENDAT.
+    CLEAR : wa_bseg,wa_sgtxt,wa_bkpf,wa_item,wa_bsak,v_bukrs.
+  ENDLOOP.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  DISPLAY_SMARTFORM_ZP
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM display_smartform_zp .
+  CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
+    EXPORTING
+      formname           = 'ZFI_BANK_RECEIPT'
+    IMPORTING
+      fm_name            = fname
+    EXCEPTIONS
+      no_form            = 1
+      no_function_module = 2
+      OTHERS             = 3.
+  IF sy-subrc <> 0.
+    MESSAGE 'WRONG SMARTFORM NAME' TYPE 'E'.
+  ENDIF.
+
+  DESCRIBE TABLE it_header LINES w_cnt.
+
+  LOOP AT it_header INTO wa_header.
+    IF wa_header-blart = 'KZ' OR wa_header-blart = 'ZP'.
+      wa_texts-head = 'Bank Payment Voucher'.
+    ELSE.
+      wa_texts-head = 'Bank Receipt Voucher'.
+    ENDIF.
+*    wa_texts-number = 'Voucher No'.
+*    wa_texts-date = 'Voucher Date'.
+
+    wa_texts-number = v_vno. " Added by Carina Jose on 08.04.2022
+    wa_texts-date =  v_vdt. " Added by Carina Jose on 08.04.2022
+    CONDENSE wa_texts-head.
+    CONDENSE wa_texts-number.
+    CONDENSE wa_texts-date.
+
+    LOOP AT it_item INTO wa_item WHERE augbl = wa_header-belnr.
+*IF WA_ITEM-AUGBL NE WA_ITEM-BELNR.
+*IF WA_ITEM-AUGBL NE WA_ITEM-BELNR.
+      MOVE-CORRESPONDING wa_item TO wa_item1.
+      APPEND wa_item1 TO it_item1.
+      CLEAR : wa_item,wa_item1.
+*ELSE.
+*MOVE-CORRESPONDING WA_ITEM TO WA_NARR.
+*APPEND WA_NARR TO IT_NARR.
+*CLEAR : WA_ITEM,WA_NARR.
+*ENDIF.
+    ENDLOOP.
+
+    IF wa_header-kursf IS INITIAL.
+      wa_header-kursf = 1.
+    ENDIF.
+
+    IF w_cnt GT 1.
+      w_cnt2 = sy-tabix .
+      CASE w_cnt2.
+        WHEN 1.
+          control_parameters-no_open   = space .
+          control_parameters-no_close  = 'X' .
+        WHEN w_cnt .
+          control_parameters-no_open   = 'X' .
+          control_parameters-no_close  = space .
+        WHEN OTHERS.
+          control_parameters-no_open   = 'X' .
+          control_parameters-no_close  = 'X' .
+      ENDCASE.
+    ENDIF.
+
+    IF w_cnt = 1.
+      CALL FUNCTION fname
+        EXPORTING
+          wa_header        = wa_header
+          it_item          = it_item1
+          wa_texts         = wa_texts
+          it_narr          = it_narr
+          v_fcompname      = v_fcompname
+          v_butxt          = v_butxt
+        EXCEPTIONS
+          formatting_error = 1
+          internal_error   = 2
+          send_error       = 3
+          user_canceled    = 4
+          OTHERS           = 5.
+      IF sy-subrc <> 0.
+      ENDIF.
+    ENDIF.
+
+    IF w_cnt GT 1.
+      CALL FUNCTION fname
+        EXPORTING
+          control_parameters = control_parameters
+          wa_header          = wa_header
+          it_item            = it_item1
+          wa_texts           = wa_texts
+          it_narr            = it_narr
+          v_fcompname        = v_fcompname
+          v_butxt            = v_butxt
+        EXCEPTIONS
+          formatting_error   = 1
+          internal_error     = 2
+          send_error         = 3
+          user_canceled      = 4
+          OTHERS             = 5.
+      IF sy-subrc <> 0.
+      ENDIF.
+    ENDIF.
+
+
+    CLEAR : wa_header,wa_texts,p1,v_waerk,v_lifnr.
+    REFRESH : it_item1.
+  ENDLOOP.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  AUTHORIZATION_CHECK
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM authorization_check .
+  SELECT bukrs FROM t001 INTO TABLE gt_t001 WHERE bukrs = p_bukrs.
+  LOOP AT gt_t001 INTO wa_t001.
+    AUTHORITY-CHECK OBJECT 'Z_VOCH_BUK'
+    ID 'BUKRS' FIELD wa_t001-bukrs
+    ID 'ACTVT' FIELD '03'.
+    IF sy-subrc <> 0.
+      MESSAGE e014(zsd) WITH wa_t001-bukrs.
+    ENDIF.
+  ENDLOOP.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  GET_VOUCHTEXT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM get_vouchtext .
+  SELECT SINGLE low
+    INTO v_vno
+    FROM tvarvc
+    WHERE name = c_var_vno.
+
+  SELECT SINGLE low
+    INTO v_vdt
+    FROM tvarvc
+    WHERE name = c_var_vdt.
+ENDFORM.

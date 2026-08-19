@@ -1,0 +1,146 @@
+*----------------------------------------------------------------------*
+***INCLUDE MV60AF0C_CUST_HEAD_GET_DATA .
+*----------------------------------------------------------------------*
+FORM cust_head_get_data .
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""$"$\SE:(1) Form CUST_HEAD_GET_DATA, Start                                                                                                                    A
+*$*$-Start: (1)---------------------------------------------------------------------------------$*$*
+ENHANCEMENT 2  ZZEWAYBILL_DATA.    "active version
+
+SELECT SINGLE NAME1 STCD3
+  FROM LFA1
+  INTO (VBRK-ZZNAME1 ,VBRK-ZZSTCD3)
+  WHERE LIFNR = VBRK-ZZLIFNR.
+************
+CHECK SY-TCODE = 'VF02'.
+TYPES: BEGIN OF ty_tvarvc1,
+         sign TYPE tvarv_sign,
+         opti TYPE tvarv_opti,
+         low  TYPE tvarv_val,
+         high TYPE tvarv_val,
+       END OF ty_tvarvc1.
+
+DATA: lt_acc_key1  TYPE STANDARD TABLE OF ty_tvarvc1.
+DATA: lwa_acc_key1 TYPE ty_tvarvc1.
+
+DATA: lt_acc_key2  TYPE STANDARD TABLE OF ty_tvarvc1.
+DATA: lwa_acc_key2 TYPE ty_tvarvc1.
+
+data: it_mode type STANDARD TABLE OF zsd_mode,
+      wa_mode type zsd_mode.
+
+CONSTANTS :  c_var_user TYPE rvari_vnam VALUE 'ZSD_MODE',
+             c_type_user   TYPE rsscr_kind VALUE 'S'.
+
+CONSTANTS :  c_var_user1 TYPE rvari_vnam VALUE 'ZSD_ETYPE',
+             c_type_user1   TYPE rsscr_kind VALUE 'S'.
+SELECT sign
+       opti
+       low
+       high INTO TABLE lt_acc_key1
+                 FROM tvarvc
+                 WHERE name = c_var_user AND
+                       type = c_type_user.
+
+SELECT sign
+       opti
+       low
+       high INTO TABLE lt_acc_key2
+                 FROM tvarvc
+                 WHERE name = c_var_user1 AND
+                       type = c_type_user1.
+
+
+*  LOOP AT LT_ACC_KEY1 INTO lwa_acc_key1.
+*    IF lwa_acc_key1-LOW <> VBRK-ZZIND AND lwa_acc_key1-HIGH <> VBRK-ZZIND .
+*     MESSAGE e007(zsd) .
+*    ENDIF.
+*  ENDLOOP.
+*
+* SELECT SINGLE modeid
+*    FROM ZSD_MODE
+*    INTO VBRK-ZZMODEID
+*    WHERE modeid = VBRK-ZZMODEID.
+*
+*    IF SY-SUBRC <> 0.
+*    message 'Only Select f4 help data for input' TYPE 'E'.
+*    ENDIF.
+
+
+
+LOOP AT LT_ACC_KEY1 INTO lwa_acc_key1.
+ if VBRK-ZZIND = lwa_acc_key1-low.
+ IF ( VBRK-ZZTRUCKNO IS INITIAL ).
+   MESSAGE ' Vehicle no. is mandatory for Full truck load' type  'E'.
+*   MESSAGE e007(zsd).
+ ENDIF.
+ IF  ( VBRK-ZZLRNO IS INITIAL ).
+    MESSAGE ' LR no. is mandatory for Full truck load' type 'E'.
+*   MESSAGE e007(zsd).
+ ENDIF.
+ IF ( VBRK-ZZLRDT IS INITIAL ).
+    MESSAGE ' LR Date is mandatory for Full truck load' type 'E'.
+*   MESSAGE e007(zsd).
+ ENDIF.
+ IF ( VBRK-ZZMODEID IS INITIAL ).
+    MESSAGE ' Transport mode is mandatory for Full truck load' type 'E'.
+ ENDIF.
+ENDIF.
+endloop.
+
+LOOP AT lt_acc_key2 INTO LWA_ACC_KEY2.
+*if vbrk-fkart = 'ZEXP' OR  vbrk-fkart = 'YEXP'.
+if vbrk-fkart = LWA_ACC_KEY2-LOW.
+  IF ( VBRK-PORTAD1 IS INITIAL ).
+    MESSAGE 'Port Address Mandatory in Export invoice' type 'E'.
+  ENDIF.
+  IF ( VBRK-PORTCITY IS INITIAL ).
+    MESSAGE 'Port Address Mandatory in Export invoice' type 'E'.
+  ENDIF.
+  IF ( VBRK-PORTREGION IS INITIAL ).
+     MESSAGE 'Port Address Mandatory in Export invoice' type 'E'.
+  ENDIF.
+  IF ( VBRK-PORTPIN IS INITIAL ).
+    MESSAGE 'Port Address Mandatory in Export invoice' type 'E'.
+  ENDIF.
+
+ENDIF.
+ENDLOOP.
+
+
+
+***********
+*  vbrk-zzname1 = XVBRK-ZZNAME1.
+*  vbrk-ZZSTCD3 = XVBRK-ZZSTCD3.
+ENDENHANCEMENT.
+*$*$-End:   (1)---------------------------------------------------------------------------------$*$*
+
+  data: l_sd_cust_head_exit   type ref to if_ex_badi_sd_cust_head,
+        active type xfeld.
+
+  call function 'GET_HANDLE_SD_CUST_HEAD'
+    importing
+      handle = l_sd_cust_head_exit
+      active = active.
+
+  if active = 'X'.
+    call method l_sd_cust_head_exit->transfer_data_from_subscreen
+      exporting
+        ft180     = t180
+      changing
+        fvbrk     = vbrk
+        fxvbpa    = xvbpa[]
+        fxyvbrk   = yvbrk[]
+        fxvbrk    = xvbrk[]
+        frv60a    = rv60a
+        fxyvbadr  = yvbadr[]
+        fxvbadr   = xvbadr[]
+        fxyvbpa   = yvbpa[]
+        fxvbrp    = xvbrp[]
+        fxyvbrp   = yvbrp[]
+        ffcode    = fcode.
+  endif.
+
+*  perform vbak_bearbeiten(sapfv45k).
+  perform  vbrk_bearbeiten.
+
+ENDFORM.                    " cust_head_get_data

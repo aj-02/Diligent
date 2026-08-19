@@ -1,0 +1,1928 @@
+----------------------------------------------------------------------------------------------------
+Main program     ZREP_TENDER_REGISTER                      Level 0    Page 1
+Object           ZREP_TENDER_REGISTER                      Lines 1922
+System           OCQ / 500   User SAP_ABAP   12.08.2026 11:17:42
+----------------------------------------------------------------------------------------------------
+1      **&---------------------------------------------------------------------*
+2      **& Report  : ZREP_TENDER_REGISTER                                      *
+3      **& Title   : Tender Register / Supply Order / GEM Register - ALV       *
+4      **& Author  : <Developer>                                               *
+5      **& Date    : July 2025                                                 *
+6      **&---------------------------------------------------------------------*
+7      **& Description:                                                        *
+8      **&   Displays one of three registers based on radio button selection:  *
+9      **&   R1 - Tender Register     (ZMM_PUR_TENDER_D + ZMM_TMS)            *
+10     **&   R2 - Supplier Order Details Corp & BD  (EKKO + EKPO + LFA1)      *
+11     **&   R3 - Supplier Order Register for GEM   (EKKO + LFA1)             *
+12     **&---------------------------------------------------------------------*
+13     **& Tables:                                                             *
+14     **&   ZMM_PUR_TENDER_D, ZMM_TMS, PA0002                                *
+15     **&   EKKO, EKPO, LFA1, T024                                           *
+16     **&---------------------------------------------------------------------*
+17     *REPORT zrep_tender_register
+18     *  NO STANDARD PAGE HEADING
+19     *  MESSAGE-ID zmm.
+20     *
+21     **======================================================================*
+22     ** TYPE DEFINITIONS                                                      *
+23     **======================================================================*
+24     *
+25     **-- Report 1 : Tender Register
+26     *TYPES:
+27     *  BEGIN OF ty_tdr,
+28     *    slno       TYPE n LENGTH 5,
+29     *    submi      LIKE zmm_pur_tender_d-submi,
+30     *    pr_rcpt_dt LIKE zmm_tms-pr_rcpt_dt,
+31     *    bsart      LIKE zmm_pur_tender_d-bsart,
+32     *    banfn      LIKE zmm_pur_tender_d-banfn,
+33     *    workdesc   LIKE zmm_pur_tender_d-workdesc,
+34     *    tndr_val   LIKE zmm_pur_tender_d-tndr_val,
+35     *    waers      LIKE zmm_pur_tender_d-waers,
+36     *    tnndr_typ  LIKE zmm_pur_tender_d-tnndr_typ,
+37     *    dlg_offic  LIKE zmm_pur_tender_d-dlg_offic,
+38     *    tc_mem_nm  TYPE char40,
+39     *    tdrtxt     LIKE zmm_pur_tender_d-tdrtxt,
+40     *    nitdate    LIKE zmm_pur_tender_d-nitdate,
+41     *    lt_sel_dt  LIKE zmm_pur_tender_d-lt_sel_dt,
+42     *    noa_dt     TYPE datum,
+43     *    banfn_pr   LIKE zmm_pur_tender_d-banfn,
+44     *    tdrsts     LIKE zmm_pur_tender_d-tdrsts,
+45     *    emd_recv   TYPE datum,
+46     *    emd_rtrn   LIKE zmm_tms-reo_tsal_stat,
+47     *  END OF ty_tdr.
+48     *
+49     **-- Report 2 : Supplier Order Details (Corp & BD) - 38 columns
+50     *TYPES:
+51     *  BEGIN OF ty_so,
+52     *    slno       TYPE n LENGTH 5,          " 01 Entry Sl.No.
+53     *    zzloino    LIKE ekko-zzloino,         " 02 Supply Order Control Number (LOI/NOA No.)
+54     *    bedat      LIKE ekko-bedat,           " 03 SO Issue Date
+55     *    zzsubmi    LIKE ekko-zzsubmi,         " 04 Tender Register File Number
+56     *    bsart      LIKE ekko-bsart,           " 05 Type of Tender (Doc Type)
+57     *    zznat_proc LIKE ekko-zznat_proc,      " 06 Type of Case (CVO Reporting)
+58     *    zzt_nature LIKE ekko-zzt_nature,      " 07 Justification (Nature of Tender)
+59     *    banfn      LIKE ekpo-banfn,           " 08 SAP PR No.
+60     *    ebeln      LIKE ekko-ebeln,           " 09 SAP Contract / PO No.
+61     *    vend_nm    TYPE char40,               " 10 Name of Contractor
+62     *    zzvend_cat LIKE ekko-zzvend_cat,      " 11 Vendor Category
+63     *    zzmse      LIKE ekko-zzmse,           " 12 Local Content Status (MSE)
+64     *    vend_addr  TYPE char80,               " 13 Address
+65     *    descr      LIKE ekko-description,     " 14 Brief Description
+66     *    waers      LIKE ekko-waers,           " 15 Contract Currency
+67     *    ktwrt      LIKE ekko-ktwrt,           " 16 Contract Value
+68     *    ktwrt_inr  TYPE p LENGTH 13 DECIMALS 2, " 17 Contract Value in INR
+69     *    wkurs      LIKE ekko-wkurs,           " 18 Exchange Rate
+70     *    gst_amt    TYPE p LENGTH 13 DECIMALS 2, " 19 GST Amount (EKPO-NAVNW)
+71     *    place_exec LIKE ekko-inco2,           " 20 Place of Execution
+72     *    ind_nm     TYPE char40,               " 21 Indentor Name
+73     *    dlg_nm     TYPE char20,               " 22 Dealing Officer (Purch. Group Name)
+74     *    kdatb      LIKE ekko-kdatb,           " 23 Contract Start Date
+75     *    kdate      LIKE ekko-kdate,           " 24 Contract Scheduled End Date
+76     *    pbg_stat   TYPE char1,               " 25 SD/PBG Status (Y=Recd N=Pending)
+77     *    pbg_sub    TYPE char1,               " 26 PBG Submit (Y/N)
+78     *    amd1_dt    TYPE datum,               " 27 1st Amendment Date
+79     *    amd1_nat   TYPE char40,              " 28 1st Amendment Nature
+80     *    amd1_del   TYPE datum,               " 29 1st Extended Delivery Date
+81     *    amd1_val   TYPE p LENGTH 13 DECIMALS 2, " 30 1st Revised Contract Value
+82     *    amd2_dt    TYPE datum,               " 31 2nd Amendment Date
+83     *    amd2_nat   TYPE char40,              " 32 2nd Amendment Nature
+84     *    amd2_del   TYPE datum,               " 33 2nd Extended Delivery Date
+85     *    amd2_val   TYPE p LENGTH 13 DECIMALS 2, " 34 2nd Revised Contract Value
+86     *    amd3_dt    TYPE datum,               " 35 3rd Amendment Date
+87     *    amd3_nat   TYPE char40,              " 36 3rd Amendment Nature
+88     *    amd3_del   TYPE datum,               " 37 3rd Extended Delivery Date
+89     *    amd3_val   TYPE p LENGTH 13 DECIMALS 2, " 38 3rd Revised Contract Value
+90     *  END OF ty_so.
+91     *
+92     **-- Report 3 : Supplier Order Register for GEM - 12 columns
+93     *TYPES:
+94     *  BEGIN OF ty_gem,
+95     *    slno       TYPE n LENGTH 5,          " 01 Sl. No.
+96     *    zgempo     LIKE ekko-zgempo,          " 02 GeM Order No.
+97     *    bedat      LIKE ekko-bedat,           " 03 Date (PO Issue Date)
+98     *    zzsubmi    LIKE ekko-zzsubmi,         " 04 Tender Register File Number
+99     *    vend_nm    TYPE char40,               " 05 Vendor Name
+100    *    zzvend_cat LIKE ekko-zzvend_cat,      " 06 Vendor Category
+101    *    descr      LIKE ekko-description,     " 07 PO Description
+102    *    ktwrt      LIKE ekko-ktwrt,           " 08 PO Value
+103    *    dlg_nm     TYPE char20,               " 09 Dealing Officer
+104    *    ebeln      LIKE ekko-ebeln,           " 10 SAP PO No.
+105    *    pbg_info   TYPE char40,               " 11 PBG (received or not)
+106    *    procstat   LIKE ekko-procstat,        " 12 Current Status
+107    *  END OF ty_gem.
+108    *
+109    **======================================================================*
+110    ** GLOBAL DATA                                                           *
+111    **======================================================================*
+112    *
+113    **-- Internal tables and work areas
+114    *DATA:
+115    *  gt_tdr    TYPE STANDARD TABLE OF ty_tdr,
+116    *  gwa_tdr   TYPE ty_tdr,
+117    *  gt_so     TYPE STANDARD TABLE OF ty_so,
+118    *  gwa_so    TYPE ty_so,
+119    *  gt_gem    TYPE STANDARD TABLE OF ty_gem,
+120    *  gwa_gem   TYPE ty_gem.
+121    *
+122    **-- ALV object references (shared across all 3 reports)
+123    *DATA:
+124    *  go_salv    TYPE REF TO cl_salv_table,
+125    *  go_ex      TYPE REF TO cx_salv_msg,
+126    *  go_columns TYPE REF TO cl_salv_columns_table,
+127    *  go_column  TYPE REF TO cl_salv_column_table,
+128    *  go_display TYPE REF TO cl_salv_display_settings,
+129    *  go_sorts   TYPE REF TO cl_salv_sorts,
+130    *  go_funcs   TYPE REF TO cl_salv_functions_list,
+131    *  go_aggrs   TYPE REF TO cl_salv_aggregations.
+132    *
+133    **-- Selection screen reference variables
+134    *DATA:
+135    *  gv_submi   LIKE zmm_pur_tender_d-submi,
+136    *  gv_bsart   LIKE zmm_pur_tender_d-bsart,
+137    *  gv_dlgof   LIKE zmm_pur_tender_d-dlg_offic,
+138    *  gv_nitdt   LIKE zmm_pur_tender_d-nitdate,
+139    *  gv_tdrst   LIKE zmm_pur_tender_d-tdrsts,
+140    *  gv_prrdt   LIKE zmm_tms-pr_rcpt_dt,
+141    *  gv_mjahr   LIKE zmm_pur_tender_d-mjahr,
+142    *  gv_ebeln   LIKE ekko-ebeln,
+143    *  gv_bsrt2   LIKE ekko-bsart,
+144    *  gv_lifnr   LIKE ekko-lifnr,
+145    *  gv_bedat   LIKE ekko-bedat,
+146    *  gv_ekgrp   LIKE ekko-ekgrp,
+147    *  gv_counter TYPE i.
+148    *
+149    *
+150    **======================================================================*
+151    ** SELECTION SCREEN                                                      *
+152    **======================================================================*
+153    *
+154    **-- Block 0: Report selection via radio buttons
+155    *SELECTION-SCREEN BEGIN OF BLOCK b0 WITH FRAME.
+156    *  SELECTION-SCREEN BEGIN OF LINE.
+157    *    PARAMETERS rb_tdr RADIOBUTTON GROUP rg01 DEFAULT 'X'
+158    *               USER-COMMAND ucmd.
+159    *    SELECTION-SCREEN COMMENT 3(38) gc_rb1 FOR FIELD rb_tdr.
+160    *  SELECTION-SCREEN END OF LINE.
+161    *  SELECTION-SCREEN BEGIN OF LINE.
+162    *    PARAMETERS rb_so RADIOBUTTON GROUP rg01.
+163    *    SELECTION-SCREEN COMMENT 3(38) gc_rb2 FOR FIELD rb_so.
+164    *  SELECTION-SCREEN END OF LINE.
+165    *  SELECTION-SCREEN BEGIN OF LINE.
+166    *    PARAMETERS rb_gem RADIOBUTTON GROUP rg01.
+167    *    SELECTION-SCREEN COMMENT 3(38) gc_rb3 FOR FIELD rb_gem.
+168    *  SELECTION-SCREEN END OF LINE.
+169    *SELECTION-SCREEN END OF BLOCK b0.
+170    *
+171    **-- Block 1: Tender Register filters (greyed out for R2/R3)
+172    *SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME.
+173    *  SELECT-OPTIONS:
+174    *    so_submi FOR gv_submi  MODIF ID t01,
+175    *    so_prrdt FOR gv_prrdt  MODIF ID t01,
+176    *    so_bsart FOR gv_bsart  MODIF ID t01,
+177    *    so_dlgof FOR gv_dlgof  MODIF ID t01,
+178    *    so_nitdt FOR gv_nitdt  MODIF ID t01,
+179    *    so_tdrst FOR gv_tdrst  MODIF ID t01.
+180    *  PARAMETERS p_mjahr TYPE mjahr MODIF ID t01.
+181    *SELECTION-SCREEN END OF BLOCK b1.
+182    *
+183    **-- Block 2: Supply Order / GEM filters (greyed out for R1)
+184    *SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME.
+185    *  SELECT-OPTIONS:
+186    *    so_ebeln FOR gv_ebeln  MODIF ID p01,
+187    *    so_bsrt2 FOR gv_bsrt2  MODIF ID p01,
+188    *    so_lifnr FOR gv_lifnr  MODIF ID p01,
+189    *    so_bedat FOR gv_bedat  MODIF ID p01,
+190    *    so_ekgrp FOR gv_ekgrp  MODIF ID p01.
+191    *SELECTION-SCREEN END OF BLOCK b2.
+192    *
+193    **======================================================================*
+194    ** INITIALIZATION                                                        *
+195    **======================================================================*
+196    *INITIALIZATION.
+197    *  p_mjahr = sy-datum(4).
+198    *  gc_rb1  = 'Tender Register'.
+199    *  gc_rb2  = 'Supplier Order Details (Corp & BD)'.
+200    *  gc_rb3  = 'Supplier Order Register for GEM'.
+201    *
+202    **======================================================================*
+203    ** AT SELECTION-SCREEN OUTPUT  (grey out irrelevant block)              *
+204    **======================================================================*
+205    *AT SELECTION-SCREEN OUTPUT.
+206    *  LOOP AT SCREEN.
+207    *    IF screen-group1 = 'T01'.
+208    *      IF rb_tdr = 'X'.
+209    *        screen-active = 1.
+210    *      ELSE.
+211    *        screen-active = 0.
+212    *      ENDIF.
+213    *      MODIFY SCREEN.
+214    *    ELSEIF screen-group1 = 'P01'.
+215    *      IF rb_so = 'X' OR rb_gem = 'X'.
+216    *        screen-active = 1.
+217    *      ELSE.
+218    *        screen-active = 0.
+219    *      ENDIF.
+220    *      MODIFY SCREEN.
+221    *    ENDIF.
+222    *  ENDLOOP.
+223    *
+224    **======================================================================*
+225    ** START-OF-SELECTION                                                    *
+226    **======================================================================*
+227    *START-OF-SELECTION.
+228    *  CLEAR gv_counter.
+229    *  IF rb_tdr = 'X'.
+230    *    PERFORM fetch_tender_data.
+231    *    PERFORM display_tender_alv.
+232    *  ELSEIF rb_so = 'X'.
+233    *    PERFORM fetch_so_data.
+234    *    PERFORM display_so_alv.
+235    *  ELSEIF rb_gem = 'X'.
+236    *    PERFORM fetch_gem_data.
+237    *    PERFORM display_gem_alv.
+238    *  ENDIF.
+239    *
+240    **======================================================================*
+241    **& FORM: FETCH_TENDER_DATA  (Report 1 - Tender Register)               *
+242    **======================================================================*
+243    *FORM fetch_tender_data.
+244    *
+245    *  DATA:
+246    *    lt_tender TYPE TABLE OF zmm_pur_tender_d,
+247    *    ls_tender TYPE zmm_pur_tender_d,
+248    *    ls_tms    TYPE zmm_tms,
+249    *    lv_nachn  TYPE pa0002-nachn,
+250    *    lv_vorna  TYPE pa0002-vorna,
+251    *    lv_ename  TYPE char40.
+252    *
+253    *  SELECT *
+254    *    FROM zmm_pur_tender_d
+255    *    INTO TABLE lt_tender
+256    *    WHERE submi     IN so_submi
+257    *      AND bsart     IN so_bsart
+258    *      AND dlg_offic IN so_dlgof
+259    *      AND nitdate   IN so_nitdt
+260    *      AND tdrsts    IN so_tdrst
+261    *      AND mjahr     = p_mjahr.
+262    *
+263    *  IF sy-subrc <> 0 OR lt_tender IS INITIAL.
+264    *    MESSAGE 'No tender records found for the given selection.' TYPE 'I'.
+265    *    RETURN.
+266    *  ENDIF.
+267    *
+268    *  LOOP AT lt_tender INTO ls_tender.
+269    *
+270    *    CLEAR gwa_tdr.
+271    *    gwa_tdr-submi     = ls_tender-submi.
+272    *    gwa_tdr-bsart     = ls_tender-bsart.
+273    *    gwa_tdr-banfn     = ls_tender-banfn.
+274    *    gwa_tdr-banfn_pr  = ls_tender-banfn.
+275    *    gwa_tdr-workdesc  = ls_tender-workdesc.
+276    *    gwa_tdr-tndr_val  = ls_tender-tndr_val.
+277    *    gwa_tdr-waers     = ls_tender-waers.
+278    *    gwa_tdr-tnndr_typ = ls_tender-tnndr_typ.
+279    *    gwa_tdr-dlg_offic = ls_tender-dlg_offic.
+280    *    gwa_tdr-tdrtxt    = ls_tender-tdrtxt.
+281    *    gwa_tdr-nitdate   = ls_tender-nitdate.
+282    *    gwa_tdr-lt_sel_dt = ls_tender-lt_sel_dt.
+283    *    gwa_tdr-tdrsts    = ls_tender-tdrsts.
+284    *
+285    *    SELECT SINGLE *
+286    *      FROM zmm_tms
+287    *      INTO ls_tms
+288    *      WHERE submi = ls_tender-submi.
+289    *
+290    *    IF sy-subrc = 0.
+291    *      IF so_prrdt[] IS NOT INITIAL.
+292    *        IF ls_tms-pr_rcpt_dt NOT IN so_prrdt.
+293    *          CONTINUE.
+294    *        ENDIF.
+295    *      ENDIF.
+296    *      gwa_tdr-pr_rcpt_dt = ls_tms-pr_rcpt_dt.
+297    *      gwa_tdr-noa_dt     = ls_tms-loi_1_act_dt.
+298    *      gwa_tdr-emd_recv   = ls_tms-rec_tsal_act_dt.
+299    *      gwa_tdr-emd_rtrn   = ls_tms-reo_tsal_stat.
+300    *      IF ls_tms-tc_member1 IS NOT INITIAL.
+301    *        CLEAR: lv_nachn, lv_vorna, lv_ename.
+302    *        SELECT SINGLE vorna nachn
+303    *          FROM pa0002
+304    *          INTO (lv_vorna, lv_nachn)
+305    *          WHERE pernr = ls_tms-tc_member1
+306    *            AND endda >= sy-datum
+307    *            AND begda <= sy-datum.
+308    *        IF sy-subrc = 0.
+309    *          CONCATENATE lv_vorna lv_nachn
+310    *            INTO lv_ename SEPARATED BY space.
+311    *          gwa_tdr-tc_mem_nm = lv_ename.
+312    *        ELSE.
+313    *          gwa_tdr-tc_mem_nm = ls_tms-tc_member1.
+314    *        ENDIF.
+315    *      ENDIF.
+316    *    ELSE.
+317    *      IF so_prrdt[] IS NOT INITIAL.
+318    *        CONTINUE.
+319    *      ENDIF.
+320    *    ENDIF.
+321    *
+322    *    gv_counter += 1.
+323    *    gwa_tdr-slno = gv_counter.
+324    *    APPEND gwa_tdr TO gt_tdr.
+325    *
+326    *  ENDLOOP.
+327    *
+328    *  IF gt_tdr IS INITIAL.
+329    *    MESSAGE 'No records found after applying all filters.' TYPE 'I'.
+330    *  ENDIF.
+331    *
+332    *ENDFORM.
+333    *
+334    **======================================================================*
+335    **& FORM: FETCH_SO_DATA  (Report 2 - Supplier Order Details Corp & BD)  *
+336    **======================================================================*
+337    *FORM fetch_so_data.
+338    *
+339    *  DATA:
+340    *    lt_ekko  TYPE TABLE OF ekko,
+341    *    ls_ekko  TYPE ekko,
+342    *    lv_banfn LIKE ekpo-banfn,
+343    *    lv_txz01 LIKE ekpo-txz01,
+344    *    lv_navnw LIKE ekpo-navnw,
+345    *    lv_name1 TYPE char40,
+346    *    lv_addr  TYPE char80,
+347    *    lv_eknam LIKE t024-eknam,
+348    *    lv_ename TYPE char40.
+349    *
+350    *  SELECT *
+351    *    FROM ekko
+352    *    INTO TABLE lt_ekko
+353    *    WHERE ebeln IN so_ebeln
+354    *      AND bsart IN so_bsrt2
+355    *      AND lifnr IN so_lifnr
+356    *      AND bedat IN so_bedat
+357    *      AND ekgrp IN so_ekgrp
+358    *      AND loekz = ' '.
+359    *
+360    *  IF sy-subrc <> 0 OR lt_ekko IS INITIAL.
+361    *    MESSAGE 'No supply order records found for the given selection.' TYPE 'I'.
+362    *    RETURN.
+363    *  ENDIF.
+364    *
+365    *  LOOP AT lt_ekko INTO ls_ekko.
+366    *
+367    *    CLEAR gwa_so.
+368    *
+369    *    gwa_so-zzloino    = ls_ekko-zzloino.
+370    *    gwa_so-bedat      = ls_ekko-bedat.
+371    *    gwa_so-zzsubmi    = ls_ekko-zzsubmi.
+372    *    gwa_so-bsart      = ls_ekko-bsart.
+373    *    gwa_so-zznat_proc = ls_ekko-zznat_proc.
+374    *    gwa_so-zzt_nature = ls_ekko-zzt_nature.
+375    *    gwa_so-ebeln      = ls_ekko-ebeln.
+376    *    gwa_so-zzvend_cat = ls_ekko-zzvend_cat.
+377    *    gwa_so-zzmse      = ls_ekko-zzmse.
+378    *    gwa_so-waers      = ls_ekko-waers.
+379    *    gwa_so-ktwrt      = ls_ekko-ktwrt.
+380    *    gwa_so-wkurs      = ls_ekko-wkurs.
+381    *    gwa_so-place_exec = ls_ekko-inco2.
+382    *    gwa_so-kdatb      = ls_ekko-kdatb.
+383    *    gwa_so-kdate      = ls_ekko-kdate.
+384    *
+385    *    " Description: prefer EKKO contract description, else first item text
+386    *    IF ls_ekko-description IS NOT INITIAL.
+387    *      gwa_so-descr = ls_ekko-description.
+388    *    ELSE.
+389    *      CLEAR lv_txz01.
+390    *      SELECT SINGLE txz01
+391    *        FROM ekpo INTO lv_txz01
+392    *        WHERE ebeln = ls_ekko-ebeln.
+393    *      gwa_so-descr = lv_txz01.
+394    *    ENDIF.
+395    *
+396    *    " Contract value in INR
+397    *    IF ls_ekko-waers = 'INR'.
+398    *      gwa_so-ktwrt_inr = ls_ekko-ktwrt.
+399    *    ELSEIF ls_ekko-wkurs > 0.
+400    *      gwa_so-ktwrt_inr = ls_ekko-ktwrt * ls_ekko-wkurs.
+401    *    ELSE.
+402    *      gwa_so-ktwrt_inr = ls_ekko-ktwrt.
+403    *    ENDIF.
+404    *
+405    *    " PR No. and GST from first EKPO item
+406    *    CLEAR: lv_banfn, lv_navnw.
+407    *    SELECT SINGLE banfn navnw
+408    *      FROM ekpo INTO (lv_banfn, lv_navnw)
+409    *      WHERE ebeln = ls_ekko-ebeln.
+410    *    IF sy-subrc = 0.
+411    *      gwa_so-banfn   = lv_banfn.
+412    *      gwa_so-gst_amt = lv_navnw.
+413    *    ENDIF.
+414    *
+415    *    " Vendor name and address from LFA1
+416    *    PERFORM get_vendor_info
+417    *      USING    ls_ekko-lifnr
+418    *      CHANGING lv_name1 lv_addr.
+419    *    gwa_so-vend_nm   = lv_name1.
+420    *    gwa_so-vend_addr = lv_addr.
+421    *
+422    *    " Indentor name from HR (EKKO-ZZINDPER)
+423    *    IF ls_ekko-zzindper IS NOT INITIAL.
+424    *      CLEAR lv_ename.
+425    *      PERFORM get_emp_name
+426    *        USING    ls_ekko-zzindper
+427    *        CHANGING lv_ename.
+428    *      gwa_so-ind_nm = lv_ename.
+429    *    ENDIF.
+430    *
+431    *    " Dealing officer: purchasing group name from T024
+432    *    CLEAR lv_eknam.
+433    *    PERFORM get_pgrp_name
+434    *      USING    ls_ekko-ekgrp
+435    *      CHANGING lv_eknam.
+436    *    gwa_so-dlg_nm = lv_eknam.
+437    *
+438    *    " Amendment data: extend by reading from custom Z amendment table
+439    *    " e.g. SELECT ... FROM zcustom_amendment WHERE ebeln = ls_ekko-ebeln.
+440    *
+441    *    gv_counter += 1.
+442    *    gwa_so-slno = gv_counter.
+443    *    APPEND gwa_so TO gt_so.
+444    *
+445    *  ENDLOOP.
+446    *
+447    *  IF gt_so IS INITIAL.
+448    *    MESSAGE 'No supply order records after applying filters.' TYPE 'I'.
+449    *  ENDIF.
+450    *
+451    *ENDFORM.
+452    *
+453    **======================================================================*
+454    **& FORM: FETCH_GEM_DATA  (Report 3 - Supplier Order Register for GEM)  *
+455    **======================================================================*
+456    *FORM fetch_gem_data.
+457    *
+458    *  DATA:
+459    *    lt_ekko  TYPE TABLE OF ekko,
+460    *    ls_ekko  TYPE ekko,
+461    *    lv_name1 TYPE char40,
+462    *    lv_addr  TYPE char80,
+463    *    lv_eknam LIKE t024-eknam,
+464    *    ls_tms   TYPE zmm_tms.
+465    *
+466    *  SELECT *
+467    *    FROM ekko
+468    *    INTO TABLE lt_ekko
+469    *    WHERE ebeln  IN so_ebeln
+470    *      AND lifnr  IN so_lifnr
+471    *      AND bedat  IN so_bedat
+472    *      AND ekgrp  IN so_ekgrp
+473    *      AND loekz  = ' '
+474    *      AND zgempo NE ' '.
+475    *
+476    *  IF sy-subrc <> 0 OR lt_ekko IS INITIAL.
+477    *    MESSAGE 'No GEM order records found for the given selection.' TYPE 'I'.
+478    *    RETURN.
+479    *  ENDIF.
+480    *
+481    *  LOOP AT lt_ekko INTO ls_ekko.
+482    *
+483    *    CLEAR gwa_gem.
+484    *
+485    *    gwa_gem-zgempo    = ls_ekko-zgempo.
+486    *    gwa_gem-bedat     = ls_ekko-bedat.
+487    *    gwa_gem-zzsubmi   = ls_ekko-zzsubmi.
+488    *    gwa_gem-zzvend_cat = ls_ekko-zzvend_cat.
+489    *    gwa_gem-descr     = ls_ekko-description.
+490    *    gwa_gem-ktwrt     = ls_ekko-ktwrt.
+491    *    gwa_gem-ebeln     = ls_ekko-ebeln.
+492    *    gwa_gem-procstat  = ls_ekko-procstat.
+493    *
+494    *    " Vendor name from LFA1
+495    *    CLEAR: lv_name1, lv_addr.
+496    *    PERFORM get_vendor_info
+497    *      USING    ls_ekko-lifnr
+498    *      CHANGING lv_name1 lv_addr.
+499    *    gwa_gem-vend_nm = lv_name1.
+500    *
+501    *    " Dealing officer: purchasing group name
+502    *    CLEAR lv_eknam.
+503    *    PERFORM get_pgrp_name
+504    *      USING    ls_ekko-ekgrp
+505    *      CHANGING lv_eknam.
+506    *    gwa_gem-dlg_nm = lv_eknam.
+507    *
+508    *    " PBG info: check ZMM_TMS if linked via ZZSUBMI
+509    *    IF ls_ekko-zzsubmi IS NOT INITIAL.
+510    *      SELECT SINGLE pbg_rcpt_sch_dt
+511    *        FROM zmm_tms
+512    *        INTO ls_tms-pbg_rcpt_sch_dt
+513    *        WHERE submi = ls_ekko-zzsubmi.
+514    *      IF sy-subrc = 0 AND ls_tms-pbg_rcpt_sch_dt IS NOT INITIAL.
+515    *        gwa_gem-pbg_info = 'Received'.
+516    *      ELSE.
+517    *        gwa_gem-pbg_info = 'Pending'.
+518    *      ENDIF.
+519    *    ENDIF.
+520    *
+521    *    gv_counter += 1.
+522    *    gwa_gem-slno = gv_counter.
+523    *    APPEND gwa_gem TO gt_gem.
+524    *
+525    *  ENDLOOP.
+526    *
+527    *  IF gt_gem IS INITIAL.
+528    *    MESSAGE 'No GEM records found after applying filters.' TYPE 'I'.
+529    *  ENDIF.
+530    *
+531    *ENDFORM.
+532    *
+533    **======================================================================*
+534    **& FORM: DISPLAY_TENDER_ALV  (Report 1 ALV display)                    *
+535    **======================================================================*
+536    *FORM display_tender_alv.
+537    *
+538    *  CHECK gt_tdr IS NOT INITIAL.
+539    *
+540    *  TRY.
+541    *      cl_salv_table=>factory(
+542    *        IMPORTING r_salv_table = go_salv
+543    *        CHANGING  t_table      = gt_tdr ).
+544    *    CATCH cx_salv_msg INTO go_ex.
+545    *      MESSAGE go_ex->get_text( ) TYPE 'E'.
+546    *      RETURN.
+547    *  ENDTRY.
+548    *
+549    *  go_funcs = go_salv->get_functions( ).
+550    *  go_funcs->set_all( abap_true ).
+551    *
+552    *  go_display = go_salv->get_display_settings( ).
+553    *  go_display->set_list_header( 'Tender Register' ).
+554    *  go_display->set_striped_pattern( cl_salv_display_settings=>true ).
+555    *  go_display->set_fit_column_to_table_size( abap_true ).
+556    *
+557    *  go_columns = go_salv->get_columns( ).
+558    *  go_columns->set_optimize( abap_true ).
+559    *
+560    *  PERFORM set_col_texts USING 'SLNO'      'Sl.No'    'Sl. No.'           'Serial Number'.
+561    *  PERFORM set_col_texts USING 'SUBMI'     'File No'  'File No.'          'File No. (Tender Number)'.
+562    *  PERFORM set_col_texts USING 'PR_RCPT_DT' 'IndRcpDt' 'Indent Rcpt Date' 'Indent Receipt Date'.
+563    *  PERFORM set_col_texts USING 'BSART'     'Category' 'Category'          'Category (Document Type)'.
+564    *  PERFORM set_col_texts USING 'BANFN'     'Indent No' 'Indent File No'   'Indent File Number'.
+565    *  PERFORM set_col_texts USING 'WORKDESC'  'Desc.'    'Description'       'Description of Work / Material'.
+566    *  PERFORM set_col_texts USING 'TNDR_VAL'  'Amount'   'Amount'            'Tender Value (Amount)'.
+567    *  PERFORM set_col_texts USING 'WAERS'     'Curr.'    'Currency'          'Currency Key'.
+568    *  PERFORM set_col_texts USING 'TNNDR_TYP' 'TndrTyp'  'Tender Type'       'Type of Tender'.
+569    *  PERFORM set_col_texts USING 'DLG_OFFIC' 'Dlg.Off'  'Dealing Ofcr'      'Dealing Officer'.
+570    *  PERFORM set_col_texts USING 'TC_MEM_NM' 'TC Memb'  'TC Memb(Comm)'     'TC Member from Commercial'.
+571    *  PERFORM set_col_texts USING 'TDRTXT'    'DishaMM'  'Disha MM File'     'Disha MM File Number'.
+572    *  PERFORM set_col_texts USING 'NITDATE'   'NIT Dt'   'Date of NIT'       'Date of NIT (Notice Inviting Tender)'.
+573    *  PERFORM set_col_texts USING 'LT_SEL_DT' 'Due On'   'Tender Due On'     'Tender Due On (Last Submission Date)'.
+574    *  PERFORM set_col_texts USING 'NOA_DT'    'NOA Dt'   'NOA Date'          'Notice of Award Date'.
+575    *  PERFORM set_col_texts USING 'BANFN_PR'  'PR No.'   'PR No.'            'Purchase Requisition Number'.
+576    *  PERFORM set_col_texts USING 'TDRSTS'    'Status'   'Status'            'Tender Status'.
+577    *  PERFORM set_col_texts USING 'EMD_RECV'  'EMD Rcv'  'EMD Received'      'EMD Received Date'.
+578    *  PERFORM set_col_texts USING 'EMD_RTRN'  'EMD Ret'  'EMD Returned?'     'Whether EMD Returned (Y/N)'.
+579    *
+580    *  TRY.
+581    *      go_column ?= go_columns->get_column( 'WAERS' ).
+582    *      go_column->set_visible( abap_false ).
+583    *    CATCH cx_salv_not_found. "#EC NO_HANDLER
+584    *  ENDTRY.
+585    *
+586    *  TRY.
+587    *      go_column ?= go_columns->get_column( 'TNDR_VAL' ).
+588    *      go_column->set_currency_column( 'WAERS' ).
+589    *    CATCH cx_salv_not_found. "#EC NO_HANDLER
+590    *  ENDTRY.
+591    *
+592    *  go_aggrs = go_salv->get_aggregations( ).
+593    *  TRY.
+594    *      go_aggrs->add_aggregation(
+595    *        columnname  = 'TNDR_VAL'
+596    *        aggregation = if_salv_c_aggregation=>total ).
+597    *    CATCH cx_salv_data_error cx_salv_not_found cx_salv_existing. "#EC NO_HANDLER
+598    *  ENDTRY.
+599    *
+600    *  go_sorts = go_salv->get_sorts( ).
+601    *  TRY.
+602    *      go_sorts->add_sort(
+603    *        columnname = 'SLNO'
+604    *        sequence   = if_salv_c_sort=>sort_up ).
+605    *    CATCH cx_salv_data_error cx_salv_not_found cx_salv_existing. "#EC NO_HANDLER
+606    *  ENDTRY.
+607    *
+608    *  go_salv->display( ).
+609    *
+610    *ENDFORM.
+611    *
+612    **======================================================================*
+613    **& FORM: DISPLAY_SO_ALV  (Report 2 ALV display - 38 columns)           *
+614    **======================================================================*
+615    *FORM display_so_alv.
+616    *
+617    *  CHECK gt_so IS NOT INITIAL.
+618    *
+619    *  TRY.
+620    *      cl_salv_table=>factory(
+621    *        IMPORTING r_salv_table = go_salv
+622    *        CHANGING  t_table      = gt_so ).
+623    *    CATCH cx_salv_msg INTO go_ex.
+624    *      MESSAGE go_ex->get_text( ) TYPE 'E'.
+625    *      RETURN.
+626    *  ENDTRY.
+627    *
+628    *  go_funcs = go_salv->get_functions( ).
+629    *  go_funcs->set_all( abap_true ).
+630    *
+631    *  go_display = go_salv->get_display_settings( ).
+632    *  go_display->set_list_header( 'Supplier Order Details - Corp & BD' ).
+633    *  go_display->set_striped_pattern( cl_salv_display_settings=>true ).
+634    *  go_display->set_fit_column_to_table_size( abap_true ).
+635    *
+636    *  go_columns = go_salv->get_columns( ).
+637    *  go_columns->set_optimize( abap_true ).
+638    *
+639    *  PERFORM set_col_texts USING 'SLNO'       'Sl.No'    'Entry Sl.No.'      'Entry Serial Number'.
+640    *  PERFORM set_col_texts USING 'ZZLOINO'    'SO Ctrl'  'SO Ctrl. No.'      'Supply Order Control Number (LOI/NOA)'.
+641    *  PERFORM set_col_texts USING 'BEDAT'      'Issue Dt' 'SO Issue Date'     'Supply Order Issue Date'.
+642    *  PERFORM set_col_texts USING 'ZZSUBMI'    'Tndr File' 'Tender File No.'  'Tender Register File Number'.
+643    *  PERFORM set_col_texts USING 'BSART'      'TndrType' 'Type of Tender'    'Type of Tender (Document Type)'.
+644    *  PERFORM set_col_texts USING 'ZZNAT_PROC' 'CVO Case' 'Type of Case'      'Type of Case (CVO Reporting)'.
+645    *  PERFORM set_col_texts USING 'ZZT_NATURE' 'Justif.'  'Justification'     'Justification (Nature of Tender)'.
+646    *  PERFORM set_col_texts USING 'BANFN'      'PR No.'   'SAP PR No.'        'SAP Purchase Requisition Number'.
+647    *  PERFORM set_col_texts USING 'EBELN'      'PO/Contr' 'SAP PO/Contract'   'SAP Contract / PO Number'.
+648    *  PERFORM set_col_texts USING 'VEND_NM'    'Contrctr' 'Contractor Name'   'Name of Contractor'.
+649    *  PERFORM set_col_texts USING 'ZZVEND_CAT' 'VndCat'   'Vendor Category'   'Vendor Category'.
+650    *  PERFORM set_col_texts USING 'ZZMSE'      'MSE'      'Local Content'     'Local Content Status (MSE)'.
+651    *  PERFORM set_col_texts USING 'VEND_ADDR'  'Address'  'Vendor Address'    'Address of Contractor'.
+652    *  PERFORM set_col_texts USING 'DESCR'      'Desc.'    'Description'       'Brief Description of Items/Services'.
+653    *  PERFORM set_col_texts USING 'WAERS'      'Curr.'    'Contr.Currency'    'Contract Currency'.
+654    *  PERFORM set_col_texts USING 'KTWRT'      'ContrVal' 'Contract Value'    'Contract Value'.
+655    *  PERFORM set_col_texts USING 'KTWRT_INR'  'Val(INR)' 'Contr.Val.(INR)'   'Contract Value in INR'.
+656    *  PERFORM set_col_texts USING 'WKURS'      'Ex.Rate'  'Exchange Rate'     'Exchange Rate for Foreign Currency'.
+657    *  PERFORM set_col_texts USING 'GST_AMT'    'GST'      'GST Amount'        'GST Amount'.
+658    *  PERFORM set_col_texts USING 'PLACE_EXEC' 'PlaceExc' 'Place of Exec.'    'Place of Execution of Work'.
+659    *  PERFORM set_col_texts USING 'IND_NM'     'Indentor' 'Indentor'          'Indentor Name'.
+660    *  PERFORM set_col_texts USING 'DLG_NM'     'Dlg.Ofcr' 'Dealing Officer'   'Dealing Officer'.
+661    *  PERFORM set_col_texts USING 'KDATB'      'StrtDate' 'Contr.Start Date'  'Contract Start Date'.
+662    *  PERFORM set_col_texts USING 'KDATE'      'EndDate'  'Contr.End Date'    'Contract Scheduled End Date'.
+663    *  PERFORM set_col_texts USING 'PBG_STAT'   'SD/PBG'   'SD/PBG Status'     'SD/PBG Status'.
+664    *  PERFORM set_col_texts USING 'PBG_SUB'    'PBG Sub'  'PBG Submit'        'PBG Submit (Y/N)'.
+665    *  PERFORM set_col_texts USING 'AMD1_DT'    'Amd1 Dt'  '1st Amnd.Date'     'Date of 1st Amendment Issued'.
+666    *  PERFORM set_col_texts USING 'AMD1_NAT'   'Amd1 Nat' '1st Amnd.Nature'   'Nature of 1st Amendment'.
+667    *  PERFORM set_col_texts USING 'AMD1_DEL'   'Amd1 Del' '1st Ext.Del.Dt'    '1st Extended Delivery Date'.
+668    *  PERFORM set_col_texts USING 'AMD1_VAL'   'Amd1 Val' '1st Rev.Value'     '1st Revised Contract Value'.
+669    *  PERFORM set_col_texts USING 'AMD2_DT'    'Amd2 Dt'  '2nd Amnd.Date'     'Date of 2nd Amendment Issued'.
+670    *  PERFORM set_col_texts USING 'AMD2_NAT'   'Amd2 Nat' '2nd Amnd.Nature'   'Nature of 2nd Amendment'.
+671    *  PERFORM set_col_texts USING 'AMD2_DEL'   'Amd2 Del' '2nd Ext.Del.Dt'    '2nd Extended Delivery Date'.
+672    *  PERFORM set_col_texts USING 'AMD2_VAL'   'Amd2 Val' '2nd Rev.Value'     '2nd Revised Contract Value'.
+673    *  PERFORM set_col_texts USING 'AMD3_DT'    'Amd3 Dt'  '3rd Amnd.Date'     'Date of 3rd Amendment Issued'.
+674    *  PERFORM set_col_texts USING 'AMD3_NAT'   'Amd3 Nat' '3rd Amnd.Nature'   'Nature of 3rd Amendment'.
+675    *  PERFORM set_col_texts USING 'AMD3_DEL'   'Amd3 Del' '3rd Ext.Del.Dt'    '3rd Extended Delivery Date'.
+676    *  PERFORM set_col_texts USING 'AMD3_VAL'   'Amd3 Val' '3rd Rev.Value'     '3rd Revised Contract Value'.
+677    *
+678    *  TRY.
+679    *      go_column ?= go_columns->get_column( 'WAERS' ).
+680    *      go_column->set_visible( abap_false ).
+681    *    CATCH cx_salv_not_found. "#EC NO_HANDLER
+682    *  ENDTRY.
+683    *
+684    *  TRY.
+685    *      go_column ?= go_columns->get_column( 'KTWRT' ).
+686    *      go_column->set_currency_column( 'WAERS' ).
+687    *    CATCH cx_salv_not_found. "#EC NO_HANDLER
+688    *  ENDTRY.
+689    *
+690    *  go_aggrs = go_salv->get_aggregations( ).
+691    *  TRY.
+692    *      go_aggrs->add_aggregation( columnname = 'KTWRT'
+693    *        aggregation = if_salv_c_aggregation=>total ).
+694    *    CATCH cx_salv_data_error cx_salv_not_found cx_salv_existing. "#EC NO_HANDLER
+695    *  ENDTRY.
+696    *  TRY.
+697    *      go_aggrs->add_aggregation( columnname = 'KTWRT_INR'
+698    *        aggregation = if_salv_c_aggregation=>total ).
+699    *    CATCH cx_salv_data_error cx_salv_not_found cx_salv_existing. "#EC NO_HANDLER
+700    *  ENDTRY.
+701    *
+702    *  go_sorts = go_salv->get_sorts( ).
+703    *  TRY.
+704    *      go_sorts->add_sort( columnname = 'SLNO'
+705    *        sequence = if_salv_c_sort=>sort_up ).
+706    *    CATCH cx_salv_data_error cx_salv_not_found cx_salv_existing. "#EC NO_HANDLER
+707    *  ENDTRY.
+708    *
+709    *  go_salv->display( ).
+710    *
+711    *ENDFORM.
+712    *
+713    **======================================================================*
+714    **& FORM: DISPLAY_GEM_ALV  (Report 3 ALV display - 12 columns)          *
+715    **======================================================================*
+716    *FORM display_gem_alv.
+717    *
+718    *  CHECK gt_gem IS NOT INITIAL.
+719    *
+720    *  TRY.
+721    *      cl_salv_table=>factory(
+722    *        IMPORTING r_salv_table = go_salv
+723    *        CHANGING  t_table      = gt_gem ).
+724    *    CATCH cx_salv_msg INTO go_ex.
+725    *      MESSAGE go_ex->get_text( ) TYPE 'E'.
+726    *      RETURN.
+727    *  ENDTRY.
+728    *
+729    *  go_funcs = go_salv->get_functions( ).
+730    *  go_funcs->set_all( abap_true ).
+731    *
+732    *  go_display = go_salv->get_display_settings( ).
+733    *  go_display->set_list_header( 'Supplier Order Register - GEM' ).
+734    *  go_display->set_striped_pattern( cl_salv_display_settings=>true ).
+735    *  go_display->set_fit_column_to_table_size( abap_true ).
+736    *
+737    *  go_columns = go_salv->get_columns( ).
+738    *  go_columns->set_optimize( abap_true ).
+739    *
+740    *  PERFORM set_col_texts USING 'SLNO'       'Sl.No'    'Sl. No.'           'Serial Number'.
+741    *  PERFORM set_col_texts USING 'ZGEMPO'     'GeM No.'  'GeM Order No.'     'GeM Order Number'.
+742    *  PERFORM set_col_texts USING 'BEDAT'      'Date'     'Date'              'PO Issue Date'.
+743    *  PERFORM set_col_texts USING 'ZZSUBMI'    'Tndr File' 'Tender File No.'  'Tender Register File Number'.
+744    *  PERFORM set_col_texts USING 'VEND_NM'    'Vendor'   'Vendor'            'Vendor Name'.
+745    *  PERFORM set_col_texts USING 'ZZVEND_CAT' 'Vnd Cat'  'Vendor Category'   'Vendor Category'.
+746    *  PERFORM set_col_texts USING 'DESCR'      'Desc.'    'PO Description'    'PO Description'.
+747    *  PERFORM set_col_texts USING 'KTWRT'      'PO Value' 'PO Value'          'PO Value'.
+748    *  PERFORM set_col_texts USING 'DLG_NM'     'Dlg.Ofcr' 'Dealing Officer'   'Dealing Officer'.
+749    *  PERFORM set_col_texts USING 'EBELN'      'SAP PO'   'SAP PO No.'        'SAP PO Number'.
+750    *  PERFORM set_col_texts USING 'PBG_INFO'   'PBG'      'PBG Info'          'PBG (Received or Not)'.
+751    *  PERFORM set_col_texts USING 'PROCSTAT'   'Status'   'Current Status'    'Current Status'.
+752    *
+753    *  go_aggrs = go_salv->get_aggregations( ).
+754    *  TRY.
+755    *      go_aggrs->add_aggregation( columnname = 'KTWRT'
+756    *        aggregation = if_salv_c_aggregation=>total ).
+757    *    CATCH cx_salv_data_error cx_salv_not_found cx_salv_existing. "#EC NO_HANDLER
+758    *  ENDTRY.
+759    *
+760    *  go_sorts = go_salv->get_sorts( ).
+761    *  TRY.
+762    *      go_sorts->add_sort( columnname = 'SLNO'
+763    *        sequence = if_salv_c_sort=>sort_up ).
+764    *    CATCH cx_salv_data_error cx_salv_not_found cx_salv_existing. "#EC NO_HANDLER
+765    *  ENDTRY.
+766    *
+767    *  go_salv->display( ).
+768    *
+769    *ENDFORM.
+770    *
+771    **======================================================================*
+772    **& FORM: SET_COL_TEXTS  (Helper - Short/Medium/Long column headers)    *
+773    **======================================================================*
+774    *FORM set_col_texts
+775    *  USING pv_name   TYPE lvc_fname
+776    *        pv_short  TYPE scrtext_s
+777    *        pv_medium TYPE scrtext_m
+778    *        pv_long   TYPE scrtext_l.
+779    *
+780    *  TRY.
+781    *      go_column ?= go_columns->get_column( pv_name ).
+782    *      go_column->set_short_text( pv_short ).
+783    *      go_column->set_medium_text( pv_medium ).
+784    *      go_column->set_long_text( pv_long ).
+785    *    CATCH cx_salv_not_found. "#EC NO_HANDLER
+786    *  ENDTRY.
+787    *
+788    *ENDFORM.
+789    *
+790    **======================================================================*
+791    **& FORM: GET_VENDOR_INFO  (Helper - Vendor name and address from LFA1) *
+792    **======================================================================*
+793    *FORM get_vendor_info
+794    *  USING    pv_lifnr LIKE ekko-lifnr
+795    *  CHANGING cv_name TYPE char40
+796    *           cv_addr TYPE char80.
+797    *
+798    *  DATA:
+799    *    lv_name1 TYPE char40,
+800    *    lv_stras LIKE lfa1-stras,
+801    *    lv_ort01 LIKE lfa1-ort01,
+802    *    lv_pstlz LIKE lfa1-pstlz.
+803    *
+804    *  CLEAR: cv_name, cv_addr.
+805    *
+806    *  SELECT SINGLE name1 stras ort01 pstlz
+807    *    FROM lfa1
+808    *    INTO (lv_name1, lv_stras, lv_ort01, lv_pstlz)
+809    *    WHERE lifnr = pv_lifnr.
+810    *
+811    *  IF sy-subrc = 0.
+812    *    cv_name = lv_name1.
+813    *    CONCATENATE lv_stras lv_pstlz lv_ort01
+814    *      INTO cv_addr SEPARATED BY ', '.
+815    *  ENDIF.
+816    *
+817    *ENDFORM.
+818    *
+819    **======================================================================*
+820    **& FORM: GET_EMP_NAME  (Helper - Employee name from PA0002)            *
+821    **======================================================================*
+822    *FORM get_emp_name
+823    *  USING    pv_pernr TYPE persno
+824    *  CHANGING cv_name  TYPE char40.
+825    *
+826    *  DATA:
+827    *    lv_vorna TYPE pa0002-vorna,
+828    *    lv_nachn TYPE pa0002-nachn.
+829    *
+830    *  CLEAR cv_name.
+831    *
+832    *  SELECT SINGLE vorna nachn
+833    *    FROM pa0002
+834    *    INTO (lv_vorna, lv_nachn)
+835    *    WHERE pernr = pv_pernr
+836    *      AND endda >= sy-datum
+837    *      AND begda <= sy-datum.
+838    *
+839    *  IF sy-subrc = 0.
+840    *    CONCATENATE lv_vorna lv_nachn
+841    *      INTO cv_name SEPARATED BY space.
+842    *  ELSE.
+843    *    cv_name = pv_pernr.
+844    *  ENDIF.
+845    *
+846    *ENDFORM.
+847    *
+848    **======================================================================*
+849    **& FORM: GET_PGRP_NAME  (Helper - Purchasing group name from T024)     *
+850    **======================================================================*
+851    *FORM get_pgrp_name
+852    *  USING    pv_ekgrp LIKE ekko-ekgrp
+853    *  CHANGING cv_eknam LIKE t024-eknam.
+854    *
+855    *  CLEAR cv_eknam.
+856    *
+857    *  SELECT SINGLE eknam
+858    *    FROM t024
+859    *    INTO cv_eknam
+860    *    WHERE ekgrp = pv_ekgrp.
+861    *
+862    *  IF sy-subrc <> 0.
+863    *    cv_eknam = pv_ekgrp.
+864    *  ENDIF.
+865    *
+866    *ENDFORM.
+867
+868    *&---------------------------------------------------------------------*
+869    *& Report  : ZREP_TENDER_REGISTER                                      *
+870    *& Title   : Tender Register / Supply Order / GEM Register - ALV       *
+871    *& Author  : <Developer>                                               *
+872    *& Date    : July 2025                                                 *
+873    *&---------------------------------------------------------------------*
+874    *& Description:                                                        *
+875    *&   Displays one of three registers based on radio button selection:  *
+876    *&   R1 - Tender Register     (ZMM_PUR_TENDER_D + ZMM_TMS)            *
+877    *&   R2 - Supplier Order Details Corp & BD  (EKKO + EKPO + LFA1)      *
+878    *&   R3 - Supplier Order Register for GEM   (EKKO + LFA1)             *
+879    *&---------------------------------------------------------------------*
+880    *& Tables:                                                             *
+881    *&   ZMM_PUR_TENDER_D, ZMM_TMS, PA0002                                *
+882    *&   EKKO, EKPO, LFA1, T024                                           *
+883    *&---------------------------------------------------------------------*
+884    *& Modifications                                                       *
+885    *&---------------------------------------------------------------------*
+886    *& 10.08.2026  +P2  Contract / PO value was always zero on standard POs *
+887    *&                  because EKKO-KTWRT holds the target value of an     *
+888    *&                  outline agreement only.  Value is now derived by    *
+889    *&                  document category from EKPO.  Also corrected the    *
+890    *&                  INR conversion for indirect quotation (WKURS < 0).  *
+891    *&                  Applies to Report 2 and Report 3.                   *
+892    *& 10.08.2026  +P4  RFQ (EKPO-ANFNR) now shown on the PO line in a new  *
+893    *&                  column, and the standalone RFQ row is suppressed    *
+894    *&                  where the referencing document is in the same       *
+895    *&                  result set.                                         *
+896    *& 10.08.2026  +P3  Contract / OLA number (EKPO-KONNR) added as a new   *
+897    *&                  column next to the PO number.                       *
+898    *& 10.08.2026  +P5  New SELECT-OPTION SO_ERNAM (multiple user IDs).     *
+899    *&                  Where the document references a contract the        *
+900    *&                  CONTRACT's creator is matched, otherwise the        *
+901    *&                  document's own creator.                             *
+902    *&---------------------------------------------------------------------*
+903    REPORT zrep_tender_register
+904      NO STANDARD PAGE HEADING
+905      MESSAGE-ID zmm.
+906
+907    *======================================================================*
+908    * TYPE DEFINITIONS                                                     *
+909    *======================================================================*
+910
+911    *-- Report 1 : Tender Register
+912    TYPES:
+913      BEGIN OF ty_tdr,
+914        slno       TYPE n LENGTH 5,
+915        submi      LIKE zmm_pur_tender_d-submi,
+916        pr_rcpt_dt LIKE zmm_tms-pr_rcpt_dt,
+917        bsart      LIKE zmm_pur_tender_d-bsart,
+918        banfn      LIKE zmm_pur_tender_d-banfn,
+919        workdesc   LIKE zmm_pur_tender_d-workdesc,
+920        tndr_val   LIKE zmm_pur_tender_d-tndr_val,
+921        waers      LIKE zmm_pur_tender_d-waers,
+922        tnndr_typ  LIKE zmm_pur_tender_d-tnndr_typ,
+923        dlg_offic  LIKE zmm_pur_tender_d-dlg_offic,
+924        tc_mem_nm  TYPE char40,
+925        tdrtxt     LIKE zmm_pur_tender_d-tdrtxt,
+926        nitdate    LIKE zmm_pur_tender_d-nitdate,
+927        lt_sel_dt  LIKE zmm_pur_tender_d-lt_sel_dt,
+928        noa_dt     TYPE datum,
+929        banfn_pr   LIKE zmm_pur_tender_d-banfn,
+930        tdrsts     LIKE zmm_pur_tender_d-tdrsts,
+931        emd_recv   TYPE datum,
+932        emd_rtrn   LIKE zmm_tms-reo_tsal_stat,
+933      END OF ty_tdr.
+934
+935    *-- Report 2 : Supplier Order Details (Corp & BD) - 38 columns
+936    TYPES:
+937      BEGIN OF ty_so,
+938        slno       TYPE n LENGTH 5,          " 01 Entry Sl.No.
+939        zzloino    LIKE ekko-zzloino,         " 02 Supply Order Control Number (LOI/NOA No.)
+940        bedat      LIKE ekko-bedat,           " 03 SO Issue Date
+941        zzsubmi    LIKE ekko-zzsubmi,         " 04 Tender Register File Number
+942        bsart      LIKE ekko-bsart,           " 05 Type of Tender (Doc Type)
+943        zznat_proc LIKE ekko-zznat_proc,      " 06 Type of Case (CVO Reporting)
+944        zzt_nature LIKE ekko-zzt_nature,      " 07 Justification (Nature of Tender)
+945        banfn      LIKE ekpo-banfn,           " 08 SAP PR No.
+946        ebeln      LIKE ekko-ebeln,           " 09 SAP Contract / PO No.
+947        konnr      LIKE ekpo-konnr,           " 09a Contract / OLA No.         "+P3
+948        anfnr      LIKE ekpo-anfnr,           " 09b RFQ No.                    "+P4
+949        ernam      LIKE ekko-ernam,           " 09c Created By (eff. user)     "+P5
+950        bstyp      LIKE ekko-bstyp,           " 09d Doc.cat. (hidden in ALV)   "+P4
+951        vend_nm    TYPE char40,               " 10 Name of Contractor
+952        zzvend_cat LIKE ekko-zzvend_cat,      " 11 Vendor Category
+953        zzmse      LIKE ekko-zzmse,           " 12 Local Content Status (MSE)
+954        vend_addr  TYPE char80,               " 13 Address
+955        descr      LIKE ekko-description,     " 14 Brief Description
+956        waers      LIKE ekko-waers,           " 15 Contract Currency
+957        ktwrt      LIKE ekko-ktwrt,           " 16 Contract Value
+958        ktwrt_inr  TYPE p LENGTH 13 DECIMALS 2, " 17 Contract Value in INR
+959        wkurs      LIKE ekko-wkurs,           " 18 Exchange Rate
+960        gst_amt    TYPE p LENGTH 13 DECIMALS 2, " 19 GST Amount (EKPO-NAVNW)
+961        place_exec LIKE ekko-inco2,           " 20 Place of Execution
+962        ind_nm     TYPE char40,               " 21 Indentor Name
+963        dlg_nm     TYPE char20,               " 22 Dealing Officer (Purch. Group Name)
+964        kdatb      LIKE ekko-kdatb,           " 23 Contract Start Date
+965        kdate      LIKE ekko-kdate,           " 24 Contract Scheduled End Date
+966        pbg_stat   TYPE char1,               " 25 SD/PBG Status (Y=Recd N=Pending)
+967        pbg_sub    TYPE char1,               " 26 PBG Submit (Y/N)
+968        amd1_dt    TYPE datum,               " 27 1st Amendment Date
+969        amd1_nat   TYPE char40,              " 28 1st Amendment Nature
+970        amd1_del   TYPE datum,               " 29 1st Extended Delivery Date
+971        amd1_val   TYPE p LENGTH 13 DECIMALS 2, " 30 1st Revised Contract Value
+972        amd2_dt    TYPE datum,               " 31 2nd Amendment Date
+973        amd2_nat   TYPE char40,              " 32 2nd Amendment Nature
+974        amd2_del   TYPE datum,               " 33 2nd Extended Delivery Date
+975        amd2_val   TYPE p LENGTH 13 DECIMALS 2, " 34 2nd Revised Contract Value
+976        amd3_dt    TYPE datum,               " 35 3rd Amendment Date
+977        amd3_nat   TYPE char40,              " 36 3rd Amendment Nature
+978        amd3_del   TYPE datum,               " 37 3rd Extended Delivery Date
+979        amd3_val   TYPE p LENGTH 13 DECIMALS 2, " 38 3rd Revised Contract Value
+980      END OF ty_so.
+981
+982    *-- Report 3 : Supplier Order Register for GEM - 12 columns
+983    TYPES:
+984      BEGIN OF ty_gem,
+985        slno       TYPE n LENGTH 5,          " 01 Sl. No.
+986        zgempo     LIKE ekko-zgempo,          " 02 GeM Order No.
+987        bedat      LIKE ekko-bedat,           " 03 Date (PO Issue Date)
+988        zzsubmi    LIKE ekko-zzsubmi,         " 04 Tender Register File Number
+989        vend_nm    TYPE char40,               " 05 Vendor Name
+990        zzvend_cat LIKE ekko-zzvend_cat,      " 06 Vendor Category
+991        descr      LIKE ekko-description,     " 07 PO Description
+992        ktwrt      LIKE ekko-ktwrt,           " 08 PO Value
+993        dlg_nm     TYPE char20,               " 09 Dealing Officer
+994        ebeln      LIKE ekko-ebeln,           " 10 SAP PO No.
+995        pbg_info   TYPE char40,               " 11 PBG (received or not)
+996        procstat   LIKE ekko-procstat,        " 12 Current Status
+997      END OF ty_gem.
+998
+999    *======================================================================*
+1000   * GLOBAL DATA                                                          *
+1001   *======================================================================*
+1002
+1003   *-- Internal tables and work areas
+1004   DATA:
+1005     gt_tdr    TYPE STANDARD TABLE OF ty_tdr,
+1006     gwa_tdr   TYPE ty_tdr,
+1007     gt_so     TYPE STANDARD TABLE OF ty_so,
+1008     gwa_so    TYPE ty_so,
+1009     gt_gem    TYPE STANDARD TABLE OF ty_gem,
+1010     gwa_gem   TYPE ty_gem.
+1011
+1012   *-- ALV object references (shared across all 3 reports)
+1013   DATA:
+1014     go_salv    TYPE REF TO cl_salv_table,
+1015     go_ex      TYPE REF TO cx_salv_msg,
+1016     go_columns TYPE REF TO cl_salv_columns_table,
+1017     go_column  TYPE REF TO cl_salv_column_table,
+1018     go_display TYPE REF TO cl_salv_display_settings,
+1019     go_sorts   TYPE REF TO cl_salv_sorts,
+1020     go_funcs   TYPE REF TO cl_salv_functions_list,
+1021     go_aggrs   TYPE REF TO cl_salv_aggregations.
+1022
+1023   *-- Selection screen reference variables
+1024   DATA:
+1025     gv_submi   LIKE zmm_pur_tender_d-submi,
+1026     gv_bsart   LIKE zmm_pur_tender_d-bsart,
+1027     gv_dlgof   LIKE zmm_pur_tender_d-dlg_offic,
+1028     gv_nitdt   LIKE zmm_pur_tender_d-nitdate,
+1029     gv_tdrst   LIKE zmm_pur_tender_d-tdrsts,
+1030     gv_prrdt   LIKE zmm_tms-pr_rcpt_dt,
+1031     gv_mjahr   LIKE zmm_pur_tender_d-mjahr,
+1032     gv_ebeln   LIKE ekko-ebeln,
+1033     gv_bsrt2   LIKE ekko-bsart,
+1034     gv_lifnr   LIKE ekko-lifnr,
+1035     gv_bedat   LIKE ekko-bedat,
+1036     gv_ekgrp   LIKE ekko-ekgrp,
+1037     gv_ernam   LIKE ekko-ernam,                                     "+P5
+1038     gv_counter TYPE i.
+1039
+1040
+1041   *======================================================================*
+1042   * SELECTION SCREEN                                                     *
+1043   *======================================================================*
+1044
+1045   *-- Block 0: Report selection via radio buttons
+1046   SELECTION-SCREEN BEGIN OF BLOCK b0 WITH FRAME.
+1047     SELECTION-SCREEN BEGIN OF LINE.
+1048       PARAMETERS rb_tdr RADIOBUTTON GROUP rg01 DEFAULT 'X'
+1049                  USER-COMMAND ucmd.
+1050       SELECTION-SCREEN COMMENT 3(38) gc_rb1 FOR FIELD rb_tdr.
+1051     SELECTION-SCREEN END OF LINE.
+1052     SELECTION-SCREEN BEGIN OF LINE.
+1053       PARAMETERS rb_so RADIOBUTTON GROUP rg01.
+1054       SELECTION-SCREEN COMMENT 3(38) gc_rb2 FOR FIELD rb_so.
+1055     SELECTION-SCREEN END OF LINE.
+1056     SELECTION-SCREEN BEGIN OF LINE.
+1057       PARAMETERS rb_gem RADIOBUTTON GROUP rg01.
+1058       SELECTION-SCREEN COMMENT 3(38) gc_rb3 FOR FIELD rb_gem.
+1059     SELECTION-SCREEN END OF LINE.
+1060   SELECTION-SCREEN END OF BLOCK b0.
+1061
+1062   *-- Block 1: Tender Register filters (greyed out for R2/R3)
+1063   SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME.
+1064     SELECT-OPTIONS:
+1065       so_submi FOR gv_submi  MODIF ID t01,
+1066       so_prrdt FOR gv_prrdt  MODIF ID t01,
+1067       so_bsart FOR gv_bsart  MODIF ID t01,
+1068       so_dlgof FOR gv_dlgof  MODIF ID t01,
+1069       so_nitdt FOR gv_nitdt  MODIF ID t01,
+1070       so_tdrst FOR gv_tdrst  MODIF ID t01.
+1071     PARAMETERS p_mjahr TYPE mjahr MODIF ID t01.
+1072   SELECTION-SCREEN END OF BLOCK b1.
+1073
+1074   *-- Block 2: Supply Order / GEM filters (greyed out for R1)
+1075   SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME.
+1076     SELECT-OPTIONS:
+1077       so_ebeln FOR gv_ebeln  MODIF ID p01,
+1078       so_bsrt2 FOR gv_bsrt2  MODIF ID p01,
+1079       so_lifnr FOR gv_lifnr  MODIF ID p01,
+1080       so_bedat FOR gv_bedat  MODIF ID p01,
+1081       so_ekgrp FOR gv_ekgrp  MODIF ID p01,
+1082       so_ernam FOR gv_ernam  MODIF ID p01.                          "+P5
+1083   SELECTION-SCREEN END OF BLOCK b2.
+1084
+1085   *======================================================================*
+1086   * INITIALIZATION                                                       *
+1087   *======================================================================*
+1088   INITIALIZATION.
+1089     p_mjahr = sy-datum(4).
+1090     gc_rb1  = 'Tender Register'.
+1091     gc_rb2  = 'Supplier Order Details (Corp & BD)'.
+1092     gc_rb3  = 'Supplier Order Register for GEM'.
+1093
+1094   *======================================================================*
+1095   * AT SELECTION-SCREEN OUTPUT  (grey out irrelevant block)              *
+1096   *======================================================================*
+1097   AT SELECTION-SCREEN OUTPUT.
+1098     LOOP AT SCREEN.
+1099       IF screen-group1 = 'T01'.
+1100         IF rb_tdr = 'X'.
+1101           screen-active = 1.
+1102         ELSE.
+1103           screen-active = 0.
+1104         ENDIF.
+1105         MODIFY SCREEN.
+1106       ELSEIF screen-group1 = 'P01'.
+1107         IF rb_so = 'X' OR rb_gem = 'X'.
+1108           screen-active = 1.
+1109         ELSE.
+1110           screen-active = 0.
+1111         ENDIF.
+1112         MODIFY SCREEN.
+1113       ENDIF.
+1114     ENDLOOP.
+1115
+1116   *======================================================================*
+1117   * START-OF-SELECTION                                                   *
+1118   *======================================================================*
+1119   START-OF-SELECTION.
+1120     CLEAR gv_counter.
+1121     IF rb_tdr = 'X'.
+1122       PERFORM fetch_tender_data.
+1123       PERFORM display_tender_alv.
+1124     ELSEIF rb_so = 'X'.
+1125       PERFORM fetch_so_data.
+1126       PERFORM display_so_alv.
+1127     ELSEIF rb_gem = 'X'.
+1128       PERFORM fetch_gem_data.
+1129       PERFORM display_gem_alv.
+1130     ENDIF.
+1131
+1132   *======================================================================*
+1133   *& FORM: FETCH_TENDER_DATA  (Report 1 - Tender Register)               *
+1134   *======================================================================*
+1135   FORM fetch_tender_data.
+1136
+1137     DATA:
+1138       lt_tender TYPE TABLE OF zmm_pur_tender_d,
+1139       ls_tender TYPE zmm_pur_tender_d,
+1140       ls_tms    TYPE zmm_tms,
+1141       lv_nachn  TYPE pa0002-nachn,
+1142       lv_vorna  TYPE pa0002-vorna,
+1143       lv_ename  TYPE char40.
+1144
+1145     SELECT *
+1146       FROM zmm_pur_tender_d
+1147       INTO TABLE lt_tender
+1148       WHERE submi     IN so_submi
+1149         AND bsart     IN so_bsart
+1150         AND dlg_offic IN so_dlgof
+1151         AND nitdate   IN so_nitdt
+1152         AND tdrsts    IN so_tdrst
+1153         AND mjahr     = p_mjahr.
+1154
+1155     IF sy-subrc <> 0 OR lt_tender IS INITIAL.
+1156       MESSAGE 'No tender records found for the given selection.' TYPE 'I'.
+1157       RETURN.
+1158     ENDIF.
+1159
+1160     LOOP AT lt_tender INTO ls_tender.
+1161
+1162       CLEAR gwa_tdr.
+1163       gwa_tdr-submi     = ls_tender-submi.
+1164       gwa_tdr-bsart     = ls_tender-bsart.
+1165       gwa_tdr-banfn     = ls_tender-banfn.
+1166       gwa_tdr-banfn_pr  = ls_tender-banfn.
+1167       gwa_tdr-workdesc  = ls_tender-workdesc.
+1168       gwa_tdr-tndr_val  = ls_tender-tndr_val.
+1169       gwa_tdr-waers     = ls_tender-waers.
+1170       gwa_tdr-tnndr_typ = ls_tender-tnndr_typ.
+1171       gwa_tdr-dlg_offic = ls_tender-dlg_offic.
+1172       gwa_tdr-tdrtxt    = ls_tender-tdrtxt.
+1173       gwa_tdr-nitdate   = ls_tender-nitdate.
+1174       gwa_tdr-lt_sel_dt = ls_tender-lt_sel_dt.
+1175       gwa_tdr-tdrsts    = ls_tender-tdrsts.
+1176
+1177       SELECT SINGLE *
+1178         FROM zmm_tms
+1179         INTO ls_tms
+1180         WHERE submi = ls_tender-submi.
+1181
+1182       IF sy-subrc = 0.
+1183         IF so_prrdt[] IS NOT INITIAL.
+1184           IF ls_tms-pr_rcpt_dt NOT IN so_prrdt.
+1185             CONTINUE.
+1186           ENDIF.
+1187         ENDIF.
+1188         gwa_tdr-pr_rcpt_dt = ls_tms-pr_rcpt_dt.
+1189         gwa_tdr-noa_dt     = ls_tms-loi_1_act_dt.
+1190         gwa_tdr-emd_recv   = ls_tms-rec_tsal_act_dt.
+1191         gwa_tdr-emd_rtrn   = ls_tms-reo_tsal_stat.
+1192         IF ls_tms-tc_member1 IS NOT INITIAL.
+1193           CLEAR: lv_nachn, lv_vorna, lv_ename.
+1194           SELECT SINGLE vorna nachn
+1195             FROM pa0002
+1196             INTO (lv_vorna, lv_nachn)
+1197             WHERE pernr = ls_tms-tc_member1
+1198               AND endda >= sy-datum
+1199               AND begda <= sy-datum.
+1200           IF sy-subrc = 0.
+1201             CONCATENATE lv_vorna lv_nachn
+1202               INTO lv_ename SEPARATED BY space.
+1203             gwa_tdr-tc_mem_nm = lv_ename.
+1204           ELSE.
+1205             gwa_tdr-tc_mem_nm = ls_tms-tc_member1.
+1206           ENDIF.
+1207         ENDIF.
+1208       ELSE.
+1209         IF so_prrdt[] IS NOT INITIAL.
+1210           CONTINUE.
+1211         ENDIF.
+1212       ENDIF.
+1213
+1214       gv_counter += 1.
+1215       gwa_tdr-slno = gv_counter.
+1216       APPEND gwa_tdr TO gt_tdr.
+1217
+1218     ENDLOOP.
+1219
+1220     IF gt_tdr IS INITIAL.
+1221       MESSAGE 'No records found after applying all filters.' TYPE 'I'.
+1222     ENDIF.
+1223
+1224   ENDFORM.
+1225
+1226   *======================================================================*
+1227   *& FORM: FETCH_SO_DATA  (Report 2 - Supplier Order Details Corp & BD)  *
+1228   *======================================================================*
+1229   FORM fetch_so_data.
+1230
+1231     DATA:
+1232       lt_ekko  TYPE TABLE OF ekko,
+1233       ls_ekko  TYPE ekko,
+1234       lv_banfn LIKE ekpo-banfn,
+1235       lv_txz01 LIKE ekpo-txz01,
+1236       lv_navnw LIKE ekpo-navnw,
+1237       lv_name1 TYPE char40,
+1238       lv_addr  TYPE char80,
+1239       lv_eknam LIKE t024-eknam,
+1240       lv_ename TYPE char40.
+1241
+1242   *-- Item data, read once instead of once per header          "+P2 +P4
+1243     TYPES: BEGIN OF ty_item,
+1244              ebeln TYPE ekpo-ebeln,
+1245              ebelp TYPE ekpo-ebelp,
+1246              loekz TYPE ekpo-loekz,
+1247              netwr TYPE ekpo-netwr,
+1248              zwert TYPE ekpo-zwert,
+1249              navnw TYPE ekpo-navnw,
+1250              banfn TYPE ekpo-banfn,
+1251              txz01 TYPE ekpo-txz01,
+1252              anfnr TYPE ekpo-anfnr,
+1253              konnr TYPE ekpo-konnr,
+1254            END OF ty_item.
+1255
+1256   *-- Contract numbers referenced by the selected documents, and the
+1257   *-- creator of each of those contracts                             "+P5
+1258     TYPES: BEGIN OF ty_konnr,
+1259              konnr TYPE ekpo-konnr,
+1260            END OF ty_konnr.
+1261     TYPES: BEGIN OF ty_cern,
+1262              ebeln TYPE ekko-ebeln,
+1263              ernam TYPE ekko-ernam,
+1264            END OF ty_cern.
+1265
+1266     DATA: lt_item     TYPE SORTED TABLE OF ty_item
+1267                            WITH NON-UNIQUE KEY ebeln ebelp,
+1268           ls_item     TYPE ty_item,
+1269           lt_rfq_used TYPE SORTED TABLE OF ebeln
+1270                            WITH UNIQUE KEY table_line,
+1271           lt_konnr    TYPE SORTED TABLE OF ty_konnr
+1272                            WITH UNIQUE KEY konnr,
+1273           ls_konnr    TYPE ty_konnr,
+1274           lt_cern     TYPE SORTED TABLE OF ty_cern
+1275                            WITH UNIQUE KEY ebeln,
+1276           ls_cern     TYPE ty_cern,
+1277           lv_docval   TYPE ekko-ktwrt,
+1278           lv_ernam    TYPE ekko-ernam,
+1279           lv_first    TYPE abap_bool,
+1280           lv_tabix    TYPE sy-tabix.
+1281
+1282     FIELD-SYMBOLS: <ls_so> TYPE ty_so.
+1283
+1284     SELECT *
+1285       FROM ekko
+1286       INTO TABLE lt_ekko
+1287       WHERE ebeln IN so_ebeln
+1288         AND bsart IN so_bsrt2
+1289         AND lifnr IN so_lifnr
+1290         AND bedat IN so_bedat
+1291         AND ekgrp IN so_ekgrp
+1292         AND loekz = ' '.
+1293
+1294     IF sy-subrc <> 0 OR lt_ekko IS INITIAL.
+1295       MESSAGE 'No supply order records found for the given selection.' TYPE 'I'.
+1296       RETURN.
+1297     ENDIF.
+1298
+1299   *-- Prefetch all items once.  Replaces the two SELECT SINGLEs that used
+1300   *-- to run inside the loop, and feeds both corrections.      "+P2 +P4
+1301     SELECT ebeln ebelp loekz netwr zwert navnw banfn txz01 anfnr konnr
+1302       FROM ekpo
+1303       INTO TABLE lt_item
+1304       FOR ALL ENTRIES IN lt_ekko
+1305       WHERE ebeln = lt_ekko-ebeln.
+1306
+1307   *-- Every RFQ referenced by a document in this result set (those must
+1308   *-- not also appear as a row of their own), and every contract       "+P4
+1309   *-- referenced, so its creator can be read for the user filter.      "+P5
+1310     LOOP AT lt_item INTO ls_item.
+1311       IF ls_item-anfnr IS NOT INITIAL.
+1312         INSERT ls_item-anfnr INTO TABLE lt_rfq_used.
+1313       ENDIF.
+1314       IF ls_item-konnr IS NOT INITIAL.
+1315         ls_konnr-konnr = ls_item-konnr.
+1316         INSERT ls_konnr INTO TABLE lt_konnr.
+1317       ENDIF.
+1318     ENDLOOP.
+1319
+1320   *-- Creator of each referenced contract                             "+P5
+1321     IF lt_konnr IS NOT INITIAL.
+1322       SELECT ebeln ernam
+1323         FROM ekko
+1324         INTO TABLE lt_cern
+1325         FOR ALL ENTRIES IN lt_konnr
+1326         WHERE ebeln = lt_konnr-konnr.
+1327     ENDIF.
+1328
+1329     LOOP AT lt_ekko INTO ls_ekko.
+1330
+1331       CLEAR gwa_so.
+1332
+1333       gwa_so-zzloino    = ls_ekko-zzloino.
+1334       gwa_so-bedat      = ls_ekko-bedat.
+1335       gwa_so-zzsubmi    = ls_ekko-zzsubmi.
+1336       gwa_so-bsart      = ls_ekko-bsart.
+1337       gwa_so-zznat_proc = ls_ekko-zznat_proc.
+1338       gwa_so-zzt_nature = ls_ekko-zzt_nature.
+1339       gwa_so-ebeln      = ls_ekko-ebeln.
+1340       gwa_so-bstyp      = ls_ekko-bstyp.                            "+P4
+1341       gwa_so-zzvend_cat = ls_ekko-zzvend_cat.
+1342       gwa_so-zzmse      = ls_ekko-zzmse.
+1343       gwa_so-waers      = ls_ekko-waers.
+1344       gwa_so-wkurs      = ls_ekko-wkurs.
+1345       gwa_so-place_exec = ls_ekko-inco2.
+1346       gwa_so-kdatb      = ls_ekko-kdatb.
+1347       gwa_so-kdate      = ls_ekko-kdate.
+1348
+1349   *-- Document value by category.                                   "+P2
+1350   *-- EKKO-KTWRT holds the target value of an OUTLINE AGREEMENT only; on a
+1351   *-- standard PO it is always zero, which is why PO values showed as 0.
+1352       CLEAR lv_docval.
+1353       IF ls_ekko-bstyp = 'K' OR ls_ekko-bstyp = 'L'.
+1354         lv_docval = ls_ekko-ktwrt.
+1355         IF lv_docval IS INITIAL.
+1356           LOOP AT lt_item INTO ls_item
+1357                WHERE ebeln = ls_ekko-ebeln
+1358                  AND loekz <> 'L'.
+1359             lv_docval = lv_docval + ls_item-zwert.
+1360           ENDLOOP.
+1361         ENDIF.
+1362       ELSE.
+1363         LOOP AT lt_item INTO ls_item
+1364              WHERE ebeln = ls_ekko-ebeln
+1365                AND loekz <> 'L'.
+1366           lv_docval = lv_docval + ls_item-netwr.
+1367         ENDLOOP.
+1368       ENDIF.
+1369       gwa_so-ktwrt = lv_docval.
+1370
+1371   *-- Value in INR.  A negative WKURS means indirect quotation.      "+P2
+1372       CLEAR gwa_so-ktwrt_inr.
+1373       IF ls_ekko-waers = 'INR'.
+1374         gwa_so-ktwrt_inr = lv_docval.
+1375       ELSEIF ls_ekko-wkurs > 0.
+1376         gwa_so-ktwrt_inr = lv_docval * ls_ekko-wkurs.
+1377       ELSEIF ls_ekko-wkurs < 0.
+1378         gwa_so-ktwrt_inr = lv_docval / abs( ls_ekko-wkurs ).
+1379       ENDIF.
+1380
+1381   *-- First item (lowest EBELP) drives description, PR no. and GST.
+1382   *-- RFQ no. = first non-blank EKPO-ANFNR on the document.          "+P4
+1383   *-- Contract / OLA no. = first non-blank EKPO-KONNR.               "+P3
+1384       CLEAR: lv_txz01, lv_banfn, lv_navnw, lv_first.
+1385       LOOP AT lt_item INTO ls_item WHERE ebeln = ls_ekko-ebeln.
+1386         IF lv_first = abap_false.
+1387           lv_txz01 = ls_item-txz01.
+1388           lv_banfn = ls_item-banfn.
+1389           lv_navnw = ls_item-navnw.
+1390           lv_first = abap_true.
+1391         ENDIF.
+1392         IF gwa_so-anfnr IS INITIAL AND ls_item-anfnr IS NOT INITIAL.
+1393           gwa_so-anfnr = ls_item-anfnr.
+1394         ENDIF.
+1395         IF gwa_so-konnr IS INITIAL AND ls_item-konnr IS NOT INITIAL.
+1396           gwa_so-konnr = ls_item-konnr.
+1397         ENDIF.
+1398       ENDLOOP.
+1399
+1400   *-- Effective user: where the document references a contract it is the
+1401   *-- CONTRACT's creator, otherwise the document's own creator.       "+P5
+1402       CLEAR lv_ernam.
+1403       IF gwa_so-konnr IS NOT INITIAL.
+1404         READ TABLE lt_cern INTO ls_cern
+1405              WITH TABLE KEY ebeln = gwa_so-konnr.
+1406         IF sy-subrc = 0.
+1407           lv_ernam = ls_cern-ernam.
+1408         ENDIF.
+1409       ENDIF.
+1410       IF lv_ernam IS INITIAL.
+1411         lv_ernam = ls_ekko-ernam.
+1412       ENDIF.
+1413       gwa_so-ernam = lv_ernam.
+1414
+1415   *-- Apply the user filter here, not in the WHERE clause, because the
+1416   *-- value depends on the contract lookup above.  An empty SELECT-OPTION
+1417   *-- lets every row through.                                        "+P5
+1418       IF lv_ernam NOT IN so_ernam.
+1419         CONTINUE.
+1420       ENDIF.
+1421
+1422       " Description: prefer EKKO contract description, else first item text
+1423       IF ls_ekko-description IS NOT INITIAL.
+1424         gwa_so-descr = ls_ekko-description.
+1425       ELSE.
+1426         gwa_so-descr = lv_txz01.
+1427       ENDIF.
+1428
+1429       " PR No. and GST from first EKPO item
+1430       gwa_so-banfn   = lv_banfn.
+1431       gwa_so-gst_amt = lv_navnw.
+1432
+1433       " Vendor name and address from LFA1
+1434       PERFORM get_vendor_info
+1435         USING    ls_ekko-lifnr
+1436         CHANGING lv_name1 lv_addr.
+1437       gwa_so-vend_nm   = lv_name1.
+1438       gwa_so-vend_addr = lv_addr.
+1439
+1440       " Indentor name from HR (EKKO-ZZINDPER)
+1441       IF ls_ekko-zzindper IS NOT INITIAL.
+1442         CLEAR lv_ename.
+1443         PERFORM get_emp_name
+1444           USING    ls_ekko-zzindper
+1445           CHANGING lv_ename.
+1446         gwa_so-ind_nm = lv_ename.
+1447       ENDIF.
+1448
+1449       " Dealing officer: purchasing group name from T024
+1450       CLEAR lv_eknam.
+1451       PERFORM get_pgrp_name
+1452         USING    ls_ekko-ekgrp
+1453         CHANGING lv_eknam.
+1454       gwa_so-dlg_nm = lv_eknam.
+1455
+1456       " Amendment data: extend by reading from custom Z amendment table
+1457       " e.g. SELECT ... FROM zcustom_amendment WHERE ebeln = ls_ekko-ebeln.
+1458
+1459   *-- Sl.No. is assigned after the suppression pass below            "+P4
+1460       APPEND gwa_so TO gt_so.
+1461
+1462     ENDLOOP.
+1463
+1464   *-- Suppress the standalone RFQ row where the referencing PO/contract
+1465   *-- is present in this same result set.  An RFQ with no document
+1466   *-- against it is kept, so open enquiries are not lost.            "+P4
+1467     IF lt_rfq_used IS NOT INITIAL.
+1468       LOOP AT gt_so INTO gwa_so WHERE bstyp = 'A'.
+1469         lv_tabix = sy-tabix.
+1470         READ TABLE lt_rfq_used TRANSPORTING NO FIELDS
+1471              WITH TABLE KEY table_line = gwa_so-ebeln.
+1472         IF sy-subrc = 0.
+1473           DELETE gt_so INDEX lv_tabix.
+1474         ENDIF.
+1475       ENDLOOP.
+1476     ENDIF.
+1477
+1478   *-- Renumber so Sl.No. stays contiguous after suppression          "+P4
+1479     CLEAR gv_counter.
+1480     LOOP AT gt_so ASSIGNING <ls_so>.
+1481       gv_counter = gv_counter + 1.
+1482       <ls_so>-slno = gv_counter.
+1483     ENDLOOP.
+1484
+1485     IF gt_so IS INITIAL.
+1486       MESSAGE 'No supply order records after applying filters.' TYPE 'I'.
+1487     ENDIF.
+1488
+1489   ENDFORM.
+1490
+1491   *======================================================================*
+1492   *& FORM: FETCH_GEM_DATA  (Report 3 - Supplier Order Register for GEM)  *
+1493   *======================================================================*
+1494   FORM fetch_gem_data.
+1495
+1496     DATA:
+1497       lt_ekko  TYPE TABLE OF ekko,
+1498       ls_ekko  TYPE ekko,
+1499       lv_name1 TYPE char40,
+1500       lv_addr  TYPE char80,
+1501       lv_eknam LIKE t024-eknam,
+1502       ls_tms   TYPE zmm_tms,
+1503       lv_docval TYPE ekko-ktwrt.                                    "+P2
+1504
+1505     SELECT *
+1506       FROM ekko
+1507       INTO TABLE lt_ekko
+1508       WHERE ebeln  IN so_ebeln
+1509         AND lifnr  IN so_lifnr
+1510         AND bedat  IN so_bedat
+1511         AND ekgrp  IN so_ekgrp
+1512         AND ernam  IN so_ernam                                      "+P5
+1513         AND loekz  = ' '
+1514         AND zgempo NE ' '.
+1515
+1516     IF sy-subrc <> 0 OR lt_ekko IS INITIAL.
+1517       MESSAGE 'No GEM order records found for the given selection.' TYPE 'I'.
+1518       RETURN.
+1519     ENDIF.
+1520
+1521     LOOP AT lt_ekko INTO ls_ekko.
+1522
+1523       CLEAR gwa_gem.
+1524
+1525       gwa_gem-zgempo    = ls_ekko-zgempo.
+1526       gwa_gem-bedat     = ls_ekko-bedat.
+1527       gwa_gem-zzsubmi   = ls_ekko-zzsubmi.
+1528       gwa_gem-zzvend_cat = ls_ekko-zzvend_cat.
+1529       gwa_gem-descr     = ls_ekko-description.
+1530   *-- GeM orders are POs, so EKKO-KTWRT is always zero here.  Same root
+1531   *-- cause as Point 2 on the Supply Order report.                  "+P2
+1532       CLEAR lv_docval.
+1533       SELECT SUM( netwr ) FROM ekpo INTO lv_docval
+1534         WHERE ebeln = ls_ekko-ebeln
+1535           AND loekz <> 'L'.
+1536       gwa_gem-ktwrt     = lv_docval.
+1537       gwa_gem-ebeln     = ls_ekko-ebeln.
+1538       gwa_gem-procstat  = ls_ekko-procstat.
+1539
+1540       " Vendor name from LFA1
+1541       CLEAR: lv_name1, lv_addr.
+1542       PERFORM get_vendor_info
+1543         USING    ls_ekko-lifnr
+1544         CHANGING lv_name1 lv_addr.
+1545       gwa_gem-vend_nm = lv_name1.
+1546
+1547       " Dealing officer: purchasing group name
+1548       CLEAR lv_eknam.
+1549       PERFORM get_pgrp_name
+1550         USING    ls_ekko-ekgrp
+1551         CHANGING lv_eknam.
+1552       gwa_gem-dlg_nm = lv_eknam.
+1553
+1554       " PBG info: check ZMM_TMS if linked via ZZSUBMI
+1555       IF ls_ekko-zzsubmi IS NOT INITIAL.
+1556         SELECT SINGLE pbg_rcpt_sch_dt
+1557           FROM zmm_tms
+1558           INTO ls_tms-pbg_rcpt_sch_dt
+1559           WHERE submi = ls_ekko-zzsubmi.
+1560         IF sy-subrc = 0 AND ls_tms-pbg_rcpt_sch_dt IS NOT INITIAL.
+1561           gwa_gem-pbg_info = 'Received'.
+1562         ELSE.
+1563           gwa_gem-pbg_info = 'Pending'.
+1564         ENDIF.
+1565       ENDIF.
+1566
+1567       gv_counter += 1.
+1568       gwa_gem-slno = gv_counter.
+1569       APPEND gwa_gem TO gt_gem.
+1570
+1571     ENDLOOP.
+1572
+1573     IF gt_gem IS INITIAL.
+1574       MESSAGE 'No GEM records found after applying filters.' TYPE 'I'.
+1575     ENDIF.
+1576
+1577   ENDFORM.
+1578
+1579   *======================================================================*
+1580   *& FORM: DISPLAY_TENDER_ALV  (Report 1 ALV display)                    *
+1581   *======================================================================*
+1582   FORM display_tender_alv.
+1583
+1584     CHECK gt_tdr IS NOT INITIAL.
+1585
+1586     TRY.
+1587         cl_salv_table=>factory(
+1588           IMPORTING r_salv_table = go_salv
+1589           CHANGING  t_table      = gt_tdr ).
+1590       CATCH cx_salv_msg INTO go_ex.
+1591         MESSAGE go_ex->get_text( ) TYPE 'E'.
+1592         RETURN.
+1593     ENDTRY.
+1594
+1595     go_funcs = go_salv->get_functions( ).
+1596     go_funcs->set_all( abap_true ).
+1597
+1598     go_display = go_salv->get_display_settings( ).
+1599     go_display->set_list_header( 'Tender Register' ).
+1600     go_display->set_striped_pattern( cl_salv_display_settings=>true ).
+1601     go_display->set_fit_column_to_table_size( abap_true ).
+1602
+1603     go_columns = go_salv->get_columns( ).
+1604     go_columns->set_optimize( abap_true ).
+1605
+1606     PERFORM set_col_texts USING 'SLNO'      'Sl.No'    'Sl. No.'          'Serial Number'.
+1607     PERFORM set_col_texts USING 'SUBMI'     'File No'  'File No.'         'File No. (Tender Number)'.
+1608     PERFORM set_col_texts USING 'PR_RCPT_DT' 'IndRcpDt' 'Indent Rcpt Date' 'Indent Receipt Date'.
+1609     PERFORM set_col_texts USING 'BSART'     'Category' 'Category'         'Category (Document Type)'.
+1610     PERFORM set_col_texts USING 'BANFN'     'Indent No' 'Indent File No'  'Indent File Number'.
+1611     PERFORM set_col_texts USING 'WORKDESC'  'Desc.'    'Description'      'Description of Work / Material'.
+1612     PERFORM set_col_texts USING 'TNDR_VAL'  'Amount'   'Amount'           'Tender Value (Amount)'.
+1613     PERFORM set_col_texts USING 'WAERS'     'Curr.'    'Currency'         'Currency Key'.
+1614     PERFORM set_col_texts USING 'TNNDR_TYP' 'TndrTyp'  'Tender Type'      'Type of Tender'.
+1615     PERFORM set_col_texts USING 'DLG_OFFIC' 'Dlg.Off'  'Dealing Ofcr'     'Dealing Officer'.
+1616     PERFORM set_col_texts USING 'TC_MEM_NM' 'TC Memb'  'TC Memb(Comm)'    'TC Member from Commercial'.
+1617     PERFORM set_col_texts USING 'TDRTXT'    'DishaMM'  'Disha MM File'    'Disha MM File Number'.
+1618     PERFORM set_col_texts USING 'NITDATE'   'NIT Dt'   'Date of NIT'      'Date of NIT (Notice Inviting Tender)'.
+1619     PERFORM set_col_texts USING 'LT_SEL_DT' 'Due On'   'Tender Due On'    'Tender Due On (Last Submission Date)'.
+1620     PERFORM set_col_texts USING 'NOA_DT'    'NOA Dt'   'NOA Date'         'Notice of Award Date'.
+1621     PERFORM set_col_texts USING 'BANFN_PR'  'PR No.'   'PR No.'           'Purchase Requisition Number'.
+1622     PERFORM set_col_texts USING 'TDRSTS'    'Status'   'Status'           'Tender Status'.
+1623     PERFORM set_col_texts USING 'EMD_RECV'  'EMD Rcv'  'EMD Received'     'EMD Received Date'.
+1624     PERFORM set_col_texts USING 'EMD_RTRN'  'EMD Ret'  'EMD Returned?'    'Whether EMD Returned (Y/N)'.
+1625
+1626     TRY.
+1627         go_column ?= go_columns->get_column( 'WAERS' ).
+1628         go_column->set_visible( abap_false ).
+1629       CATCH cx_salv_not_found. "#EC NO_HANDLER
+1630     ENDTRY.
+1631
+1632     TRY.
+1633         go_column ?= go_columns->get_column( 'TNDR_VAL' ).
+1634         go_column->set_currency_column( 'WAERS' ).
+1635       CATCH cx_salv_not_found. "#EC NO_HANDLER
+1636     ENDTRY.
+1637
+1638     go_aggrs = go_salv->get_aggregations( ).
+1639     TRY.
+1640         go_aggrs->add_aggregation(
+1641           columnname  = 'TNDR_VAL'
+1642           aggregation = if_salv_c_aggregation=>total ).
+1643       CATCH cx_salv_data_error cx_salv_not_found cx_salv_existing. "#EC NO_HANDLER
+1644     ENDTRY.
+1645
+1646     go_sorts = go_salv->get_sorts( ).
+1647     TRY.
+1648         go_sorts->add_sort(
+1649           columnname = 'SLNO'
+1650           sequence   = if_salv_c_sort=>sort_up ).
+1651       CATCH cx_salv_data_error cx_salv_not_found cx_salv_existing. "#EC NO_HANDLER
+1652     ENDTRY.
+1653
+1654     go_salv->display( ).
+1655
+1656   ENDFORM.
+1657
+1658   *======================================================================*
+1659   *& FORM: DISPLAY_SO_ALV  (Report 2 ALV display - 38 columns)           *
+1660   *======================================================================*
+1661   FORM display_so_alv.
+1662
+1663     CHECK gt_so IS NOT INITIAL.
+1664
+1665     TRY.
+1666         cl_salv_table=>factory(
+1667           IMPORTING r_salv_table = go_salv
+1668           CHANGING  t_table      = gt_so ).
+1669       CATCH cx_salv_msg INTO go_ex.
+1670         MESSAGE go_ex->get_text( ) TYPE 'E'.
+1671         RETURN.
+1672     ENDTRY.
+1673
+1674     go_funcs = go_salv->get_functions( ).
+1675     go_funcs->set_all( abap_true ).
+1676
+1677     go_display = go_salv->get_display_settings( ).
+1678     go_display->set_list_header( 'Supplier Order Details - Corp & BD' ).
+1679     go_display->set_striped_pattern( cl_salv_display_settings=>true ).
+1680     go_display->set_fit_column_to_table_size( abap_true ).
+1681
+1682     go_columns = go_salv->get_columns( ).
+1683     go_columns->set_optimize( abap_true ).
+1684
+1685     PERFORM set_col_texts USING 'SLNO'       'Sl.No'    'Entry Sl.No.'     'Entry Serial Number'.
+1686     PERFORM set_col_texts USING 'ZZLOINO'    'SO Ctrl'  'SO Ctrl. No.'     'Supply Order Control Number (LOI/NOA)'.
+1687     PERFORM set_col_texts USING 'BEDAT'      'Issue Dt' 'SO Issue Date'    'Supply Order Issue Date'.
+1688     PERFORM set_col_texts USING 'ZZSUBMI'    'Tndr File' 'Tender File No.'  'Tender Register File Number'.
+1689     PERFORM set_col_texts USING 'BSART'      'TndrType' 'Type of Tender'   'Type of Tender (Document Type)'.
+1690     PERFORM set_col_texts USING 'ZZNAT_PROC' 'CVO Case' 'Type of Case'     'Type of Case (CVO Reporting)'.
+1691     PERFORM set_col_texts USING 'ZZT_NATURE' 'Justif.'  'Justification'    'Justification (Nature of Tender)'.
+1692     PERFORM set_col_texts USING 'BANFN'      'PR No.'   'SAP PR No.'       'SAP Purchase Requisition Number'.
+1693     PERFORM set_col_texts USING 'EBELN'      'PO/Contr' 'SAP PO/Contract'  'SAP Contract / PO Number'.
+1694     PERFORM set_col_texts USING 'KONNR'      'Contract' 'Contract/OLA No.' 'Contract / OLA Number'.    "+P3
+1695     PERFORM set_col_texts USING 'ANFNR'      'RFQ No.'  'RFQ Number'       'RFQ / Tender Enquiry No.'. "+P4
+1696     PERFORM set_col_texts USING 'ERNAM'      'User ID'  'Created By'       'Created By (Contract else PO)'. "+P5
+1697     PERFORM set_col_texts USING 'VEND_NM'    'Contrctr' 'Contractor Name'  'Name of Contractor'.
+1698     PERFORM set_col_texts USING 'ZZVEND_CAT' 'VndCat'   'Vendor Category'  'Vendor Category'.
+1699     PERFORM set_col_texts USING 'ZZMSE'      'MSE'      'Local Content'    'Local Content Status (MSE)'.
+1700     PERFORM set_col_texts USING 'VEND_ADDR'  'Address'  'Vendor Address'   'Address of Contractor'.
+1701     PERFORM set_col_texts USING 'DESCR'      'Desc.'    'Description'      'Brief Description of Items/Services'.
+1702     PERFORM set_col_texts USING 'WAERS'      'Curr.'    'Contr.Currency'   'Contract Currency'.
+1703     PERFORM set_col_texts USING 'KTWRT'      'ContrVal' 'Contract Value'   'Contract Value'.
+1704     PERFORM set_col_texts USING 'KTWRT_INR'  'Val(INR)' 'Contr.Val.(INR)'  'Contract Value in INR'.
+1705     PERFORM set_col_texts USING 'WKURS'      'Ex.Rate'  'Exchange Rate'    'Exchange Rate for Foreign Currency'.
+1706     PERFORM set_col_texts USING 'GST_AMT'    'GST'      'GST Amount'       'GST Amount'.
+1707     PERFORM set_col_texts USING 'PLACE_EXEC' 'PlaceExc' 'Place of Exec.'   'Place of Execution of Work'.
+1708     PERFORM set_col_texts USING 'IND_NM'     'Indentor' 'Indentor'         'Indentor Name'.
+1709     PERFORM set_col_texts USING 'DLG_NM'     'Dlg.Ofcr' 'Dealing Officer'  'Dealing Officer'.
+1710     PERFORM set_col_texts USING 'KDATB'      'StrtDate' 'Contr.Start Date'  'Contract Start Date'.
+1711     PERFORM set_col_texts USING 'KDATE'      'EndDate'  'Contr.End Date'   'Contract Scheduled End Date'.
+1712     PERFORM set_col_texts USING 'PBG_STAT'   'SD/PBG'   'SD/PBG Status'    'SD/PBG Status'.
+1713     PERFORM set_col_texts USING 'PBG_SUB'    'PBG Sub'  'PBG Submit'       'PBG Submit (Y/N)'.
+1714     PERFORM set_col_texts USING 'AMD1_DT'    'Amd1 Dt'  '1st Amnd.Date'    'Date of 1st Amendment Issued'.
+1715     PERFORM set_col_texts USING 'AMD1_NAT'   'Amd1 Nat' '1st Amnd.Nature'  'Nature of 1st Amendment'.
+1716     PERFORM set_col_texts USING 'AMD1_DEL'   'Amd1 Del' '1st Ext.Del.Dt'   '1st Extended Delivery Date'.
+1717     PERFORM set_col_texts USING 'AMD1_VAL'   'Amd1 Val' '1st Rev.Value'    '1st Revised Contract Value'.
+1718     PERFORM set_col_texts USING 'AMD2_DT'    'Amd2 Dt'  '2nd Amnd.Date'    'Date of 2nd Amendment Issued'.
+1719     PERFORM set_col_texts USING 'AMD2_NAT'   'Amd2 Nat' '2nd Amnd.Nature'  'Nature of 2nd Amendment'.
+1720     PERFORM set_col_texts USING 'AMD2_DEL'   'Amd2 Del' '2nd Ext.Del.Dt'   '2nd Extended Delivery Date'.
+1721     PERFORM set_col_texts USING 'AMD2_VAL'   'Amd2 Val' '2nd Rev.Value'    '2nd Revised Contract Value'.
+1722     PERFORM set_col_texts USING 'AMD3_DT'    'Amd3 Dt'  '3rd Amnd.Date'    'Date of 3rd Amendment Issued'.
+1723     PERFORM set_col_texts USING 'AMD3_NAT'   'Amd3 Nat' '3rd Amnd.Nature'  'Nature of 3rd Amendment'.
+1724     PERFORM set_col_texts USING 'AMD3_DEL'   'Amd3 Del' '3rd Ext.Del.Dt'   '3rd Extended Delivery Date'.
+1725     PERFORM set_col_texts USING 'AMD3_VAL'   'Amd3 Val' '3rd Rev.Value'    '3rd Revised Contract Value'.
+1726
+1727     TRY.
+1728         go_column ?= go_columns->get_column( 'WAERS' ).
+1729         go_column->set_visible( abap_false ).
+1730       CATCH cx_salv_not_found. "#EC NO_HANDLER
+1731     ENDTRY.
+1732
+1733   *-- BSTYP is carried only to drive the RFQ suppression logic       "+P4
+1734     TRY.
+1735         go_column ?= go_columns->get_column( 'BSTYP' ).
+1736         go_column->set_visible( abap_false ).
+1737       CATCH cx_salv_not_found. "#EC NO_HANDLER
+1738     ENDTRY.
+1739
+1740     TRY.
+1741         go_column ?= go_columns->get_column( 'KTWRT' ).
+1742         go_column->set_currency_column( 'WAERS' ).
+1743       CATCH cx_salv_not_found. "#EC NO_HANDLER
+1744     ENDTRY.
+1745
+1746     go_aggrs = go_salv->get_aggregations( ).
+1747     TRY.
+1748         go_aggrs->add_aggregation( columnname = 'KTWRT'
+1749           aggregation = if_salv_c_aggregation=>total ).
+1750       CATCH cx_salv_data_error cx_salv_not_found cx_salv_existing. "#EC NO_HANDLER
+1751     ENDTRY.
+1752     TRY.
+1753         go_aggrs->add_aggregation( columnname = 'KTWRT_INR'
+1754           aggregation = if_salv_c_aggregation=>total ).
+1755       CATCH cx_salv_data_error cx_salv_not_found cx_salv_existing. "#EC NO_HANDLER
+1756     ENDTRY.
+1757
+1758     go_sorts = go_salv->get_sorts( ).
+1759     TRY.
+1760         go_sorts->add_sort( columnname = 'SLNO'
+1761           sequence = if_salv_c_sort=>sort_up ).
+1762       CATCH cx_salv_data_error cx_salv_not_found cx_salv_existing. "#EC NO_HANDLER
+1763     ENDTRY.
+1764
+1765     go_salv->display( ).
+1766
+1767   ENDFORM.
+1768
+1769   *======================================================================*
+1770   *& FORM: DISPLAY_GEM_ALV  (Report 3 ALV display - 12 columns)          *
+1771   *======================================================================*
+1772   FORM display_gem_alv.
+1773
+1774     CHECK gt_gem IS NOT INITIAL.
+1775
+1776     TRY.
+1777         cl_salv_table=>factory(
+1778           IMPORTING r_salv_table = go_salv
+1779           CHANGING  t_table      = gt_gem ).
+1780       CATCH cx_salv_msg INTO go_ex.
+1781         MESSAGE go_ex->get_text( ) TYPE 'E'.
+1782         RETURN.
+1783     ENDTRY.
+1784
+1785     go_funcs = go_salv->get_functions( ).
+1786     go_funcs->set_all( abap_true ).
+1787
+1788     go_display = go_salv->get_display_settings( ).
+1789     go_display->set_list_header( 'Supplier Order Register - GEM' ).
+1790     go_display->set_striped_pattern( cl_salv_display_settings=>true ).
+1791     go_display->set_fit_column_to_table_size( abap_true ).
+1792
+1793     go_columns = go_salv->get_columns( ).
+1794     go_columns->set_optimize( abap_true ).
+1795
+1796     PERFORM set_col_texts USING 'SLNO'       'Sl.No'    'Sl. No.'          'Serial Number'.
+1797     PERFORM set_col_texts USING 'ZGEMPO'     'GeM No.'  'GeM Order No.'    'GeM Order Number'.
+1798     PERFORM set_col_texts USING 'BEDAT'      'Date'     'Date'             'PO Issue Date'.
+1799     PERFORM set_col_texts USING 'ZZSUBMI'    'Tndr File' 'Tender File No.'  'Tender Register File Number'.
+1800     PERFORM set_col_texts USING 'VEND_NM'    'Vendor'   'Vendor'           'Vendor Name'.
+1801     PERFORM set_col_texts USING 'ZZVEND_CAT' 'Vnd Cat'  'Vendor Category'  'Vendor Category'.
+1802     PERFORM set_col_texts USING 'DESCR'      'Desc.'    'PO Description'   'PO Description'.
+1803     PERFORM set_col_texts USING 'KTWRT'      'PO Value' 'PO Value'         'PO Value'.
+1804     PERFORM set_col_texts USING 'DLG_NM'     'Dlg.Ofcr' 'Dealing Officer'  'Dealing Officer'.
+1805     PERFORM set_col_texts USING 'EBELN'      'SAP PO'   'SAP PO No.'       'SAP PO Number'.
+1806     PERFORM set_col_texts USING 'PBG_INFO'   'PBG'      'PBG Info'         'PBG (Received or Not)'.
+1807     PERFORM set_col_texts USING 'PROCSTAT'   'Status'   'Current Status'   'Current Status'.
+1808
+1809     go_aggrs = go_salv->get_aggregations( ).
+1810     TRY.
+1811         go_aggrs->add_aggregation( columnname = 'KTWRT'
+1812           aggregation = if_salv_c_aggregation=>total ).
+1813       CATCH cx_salv_data_error cx_salv_not_found cx_salv_existing. "#EC NO_HANDLER
+1814     ENDTRY.
+1815
+1816     go_sorts = go_salv->get_sorts( ).
+1817     TRY.
+1818         go_sorts->add_sort( columnname = 'SLNO'
+1819           sequence = if_salv_c_sort=>sort_up ).
+1820       CATCH cx_salv_data_error cx_salv_not_found cx_salv_existing. "#EC NO_HANDLER
+1821     ENDTRY.
+1822
+1823     go_salv->display( ).
+1824
+1825   ENDFORM.
+1826
+1827   *======================================================================*
+1828   *& FORM: SET_COL_TEXTS  (Helper - Short/Medium/Long column headers)    *
+1829   *======================================================================*
+1830   FORM set_col_texts
+1831     USING pv_name   TYPE lvc_fname
+1832           pv_short  TYPE scrtext_s
+1833           pv_medium TYPE scrtext_m
+1834           pv_long   TYPE scrtext_l.
+1835
+1836     TRY.
+1837         go_column ?= go_columns->get_column( pv_name ).
+1838         go_column->set_short_text( pv_short ).
+1839         go_column->set_medium_text( pv_medium ).
+1840         go_column->set_long_text( pv_long ).
+1841       CATCH cx_salv_not_found. "#EC NO_HANDLER
+1842     ENDTRY.
+1843
+1844   ENDFORM.
+1845
+1846   *======================================================================*
+1847   *& FORM: GET_VENDOR_INFO  (Helper - Vendor name and address from LFA1) *
+1848   *======================================================================*
+1849   FORM get_vendor_info
+1850     USING    pv_lifnr LIKE ekko-lifnr
+1851     CHANGING cv_name TYPE char40
+1852              cv_addr TYPE char80.
+1853
+1854     DATA:
+1855       lv_name1 TYPE char40,
+1856       lv_stras LIKE lfa1-stras,
+1857       lv_ort01 LIKE lfa1-ort01,
+1858       lv_pstlz LIKE lfa1-pstlz.
+1859
+1860     CLEAR: cv_name, cv_addr.
+1861
+1862     SELECT SINGLE name1 stras ort01 pstlz
+1863       FROM lfa1
+1864       INTO (lv_name1, lv_stras, lv_ort01, lv_pstlz)
+1865       WHERE lifnr = pv_lifnr.
+1866
+1867     IF sy-subrc = 0.
+1868       cv_name = lv_name1.
+1869       CONCATENATE lv_stras lv_pstlz lv_ort01
+1870         INTO cv_addr SEPARATED BY ', '.
+1871     ENDIF.
+1872
+1873   ENDFORM.
+1874
+1875   *======================================================================*
+1876   *& FORM: GET_EMP_NAME  (Helper - Employee name from PA0002)            *
+1877   *======================================================================*
+1878   FORM get_emp_name
+1879     USING    pv_pernr TYPE persno
+1880     CHANGING cv_name  TYPE char40.
+1881
+1882     DATA:
+1883       lv_vorna TYPE pa0002-vorna,
+1884       lv_nachn TYPE pa0002-nachn.
+1885
+1886     CLEAR cv_name.
+1887
+1888     SELECT SINGLE vorna nachn
+1889       FROM pa0002
+1890       INTO (lv_vorna, lv_nachn)
+1891       WHERE pernr = pv_pernr
+1892         AND endda >= sy-datum
+1893         AND begda <= sy-datum.
+1894
+1895     IF sy-subrc = 0.
+1896       CONCATENATE lv_vorna lv_nachn
+1897         INTO cv_name SEPARATED BY space.
+1898     ELSE.
+1899       cv_name = pv_pernr.
+1900     ENDIF.
+1901
+1902   ENDFORM.
+1903
+1904   *======================================================================*
+1905   *& FORM: GET_PGRP_NAME  (Helper - Purchasing group name from T024)     *
+1906   *======================================================================*
+1907   FORM get_pgrp_name
+1908     USING    pv_ekgrp LIKE ekko-ekgrp
+1909     CHANGING cv_eknam LIKE t024-eknam.
+1910
+1911     CLEAR cv_eknam.
+1912
+1913     SELECT SINGLE eknam
+1914       FROM t024
+1915       INTO cv_eknam
+1916       WHERE ekgrp = pv_ekgrp.
+1917
+1918     IF sy-subrc <> 0.
+1919       cv_eknam = pv_ekgrp.
+1920     ENDIF.
+1921
+1922   ENDFORM.
+*--- End of ZREP_TENDER_REGISTER - 1922 lines ---

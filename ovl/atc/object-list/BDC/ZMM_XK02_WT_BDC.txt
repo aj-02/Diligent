@@ -1,0 +1,881 @@
+*&---------------------------------------------------------------------*
+*& Report  ZMM_XK02_WT_BDC
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+REPORT zmm_xk02_wt_bdc.
+
+TYPES: BEGIN OF ty_xk02,
+         vendor               TYPE string,
+         company_code         TYPE string,
+         withholdtax          TYPE string,
+         wh_tax_country       TYPE string,
+         withhold_tax_type    TYPE string,
+         withhold_tax_code    TYPE string,
+         subject_to_wth       TYPE string,
+         recepiant_type       TYPE string,
+         withhold_taxid       TYPE string,
+         exemption_no         TYPE string,
+         exemption_rate       TYPE string,
+         exemption_reason     TYPE string,
+         exemption_start_date TYPE string,
+         exemption_end_date   TYPE string,
+       END OF ty_xk02.
+
+DATA: lt_xk02 TYPE TABLE OF ty_xk02,
+      ls_xk02 TYPE ty_xk02.
+
+DATA :it_type TYPE truxs_t_text_data.
+DATA : file_name TYPE string.
+
+DATA:wa_bdc TYPE bdcdata,
+     it_bdc TYPE TABLE OF bdcdata.
+
+DATA:wa_msg TYPE bdcmsgcoll,
+     it_msg TYPE TABLE OF bdcmsgcoll.
+
+DATA: lv_lifnr TYPE lifnr,
+      lv_comp  TYPE bukrs,
+      lt_lfbw  TYPE TABLE OF lfbw,
+      idx      TYPE n LENGTH 2.
+
+TYPES : BEGIN OF t_message ,
+*           lifnr   TYPE char10  , " Customer Number
+          status  TYPE char4   , " Light Indicator
+          vendor  TYPE char15,
+          type    TYPE char4   , " Error Type
+          message TYPE char255 , " Message Description
+        END OF t_message    .
+
+TYPES : BEGIN OF ty_error,
+          sno          TYPE i,
+*          efield(200),
+          message(100) TYPE c,
+        END OF ty_error.
+
+DATA: wa_error    TYPE ty_error,
+      it_error    TYPE STANDARD TABLE OF ty_error,
+
+      it_fieldcat TYPE slis_t_fieldcat_alv WITH HEADER LINE.
+
+DATA: i_message   TYPE STANDARD TABLE OF t_message.
+
+DATA:count  TYPE i.
+FIELD-SYMBOLS :
+  <x_message> TYPE t_message,
+  <x_field>   TYPE slis_fieldcat_alv,
+  <x_bdcdata> TYPE bdcdata,
+  <x_msg>     TYPE bdcmsgcoll.
+
+CONSTANTS:
+  c_x    TYPE char1 VALUE 'X',
+  c_e    TYPE char1 VALUE 'E',
+  c_i    TYPE char1 VALUE 'I',
+  c_s    TYPE char1 VALUE 'S',
+  c_l    TYPE char1 VALUE 'L',
+  c_a    TYPE char1 VALUE 'A',
+  c_n    TYPE char1 VALUE 'N',
+  c_xls  TYPE char4 VALUE '.XLS',
+  c_xd01 TYPE char4 VALUE 'XD01',
+  c_en   TYPE char2 VALUE 'EN'.
+
+DATA: gv_sno(02),
+      gv_fname(60).
+DATA: cursor TYPE i.
+
+*&---------------------------------------------- SELECTION SCREEN -------------------------------------------------------------&*
+SELECTION-SCREEN: BEGIN OF BLOCK a1 WITH FRAME TITLE text-000.
+PARAMETERS:p_file TYPE rlgrap-filename OBLIGATORY,
+*           p_file1 TYPE rlgrap-filename OBLIGATORY, " Download FileName
+           p_mode LIKE ctu_params-dismode DEFAULT 'A'.         " Mode .
+SELECTION-SCREEN:END OF BLOCK a1.
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_file.
+  CALL FUNCTION 'WS_FILENAME_GET'
+    EXPORTING
+      def_filename     = space
+      def_path         = space
+      mask             = ',*.*,*.*.'
+      mode             = space
+      title            = space
+    IMPORTING
+      filename         = p_file
+*     RC               =
+    EXCEPTIONS
+      inv_winsys       = 1
+      no_batch         = 2
+      selection_cancel = 3
+      selection_error  = 4
+      OTHERS           = 5.
+  IF sy-subrc <> 0 AND sy-subrc <> 3.
+    MESSAGE e102(yb) WITH 'Error Selecting File'(007).
+  ENDIF.
+
+
+START-OF-SELECTION.
+
+  PERFORM upload_data.
+
+  PERFORM authorization_check.
+
+  PERFORM bdc_run.
+
+  PERFORM fieldcat.
+
+  PERFORM alv_display.
+
+*&---------------------------------------------------------------------*
+*&      Form  UPLOAD_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM upload_data .
+
+
+  file_name  = p_file.
+  CALL FUNCTION 'TEXT_CONVERT_XLS_TO_SAP'
+    EXPORTING
+*     I_FIELD_SEPERATOR    =
+      i_line_header        = 'X'
+      i_tab_raw_data       = it_type
+      i_filename           = p_file
+    TABLES
+      i_tab_converted_data = lt_xk02
+    EXCEPTIONS
+      conversion_failed    = 1
+      OTHERS               = 2.
+  IF sy-subrc <> 0.
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  BDC_RUN
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM bdc_run .
+
+  LOOP AT lt_xk02 INTO ls_xk02.
+
+    PERFORM bdc_dynpro      USING 'SAPMF02K' '0101'.
+    PERFORM bdc_field       USING 'BDC_CURSOR'
+                                  'RF02K-D0610'.
+    PERFORM bdc_field       USING 'BDC_OKCODE'
+                                  '/00'.
+    PERFORM bdc_field       USING 'RF02K-LIFNR'
+*                              '1000034'.
+    ls_xk02-vendor.
+    PERFORM bdc_field       USING 'RF02K-BUKRS'
+*                              '1000'.
+    ls_xk02-company_code.
+    PERFORM bdc_field       USING 'RF02K-D0610'
+                                  'X'.
+
+******************************Added by Raj on 19.10.2023**********************
+    PERFORM bdc_dynpro      USING 'SAPMF02K' '0610'.
+    PERFORM bdc_field       USING 'BDC_OKCODE'
+                                  '=OPFI'.
+
+    PERFORM bdc_dynpro      USING 'SAPLJ1I_MASTER' '0100'.
+
+    PERFORM bdc_field       USING 'BDC_OKCODE'
+                                  '=BACK'.
+****************************Added by Raj on 19.10.2023*********************
+    PERFORM bdc_dynpro      USING 'SAPMF02K' '0610'.
+    PERFORM bdc_field       USING 'BDC_OKCODE'
+                                  '=ENTR'.
+
+    PERFORM bdc_field       USING 'BDC_CURSOR'
+                                  'LFBW-QSREC(02)'.
+
+    IF ls_xk02-wh_tax_country = 'X'.
+
+    ELSE.
+      PERFORM bdc_field       USING 'LFB1-QLAND'
+*                              'IN'.
+      ls_xk02-wh_tax_country.
+
+    ENDIF.
+
+    """"""""'
+    CLEAR: lv_lifnr,lv_comp. REFRESH: lt_lfbw.
+    lv_lifnr = |{ ls_xk02-vendor ALPHA = IN }|.
+    lv_comp = ls_xk02-company_code.
+    SELECT * FROM lfbw INTO TABLE lt_lfbw WHERE lifnr = lv_lifnr AND bukrs = lv_comp.
+    IF lt_lfbw IS NOT INITIAL.
+*      idx = line_index( lt_lfbw[ witht = ls_xk02-withhold_tax_type bukrs = ls_xk02-company_code ] ).
+      DESCRIBE TABLE lt_lfbw lines idx.
+    ENDIF.
+    """""""""
+    IF idx IS NOT INITIAL.
+
+      CASE idx.
+        WHEN 1.
+          IF ls_xk02-withhold_tax_type = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WITHT(01)'
+*                              'CO'.
+            ls_xk02-withhold_tax_type.
+          ENDIF.
+
+          IF ls_xk02-withhold_tax_code = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_WITHCD(01)'
+                  ls_xk02-withhold_tax_code.
+          ENDIF.
+
+          IF ls_xk02-subject_to_wth = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_SUBJCT(01)'
+            ls_xk02-subject_to_wth.
+          ENDIF.
+
+          IF ls_xk02-recepiant_type = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-QSREC(01)'
+            ls_xk02-recepiant_type.
+          ENDIF.
+
+          IF ls_xk02-withhold_taxid = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_WTSTCD(01)'
+            ls_xk02-withhold_taxid.
+          ENDIF.
+
+          IF ls_xk02-exemption_no = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_EXNR(01)'
+            ls_xk02-exemption_no.
+          ENDIF.
+
+          IF ls_xk02-exemption_rate = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_EXRT(01)'
+            ls_xk02-exemption_rate.
+          ENDIF.
+
+          IF ls_xk02-exemption_reason = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_WTEXRS(01)'
+            ls_xk02-exemption_reason.
+          ENDIF.
+
+          IF ls_xk02-exemption_start_date = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_EXDF(01)'
+            ls_xk02-exemption_start_date.
+          ENDIF.
+
+          IF ls_xk02-exemption_end_date = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_EXDT(01)'
+            ls_xk02-exemption_end_date.
+          ENDIF.
+
+        WHEN 2.
+
+          IF ls_xk02-withhold_tax_type = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WITHT(02)'
+*                              'CO'.
+            ls_xk02-withhold_tax_type.
+          ENDIF.
+
+          IF ls_xk02-withhold_tax_code = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_WITHCD(02)'
+            ls_xk02-withhold_tax_code.
+          ENDIF.
+
+          IF ls_xk02-subject_to_wth = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_SUBJCT(02)'
+            ls_xk02-subject_to_wth.
+          ENDIF.
+
+          IF ls_xk02-recepiant_type = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-QSREC(02)'
+            ls_xk02-recepiant_type.
+          ENDIF.
+
+          IF ls_xk02-withhold_taxid = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_WTSTCD(02)'
+            ls_xk02-withhold_taxid.
+          ENDIF.
+
+          IF ls_xk02-exemption_no = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_EXNR(02)'
+            ls_xk02-exemption_no.
+          ENDIF.
+
+          IF ls_xk02-exemption_rate = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_EXRT(02)'
+            ls_xk02-exemption_rate.
+          ENDIF.
+
+          IF ls_xk02-exemption_reason = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_WTEXRS(02)'
+            ls_xk02-exemption_reason.
+          ENDIF.
+
+          IF ls_xk02-exemption_start_date = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_EXDF(02)'
+            ls_xk02-exemption_start_date.
+          ENDIF.
+
+          IF ls_xk02-exemption_end_date = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_EXDT(02)'
+            ls_xk02-exemption_end_date.
+          ENDIF.
+
+        WHEN 3.
+
+          IF ls_xk02-withhold_tax_type = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WITHT(03)'
+*                              'CO'.
+            ls_xk02-withhold_tax_type.
+          ENDIF.
+
+          IF ls_xk02-withhold_tax_code = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_WITHCD(03)'
+            ls_xk02-withhold_tax_code.
+          ENDIF.
+
+          IF ls_xk02-subject_to_wth = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_SUBJCT(03)'
+            ls_xk02-subject_to_wth.
+          ENDIF.
+
+          IF ls_xk02-recepiant_type = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-QSREC(03)'
+            ls_xk02-recepiant_type.
+          ENDIF.
+
+          IF ls_xk02-withhold_taxid = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_WTSTCD(03)'
+            ls_xk02-withhold_taxid.
+          ENDIF.
+
+          IF ls_xk02-exemption_no = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_EXNR(03)'
+            ls_xk02-exemption_no.
+          ENDIF.
+
+          IF ls_xk02-exemption_rate = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_EXRT(03)'
+            ls_xk02-exemption_rate.
+          ENDIF.
+
+          IF ls_xk02-exemption_reason = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_WTEXRS(03)'
+            ls_xk02-exemption_reason.
+          ENDIF.
+
+          IF ls_xk02-exemption_start_date = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_EXDF(03)'
+            ls_xk02-exemption_start_date.
+          ENDIF.
+
+          IF ls_xk02-exemption_end_date = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_EXDT(03)'
+            ls_xk02-exemption_end_date.
+          ENDIF.
+
+        WHEN 4.
+
+          IF ls_xk02-withhold_tax_type = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WITHT(04)'
+*                              'CO'.
+            ls_xk02-withhold_tax_type.
+          ENDIF.
+
+          IF ls_xk02-withhold_tax_code = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_WITHCD(04)'
+            ls_xk02-withhold_tax_code.
+          ENDIF.
+
+          IF ls_xk02-subject_to_wth = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_SUBJCT(04)'
+            ls_xk02-subject_to_wth.
+          ENDIF.
+
+          IF ls_xk02-recepiant_type = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-QSREC(04)'
+            ls_xk02-recepiant_type.
+          ENDIF.
+
+          IF ls_xk02-withhold_taxid = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_WTSTCD(04)'
+            ls_xk02-withhold_taxid.
+          ENDIF.
+
+          IF ls_xk02-exemption_no = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_EXNR(04)'
+            ls_xk02-exemption_no.
+          ENDIF.
+
+          IF ls_xk02-exemption_rate = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_EXRT(04)'
+            ls_xk02-exemption_rate.
+          ENDIF.
+
+          IF ls_xk02-exemption_reason = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_WTEXRS(04)'
+            ls_xk02-exemption_reason.
+          ENDIF.
+
+          IF ls_xk02-exemption_start_date = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_EXDF(04)'
+            ls_xk02-exemption_start_date.
+          ENDIF.
+
+          IF ls_xk02-exemption_end_date = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_EXDT(04)'
+            ls_xk02-exemption_end_date.
+          ENDIF.
+
+        WHEN 5.
+
+          IF ls_xk02-withhold_tax_type = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WITHT(05)'
+*                              'CO'.
+            ls_xk02-withhold_tax_type.
+          ENDIF.
+
+          IF ls_xk02-withhold_tax_code = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_WITHCD(05)'
+            ls_xk02-withhold_tax_code.
+          ENDIF.
+
+          IF ls_xk02-subject_to_wth = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_SUBJCT(05)'
+            ls_xk02-subject_to_wth.
+          ENDIF.
+
+          IF ls_xk02-recepiant_type = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-QSREC(05)'
+            ls_xk02-recepiant_type.
+          ENDIF.
+
+          IF ls_xk02-withhold_taxid = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_WTSTCD(05)'
+            ls_xk02-withhold_taxid.
+          ENDIF.
+
+          IF ls_xk02-exemption_no = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_EXNR(05)'
+            ls_xk02-exemption_no.
+          ENDIF.
+
+          IF ls_xk02-exemption_rate = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_EXRT(05)'
+            ls_xk02-exemption_rate.
+          ENDIF.
+
+          IF ls_xk02-exemption_reason = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_WTEXRS(05)'
+            ls_xk02-exemption_reason.
+          ENDIF.
+
+          IF ls_xk02-exemption_start_date = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_EXDF(05)'
+            ls_xk02-exemption_start_date.
+          ENDIF.
+
+          IF ls_xk02-exemption_end_date = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_EXDT(05)'
+            ls_xk02-exemption_end_date.
+          ENDIF.
+
+        WHEN 6.
+
+          IF ls_xk02-withhold_tax_type = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WITHT(06)'
+*                              'CO'.
+            ls_xk02-withhold_tax_type.
+          ENDIF.
+
+          IF ls_xk02-withhold_tax_code = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_WITHCD(06)'
+            ls_xk02-withhold_tax_code.
+          ENDIF.
+
+          IF ls_xk02-subject_to_wth = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_SUBJCT(06)'
+            ls_xk02-subject_to_wth.
+          ENDIF.
+
+          IF ls_xk02-recepiant_type = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-QSREC(06)'
+            ls_xk02-recepiant_type.
+          ENDIF.
+
+          IF ls_xk02-withhold_taxid = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_WTSTCD(06)'
+            ls_xk02-withhold_taxid.
+          ENDIF.
+
+          IF ls_xk02-exemption_no = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_EXNR(06)'
+            ls_xk02-exemption_no.
+          ENDIF.
+
+          IF ls_xk02-exemption_rate = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_EXRT(06)'
+            ls_xk02-exemption_rate.
+          ENDIF.
+
+          IF ls_xk02-exemption_reason = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_WTEXRS(06)'
+            ls_xk02-exemption_reason.
+          ENDIF.
+
+          IF ls_xk02-exemption_start_date = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_EXDF(06)'
+            ls_xk02-exemption_start_date.
+          ENDIF.
+
+          IF ls_xk02-exemption_end_date = 'X'.
+
+          ELSE.
+            PERFORM bdc_field       USING 'LFBW-WT_EXDT(06)'
+            ls_xk02-exemption_end_date.
+          ENDIF.
+
+      ENDCASE.
+
+
+
+    ENDIF.
+
+****************************Added by Raj on 19.10.2023**********************
+*    PERFORM bdc_dynpro      USING 'SAPLJ1I_MASTER' '0100'.
+*    PERFORM bdc_field       USING 'BDC_OKCODE'
+*                                  '=BACK'.
+***************************Added by Raj on 19.10.2023*********************
+
+    PERFORM bdc_dynpro      USING 'SAPMF02K' '0610'.
+    PERFORM bdc_field       USING 'BDC_OKCODE'
+                                  '=UPDA'.
+*      PERFORM bdc_field       USING 'BDC_OKCODE'
+*                                     '=OPFI'.
+
+
+
+    PERFORM bdc_field       USING 'BDC_CURSOR'
+                                  'LFBW-QSREC(02)'.
+
+
+    IF ls_xk02-wh_tax_country = 'X'.
+
+    ELSE.
+      PERFORM bdc_field       USING 'LFB1-QLAND'
+*                                    'IN'.
+    ls_xk02-wh_tax_country.
+    ENDIF.
+
+*perform bdc_dynpro      using 'SAPLJ1I_MASTER' '0100'.
+*perform bdc_field       using 'BDC_OKCODE'
+*                              '=BACK'.
+
+    CALL TRANSACTION 'XK02' USING it_bdc MODE p_mode UPDATE 'S' MESSAGES INTO it_msg.
+
+    IF  it_msg IS NOT INITIAL.
+      PERFORM populate_error.
+    ENDIF.
+    REFRESH it_bdc.
+    CLEAR : ls_xk02.
+  ENDLOOP.
+
+
+ENDFORM.
+
+
+FORM bdc_dynpro USING program screen.
+
+  wa_bdc-program = program.
+  wa_bdc-dynpro = screen.
+  wa_bdc-dynbegin = 'X'.
+  APPEND wa_bdc TO it_bdc.
+  CLEAR:wa_bdc.
+ENDFORM.
+FORM bdc_field USING field value.
+
+  wa_bdc-fnam = field.
+  wa_bdc-fval = value.
+  APPEND wa_bdc TO it_bdc.
+  CLEAR:wa_bdc.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  POPULATE_ERROR
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM populate_error .
+
+  DATA : lv_msg TYPE string.
+  LOOP AT it_msg INTO wa_msg.
+    CALL FUNCTION 'FORMAT_MESSAGE'
+      EXPORTING
+        id   = wa_msg-msgid
+        lang = sy-langu
+        no   = wa_msg-msgnr
+        v1   = wa_msg-msgv1
+        v2   = wa_msg-msgv2
+        v3   = wa_msg-msgv3
+        v4   = wa_msg-msgv4
+      IMPORTING
+        msg  = lv_msg.
+
+    IF wa_msg-msgtyp = c_s .
+*                              AND wa_msg-msgnr = '271' OR wa_msg-msgnr = '175'.
+      UNASSIGN <x_message>.
+      APPEND INITIAL LINE TO i_message ASSIGNING <x_message>.
+      IF <x_message> IS ASSIGNED.
+*        <x_message>-lifnr        = wa_msg-msgv1         .
+        <x_message>-status       = icon_led_green        .
+        <x_message>-vendor = ls_xk02-vendor.
+        <x_message>-type         =  wa_msg-msgtyp       .
+        <x_message>-message      = lv_msg                .
+      ENDIF.
+*      ELSEIF wa_msg-msgtyp = c_i  .
+*        UNASSIGN <x_message>.
+*        APPEND INITIAL LINE TO i_message ASSIGNING <x_message>.
+*        IF <x_message> IS ASSIGNED.
+*          <x_message>-lifnr        = wa_msg-msgv1         .
+*          <x_message>-status       = icon_led_yellow        .
+*          <x_message>-type         =  wa_msg-msgtyp       .
+*          <x_message>-message      = lv_msg                .
+*        ENDIF.
+
+*    ELSEIF wa_msg-msgtyp = c_s  AND wa_msg-msgid = '06'.
+*      UNASSIGN <x_message>.
+*      APPEND INITIAL LINE TO i_message ASSIGNING <x_message>.
+*      IF <x_message> IS ASSIGNED.
+**          <x_message>-lifnr        = wa_msg-msgv1         .
+*        <x_message>-status       = icon_led_green        .
+*        <x_message>-type         =  wa_msg-msgtyp       .
+*        <x_message>-message      = lv_msg                .
+*      ENDIF.
+    ELSEIF wa_msg-msgtyp = c_e.
+      UNASSIGN <x_message>.
+      APPEND INITIAL LINE TO i_message ASSIGNING <x_message>.
+      IF <x_message> IS ASSIGNED.
+
+*          <x_message>-lifnr        = wa_msg-msgv1                       .
+        <x_message>-status       = icon_led_red          .
+        <x_message>-vendor = ls_xk02-vendor.
+        <x_message>-type         = wa_msg-msgtyp        .
+*        IF wa_msg-msgid = 'AM' AND wa_msg-msgnr = '214'
+*          OR wa_msg-msgid = 'AM' AND wa_msg-msgnr = '215'.
+*          <x_message>-type = c_e.
+*        ENDIF.
+        <x_message>-message      = lv_msg                .
+      ENDIF.
+    ENDIF.
+
+    DELETE it_msg WHERE msgnr = wa_msg-msgnr.
+*      IF <x_message>-kunnr IS NOT INITIAL.
+*        EXIT.
+*      ENDIF.
+
+  ENDLOOP.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FIELDCAT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM fieldcat .
+
+  PERFORM fieldcat_append  USING  'STATUS'               'STATUS'                'X'  'I_MESSAGE'    '5'.
+  PERFORM fieldcat_append  USING  'VENDOR'               'VENDOR'                'X'  'I_MESSAGE'    '15'.
+*  Order_no
+  PERFORM fieldcat_append  USING  'TYPE'               'TYPE'                'X'  'I_MESSAGE'    '5'.
+  PERFORM fieldcat_append  USING  'MESSAGE'               'MESSAGE DESCRIPTION'                'X'  'I_MESSAGE'  '60'  .
+
+ENDFORM.
+
+FORM fieldcat_append  USING    VALUE(p_fname)
+                               VALUE(p_ftext)
+                               VALUE(p_fixcol)
+                               VALUE(p_table)
+                                 VALUE(p_outlen).
+  it_fieldcat-fieldname   = p_fname.
+  it_fieldcat-seltext_l   = p_ftext.
+  it_fieldcat-fix_column  = p_fixcol.
+  it_fieldcat-tabname     = p_table.
+  it_fieldcat-outputlen   = p_outlen.
+  APPEND it_fieldcat.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  ALV_DISPLAY
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM alv_display .
+
+
+  DATA : lv_repid TYPE sy-repid.
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      i_callback_program = lv_repid
+      it_fieldcat        = it_fieldcat[]
+      i_save             = 'A'
+    TABLES
+      t_outtab           = i_message
+    EXCEPTIONS
+      program_error      = 1
+      OTHERS             = 2.
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  AUTHORIZATION_CHECK
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM authorization_check .
+  DATA: lv_bukrs TYPE bukrs.
+  CLEAR: lv_bukrs.
+  LOOP AT lt_xk02 INTO DATA(wa_data).
+    lv_bukrs = wa_data-company_code.
+    AUTHORITY-CHECK OBJECT 'ZXK02_WT'
+        ID 'BUKRS' FIELD lv_bukrs
+        ID 'ACTVT' FIELD '02'.
+    IF sy-subrc <> 0.
+      MESSAGE e026(zfi) WITH lv_bukrs.
+    ENDIF.
+    CLEAR : wa_data,lv_bukrs.
+  ENDLOOP.
+
+ENDFORM.

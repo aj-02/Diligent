@@ -1,0 +1,4567 @@
+*&---------------------------------------------------------------------*
+*& Report  ZPROC_REPORT2
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+REPORT zmm_pr_po_report_new.
+
+TABLES : ekko,
+         ekpo,
+         mara,
+         ekkn,
+         mseg,
+         lfa1,
+         eban,
+         eket,
+         prps,
+         rbkp,
+         rseg.
+
+
+*&---------------------------------------------------------------------*
+*& SELECTION-SCREEN
+*&---------------------------------------------------------------------*.
+SELECTION-SCREEN BEGIN OF BLOCK blck WITH FRAME TITLE text-001.
+SELECT-OPTIONS : s_badat FOR eban-badat OBLIGATORY,      "1 PR Date.
+                 s_bedat FOR ekko-bedat,      "2.  Purchase order date
+                 s_banfns FOR ekpo-banfn,      "    Purchase Requistion no
+                 s_banfn FOR ekpo-ebeln,      "3. Purchase Order No.
+                 s_ekgrp FOR ekko-ekgrp,      "5.Purchasing Group
+                 s_knttp FOR ekpo-knttp,         "Account assignment category
+                 s_lifnr FOR ekko-lifnr,      "6.  Supplier number
+                 s_matnr FOR ekpo-matnr,      "7.Material Code
+                 s_werks FOR ekpo-werks OBLIGATORY no INTERVALS,      "9.  Plant
+                 s_grndt FOR mseg-budat_mkpf. "10.  GRN date
+SELECTION-SCREEN END OF BLOCK blck.
+
+SELECTION-SCREEN BEGIN OF BLOCK blck1 WITH FRAME TITLE text-002.
+PARAMETERS    : r1 RADIOBUTTON GROUP rd1 USER-COMMAND upd DEFAULT 'X',
+                r2 RADIOBUTTON GROUP rd1.
+SELECTION-SCREEN END OF BLOCK blck1.
+
+*&---------------------------------------------------------------------*
+*&  TYPES
+*&---------------------------------------------------------------------*
+TYPES : BEGIN OF ty_final,
+          ebeln             TYPE ekpo-ebeln,
+          mfrpn             TYPE ekpo-mfrpn,
+          mname             TYPE lfa1-name1,
+          lifnr             TYPE lfa1-lifnr,
+          sname             TYPE lfa1-name1,
+          pspnr             TYPE ekkn-ps_psp_pnr,
+          psphi             TYPE prps-psphi,
+          psphi1(50)        TYPE c,
+          werks             TYPE ekpo-werks,
+          matnr             TYPE ekpo-matnr,
+
+         LAEDA type mara-LAEDA,
+         ersda type mara-ersda,
+
+          bsart             TYPE ekko-bsart,
+          bedat             TYPE ekko-bedat,
+          matkl             TYPE ekpo-matkl,
+          maktx             TYPE makt-maktx,
+          txz01             TYPE ekpo-txz01,
+          mfrnr             TYPE ekpo-mfrnr,
+          qty_rec           TYPE mseg-menge,
+          rec_qty           TYPE ekpo-menge,
+          pstyp             TYPE ekpo-pstyp,
+          packno            TYPE ekpo-packno,
+          netpr             TYPE dec11_4,
+          ebelp             TYPE ekpo-ebelp,
+          waers             TYPE ekko-waers,
+          netwr             TYPE ekpo-netwr,
+          "**********************************************************************************************
+          cgst              TYPE p DECIMALS 2,
+          cgst_rate         TYPE p DECIMALS 2,
+          sgst              TYPE p DECIMALS 2,
+          sgst_rate         TYPE p DECIMALS 2,
+          igst              TYPE p DECIMALS 2,
+          igst_rate         TYPE p DECIMALS 2,
+          ugst              TYPE p DECIMALS 2,
+          ugst_rate         TYPE p DECIMALS 2,
+          gr_val            TYPE p DECIMALS 2,
+
+          "******************************************************************************************************
+          mblnr             TYPE mseg-mblnr,
+          grndt             TYPE mseg-budat_mkpf,
+          menge             TYPE ekpo-menge,
+          menge1            TYPE ekpo-menge,
+          meins             TYPE ekpo-meins,
+          erfmg             TYPE mseg-erfmg,
+          ekgrp             TYPE ekko-ekgrp,
+          ernam             TYPE ekko-ernam,
+          frgzu             TYPE ekko-frgzu,
+          banfn             TYPE eban-banfn,
+          bnfpo             TYPE eban-bnfpo,
+          pr                TYPE eban-menge,
+          badat             TYPE eban-badat,
+          pr_pstyp          TYPE eban-pstyp,
+          packno_pr         TYPE eban-packno,
+*          DISUB_PSPNR       TYPE EBAN-DISUB_PSPNR,
+          posid             TYPE   ps_posid,
+          post1             TYPE ps_post1,
+          eindt             TYPE eket-eindt,
+          lv_delay          TYPE i,
+          de_prpo           TYPE i,
+          grn_qty           TYPE mseg-erfmg,
+          lv_delay_text(10) TYPE c,
+          extrow            TYPE esll-extrow,
+          sub_packnopr      TYPE esll-sub_packno,
+          meins1            TYPE esll-meins,
+          tbtwr             TYPE esll-tbtwr,
+          netwr1            TYPE esll-netwr,
+          ktext1            TYPE esll-ktext1,
+          pln_packno        TYPE esll-pln_packno,
+          pln_introw        TYPE esll-pln_introw,
+          lfbnr             TYPE mseg-lfbnr,
+          act_menge         TYPE esll-act_menge,
+          flag_open         TYPE char1,
+          bwart             TYPE mseg-bwart,
+          xwsbr             TYPE mseg-xwsbr,
+          shkzg             TYPE mseg-shkzg,
+          zterm             TYPE ekko-zterm,
+          inco1             TYPE ekko-inco1,
+          afnam             TYPE ekpo-afnam,
+          wkurs             TYPE ekko-wkurs,
+          xblnr_mkpf        TYPE mseg-xblnr_mkpf,
+          payd     type ekbe-budat,
+          bldat             TYPE mkpf-bldat,
+*          gt_no             TYPE zgate_entry-gt_no,
+*          entry_dt          TYPE zgate_entry-entry_dt,
+          j_1bnbm           TYPE ekpo-j_1bnbm,
+          stcd3             TYPE lfa1-stcd3,
+          grn_qty1          TYPE mseg-erfmg,
+          belnr             TYPE rbkp-belnr,
+          bldat2            TYPE rbkp-bldat,
+          wrbtr             TYPE rseg-wrbtr,
+          ernam1            TYPE ekko-ernam, "Added by Raj on 22.11.2024
+          afnam1            TYPE  ekko-ernam, "Added by Raj on 22.11.2024
+          frgkz             TYPE eban-frgkz, "Added by Raj on 22.11.2024
+          frgdt             TYPE eban-frgdt, "Added by Raj on 22.11.2024
+          knttp             TYPE ekpo-knttp,  "KNTTP Added by Raj on 22.11.2024
+          eindt1            TYPE eket-eindt, "ADDED BY RAJ ON 22.11.2024
+          podate            TYPE cdhdr-udate, "Added by Raj on 25.11.2024
+          anln1             TYPE anla-anln1, "Added by Raj on 25.11.2024
+          ddate             TYPE cdhdr-udate, "Added by Raj on 25.11.2024
+          dpamt             TYPE ekko-dpamt, "Added by Raj on 25.11.2024
+          lgort             TYPE ekpo-lgort, "Added by Raj on 25.11.2024
+          aktiv             TYPE anla-aktiv, "Added by Raj on 25.11.2024
+          erdat1            TYPE erev-erdat, "Added by Raj on 25.11.2024
+
+*          stilld            TYPE eket-menge, "Added by Raj on 25.11.2024
+*          stillinv          TYPE eket-menge, "Added by Raj on 25.11.2024
+*          stilld_val        TYPE ekpo-netpr, "Added by Raj on 25.11.2024
+*          stillinv_val      TYPE
+
+          stillinv_val(16)  TYPE p DECIMALS 3,"Added by Raj on 06.02.2025
+
+          stilld(16)           TYPE p DECIMALS 3,"Added by Raj on 06.02.2025
+          stillinv(16)          TYPE p DECIMALS 3,"Added by Raj on 06.02.2025
+          stilld_val(16)        TYPE p DECIMALS 3,"Added by Raj on 06.02.2025
+
+
+
+          pack              TYPE konv-kwert, "Added by Raj on 25.11.2024
+          budat             TYPE essr-budat, "Added by Raj on 25.11.2024
+          belnr1            TYPE ekbe-belnr, "Added by Raj on 25.11.2024
+          mdate             TYPE mkpf-bldat, "Added by Raj on 28.11.2024
+          mdoc              TYPE ekbe-belnr,
+          erdats            TYPE eban-erdat,
+          string            TYPE string,
+          anlu1             TYPE anek-anlu1,
+          lv_no             TYPE i,
+          anln2             TYPE anla-anln1, "Added by Raj on 25.11.2024
+          anln3             TYPE anla-anln1, "Added by Raj on 25.11.2024
+          srvpos  type esll-srvpos,
+           pspnrs             TYPE char50,
+            belnrs             TYPE rbkp-belnr,
+             bldats            TYPE mkpf-bldat, "Added by Raj on 28.11.2024
+
+             wbsc type anla-ERDAT,
+             wbsch type ANLA-Aedat,
+
+        END OF ty_final,
+
+        BEGIN OF lt_mkpf,
+          bldat TYPE mkpf-bldat,
+          mblnr TYPE mkpf-mblnr,
+        END OF lt_mkpf,
+
+        BEGIN OF lt_sub1,
+          mfrnr TYPE ekpo-mfrnr,
+        END OF lt_sub1,
+
+        BEGIN OF lt_sub2,
+          pspnr TYPE ekkn-ps_psp_pnr,
+        END OF lt_sub2,
+
+        BEGIN OF st_esll,
+          packno     TYPE esll-packno,
+          introw     TYPE esll-introw,
+          extrow     TYPE esll-extrow,
+          sub_packno TYPE esll-sub_packno,
+          menge      TYPE esll-menge,
+          meins      TYPE esll-meins,
+          netwr      TYPE esll-netwr,
+          ktext1     TYPE esll-ktext1,
+
+        END OF st_esll.
+
+DATA :lt_esll TYPE TABLE OF st_esll,
+      wa_esll TYPE st_esll.
+
+TYPES : BEGIN OF ts_rbkp,
+          belnr TYPE rbkp-belnr,
+          bldat TYPE rbkp-bldat,
+          tcode TYPE rbkp-tcode,
+          lifnr TYPE rbkp-lifnr,
+        END OF ts_rbkp.
+
+DATA :it_rbkp TYPE TABLE OF ts_rbkp,
+      wa_rbkp TYPE ts_rbkp.
+
+TYPES : BEGIN OF ts_rseg,
+          belnr TYPE rseg-belnr,
+          ebeln TYPE rseg-ebeln,
+          ebelp TYPE rseg-ebelp,
+          matnr TYPE rseg-matnr,
+          wrbtr TYPE rseg-wrbtr,
+          shkzg TYPE rseg-shkzg,
+        END OF ts_rseg.
+
+DATA :it_rseg TYPE TABLE OF ts_rseg,
+      wa_rseg TYPE ts_rseg.
+
+DATA : wa_layout   TYPE slis_layout_alv.
+
+
+"*****************************************
+
+DATA: lt_konp     TYPE STANDARD TABLE OF konp.
+DATA: ls_konp     TYPE konp.
+
+
+*******************************************
+
+TYPES : BEGIN OF st_mseg,
+          mblnr      TYPE mseg-mblnr,
+          mjahr      TYPE mseg-mjahr,
+          zeile      TYPE mseg-zeile,
+          bwart      TYPE mseg-bwart,
+          matnr      TYPE mseg-matnr,
+          menge      TYPE mseg-menge,
+          erfmg      TYPE mseg-erfmg,
+          erfme      TYPE mseg-erfme,
+          bpmng      TYPE mseg-bpmng,
+          ebeln      TYPE mseg-ebeln,
+          ebelp      TYPE mseg-ebelp,
+          lfbnr      TYPE mseg-lfbnr,
+          lfbja      TYPE mseg-lfbja,
+          sjahr      TYPE mseg-sjahr,
+          smbln      TYPE mseg-smbln,
+          smblp      TYPE mseg-smblp,
+          budat_mkpf TYPE mseg-budat_mkpf,
+          sgtxt      TYPE sgtxt,
+          xwsbr      TYPE xwsbr,
+          shkzg      TYPE shkzg,
+          xblnr_mkpf TYPE mseg-xblnr_mkpf,
+          flag,
+        END OF st_mseg,
+        tt_mseg TYPE STANDARD TABLE OF st_mseg WITH DEFAULT KEY.
+DATA : lt_mseg TYPE TABLE OF st_mseg,
+       wa_mseg TYPE st_mseg.
+
+DATA: banfn TYPE ekpo-banfn.
+DATA : lv_delay_text(10) TYPE c.
+DATA: fl_qty_rec TYPE i,
+      packno_pr  TYPE eban-packno.
+
+DATA: lv_delay    TYPE i,
+      grndate     TYPE mseg-budat_mkpf,
+      qty_rec     TYPE i,
+      rec_qty     TYPE ekpo-menge,
+      pr          TYPE i,
+      delivert_dt TYPE  eket-eindt.
+
+
+
+data:      it_konv4  TYPE STANDARD TABLE OF konv,
+      wa_konv4  TYPE konv,
+      it_komv   TYPE TABLE OF komv WITH HEADER LINE,
+      wa_komv   TYPE komv,
+      lv_taxcom TYPE taxcom.
+
+*&---------------------------------------------------------------------*
+*&  DATA
+*&---------------------------------------------------------------------*
+
+DATA : it_final TYPE TABLE OF ty_final,
+       wa_final TYPE ty_final,
+       lc_bwart TYPE mseg-bwart VALUE '122',
+       cnt      TYPE i,
+       qty_rec1 TYPE i.
+
+DATA : lt_fieldcat TYPE slis_t_fieldcat_alv,
+       ls_fieldcat TYPE slis_fieldcat_alv,
+       ls_layout   TYPE slis_layout_alv.
+
+DATA : it_sub1 TYPE TABLE OF lt_sub1,
+       it_sub2 TYPE TABLE OF lt_sub2,
+       wa_sub1 TYPE lt_sub1.
+DATA : it_sort TYPE slis_t_sortinfo_alv,
+       wa_sort TYPE slis_sortinfo_alv.
+
+START-OF-SELECTION.
+
+
+  SELECT  sign,opti,low,high FROM tvarvc INTO TABLE
+    @DATA(it_types) WHERE name = 'ZMM_P2P_CONDITIONS' AND type = 'S'.
+
+
+  IF r1 IS NOT INITIAL.
+    PERFORM get_data.  " Material Purchase Order
+  ELSE.
+    PERFORM get_service_po. " Service Purchase Order
+  ENDIF.
+
+END-OF-SELECTION.
+  PERFORM build_filedcat.
+  PERFORM display_data.
+
+
+FORM get_data .
+******************************Material Purchase Order
+  DATA : l_flag  TYPE c,
+         l_endat TYPE c.
+
+*  Get data from ekko ,ekpo and eban
+  SELECT k~ebeln, k~bedat, k~lifnr, k~bsart,k~ekgrp,k~ernam,k~frgzu,k~zterm,k~inco1,k~wkurs,
+         p~ebelp, p~mwskz, p~werks, p~mfrpn, p~mfrnr, p~matnr,p~afnam, p~txz01, p~matkl,p~j_1bnbm, netpr, k~waers, p~netwr, p~ematn, p~menge, p~meins, p~banfn , p~bnfpo, p~pstyp, p~packno,
+          d~menge AS pr, d~badat,d~pstyp AS pstyp1,p~knttp,p~dpamt,p~lgort,k~revno,k~knumv  "KNTTP Added by Raj on 22.11.2024
+   , k~bukrs,k~aedat,k~lands,k~ekorg,p~mtart,d~frgdt
+    FROM ekko AS k INNER JOIN ekpo AS p ON k~ebeln = p~ebeln
+                   LEFT OUTER JOIN eban AS d ON d~banfn = p~banfn AND d~bnfpo = p~bnfpo
+    INTO TABLE @DATA(lt_ekpo)
+    WHERE k~ebeln IN @s_banfn
+    AND k~bedat IN @s_bedat
+    AND p~matnr IN @s_matnr
+    AND k~ekgrp IN @s_ekgrp
+    AND p~werks IN @s_werks
+    AND k~lifnr IN @s_lifnr
+    AND k~bsart NE 'SERV'
+    AND d~badat IN @s_badat
+  AND p~loekz NE 'L'
+    AND p~knttp IN @s_knttp "KNTTP Added by Raj on 26.11.2024
+    AND p~banfn IN @s_banfns. "BANFN Added by Raj on 26.11.2024
+
+  IF sy-subrc NE 0.
+    MESSAGE text-003 TYPE sy-abcde+18 DISPLAY LIKE sy-abcde+4.
+    LEAVE LIST-PROCESSING.
+  ENDIF.
+
+
+*****************Authorisation Object****************
+    IF lt_ekpo IS NOT INITIAL.
+      LOOP AT lt_ekpo INTO data(wa_ekp).
+        AUTHORITY-CHECK OBJECT 'ZMM_WRKP2P'
+         ID 'WERKS' FIELD wa_ekp-werks
+         ID 'ACTVT' FIELD '03'.
+        IF sy-subrc <> 0.
+          MESSAGE e049(zsd) WITH wa_ekp-werks.
+        ENDIF.
+        clear: wa_ekp.
+      ENDLOOP.
+    ENDIF.
+****************Authorisation Object****************
+
+
+  data(lt_acca) = lt_ekpo[].
+
+  delete lt_acca where knttp NE 'A'.
+
+if lt_acca is not INITIAL.
+ select ebeln,ebelp,anln1 from ekkn into table @data(it_ekn) FOR ALL ENTRIES IN @lt_acca
+   where  EBELN = @lt_acca-EBELN AND EBELP = @lt_acca-EBELP.
+   endif.
+
+
+  IF lt_ekpo IS NOT INITIAL.
+    SELECT ebeln,ebelp,banfn,eindt,menge,wemng FROM eket INTO TABLE @DATA(it_eket) FOR ALL ENTRIES IN @lt_ekpo WHERE banfn = @lt_ekpo-banfn.
+  ENDIF.
+
+*  SELECT packno,
+*         extrow,
+*          menge  ,
+*          meins  ,
+*          netwr  ,
+*          ktext1
+*        FROM esll
+*        INTO TABLE @DATA(lt_esll2)
+*        FOR ALL ENTRIES IN @lt_esll
+*  WHERE packno = @lt_esll-sub_packno.
+
+  IF lt_ekpo[] IS NOT INITIAL.
+    SELECT banfn,
+           bnfpo,
+           ernam, "ERnam Added by Raj on 22.11.2024 "Purchase requistion Created by
+           afnam, "Requisitioner Name Added by Raj on 22.11.2024
+           frgkz, "Release Indicator Added by Raj on 22.11.2024
+           frgdt, "pr RELEASE DATE Added by Raj on 22.11.2024
+           menge,
+           badat,
+           pstyp,
+           ebeln,
+           ebelp,
+           packno,
+           erdat
+*           DISUB_PSPNR
+   FROM eban
+   INTO TABLE @DATA(lt_eban)
+   FOR ALL ENTRIES IN @lt_ekpo
+   WHERE  ebeln = @lt_ekpo-ebeln
+          AND ebelp = @lt_ekpo-ebelp
+    AND badat IN @s_badat.
+  ENDIF.
+
+***   Pr Qty Logic ****
+  IF lt_eban[] IS NOT INITIAL.
+
+    DATA(lt_eban_1) = lt_eban[].
+
+    DELETE  lt_eban_1 WHERE pstyp <> '9'.
+
+    IF lt_eban_1 IS NOT INITIAL.
+
+      SELECT packno,extrow, sub_packno
+                    FROM esll
+         INTO TABLE @DATA(lt_esll4)
+         FOR ALL ENTRIES IN @lt_eban_1
+      WHERE   packno = @lt_eban_1-packno.
+
+      SELECT packno,
+             extrow,
+             menge
+            FROM esll
+            INTO TABLE @DATA(lt_esll5)
+            FOR ALL ENTRIES IN @lt_esll4
+      WHERE packno = @lt_esll4-sub_packno.
+
+    ENDIF.
+  ENDIF.
+
+  IF lt_ekpo[] IS NOT INITIAL.
+*   Get Supplier name from LFA1
+    SELECT lifnr, name1 , stcd3
+      FROM lfa1
+      INTO TABLE @DATA(lt_lfa1)
+      FOR ALL ENTRIES IN @lt_ekpo
+    WHERE lifnr = @lt_ekpo-lifnr.
+
+    SELECT ebeln, ebelp, ps_psp_pnr
+       FROM ekkn
+       INTO TABLE @DATA(lt_ekkn)
+       FOR ALL ENTRIES IN @lt_ekpo
+       WHERE ebeln = @lt_ekpo-ebeln
+        AND  ebelp = @lt_ekpo-ebelp.
+*    AND ps_psp_pnr IN @s_pspnr.
+
+
+
+    IF s_werks-low+0(1) = '1'.
+      DATA(lv_bukrss) = '1000'.
+    ELSEIF s_werks-low+0(1) = '4'.
+      lv_bukrss = '1000'.
+    ELSEIF s_werks-low+0(1) = '7'.
+      lv_bukrss = '7000'.
+    ENDIF.
+
+
+
+
+
+
+
+    IF lt_ekkn IS NOT INITIAL."Added by Raj on 25.11.2024
+      SELECT bukrs,anln1,aktiv,posnr FROM anla INTO TABLE @DATA(it_anla)
+         FOR ALL ENTRIES IN @lt_ekkn WHERE bukrs = @lv_bukrss  AND posnr = @lt_ekkn-ps_psp_pnr .
+    ENDIF.
+
+
+
+*** Ger Project Name From PRPS Table
+    SELECT  pspnr ,
+            posid,
+            post1 ,
+            werks ,
+            matnr
+   FROM prps
+   INTO TABLE @DATA(lt_prps)
+   FOR ALL ENTRIES IN @lt_ekkn
+    WHERE  pspnr = @lt_ekkn-ps_psp_pnr.
+
+*  Get Manufacture DELIVERY DATE FROM EKET
+    SELECT ebeln,
+           ebelp ,
+           eindt
+      FROM eket
+      INTO TABLE @DATA(lt_eket)
+      FOR ALL ENTRIES IN @lt_ekpo
+      WHERE ebeln = @lt_ekpo-ebeln
+      AND ebelp = @lt_ekpo-ebelp
+    AND bedat IN @s_bedat.                  "
+
+*  Get Manufacture part no from MARA
+    SELECT matnr,
+           mfrpn
+      FROM mara
+      INTO TABLE @DATA(lt_mara)
+      FOR ALL ENTRIES IN @lt_ekpo
+      WHERE matnr = @lt_ekpo-matnr.
+
+*  Get Material description from MAKT
+    SELECT matnr, maktx
+      FROM makt
+      INTO TABLE @DATA(lt_makt)
+      FOR ALL ENTRIES IN @lt_ekpo
+      WHERE matnr = @lt_ekpo-matnr.
+
+
+
+*  Get data from MSEG
+
+    .SELECT   mblnr,
+             mjahr,
+             zeile,
+             bwart,
+             matnr,
+             menge,
+             erfmg,
+             erfme,
+             bpmng,
+             ebeln,
+             ebelp,
+             lfbnr,
+             lfbja,
+             sjahr,
+             smbln,
+             smblp,
+             budat_mkpf,
+             sgtxt,
+             xwsbr,
+             shkzg,
+             xblnr_mkpf
+      FROM mseg
+      INTO TABLE @lt_mseg
+      FOR ALL ENTRIES IN @lt_ekpo
+      WHERE ebeln = @lt_ekpo-ebeln
+      AND ebelp = @lt_ekpo-ebelp
+      AND bwart IN ('101').
+*    AND budat_mkpf IN @s_grndt.
+
+    "********************************************************************************************************
+    IF lt_mseg IS NOT INITIAL.
+
+
+      SELECT bldat, mblnr,mjahr
+      FROM mkpf
+      INTO TABLE @DATA(lt_mkpf)
+      FOR ALL ENTRIES IN @lt_mseg
+      WHERE mblnr = @lt_mseg-mblnr.
+*      SELECT GT_NO, ENTRY_DT, MBLNR      "Commented by Raj on 22.11.2024
+*      FROM ZGATE_ENTRY
+*      INTO TABLE @DATA(LT_ZGATE)
+*      FOR ALL ENTRIES IN  @LT_MSEG
+*      WHERE MBLNR = @LT_MSEG-MBLNR.
+    ENDIF.
+    "****************************************************************************************************************
+*      AND mjahr = @p_gjahr.
+
+    SORT lt_mseg BY ebeln ebelp mblnr.
+
+  ENDIF.
+  DATA(lt_mseg2) = CORRESPONDING tt_mseg( lt_mseg ) .
+  DATA(lt_mseg3) = CORRESPONDING tt_mseg( lt_mseg ) .
+
+  DELETE lt_mseg WHERE bwart = '102' .
+  DELETE lt_mseg2 WHERE bwart = '101'.
+  IF lt_mseg2 IS NOT INITIAL.
+    LOOP AT lt_mseg ASSIGNING FIELD-SYMBOL(<lfs_mseg>)  .
+
+      READ TABLE lt_mseg2 INTO DATA(wa_mseg2) WITH KEY sjahr = <lfs_mseg>-mjahr
+                                                       smbln = <lfs_mseg>-mblnr
+                                                       smblp = <lfs_mseg>-zeile
+                                                       .
+      IF sy-subrc = 0 .
+        <lfs_mseg>-flag = 'X' .
+      ENDIF .
+    ENDLOOP.
+    DELETE lt_mseg WHERE flag IS NOT INITIAL.
+
+  ENDIF.
+  "***************************************************************************
+  IF lt_ekpo IS NOT INITIAL.
+    SELECT
+     mwsk1
+     kappl
+     kschl
+     kbetr
+     FROM konp
+     INTO CORRESPONDING FIELDS OF TABLE lt_konp
+     FOR ALL ENTRIES IN lt_ekpo
+     WHERE mwsk1 = lt_ekpo-mwskz and knumh = lt_ekpo-knumv
+     AND kappl = 'TX'.
+
+
+
+  ENDIF.
+
+
+
+  SELECT
+       belnr
+       ebeln
+       ebelp
+       matnr
+       wrbtr
+       shkzg
+       FROM rseg
+       INTO TABLE it_rseg
+       FOR ALL ENTRIES IN lt_ekpo
+       WHERE ebeln = lt_ekpo-ebeln.
+
+  SELECT
+       belnr
+       bldat
+       tcode
+       lifnr
+       FROM rbkp
+       INTO TABLE it_rbkp
+       FOR ALL ENTRIES IN it_rseg
+       WHERE belnr = it_rseg-belnr
+       AND tcode = 'MIRO'.
+
+  "****************Added by Raj on 25.11.20244**************************************************************************************
+  IF lt_ekpo IS NOT INITIAL."ADDED  BY RAJ ON 22.11.2024
+
+    TYPES : BEGIN OF ty_po,
+              ebeln TYPE cdpos-objectid,
+              banfn TYPE cdpos-objectid,
+            END OF ty_po.
+
+    DATA : it_po TYPE STANDARD TABLE OF ty_po,
+           wa_po TYPE ty_po.
+
+
+    LOOP AT lt_ekpo INTO DATA(wa_ekpos).
+      wa_po-ebeln =  wa_ekpos-ebeln.
+      wa_po-banfn = wa_ekpos-banfn.
+      APPEND wa_po TO it_po.
+      CLEAR : wa_po,wa_ekpos.
+    ENDLOOP.
+
+    IF it_po IS NOT INITIAL.
+      SELECT * FROM cdhdr INTO TABLE @DATA(it_cdhdr) FOR ALL ENTRIES IN @it_po
+                      WHERE objectclas = 'EINKBELEG' AND objectid = @it_po-ebeln AND ( tcode = 'ME29N' OR tcode = 'ME28').
+*                  AND FNAME = 'FRGKE' AND VALUE_NEW = '2'.
+
+
+      SELECT * FROM cdhdr INTO TABLE @DATA(it_cdhdrs) FOR ALL ENTRIES IN @it_po
+                    WHERE objectclas = 'BANF' AND objectid = @it_po-banfn AND ( tcode = 'ME54N' OR tcode = 'ME55' OR tcode = 'ME21N' OR tcode = 'ME52N' OR tcode = 'ME51N').
+*                  AND FNAME = 'FRGKE' AND VALUE_NEW = '2'.
+
+
+    ENDIF.
+
+
+    SELECT ebeln,ebelp,budat,menge FROM ekbe INTO TABLE @DATA(it_ekbe) FOR ALL ENTRIES IN @lt_ekpo WHERE ebeln = @lt_ekpo-ebeln AND
+      ebelp = @lt_ekpo-ebelp AND bewtp = 1.
+
+    SELECT ebeln,ebelp,budat,menge,belnr,xblnr,bewtp FROM ekbe INTO TABLE @DATA(it_ekbes) FOR ALL ENTRIES IN @lt_ekpo WHERE ebeln = @lt_ekpo-ebeln AND
+  ebelp = @lt_ekpo-ebelp AND bewtp = 'Q'.
+
+*      select
+
+
+          SELECT ebeln,ebelp,budat,menge,belnr,cpudt,cputm,vgabe FROM ekbe INTO TABLE @DATA(it_ekbinv) FOR ALL ENTRIES IN @lt_ekpo WHERE ebeln = @lt_ekpo-ebeln AND
+  ebelp = @lt_ekpo-ebelp AND bewtp = 'Q' and VGABE = '2'.
+
+sort it_ekbinv DESCENDING by cpudt cputm.
+
+          SELECT ebeln,ebelp,budat,menge,belnr,cpudt,cputm,wrbtr,vgabe FROM ekbe INTO TABLE @DATA(it_pay) FOR ALL ENTRIES IN @lt_ekpo WHERE ebeln = @lt_ekpo-ebeln AND
+  ebelp = @lt_ekpo-ebelp  and VGABE = '4'.
+
+                      SELECT ebeln,ebelp,budat,menge,belnr,cpudt,cputm,wrbtr,VGABE  FROM ekbe INTO TABLE @DATA(it_pa) FOR ALL ENTRIES IN @lt_ekpo WHERE ebeln = @lt_ekpo-ebeln AND
+  ebelp = @lt_ekpo-ebelp  and VGABE = 'A'.
+
+            sort it_pa by budat.
+
+    IF it_ekbes IS NOT INITIAL.
+      SELECT belnr,budat,bldat FROM rbkp INTO TABLE @DATA(it_rbkps) FOR ALL ENTRIES IN @it_ekbes WHERE belnr = @it_ekbes-belnr AND tcode = 'MIRO' OR tcode = 'MIR7'.
+    ENDIF.
+    SELECT edokn,revno,erdat FROM erev INTO TABLE @DATA(it_erev) FOR ALL ENTRIES IN @lt_ekpo WHERE edokn = @lt_ekpo-ebeln AND revno =  @lt_ekpo-revno.
+
+
+    TYPES : BEGIN OF ty_kon,
+              knumv TYPE konv-knumv,
+              kposn TYPE konv-kposn,
+            END OF ty_kon.
+
+    DATA : it_kon TYPE STANDARD TABLE OF ty_kon,
+           wa_kon TYPE ty_kon.
+    LOOP AT lt_ekpo INTO DATA(wa_ek).
+      wa_kon-knumv =  wa_ek-knumv.
+      wa_kon-kposn = wa_ek-ebelp.
+      APPEND wa_kon TO it_kon.
+      CLEAR : wa_kon,wa_ek.
+    ENDLOOP.
+
+    SELECT knumv,kposn,kschl,kwert,KAWRT,kbetr FROM konv INTO TABLE @DATA(it_konv)
+       FOR ALL ENTRIES IN @it_kon WHERE knumv = @it_kon-knumv AND kposn = @it_kon-kposn AND
+*      kschl in ('FRB1','FRB3','FRC2','FRC5','P&F1','P&F2','P&F3','R002','R003','R005','RL01','RL04','RL05','RL06','RL07','RL08','ZFR2','ZIN2','ZINC').
+      KSCHL IN @it_types.
+  ENDIF.
+
+
+
+****************Added by Raj on 25.11.20244**********************
+******************* Loop Selection ****************
+***************For final asset logic***************
+  DATA : wa_ekko LIKE LINE OF lt_ekpo,
+         wa_ekpo LIKE LINE OF lt_ekpo,
+         wa_makt LIKE LINE OF lt_makt.
+
+*
+*  CONSTANTS : c_aclass TYPE rvari_vnam VALUE 'Z_AUC_ASTCLASS',
+*   c_type_user1 TYPE rsscr_kind VALUE 'S'.
+*
+*  TYPES: BEGIN OF ty_tvarvc2,
+*         sign TYPE tvarv_sign,
+*         opti TYPE tvarv_opti,
+*         low  TYPE anla-anlkl,
+*         high TYPE tvarv_val,
+*       END OF ty_tvarvc2.
+*DATA: it_tvarvc_ac  TYPE STANDARD TABLE OF ty_tvarvc2.
+*DATA: wa_tvarvc_ac TYPE ty_tvarvc2.
+*
+*    SELECT sign
+*   opti
+*   low
+*   high INTO CORRESPONDING FIELDS OF TABLE it_tvarvc_ac
+*             FROM tvarvc
+*             WHERE name = c_aclass AND
+*                   type = c_type_user1.
+
+
+*      IF it_tvarvc_ac IS NOT INITIAL.
+**    SELECT bukrs,anln1,anlkl
+*      INTO TABLE @DATA(it_anla)
+*      FROM anla
+*      FOR ALL ENTRIES IN @it_tvarvc_ac
+*      WHERE bukrs = @s_bukrs
+*      AND   anln1 IN @s_anln1
+*      AND   anlkl = @it_tvarvc_ac-low.
+
+
+*   IF it_anla IS NOT INITIAL.
+*      SELECT bukrs anln1 gjahr belnr bwasl
+*     INTO CORRESPONDING FIELDS OF TABLE it_anep2
+*     FROM anep
+*     FOR ALL ENTRIES IN lt_acc_key1
+*     WHERE bukrs = s_bukrs
+*     AND   anln1  IN s_anln1
+*     AND   gjahr = s_gjahr
+*     AND   bwasl = lt_acc_key1-low.
+*    ENDIF.
+
+*    IF it_anep IS NOT INITIAL.
+*      SELECT bukrs,anln1,gjahr,belnr,awtyp
+*     INTO CORRESPONDING FIELDS OF TABLE @it_anek1
+*     FROM  anek
+*     FOR ALL ENTRIES IN @it_anep2
+*     WHERE bukrs = @it_anep2-bukrs
+*     AND   anln1 = @it_anep2-anln1
+*     AND   gjahr = @it_anep2-gjahr.
+*    ENDIF.
+
+
+*    IF it_anep IS NOT INITIAL.
+*      SELECT bukrs belnr gjahr awtyp awkey
+*      INTO CORRESPONDING FIELDS OF TABLE it_bkpf1
+*      FROM bkpf
+*      FOR ALL ENTRIES IN it_anek1
+*      WHERE bukrs = it_anek1-bukrs
+*      AND   gjahr = it_anek1-gjahr
+*      AND   awtyp = it_anek1-awtyp
+*      AND   awkey = it_anek1-belnr.
+*    ENDIF.
+
+
+*    IF it_bkpf1 IS NOT INITIAL.
+*      SELECT bukrs belnr gjahr buzei anln1 prctr FROM bseg INTO TABLE it_bseg1
+*       FOR ALL ENTRIES IN it_bkpf1  " added by Carina Jose on 21.07.2021
+*       WHERE bukrs EQ s_bukrs AND
+*             belnr = it_bkpf1-belnr AND
+*             gjahr EQ s_gjahr AND
+*             koart EQ 'A' AND
+**          anbwa = lt_acc_key1-low AND
+*             bschl EQ '75' AND
+**          ANLN1 BETWEEN '000003000000' AND '000003999999' . " commented on 21.07.2021
+**          ANLN1  = it_anla-anln1. "  added on 21.07.2021
+*             anln1  IN s_anln1. "  added on 21.07.2021
+
+*        IF  it_bseg1 IS NOT INITIAL.
+*      SELECT bukrs belnr gjahr buzei bschl koart shkzg dmbtr sgtxt anln1 anln2 anbwa bzdat hkont prctr FROM bseg APPENDING TABLE it_final
+*        FOR ALL ENTRIES IN it_bseg1
+*         WHERE bukrs EQ s_bukrs AND
+*               gjahr EQ s_gjahr AND
+*               koart EQ 'A' AND
+*               bschl EQ '70' AND
+*               belnr EQ it_bseg1-belnr.
+*    ENDIF.
+
+
+*        LOOP AT it_final INTO wa_final.
+*
+*      READ TABLE it_bseg1 INTO wa_bseg WITH KEY belnr = wa_final-belnr.
+*      IF sy-subrc = 0.
+*        wa_final-asst = wa_bseg-anln1.
+*      ENDIF.
+*
+**     if  wa_final-BSCHL = '75'.
+**       wa_final-dmbtr = wa_Final-dmbtr *  -1.
+**      endif.
+*      MODIFY it_final FROM wa_final TRANSPORTING asst.
+*      CLEAR : wa_final, wa_bseg.
+*    ENDLOOP.
+
+*  IF s_werks = '1*'.
+*    DATA(lv_bukrss) = '1000'.
+*  ELSEIF s_werks = '4*'.
+*    lv_bukrss = '1000'.
+*  ELSEIF s_werks = '7*'.
+*    lv_bukrss = '7000'.
+*  ENDIF.
+
+  TYPES : BEGIN OF ty_tab,
+            bukrs TYPE anla-bukrs,
+            anln1 TYPE anla-anln1,
+            anln2 TYPE anla-anln2,
+            anlu1 TYPE anek-anlu1,
+            lv_no TYPE i,
+          END OF ty_tab.
+
+  DATA : it_tab TYPE STANDARD TABLE OF ty_tab,
+         wa_tab TYPE ty_tab.
+
+
+*  loop at
+
+  data : wa_anl like LINE OF it_anla.
+
+  loop at it_EKN into data(wa_EKN).
+    if wa_EKN-anln1 is not INITIAL.
+    wa_anl-anln1 = wa_EKN-anln1.
+    wa_anl-bukrs = lv_bukrss.
+    APPEND wa_anl to it_anla.
+    CLEAR : WA_ANL,WA_EKN.
+  endif.
+  ENDLOOP.
+
+
+  IF it_anla IS NOT INITIAL.
+    SELECT bukrs,anlu1,anln1,anln2 FROM anek INTO TABLE @DATA(it_anek)
+      FOR ALL ENTRIES IN @it_anla WHERE bukrs  = @it_anla-bukrs AND anlu1 = @it_anla-anln1.
+  ENDIF.
+
+
+
+
+  IF it_anek IS NOT INITIAL.
+
+    LOOP AT it_anla INTO DATA(wa_anla).
+      READ TABLE it_anek INTO DATA(wa_anek) WITH KEY bukrs = wa_anla-bukrs anlu1 = wa_anla-anln1 .
+      IF sy-subrc = 0.
+        MOVE-CORRESPONDING wa_anek TO wa_tab.
+        APPEND wa_tab TO it_tab.
+      ENDIF.
+      CLEAR : wa_tab,wa_anek.
+    ENDLOOP.
+*    endif.
+*    ENDLOOP.
+  ENDIF.
+
+  DATA : lv_no TYPE i.
+
+  LOOP AT it_tab INTO wa_tab.
+    LOOP AT it_anek INTO wa_anek WHERE anlu1 = wa_tab-anlu1.
+      lv_no = lv_no + 1.
+      CLEAR: wa_anek.
+    ENDLOOP.
+    wa_tab-lv_no = lv_no.
+    MODIFY it_tab FROM wa_tab TRANSPORTING lv_no.
+    CLEAR : wa_tab,lv_no.
+  ENDLOOP.
+
+
+
+
+
+***************For final asset logic *******************
+if lt_ekpo is NOT INITIAL.
+  SELECt matnr,ERSDA,LAEDA from mara into table @data(it_mar) FOR ALL ENTRIES IN @lt_ekpo
+    WHERE matnr = @lt_ekpo-matnr.
+
+ENDIF.
+
+
+  LOOP AT lt_ekpo INTO wa_ekpo.
+
+    wa_ekko-zterm = wa_ekpo-zterm.
+    wa_ekko-inco1 = wa_ekpo-inco1.
+    wa_ekko-wkurs = wa_ekpo-wkurs.
+
+    wa_final-zterm = wa_ekko-zterm.
+    wa_final-inco1 = wa_ekko-inco1.
+    wa_final-wkurs = wa_ekko-wkurs.
+
+    wa_final-ebeln = wa_ekpo-ebeln.
+    wa_final-ebelp = wa_ekpo-ebelp.
+    wa_final-afnam = wa_ekpo-afnam.
+    wa_final-matnr = wa_ekpo-matnr.
+    wa_final-j_1bnbm = wa_ekpo-j_1bnbm.
+    wa_final-knttp = wa_ekpo-knttp. "Added by Raj on 22.11.2024
+*    wa_final-dpamt  = wa_ekpo-dpamt."Added by Raj on 25.11.2024
+    wa_final-lgort = wa_ekpo-lgort."Added by Raj on 25.11.2024
+    wa_final-txz01  = wa_ekpo-txz01."added by parth on 27.11.2024
+
+*    READ TABLE IT_CDPOS INTO DATA(WA_CDPOS) WITH KEY OBJECTID = WA_EKPO-EBELN.
+*    WA_FINAL-PORD = WA_CDPOS-
+
+
+
+
+
+
+
+
+    READ TABLE it_erev INTO DATA(wa_erev) WITH KEY edokn = wa_ekpo-ebeln revno =  wa_ekpo-revno. "Added by Raj on 25.11.2024
+    IF sy-subrc = 0.
+      wa_final-erdat1    =  wa_erev-erdat.
+    ENDIF.
+
+    loop at it_konv into data(wa_konvs) where knumv = wa_ekpo-knumv and kposn =  wa_ekpo-ebelp.
+*    IF sy-subrc = 0.
+      wa_final-pack =  wa_final-pack + wa_konvs-Kwert.
+*    ENDIF.
+    clear : wa_konvs.
+    endloop.
+
+
+
+    READ TABLE it_eket INTO DATA(wa_eket) WITH KEY banfn =  wa_ekpo-banfn ebelp = wa_ekpo-ebelp.     "Added by Raj on 25.11.2024
+    IF sy-subrc = 0.
+      wa_final-eindt1 = wa_eket-eindt.
+      wa_final-stilld = ( wa_eket-menge - wa_eket-wemng ).
+    ENDIF.
+
+
+    READ TABLE  it_ekbes INTO DATA(wa_ekbes) WITH KEY ebeln =  wa_ekpo-ebeln ebelp = wa_ekpo-ebelp  bewtp = 'Q'.
+    IF sy-subrc = 0.
+      wa_final-stillinv =  ( wa_ekpo-menge - wa_ekbes-menge ).
+    ENDIF.
+
+    wa_final-stilld_val =  wa_final-stilld * wa_ekpo-netpr.
+
+    wa_final-stillinv_val  =  wa_final-stillinv * wa_ekpo-netpr.
+
+
+    wa_final-mdoc = wa_ekbes-belnr.
+    wa_final-XBLNR_MKPF = wa_ekbes-xblnr.
+*    wa_fnal-
+
+    READ TABLE it_rbkps INTO DATA(wa_rbkps) WITH KEY belnr = wa_ekbes-belnr.
+    IF sy-subrc = 0.
+      wa_final-mdate = wa_rbkps-budat.
+      wa_final-bldats =  wa_rbkps-bldat.
+    ENDIF.
+
+
+    IF wa_ekpo-mfrpn IS NOT INITIAL.
+      wa_final-mfrpn = wa_ekpo-mfrpn.
+
+    ELSE.
+      READ TABLE lt_mara INTO DATA(wa_mara) WITH KEY matnr = wa_ekpo-matnr.
+      IF sy-subrc = 0.
+        wa_final-mfrpn = wa_mara-mfrpn.
+      ENDIF.
+    ENDIF.
+
+    READ TABLE lt_lfa1 INTO DATA(wa_lfa1) WITH KEY lifnr = wa_ekpo-lifnr.
+    IF sy-subrc = 0.
+      wa_final-sname = wa_lfa1-name1.
+      wa_final-stcd3 = wa_lfa1-stcd3.
+    ENDIF.
+
+    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+      EXPORTING
+        input  = wa_ekpo-lifnr
+      IMPORTING
+        output = wa_ekpo-lifnr.
+
+    wa_final-lifnr = wa_ekpo-lifnr.
+
+    "***************************************************************************
+
+
+     lv_taxcom-bukrs = wa_ekpo-bukrs.
+    lv_taxcom-budat = wa_ekpo-aedat.
+    lv_taxcom-bldat = wa_ekpo-aedat.
+    lv_taxcom-waers = wa_ekpo-waers.
+    lv_taxcom-hwaer = wa_ekpo-waers.
+    lv_taxcom-kposn = wa_ekpo-ebelp.
+    lv_taxcom-mwskz = wa_ekpo-mwskz.
+    lv_taxcom-wrbtr = wa_ekpo-netwr.
+    lv_taxcom-lifnr = wa_ekpo-lifnr.
+    lv_taxcom-ekorg = wa_ekpo-ekorg.
+    lv_taxcom-matnr = wa_ekpo-matnr.
+    lv_taxcom-werks = wa_ekpo-werks.
+    lv_taxcom-matkl = wa_ekpo-matkl.
+    lv_taxcom-meins = wa_ekpo-meins.
+    lv_taxcom-mglme = wa_ekpo-menge.
+    lv_taxcom-mtart = wa_ekpo-mtart.
+    lv_taxcom-land1 = wa_ekpo-lands.
+    lv_taxcom-shkzg =  'H'.
+    lv_taxcom-xmwst =  'X'.
+
+*    IF v_mwskz IS INITIAL.
+*      v_mwskz = lv_taxcom-mwskz.
+*    ENDIF.
+
+    CALL FUNCTION 'CALCULATE_TAX_ITEM'
+      EXPORTING
+        i_taxcom            = lv_taxcom
+      TABLES
+        t_xkomv             = it_komv
+      EXCEPTIONS
+        mwskz_not_defined   = 1
+        mwskz_not_found     = 2
+        mwskz_not_valid     = 3
+        steuerbetrag_falsch = 4
+        country_not_found   = 5
+        OTHERS              = 6.
+    IF sy-subrc <> 0.
+* MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*         WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+    ENDIF.
+
+
+ loop at it_komv into wa_komv .
+
+*    LOOP AT lt_konp INTO ls_konp WHERE mwsk1 = wa_ekpo-mwskz.
+
+      CASE wa_komv-kschl.
+        WHEN 'JICG'.
+          wa_final-cgst      =  wa_komv-kbetr / 10.
+          wa_final-cgst_rate  = wa_final-cgst * wa_ekpo-netwr / 100.
+
+        WHEN 'JISG'.
+          wa_final-sgst      =  wa_komv-kbetr / 10.
+          wa_final-sgst_rate = wa_final-sgst * wa_ekpo-netwr / 100.
+
+        WHEN 'JIIG'.
+          wa_final-igst     = wa_komv-kbetr / 10.
+          wa_final-igst_rate =  wa_final-igst * wa_ekpo-netwr / 100.
+
+        WHEN 'JIUG' OR 'JIUN'.
+          wa_final-ugst     = wa_komv-kbetr / 10.
+          wa_final-ugst_rate =  wa_final-ugst * wa_ekpo-netwr / 100.
+
+      ENDCASE.
+      CLEAR wa_komv.
+
+    ENDLOOP.
+
+    if wa_final-igst is INITIAL.
+    wa_final-gr_val = wa_final-pack + wa_final-cgst_rate + wa_final-sgst_rate + wa_final-igst_rate + wa_final-ugst_rate.
+    else.
+      wa_final-gr_val = wa_final-pack +  ( wa_final-pack *  wa_final-igst ) / 100.
+    endif.
+    "***********************************************************************************************
+
+
+
+
+*wa_final-gr_val = wa_final-pack +  ( wa_final-pack *  wa_final-igst ) / 100.
+
+    READ TABLE lt_ekkn INTO DATA(wa_ekkn) WITH KEY ebeln = wa_ekpo-ebeln ebelp = wa_ekpo-ebelp.
+    IF sy-subrc = 0.
+
+
+      wa_final-pspnr = wa_ekkn-ps_psp_pnr.
+
+
+
+       CALL FUNCTION 'CONVERSION_EXIT_ABPSP_OUTPUT'
+        EXPORTING
+          input  = wa_final-pspnr
+        IMPORTING
+          output = wa_final-pspnrs.
+
+
+
+
+
+
+      SELECT SINGLE psphi FROM prps INTO wa_final-psphi WHERE pspnr = wa_final-pspnr.
+      WRITE wa_final-psphi TO wa_final-psphi1.
+*    ELSE.
+*      CONTINUE.
+    ENDIF.
+
+    "*********************************************************************************added by vd
+    READ TABLE lt_makt INTO wa_makt WITH KEY matnr = wa_ekpo-matnr.
+    IF sy-subrc = 0.
+      wa_final-maktx = wa_makt-maktx.
+    ENDIF.
+    "*************************************************************************************
+
+    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+      EXPORTING
+        input  = wa_final-matnr
+      IMPORTING
+        output = wa_final-matnr.
+
+    wa_final-werks = wa_ekpo-werks.
+    wa_final-bsart = wa_ekpo-bsart.
+    wa_final-bedat = wa_ekpo-bedat.
+    wa_final-matkl = wa_ekpo-matkl.
+    wa_final-ekgrp = wa_ekpo-ekgrp.
+    wa_final-ernam = wa_ekpo-ernam.
+    wa_final-frgzu = wa_ekpo-frgzu.
+    wa_final-pstyp = wa_ekpo-pstyp.
+    wa_final-packno = wa_ekpo-packno.
+    CLEAR wa_mara.
+    wa_final-mfrnr = wa_ekpo-mfrnr.
+    IF wa_final-pstyp = '0'.
+      wa_final-menge  = wa_ekpo-menge.
+      wa_final-meins  = wa_ekpo-meins.
+      wa_final-netwr  = wa_ekpo-netwr.
+    ENDIF.
+
+
+
+    READ TABLE lt_prps INTO DATA(wa_prps) WITH  KEY pspnr = wa_final-pspnr.
+    IF sy-subrc = 0.
+      wa_final-post1 = wa_prps-post1.
+      CLEAR wa_prps.
+    ENDIF.
+
+    READ TABLE it_anla INTO wa_anla WITH KEY posnr = wa_final-pspnr.  "Added by Raj on 25.11.2024
+    IF sy-subrc = 0.
+      if wa_final-knttp = 'K'.
+      wa_final-anln1 =  '  '.
+      else.
+      wa_final-anln1 =  wa_anla-anln1.
+      endif.
+*      wa_final-aktiv = wa_anla-aktiv.
+    ENDIF.
+
+
+*   if wa_final-anln1 is INITIAL.
+    if wa_final-knttp = 'A'.
+      READ TABLE it_ekn into data(wa_e) with key ebeln = wa_ekpo-ebeln ebelp = wa_ekpo-ebelp.
+      wa_final-anln1 =  wa_e-anln1.
+    endif.
+*    ENDIF.
+
+
+    select SINGLE erdat from anla into wa_final-wbsc where anln1 =  wa_final-anln1.
+
+    select SINGLE AEdat from anla into wa_final-wbsch where anln1 =  wa_final-anln1.
+
+
+*    READ TABLE it_tab INTO wa_tab WITH KEY bukrs = wa_anla-bukrs anlu1 = wa_anla-anln1 .
+    READ TABLE it_tab INTO wa_tab WITH KEY bukrs = wa_anla-bukrs anlu1 = wa_final-anln1 .
+    IF sy-subrc = 0.
+      wa_final-anln3 =  wa_tab-anln1.
+      wa_final-anln2 = wa_tab-anln2.
+*      wa_final-anlu1 =  wa_tab-anlu1.
+      wa_final-lv_no = wa_tab-lv_no.
+    ENDIF.
+
+    select single aktiv from anla into wa_final-aktiv where anln1 =  wa_final-anln3.
+
+    clear:wa_tab.
+
+
+
+
+
+
+
+    READ TABLE it_cdhdr INTO DATA(wa_cdhdr) WITH KEY objectclas = 'EINKBELEG'  objectid = wa_ekpo-ebeln. "Added by Raj on 25.11.2024
+    IF sy-subrc = 0.
+      wa_final-podate = wa_cdhdr-udate.
+    ENDIF.
+
+
+    READ TABLE it_cdhdrs INTO DATA(wa_cdhdrs) WITH KEY objectclas = 'BANF'  objectid = wa_ekpo-banfn. "Added by Raj on 25.11.2024
+    IF sy-subrc = 0.
+*      wa_final-frgdt = wa_cdhdrs-udate.
+    ENDIF.
+
+     wa_final-frgdt = wa_ekpo-frgdt.
+
+
+
+    READ TABLE it_ekbe INTO DATA(wa_ekbe) WITH KEY ebeln = wa_ekpo-ebeln.
+    IF sy-subrc = 0.
+*      wa_final-ddate = wa_ekbe-budat.
+    ENDIF.
+
+
+    READ TABLE lt_eban INTO DATA(wa_eban) WITH  KEY banfn = wa_ekpo-banfn bnfpo = wa_ekpo-bnfpo .
+
+    IF sy-subrc = 0.
+      wa_final-banfn = wa_eban-banfn.
+      wa_final-bnfpo = wa_eban-bnfpo.
+      wa_final-badat = wa_eban-badat.
+      wa_final-ernam1 = wa_eban-ernam."Added by Raj on 22.11.2024
+      wa_final-afnam1 = wa_eban-afnam."Added by Raj on 22.11.2024
+      wa_final-frgkz = wa_eban-frgkz."Added by Raj on 22.11.2024
+      wa_final-erdats =  wa_eban-erdat."Added by Raj on 22.11.2024
+*      wa_final-frgdt =  wa_eban-frgdt."Added by Raj on 22.11.2024
+      IF wa_final-pstyp = '0'.
+        wa_final-pr = wa_eban-menge.
+      ENDIF.
+      packno_pr  = wa_eban-packno.
+      wa_final-packno_pr  = packno_pr .
+    ENDIF.
+
+    READ TABLE lt_esll4 INTO DATA(wa_esll4) WITH  KEY packno = wa_final-packno_pr  .
+    IF sy-subrc = 0.
+      READ TABLE lt_esll5 INTO  DATA(wa_esll5) WITH KEY packno = wa_esll4-sub_packno .
+
+      IF sy-subrc = 0.
+
+        wa_final-pr = wa_esll5-menge.
+
+      ENDIF.
+    ENDIF.
+
+    IF  wa_final-banfn IS INITIAL .
+      wa_final-de_prpo = ' '.
+    ELSE.
+      wa_final-de_prpo = wa_final-bedat - wa_final-badat.
+    ENDIF.
+
+    READ TABLE lt_eket INTO DATA(wa_eketd) WITH KEY ebeln = wa_ekpo-ebeln ebelp = wa_ekpo-ebelp .
+    IF sy-subrc = 0.
+      wa_final-eindt = wa_eketd-eindt.
+    ENDIF.
+
+    wa_final-netpr = wa_ekpo-netpr.
+    wa_final-waers = wa_ekpo-waers.
+    wa_final-qty_rec = wa_final-menge.
+
+
+
+    IF  wa_final-waers = 'USDN'.
+      wa_final-netpr = wa_final-netpr / 1000.
+      wa_final-netwr = wa_final-netwr / 1000.
+
+    ENDIF.
+
+
+
+
+      wa_final-meins  = wa_ekpo-meins.
+
+    CALL FUNCTION 'CONVERSION_EXIT_CUNIT_OUTPUT'
+      EXPORTING
+        input                = wa_ekpo-meins
+       LANGUAGE             = SY-LANGU
+     IMPORTING
+*       LONG_TEXT            =
+       OUTPUT               = wa_final-meins
+*       SHORT_TEXT           =
+     EXCEPTIONS
+       UNIT_NOT_FOUND       = 1
+       OTHERS               = 2
+              .
+    IF sy-subrc <> 0.
+* Implement suitable error handling here
+    ENDIF.
+
+
+
+*    SORT lt_mseg BY zeile.
+    SORT lt_mseg BY ebeln ebelp bwart.
+*    LOOP AT lt_mseg INTO wa_mseg WHERE ( ebeln = wa_ekpo-ebeln AND ebelp = wa_ekpo-ebelp AND bwart = '101' )
+*                                         OR  ( ebeln = wa_ekpo-ebeln AND ebelp = wa_ekpo-ebelp AND bwart = '122' ) .
+
+    READ TABLE lt_mseg into wa_mseg with key  ebeln = wa_ekpo-ebeln  ebelp = wa_ekpo-ebelp  bwart = '101'.
+      wa_final-mblnr = wa_mseg-mblnr.
+      wa_final-grndt = wa_mseg-budat_mkpf.
+      wa_final-bwart = wa_mseg-bwart.
+      wa_final-lfbnr = wa_mseg-lfbnr.
+      wa_final-grn_qty = wa_mseg-erfmg.
+
+
+
+
+*      wa_final-xblnr_mkpf = wa_mseg-xblnr_mkpf.
+      IF wa_mseg-shkzg <> 'H' AND wa_mseg-bwart <> '122'.
+        wa_final-qty_rec = wa_final-qty_rec - wa_final-grn_qty.
+        wa_final-rec_qty = wa_final-qty_rec.
+      ELSE.
+        wa_final-qty_rec = wa_final-qty_rec + wa_final-grn_qty.
+        wa_final-rec_qty = wa_final-qty_rec.
+      ENDIF.
+
+      IF wa_final-mblnr IS INITIAL OR wa_final-eindt IS INITIAL.
+        lv_delay_text = ''.
+      ELSE.
+        lv_delay_text = wa_mseg-budat_mkpf - wa_eket-eindt.
+      ENDIF.
+
+      CALL FUNCTION 'CLOI_PUT_SIGN_IN_FRONT'
+        CHANGING
+          value = lv_delay_text.
+      wa_final-lv_delay_text = lv_delay_text .
+
+      READ TABLE lt_mseg INTO DATA(ls_mseg) WITH KEY ebeln = wa_mseg-ebeln ebelp = wa_mseg-ebelp
+                                                           smbln = wa_mseg-mblnr sjahr = wa_mseg-mjahr
+                                                           smblp = wa_mseg-zeile .
+      IF sy-subrc = 0.
+        wa_final-qty_rec = wa_final-qty_rec + wa_final-grn_qty.
+        wa_final-rec_qty = wa_final-rec_qty - wa_final-grn_qty.
+
+        IF wa_final-rec_qty IS INITIAL.
+*          CLEAR : wa_final-mblnr, wa_final-grndt.
+        ENDIF.
+      ENDIF.
+
+      "******************************************************************************************************added by vd
+*      READ TABLE LT_ZGATE INTO DATA(LS_ZGATE) WITH KEY MBLNR = WA_MSEG-MBLNR. "Commented by Raj on 22.11.2024
+*      IF SY-SUBRC = 0.
+*        WA_FINAL-GT_NO    =  LS_ZGATE-GT_NO.
+*        WA_FINAL-ENTRY_DT = LS_ZGATE-ENTRY_DT.
+*      ENDIF.
+
+      "**********************************************************************************************************************************added by vd
+      READ TABLE lt_mkpf INTO DATA(wa_mkpf) WITH  KEY mblnr = wa_mseg-mblnr mjahr = wa_mseg-mjahr.
+      IF sy-subrc = 0.
+        wa_final-bldat = wa_mkpf-bldat.
+        CLEAR wa_mkpf.
+      ENDIF.
+      "******************************************************************************************************************
+
+      READ TABLE it_rseg INTO wa_rseg WITH KEY ebeln = wa_ekpo-ebeln.
+      wa_final-wrbtr = wa_rseg-wrbtr.
+      wa_final-belnrs = wa_rseg-belnr.
+      READ TABLE it_rbkp INTO wa_rbkp WITH KEY belnr = wa_rseg-belnr.
+      wa_final-belnr = wa_rbkp-belnr.
+      wa_final-bldat2 = wa_rbkp-bldat.
+      READ TABLE it_ekbinv into data(wa_ekbinv) with key ebeln = wa_ekpo-ebeln ebelp = wa_ekpo-ebelp VGABE = '2'.
+      if sy-subrc = 0.
+*        wa_final-xblnr_mkpf = wa_ekbinv-belnr.
+      endif.
+
+      READ TABLE it_pay into data(wa_pay) with key ebeln =  wa_ekpo-ebeln ebelp = wa_ekpo-ebelp VGABE = '4'.
+      if sy-subrc = 0.
+        wa_final-payd = wa_pay-budat.
+*        wa_final-dpamt = wa_pay-wrbtr.
+      endif.
+
+
+      READ TABLE it_pa into data(wa_pa) with key ebeln =  wa_ekpo-ebeln ebelp = wa_ekpo-ebelp VGABE = 'A'.
+      if sy-subrc = 0.
+        wa_final-dpamt = wa_pa-wrbtr.
+*        wa_final-dpamt = wa_pay-wrbtr.
+         wa_final-ddate = wa_pa-budat.
+      endif.
+
+
+
+    READ TABLE it_mar into data(wa_mar) with key matnr =  wa_ekpo-matnr.
+    if sy-subrc = 0.
+      wa_final-LAEDA = wa_mar-LAEDA.
+*      else.
+      wa_final-ERSDA = wa_mar-ERSDA.
+      ENDIF.
+
+
+
+
+
+
+
+
+
+*      APPEND wa_final TO it_final.
+*      CLEAR l_endat.
+*      CLEAR : wa_final-mblnr, wa_final-grndt, wa_final-erfmg,wa_ekbinv.
+**      l_flag = 'X'.
+
+*    ENDLOOP.
+
+*    IF s_grndt IS INITIAL.
+*      IF l_flag IS INITIAL.
+
+
+if wa_final-FRGDT   >  wa_final-bedat.
+wa_final-frgdt = wa_final-ERDATS.
+endif.
+
+
+
+
+        APPEND wa_final TO it_final.
+*      ENDIF.
+*    ENDIF.
+    CLEAR : wa_final, l_flag,wa_ekbes,wa_rbkps.
+    CLEAR : wa_ekpo,wa_erev,wa_konvs,wa_eket,wa_ekbes,wa_anla,wa_cdhdr,wa_eban,wa_cdhdrs.
+    CLEAR l_endat.
+      CLEAR : wa_final-mblnr, wa_final-grndt, wa_final-erfmg,wa_ekbinv,wa_mkpf,wa_mseg.
+  ENDLOOP.
+
+************Added on 08.08.2022*****************
+*  CONSTANTS : lc_mov_typ TYPE ekbe-bwart VALUE '102'.
+*  SELECT ebeln, ebelp, belnr, buzei, bwart, menge, shkzg, lfgja, lfbnr,lfpos
+*    FROM ekbe
+*    INTO TABLE @DATA(lt_pur_hist)
+*    FOR ALL ENTRIES IN @it_final
+*    WHERE ebeln = @it_final-ebeln
+*     AND  ebelp = @it_final-ebelp
+*     AND  lfbnr = @it_final-mblnr.
+*
+*  SORT lt_pur_hist BY ebeln ebelp lfbnr.
+*  LOOP AT it_final INTO DATA(wa_final1).
+*    READ TABLE lt_pur_hist INTO DATA(wa_hist) WITH KEY ebeln = wa_final1-ebeln
+*                                                          ebelp = wa_final1-ebelp
+*                                                          lfbnr = wa_final1-mblnr
+*                                                          bwart = lc_mov_typ BINARY SEARCH.
+*    IF sy-subrc EQ 0.
+*      DELETE it_final WHERE mblnr = wa_hist-lfbnr.
+*    ENDIF.
+*
+*    READ TABLE lt_pur_hist INTO DATA(wa_hist1) WITH KEY ebeln = wa_final1-ebeln
+*                                                          ebelp = wa_final1-ebelp
+*                                                          lfbnr = wa_final1-mblnr
+*                                                          bwart = '122' .
+*    IF sy-subrc EQ 0.
+*
+*      DELETE it_final WHERE mblnr = wa_hist1-lfbnr.
+*    ENDIF.
+*
+*  ENDLOOP.
+*
+*
+*  refresh : lt_acca.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  BUILD_FILEDCAT
+*&---------------------------------------------------------------------*
+
+FORM build_filedcat .
+
+  wa_layout-zebra             = 'X'. "Zebra looks
+  wa_layout-colwidth_optimize = 'X'. "Column width optimized
+
+*  cnt = cnt + 1.                          "Uncommented by Raj on 22.11.2024
+*  ls_fieldcat-col_pos =   cnt.
+*  ls_fieldcat-fieldname = 'WERKS'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'Plant'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+**  cnt = cnt + 1.
+**  ls_fieldcat-col_pos =   cnt.
+**  ls_fieldcat-fieldname = 'PSPHI1'.
+**  ls_fieldcat-tabname =   'IT_FINAL'.
+**  ls_fieldcat-seltext_l = 'WBS (Project code) '.
+**  APPEND ls_fieldcat TO lt_fieldcat.
+**
+**  cnt = cnt + 1.
+**  ls_fieldcat-col_pos =   cnt.
+**  ls_fieldcat-fieldname = 'POST1'.
+**  ls_fieldcat-tabname =   'IT_FINAL'.
+**  ls_fieldcat-seltext_l = 'Project Name'.
+**  APPEND ls_fieldcat TO lt_fieldcat.
+*
+**  CNT = CNT + 1.
+**  LS_FIELDCAT-COL_POS =   CNT.
+**  LS_FIELDCAT-FIELDNAME = 'EKGRP'.
+**  LS_FIELDCAT-TABNAME =   'IT_FINAL'.
+**  LS_FIELDCAT-SELTEXT_L = 'Purchasing Group'.
+**  APPEND LS_FIELDCAT TO LT_FIELDCAT.
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos =   cnt.
+*  ls_fieldcat-fieldname = 'BANFN'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = ' Pr No'.
+*  ls_fieldcat-emphasize = 'C000'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos =   cnt.
+*  ls_fieldcat-fieldname = 'BNFPO'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = ' Pr Line Item'.
+**  ls_fieldcat-emphasize = 'C000'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos =   cnt.
+*  ls_fieldcat-fieldname = 'BADAT'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'PR Request Date'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos =   cnt.
+*  ls_fieldcat-fieldname = 'PR'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'PR QTY'.
+**  ls_fieldcat-no_zero = 'X'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+**  cnt = cnt + 1.
+**  ls_fieldcat-col_pos =   cnt.
+**  ls_fieldcat-fieldname = 'MFRPN'.
+**  ls_fieldcat-tabname =   'IT_FINAL'.
+**  ls_fieldcat-seltext_l = 'Manufacture part no '.
+**  APPEND ls_fieldcat TO lt_fieldcat.
+**
+**  cnt = cnt + 1.
+**  ls_fieldcat-col_pos =   cnt.
+**  ls_fieldcat-fieldname = 'MNAME'.
+**  ls_fieldcat-tabname =   'IT_FINAL'.
+**  ls_fieldcat-seltext_l = 'Manufacture name'.
+**  APPEND ls_fieldcat TO lt_fieldcat.
+**
+**  cnt = cnt + 1.
+**  ls_fieldcat-col_pos =   cnt.
+**  ls_fieldcat-fieldname = 'MFRNR'.
+**  ls_fieldcat-tabname =   'IT_FINAL'.
+**  ls_fieldcat-seltext_l = 'Manufacture code'.
+**  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos =   cnt.
+*  ls_fieldcat-fieldname = 'MATNR'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'Material code'.
+*  ls_fieldcat-emphasize = 'C3'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*  CLEAR ls_fieldcat.
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos =   cnt.
+*  ls_fieldcat-fieldname = 'MAKTX'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'Material description'.
+*  ls_fieldcat-emphasize = 'C000'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos =   cnt.
+*  ls_fieldcat-fieldname = 'MATKL'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'Material group'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos =   cnt.
+*  ls_fieldcat-fieldname = 'LIFNR'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'Supplier number'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos =   cnt.
+*  ls_fieldcat-fieldname = 'SNAME'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'Supplier name'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos =   cnt.
+*  ls_fieldcat-fieldname = 'EBELN'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'Purchase order number'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos =   cnt.
+*  ls_fieldcat-fieldname = 'EBELP'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'Po Item No'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'BEDAT'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'PO Date'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+**    CNT = CNT + 1.
+**  LS_FIELDCAT-COL_POS =   CNT.
+**  LS_FIELDCAT-FIELDNAME = 'BSART'.
+**  LS_FIELDCAT-TABNAME =   'IT_FINAL'.
+**  LS_FIELDCAT-SELTEXT_L = 'PO Type'.
+**  APPEND LS_FIELDCAT TO LT_FIELDCAT.
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'FRGZU'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'PO Released Strategy'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+**  cnt = cnt + 1.
+**  ls_fieldcat-col_pos = cnt.
+**  ls_fieldcat-fieldname =  'QTY_REC'.
+**  ls_fieldcat-tabname =   'IT_FINAL'.
+**  ls_fieldcat-seltext_l = 'PO Quantity'.
+**  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'MENGE'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'Total PO Qty'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'MEINS'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'Unit'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'NETWR'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'Total price'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*  "*********************************************************
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'CGST'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'CGST %'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'CGST_RATE'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'CGST RATE'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'SGST'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'SGST %'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'SGST_RATE'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'SGST RATE'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'IGST'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'IGST %'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'IGST_RATE'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'IGST_RATE'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'UGST'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'UGST %'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'UGST_RATE'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'UGST_RATE'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'GR_VAL'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'Gross value'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*  "****************************************************************************
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'WAERS'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'PO currency'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+**  cnt = cnt + 1.
+**  ls_fieldcat-col_pos = cnt.
+**  ls_fieldcat-fieldname = 'EINDT'.
+**  ls_fieldcat-tabname =   'IT_FINAL'.
+**  ls_fieldcat-seltext_l = 'Delivery Date'.
+**  APPEND ls_fieldcat TO lt_fieldcat.
+*
+**  IF p_pr IS INITIAL.
+*  cnt = cnt + 1.                  "Uncommented by Raj on 22.11.2024
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'ERNAM'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'PO Created By'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*
+**  ELSE.
+**  cnt = cnt + 1.                    "Uncommented by Raj on 22.11.2024
+**  ls_fieldcat-col_pos = cnt.
+**  ls_fieldcat-fieldname = 'ERNAM'.
+**  ls_fieldcat-tabname =   'IT_FINAL'.
+**  ls_fieldcat-seltext_l = 'PR Created By'.
+**  APPEND ls_fieldcat TO lt_fieldcat.
+*
+**  cnt = cnt + 1.
+**  ls_fieldcat-col_pos = cnt.                     "Uncommented by Raj on 22.11.2024
+**  ls_fieldcat-fieldname = 'FRGZU'.
+**  ls_fieldcat-tabname =   'IT_FINAL'.
+**  ls_fieldcat-seltext_l = 'PR Released Strategy'.
+**  APPEND ls_fieldcat TO lt_fieldcat.
+***  ENDIF.
+**IF R1 IS NOT INITIAL.
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'MBLNR'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'GRN'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'GRNDT'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'GRN Date'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'GRN_QTY'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'GRN Quantity'.
+*  ls_fieldcat-do_sum = 'X'.
+**  ls_fieldcat-no_zero = 'X'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*
+*
+**  cnt = cnt + 1.
+**  ls_fieldcat-col_pos = cnt.
+**  ls_fieldcat-fieldname = 'LV_DELAY_TEXT '.
+**  ls_fieldcat-tabname =   'IT_FINAL'.
+**  ls_fieldcat-seltext_l = 'Delivery Delay'.
+**  APPEND ls_fieldcat TO lt_fieldcat.
+**
+**  cnt = cnt + 1.
+**  ls_fieldcat-col_pos = cnt.
+**  ls_fieldcat-fieldname = 'DE_PRPO'.
+**  ls_fieldcat-tabname =   'IT_FINAL'.
+**  ls_fieldcat-seltext_l = 'Delay PR-PO(days) (PO Date- PR Date)'.
+**  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*
+********************************************************************************************************************************************************
+**********************************************************************************************************************************
+**  CNT = CNT + 1.
+**  LS_FIELDCAT-COL_POS = CNT.
+**  LS_FIELDCAT-FIELDNAME = 'ZTERM'.
+**  LS_FIELDCAT-TABNAME =   'IT_FINAL'.
+**  LS_FIELDCAT-SELTEXT_L = 'Payment term'.
+**  APPEND LS_FIELDCAT TO LT_FIELDCAT.
+**
+**
+**  CNT = CNT + 1.
+**  LS_FIELDCAT-COL_POS = CNT.
+**  LS_FIELDCAT-FIELDNAME = 'INCO1'.
+**  LS_FIELDCAT-TABNAME =   'IT_FINAL'.
+**  LS_FIELDCAT-SELTEXT_L = 'Incoterms'.
+**  APPEND LS_FIELDCAT TO LT_FIELDCAT.
+**
+**  CNT = CNT + 1.
+**  LS_FIELDCAT-COL_POS = CNT.
+**  LS_FIELDCAT-FIELDNAME = 'AFNAM'.
+**  LS_FIELDCAT-TABNAME =   'IT_FINAL'.
+**  LS_FIELDCAT-SELTEXT_L = 'Department'.
+**  APPEND LS_FIELDCAT TO LT_FIELDCAT.
+**
+**  CNT = CNT + 1.
+**  LS_FIELDCAT-COL_POS = CNT.
+**  LS_FIELDCAT-FIELDNAME = 'WKURS'.
+**  LS_FIELDCAT-TABNAME =   'IT_FINAL'.
+**  LS_FIELDCAT-SELTEXT_L = 'Exchange rate'.
+**  APPEND LS_FIELDCAT TO LT_FIELDCAT.
+*
+**  cnt = cnt + 1.
+**  ls_fieldcat-col_pos = cnt.
+**  ls_fieldcat-fieldname = 'GT_NO'.
+**  ls_fieldcat-tabname =   'IT_FINAL'.
+**  ls_fieldcat-seltext_l = 'Gate entry no'.
+**  APPEND ls_fieldcat TO lt_fieldcat.
+**
+**  cnt = cnt + 1.
+**  ls_fieldcat-col_pos = cnt.
+**  ls_fieldcat-fieldname = 'ENTRY_DT'.
+**  ls_fieldcat-tabname =   'IT_FINAL'.
+**  ls_fieldcat-seltext_l = 'Gate entry date'.
+**  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'XBLNR_MKPF'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'Party invoice no'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'BLDAT'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'Document Date'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'J_1BNBM'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'HSN/SAC code'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'STCD3'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'GSTIN No'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+**  cnt = cnt + 1.
+**  ls_fieldcat-col_pos = cnt.
+**  ls_fieldcat-fieldname = 'BELNR'.
+**  ls_fieldcat-tabname =   'IT_FINAL'.
+**  ls_fieldcat-seltext_l = 'MIRO DOC NO'.
+**  APPEND ls_fieldcat TO lt_fieldcat.
+**
+**  cnt = cnt + 1.
+**  ls_fieldcat-col_pos = cnt.
+**  ls_fieldcat-fieldname = 'BLDAT2'.
+**  ls_fieldcat-tabname =   'IT_FINAL'.
+**  ls_fieldcat-seltext_l = 'MIRO DOC DATE'.
+**  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'MDOC'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'MIRO DOC NO'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+**
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'MDATE'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'MIRO DOC DATE'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*
+*
+*
+*
+*
+*
+**  cnt = cnt + 1.
+**  ls_fieldcat-col_pos = cnt.
+**  ls_fieldcat-fieldname = 'WRBTR'.
+**  ls_fieldcat-tabname =   'IT_FINAL'.
+**  ls_fieldcat-seltext_l = 'AMOUNT'.
+**  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*************Begin of Changes Added by Raj on 22.11.2024************
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'ERNAM1'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'PR CREATED BY SAP USER ID'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'AFNAM1'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'REQUISITIONER NAME'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'FRGKZ'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'PR RELEASE IND.'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'FRGDT'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'PR RELEASE DATE'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'KNTTP'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'ACCOUNT ASSIGNMENT CAT.'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'EINDT'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'DELIVERY DATE OF PO'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'PSPNR'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'WBS NO'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'POST1'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'WBS NAME'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'ANLN1'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'INTIAL ASSET NO'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'ANLN3'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'MAIN ASSET NO'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+**
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'ANLN2'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'MAIN SUB ASSET NO.'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*
+**  cnt = cnt + 1.
+**  ls_fieldcat-col_pos = cnt.
+**  ls_fieldcat-fieldname = 'ANLU1'.
+**  ls_fieldcat-tabname =   'IT_FINAL'.
+**  ls_fieldcat-seltext_l = 'INTIAL ASSET NO'.
+**  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'LV_NO'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'NO OF SUB ASSETS'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'TXZ01'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'PO SHORT TEXT'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'DDATE'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'DOWNPAYMENT DATE'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'DPAMT'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'DOWNPAYMENT AGAINST PO'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'LGORT'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'STORAGE LOCATION NO'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'AKTIV'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'CAPITALIZED ON DATE'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*
+*
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'ERDAT1'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'PO AMENDMENT VERSION DATE'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'STILLD'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'STILL TO BE DELIVERED QTY'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'STILLINV'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'STILL TO BE INVOICED QTY'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'STILLD_VAL'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'STILL TO BE DELIVERED VALUE'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'STILLINV_VAL'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'STILL TO BE INVOICED VALUE'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'PACK'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'PACKING FORWARDING COST'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*  IF r2 = 'X'.
+*
+*    cnt = cnt + 1.
+*    ls_fieldcat-col_pos = cnt.
+*    ls_fieldcat-fieldname = 'BUDAT'.
+*    ls_fieldcat-tabname =   'IT_FINAL'.
+*    ls_fieldcat-seltext_l = 'SERVICE ENTRY POSTING DATE'.
+*    APPEND ls_fieldcat TO lt_fieldcat.
+*
+*    cnt = cnt + 1.
+*    ls_fieldcat-col_pos = cnt.
+*    ls_fieldcat-fieldname = 'BELNR1'.
+*    ls_fieldcat-tabname =   'IT_FINAL'.
+*    ls_fieldcat-seltext_l = 'SERVICE ENTRY SHEET NO'.
+*    APPEND ls_fieldcat TO lt_fieldcat.
+*
+*
+*
+*
+*  ENDIF.
+*    cnt = cnt + 1.
+*    ls_fieldcat-col_pos = cnt.
+*    ls_fieldcat-fieldname = 'ERDATS'.
+*    ls_fieldcat-tabname =   'IT_FINAL'.
+*    ls_fieldcat-seltext_l = 'PR CHANGED ON DATE'.
+*    APPEND ls_fieldcat TO lt_fieldcat.
+*
+*
+*    IF r1 IS NOT INITIAL.
+*    cnt = cnt + 1.
+*    ls_fieldcat-col_pos = cnt.
+*    ls_fieldcat-fieldname = 'NETPR'.
+*    ls_fieldcat-tabname =   'IT_FINAL'.
+*    ls_fieldcat-seltext_l = 'Unit cost'.
+*    APPEND ls_fieldcat TO lt_fieldcat.
+*
+*  ELSE.
+*    cnt = cnt + 1.
+*    ls_fieldcat-col_pos = cnt.
+*    ls_fieldcat-fieldname = 'NETPR'.
+*    ls_fieldcat-tabname =   'IT_FINAL'.
+*    ls_fieldcat-seltext_l = 'Unit cost'.
+*    APPEND ls_fieldcat TO lt_fieldcat.
+*  ENDIF.
+
+
+  cnt = cnt + 1.
+  ls_fieldcat-col_pos =   cnt.
+  ls_fieldcat-fieldname = 'WERKS'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'PLANT CODE'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+  cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'ERNAM1'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'PR CREATED BY SAP USER ID'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+  cnt = cnt + 1.                  "Uncommented by Raj on 22.11.2024
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'ERNAM'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'PO CREATED BY SAP USER ID'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'AFNAM1'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'REQUISITIONER NAME'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+  cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'FRGKZ'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'PR RELEASE INDICATOR'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  cnt = cnt + 1.
+  ls_fieldcat-col_pos =   cnt.
+  ls_fieldcat-fieldname = 'BANFN'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = ' PR NO'.
+  ls_fieldcat-emphasize = 'C000'.
+   ls_fieldcat-outputlen = 20.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+  cnt = cnt + 1.
+  ls_fieldcat-col_pos =   cnt.
+  ls_fieldcat-fieldname = 'BADAT'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'PR CREATED ON DATE'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+  cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'FRGDT'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'PR RELEASED ON DATE'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  cnt = cnt + 1.
+    ls_fieldcat-col_pos = cnt.
+    ls_fieldcat-fieldname = 'ERDATS'.
+    ls_fieldcat-tabname =   'IT_FINAL'.
+    ls_fieldcat-seltext_l = 'PR CHANGED ON DATE'.
+    APPEND ls_fieldcat TO lt_fieldcat.
+
+
+  cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'BEDAT'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'PO DATE'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+cnt = cnt + 1.
+  ls_fieldcat-col_pos =   cnt.
+  ls_fieldcat-fieldname = 'EBELN'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'PO NO.'.
+  ls_fieldcat-outputlen = 20.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+  cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'ERDAT1'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'PO AMENDED ON DATE'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+  cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'FRGZU'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'PO RELEASE INDICATOR'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+  cnt = cnt + 1.
+  ls_fieldcat-col_pos =   cnt.
+  ls_fieldcat-fieldname = 'LIFNR'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'VENDOR CODE'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+cnt = cnt + 1.
+  ls_fieldcat-col_pos =   cnt.
+  ls_fieldcat-fieldname = 'SNAME'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'VENDOR NAME'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'STCD3'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'VENDOR GST NO.'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+ cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'KNTTP'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'ACCOUNT ASSIGNMENT CATEGORY'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+ cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'PSPNRS'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'WBS NO'.
+  ls_fieldcat-outputlen = 50.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+
+
+
+
+
+
+cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'POST1'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'WBS NAME'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'ANLN1'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'AUC/CWIP/INITIAL ASSET CODE'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+ cnt = cnt + 1.
+  ls_fieldcat-col_pos =   cnt.
+  ls_fieldcat-fieldname = 'MATKL'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'MATERIAL TYPE'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+  cnt = cnt + 1.
+  ls_fieldcat-col_pos =   cnt.
+  ls_fieldcat-fieldname = 'MATNR'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'MATERIAL CODE'.
+  ls_fieldcat-emphasize = 'C3'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+
+
+  cnt = cnt + 1.
+  ls_fieldcat-col_pos =   cnt.
+  ls_fieldcat-fieldname = 'MAKTX'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'MATERIAL CODE DESCRIPTION'.
+  ls_fieldcat-emphasize = 'C000'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+ cnt = cnt + 1.
+  ls_fieldcat-col_pos =   cnt.
+  ls_fieldcat-fieldname = 'BNFPO'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'PR LINE ITEM NO.'.
+*  ls_fieldcat-emphasize = 'C000'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+cnt = cnt + 1.
+  ls_fieldcat-col_pos =   cnt.
+  ls_fieldcat-fieldname = 'EBELP'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'PO LINE ITEM NO.'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+ cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'TXZ01'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'PO SHORT TEXT'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+ cnt = cnt + 1.
+  ls_fieldcat-col_pos =   cnt.
+  ls_fieldcat-fieldname = 'PR'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'PR QUANTITY'.
+*  ls_fieldcat-no_zero = 'X'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+  cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'MENGE'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'PO QUANTITY'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+cnt = cnt + 1.
+    ls_fieldcat-col_pos = cnt.
+    ls_fieldcat-fieldname = 'NETPR'.
+    ls_fieldcat-tabname =   'IT_FINAL'.
+    ls_fieldcat-seltext_l = 'UNIT COST (BASIC)'.
+    APPEND ls_fieldcat TO lt_fieldcat.
+
+cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'MEINS'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'UNIT'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+
+cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'NETWR'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'TOTAL COST (BASIC)'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'J_1BNBM'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'HSN/SAC CODE'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+
+ cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'CGST'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'CGST %'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'CGST_RATE'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'CGST RATE'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'SGST'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'SGST %'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'SGST_RATE'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'SGST RATE'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'IGST'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'IGST %'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'IGST_RATE'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'IGST_RATE'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'UGST'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'UGST %'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'UGST_RATE'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'UGST_RATE'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'GR_VAL'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'GROSS PO VALUE'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  "****************************************************************************
+  cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'WAERS'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'PO CURRENCY'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+ cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'DDATE'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'DPR CREATED ON DATE'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+  cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'DPAMT'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'ADVANCE PAYMENT AMOUNT'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'EINDT'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'DELIVERY DATE AS PER PO'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'LGORT'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'STORAGE LOCATION NO'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'GRN_QTY'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'GRN QUANTITY'.
+  ls_fieldcat-do_sum = 'X'.
+*  ls_fieldcat-no_zero = 'X'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'STILLD'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'STILL TO BE DELIVERED (QUANTITY)'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+
+  cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'STILLINV'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'STILL TO BE INVOICED (QUANTITY)'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+  cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'STILLD_VAL'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'STILL TO BE DELIVERED (VALUE)'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+  cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'STILLINV_VAL'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'STILL TO BE INVOICED (VALUE)'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+
+
+
+ cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'BLDAT'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'MIGO DOCUMENT DATE'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+ cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'GRNDT'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'GRN DATE'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'MDATE'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'MIRO DATE'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+ cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'XBLNR_MKPF'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'TAX INVOICE NO.'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+   cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'BLDATS'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'TAX INVOICE DATE'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+ cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'AKTIV'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'ASSET CAPITALIZED ON DATE'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+ cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'ANLN3'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'FINAL ASSET NO.'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+*
+  cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'ANLN2'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'FINAL SUB-ASSET NO.'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+ cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'LV_NO'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'NO. OF FINAL ASSETS'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+
+ cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'PACK'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'LANDED COST (BASIC)'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+
+*  IF r2 = 'X'.
+    cnt = cnt + 1.
+    ls_fieldcat-col_pos = cnt.
+    ls_fieldcat-fieldname = 'BUDAT'.
+    ls_fieldcat-tabname =   'IT_FINAL'.
+    ls_fieldcat-seltext_l = 'SERVICE ENTRY POSTING DATE'.
+    APPEND ls_fieldcat TO lt_fieldcat.
+
+    cnt = cnt + 1.
+    ls_fieldcat-col_pos = cnt.
+    ls_fieldcat-fieldname = 'BELNR1'.
+    ls_fieldcat-tabname =   'IT_FINAL'.
+    ls_fieldcat-seltext_l = 'SERVICE ENTRY SHEET NO.'.
+    APPEND ls_fieldcat TO lt_fieldcat.
+*  ENDIF.
+
+
+
+    cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'MDOC'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'MIRO DOCUMENT NO.'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+*
+*  cnt = cnt + 1.
+*  ls_fieldcat-col_pos = cnt.
+*  ls_fieldcat-fieldname = 'MDATE'.
+*  ls_fieldcat-tabname =   'IT_FINAL'.
+*  ls_fieldcat-seltext_l = 'MIRO DOC DATE'.
+*  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+    cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'MBLNR'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'GRN NO.'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+*  podate
+
+
+      cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'PODATE'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'PO RELEASED ON DATE'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+*
+       cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'PAYD'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'FIRST ADVANCE PAYMENT DATE'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+         cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'ERSDA'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'MATERIAL CODE CREATED ON DATE'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+
+       cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'LAEDA'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'MATERIAL CODE CHANGED ON DATE'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+
+  cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'WBSC'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'WBS/AUC/CWIP CODE CREATED ON DATE'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+
+    cnt = cnt + 1.
+  ls_fieldcat-col_pos = cnt.
+  ls_fieldcat-fieldname = 'WBSCH'.
+  ls_fieldcat-tabname =   'IT_FINAL'.
+  ls_fieldcat-seltext_l = 'WBS/AUC/CWIP CODE CHANGED ON DATE'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+**********End of Changes Added by Raj on 22.11.2024****************
+  wa_sort-fieldname = 'MATNR'.
+  wa_sort-up        = 'X'.
+*  WA_SORT-SUBTOT    = 'X'.
+*  WA_SORT-
+  APPEND wa_sort TO it_sort.
+
+  wa_sort-fieldname = 'EBELP'.
+*  WA_SORT-UP        = 'X'.
+  wa_sort-subtot    = 'X'.
+  APPEND wa_sort TO it_sort.
+
+*  WA_SORT-FIELDNAME = 'MATNR'.
+**  WA_SORT-UP        = 'X'.
+***  WA_SORT-SUBTOT    = 'X'.
+* APPEND WA_SORT TO IT_SORT.
+
+*************************************************************************************
+*************************************************************************************************************************************************
+  CLEAR ls_fieldcat.
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Form  DISPLAY_DATA
+*&---------------------------------------------------------------------*
+
+FORM display_data .
+
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      i_callback_program = sy-repid
+*     i_callback_top_of_page = 'TOP_OF_PAGE '
+      is_layout          = wa_layout
+      it_fieldcat        = lt_fieldcat
+      i_save             = 'X'
+*     it_sort            = it_sort
+    TABLES
+      t_outtab           = it_final
+    EXCEPTIONS
+      program_error      = 1.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form get_service_po
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM get_service_po .   " For service PO display report
+  DATA : l_flag  TYPE c,
+         l_endat TYPE c.
+
+
+*  Get data from ekko ,ekpo and eban
+  SELECT k~ebeln, k~bedat, k~lifnr, k~bsart,k~ekgrp,k~ernam,k~frgzu,k~zterm,k~inco1,k~wkurs,
+         p~ebelp, p~werks, p~mfrpn, p~mfrnr, p~matnr, p~txz01,p~mwskz, p~matkl, netpr, p~afnam, k~waers, p~netwr, p~ematn, p~menge, p~meins, p~banfn , p~bnfpo, p~pstyp, p~packno,
+          d~menge AS pr, d~badat,d~pstyp  AS pstyp1,p~knttp,p~dpamt,p~lgort,k~revno,k~knumv,k~bukrs,k~aedat,k~lands   "KNTTP Added by Raj on 22.11.2024
+          ,k~ekorg,p~mtart,d~frgdt
+    FROM ekko AS k INNER JOIN ekpo AS p ON k~ebeln = p~ebeln
+                   LEFT OUTER JOIN eban AS d ON d~banfn = p~banfn AND d~bnfpo = p~bnfpo
+    INTO TABLE @DATA(lt_ekpo)
+    WHERE k~ebeln IN @s_banfn
+    AND k~bedat IN @s_bedat
+    AND p~matnr IN @s_matnr
+    AND k~ekgrp IN @s_ekgrp
+    AND p~werks IN @s_werks
+    AND k~lifnr IN @s_lifnr
+    AND k~bsart EQ 'SERV' "'ZSER'
+    AND d~badat IN @s_badat
+  AND p~loekz NE 'L'
+    AND p~knttp IN @s_knttp "KNTTP Added by Raj on 26.11.2024
+    AND p~banfn IN @s_banfns. "BANFN Added by Raj on 26.11.2024
+
+
+  IF sy-subrc NE 0.
+    MESSAGE text-003 TYPE sy-abcde+18 DISPLAY LIKE sy-abcde+4.
+    LEAVE LIST-PROCESSING.
+  ENDIF.
+
+*************Authorisation Object*********************
+    IF lt_ekpo IS NOT INITIAL.
+      LOOP AT lt_ekpo INTO data(wa_ekp).
+        AUTHORITY-CHECK OBJECT 'ZMM_WRKP2P'
+         ID 'WERKS' FIELD wa_ekp-werks
+         ID 'ACTVT' FIELD '03'.
+        IF sy-subrc <> 0.
+          MESSAGE e049(zsd) WITH wa_ekp-werks.
+        ENDIF.
+        clear: wa_ekp.
+      ENDLOOP.
+    ENDIF.
+************Authorisation Object*********************
+
+    data(lt_acca) = lt_ekpo[].
+
+  delete lt_acca where knttp NE 'A'.
+
+
+  IF lt_ekpo IS NOT INITIAL.
+    SELECT ebeln,ebelp,belnr,budat FROM ekbe INTO TABLE @DATA(it_ekbee)                     "SERVICE ENTRY NO
+      FOR ALL ENTRIES IN @lt_ekpo WHERE ebeln = @lt_ekpo-ebeln AND ebelp = @lt_ekpo-ebelp and VGABE = '9'.
+  ENDIF.
+
+  IF it_ekbee IS NOT INITIAL.                                                    "SERVICE ENTRY POTING DATE
+    SELECT lblni,budat FROM essr INTO TABLE @DATA(it_essrr)
+      FOR ALL ENTRIES IN @it_ekbee WHERE lblni = @it_ekbee-belnr.
+  ENDIF.
+
+
+  IF lt_ekpo[] IS NOT INITIAL.
+
+    DATA(lt_ekpo_1) = lt_ekpo[].
+
+    DELETE  lt_ekpo_1 WHERE pstyp <> '9'.
+
+    IF lt_ekpo_1[] IS NOT INITIAL.
+      SELECT packno,introw, extrow,sub_packno,
+             menge, meins , netwr,tbtwr,ktext1,act_menge,pln_packno, pln_introw,SRVPOS
+                    FROM esll
+         INTO TABLE @DATA(lt_esll)
+         FOR ALL ENTRIES IN @lt_ekpo_1
+      WHERE   packno = @lt_ekpo_1-packno.
+
+      SELECT packno,introw, extrow,sub_packno,
+             menge, meins , netwr,tbtwr,ktext1,act_menge,pln_packno, pln_introw
+            FROM esll
+            INTO TABLE @DATA(lt_esll2)
+            FOR ALL ENTRIES IN @lt_esll
+      WHERE packno = @lt_esll-sub_packno.
+
+
+              SELECT packno,introw, extrow,sub_packno,
+             menge, meins , netwr,tbtwr,ktext1,act_menge,pln_packno, pln_introw,SRVPOS
+                    FROM esll
+         INTO TABLE @DATA(lt_eslls)
+         FOR ALL ENTRIES IN @lt_ekpo_1
+      WHERE   packno = @lt_ekpo_1-packno.
+
+
+    ENDIF.
+  ENDIF.
+
+
+
+*    IF it_eslls IS NOT INITIAL.
+*    SELECT packno extrow sub_packno srvpos FROM esll INTO CORRESPONDING FIELDS OF TABLE it_srvpos
+*      FOR ALL ENTRIES IN it_esllpa WHERE packno = it_esllpa-sub_packno.
+*  ENDIF.
+
+  IF lt_eslls IS NOT INITIAL.
+    SELECT packno,extrow,sub_packno,srvpos FROM esll INTO  TABLE @data(it_esrv)
+      FOR ALL ENTRIES IN @lt_eslls WHERE packno = @lt_eslls-sub_packno.
+
+  ENDIF.
+
+
+
+
+  IF lt_ekpo[] IS NOT INITIAL.
+    SELECT banfn,
+           bnfpo,
+      ernam, "ERnam Added by Raj on 22.11.2024 "Purchase requistion Created by
+           afnam, "Requisitioner Name Added by Raj on 22.11.2024
+           frgkz, "Release Indicator Added by Raj on 22.11.2024
+           frgdt, "pr RELEASE DATE Added by Raj on 22.11.2024
+           menge,
+           badat,
+           pstyp,
+           ebeln,
+           ebelp,
+           packno,
+           erdat
+*           DISUB_PSPNR
+   FROM eban
+   INTO TABLE @DATA(lt_eban)
+   FOR ALL ENTRIES IN @lt_ekpo
+   WHERE  ebeln = @lt_ekpo-ebeln
+          AND ebelp = @lt_ekpo-ebelp
+    AND badat IN @s_badat.
+  ENDIF.
+
+***   Pr Qty Logic ****
+  IF lt_eban[] IS NOT INITIAL.
+
+    DATA(lt_eban_1) = lt_eban[].
+
+    DELETE  lt_eban_1 WHERE pstyp <> '9'.
+
+    SELECT packno,introw,extrow, sub_packno
+                  FROM esll
+       INTO TABLE @DATA(lt_esll4)
+       FOR ALL ENTRIES IN @lt_eban_1
+    WHERE   packno = @lt_eban_1-packno.
+    SORT lt_esll4 BY packno extrow.
+
+    SELECT packno,
+           introw,
+           extrow,
+           menge
+          FROM esll
+          INTO TABLE @DATA(lt_esll5)
+          FOR ALL ENTRIES IN @lt_esll4
+    WHERE packno = @lt_esll4-sub_packno.
+    SORT lt_esll5 BY packno extrow.
+
+  ENDIF.
+
+
+  IF lt_ekpo[] IS NOT INITIAL.
+*   Get Supplier name from LFA1
+    SELECT lifnr, name1, stcd3
+      FROM lfa1
+      INTO TABLE @DATA(lt_lfa2)
+      FOR ALL ENTRIES IN @lt_ekpo
+    WHERE lifnr = @lt_ekpo-lifnr.
+
+*   Get Manufacture name from LFA1
+    SELECT lifnr, name1
+      FROM lfa1
+      INTO TABLE @DATA(lt_lfa1)
+      FOR ALL ENTRIES IN @lt_ekpo
+    WHERE lifnr = @lt_ekpo-mfrnr.
+
+*  Get WBS from EKKN
+    SELECT ebeln, ebelp, ps_psp_pnr
+       FROM ekkn
+       INTO TABLE @DATA(lt_ekkn)
+       FOR ALL ENTRIES IN @lt_ekpo
+       WHERE ebeln = @lt_ekpo-ebeln
+        AND  ebelp = @lt_ekpo-ebelp.
+*    AND ps_psp_pnr IN @s_pspnr.
+
+
+    IF s_werks-low+0(1) = '1'.
+      DATA(lv_bukrss) = '1000'.
+    ELSEIF s_werks-low+0(1) = '4'.
+      lv_bukrss = '1000'.
+    ELSEIF s_werks-low+0(1) = '7'.
+      lv_bukrss = '7000'.
+    ENDIF.
+
+
+
+
+    IF lt_ekkn IS NOT INITIAL."Added by Raj on 25.11.2024
+      SELECT bukrs,anln1,aktiv,posnr FROM anla INTO TABLE @DATA(it_anla) FOR ALL ENTRIES IN @lt_ekkn WHERE bukrs = @lv_bukrss AND posnr = @lt_ekkn-ps_psp_pnr.
+    ENDIF.
+
+
+*** Ger Project Name From PRPS Table
+    SELECT  pspnr ,
+            posid,
+            post1 ,
+            werks ,
+            matnr
+   FROM prps
+   INTO TABLE @DATA(lt_prps)
+   FOR ALL ENTRIES IN @lt_ekkn
+    WHERE  pspnr = @lt_ekkn-ps_psp_pnr.
+    "
+
+*  Get Manufacture DELIVERY DATE FROM EKET
+    SELECT ebeln,
+           ebelp ,
+           eindt
+      FROM eket
+      INTO TABLE @DATA(lt_eket)
+      FOR ALL ENTRIES IN @lt_ekpo
+      WHERE ebeln = @lt_ekpo-ebeln
+      AND ebelp = @lt_ekpo-ebelp
+    AND bedat IN @s_bedat.                  "
+
+*  Get Manufacture part no from MARA
+    SELECT matnr,
+           mfrpn
+      FROM mara
+      INTO TABLE @DATA(lt_mara)
+      FOR ALL ENTRIES IN @lt_ekpo
+      WHERE matnr = @lt_ekpo-matnr.
+*    AND mfrnr IN @s_mfrnr.
+
+    IF sy-subrc = 0.
+*  Get Material description from MAKT
+      SELECT matnr, maktx
+        FROM makt
+        INTO TABLE @DATA(lt_makt)
+        FOR ALL ENTRIES IN @lt_mara
+        WHERE matnr = @lt_mara-matnr
+      AND spras  = @sy-langu.
+    ENDIF.
+
+*  Get data from MSEG
+
+    SELECT   mblnr,
+             mjahr,
+             zeile,
+             bwart,
+             matnr,
+             menge,
+             erfmg,
+             erfme,
+             bpmng,
+             ebeln,
+             ebelp,
+             lfbnr,
+             lfbja,
+             sjahr,
+             smbln,
+             smblp,
+             budat_mkpf,
+             sgtxt
+      FROM mseg
+      INTO TABLE @lt_mseg
+      FOR ALL ENTRIES IN @lt_ekpo
+      WHERE ebeln = @lt_ekpo-ebeln
+      AND ebelp = @lt_ekpo-ebelp
+      AND bwart IN ('101').
+*    AND budat_mkpf IN @s_grndt.
+
+    IF lt_mseg IS NOT INITIAL.
+*      SELECT GT_NO, ENTRY_DT, MBLNR   "Commented by Raj on 22.11.2024
+*      FROM ZGATE_ENTRY
+*      INTO TABLE @DATA(LT_ZGATE)
+*      FOR ALL ENTRIES IN  @LT_MSEG
+*      WHERE MBLNR = @LT_MSEG-MBLNR.
+    ENDIF.
+
+    SORT lt_mseg BY ebeln ebelp mblnr.
+
+  ENDIF.
+  DATA(lt_mseg2) = CORRESPONDING tt_mseg( lt_mseg ) ."added by pankaj k
+
+  DELETE lt_mseg WHERE bwart = '102' .
+  DELETE lt_mseg2 WHERE bwart = '101'.
+  IF lt_mseg2 IS NOT INITIAL.
+    LOOP AT lt_mseg ASSIGNING FIELD-SYMBOL(<lfs_mseg>)  .
+
+      READ TABLE lt_mseg2 INTO DATA(wa_mseg2) WITH KEY sjahr = <lfs_mseg>-mjahr
+                                                       smbln = <lfs_mseg>-mblnr
+                                                       smblp = <lfs_mseg>-zeile
+                                                       .
+      IF sy-subrc = 0 .
+        <lfs_mseg>-flag = 'X' .
+      ENDIF .
+    ENDLOOP.
+    DELETE lt_mseg WHERE flag IS NOT INITIAL.
+  ENDIF.
+
+  IF lt_ekpo IS NOT INITIAL.
+    SELECT
+     mwsk1
+     kappl
+     kschl
+     kbetr
+     FROM konp
+     INTO CORRESPONDING FIELDS OF TABLE lt_konp
+     FOR ALL ENTRIES IN lt_ekpo
+     WHERE mwsk1 = lt_ekpo-mwskz and knumh = lt_ekpo-knumv
+     AND kappl = 'TX'.
+  ENDIF.
+
+  SELECT
+       belnr
+       ebeln
+       ebelp
+       matnr
+       wrbtr
+       shkzg
+       FROM rseg
+       INTO TABLE it_rseg
+       FOR ALL ENTRIES IN lt_ekpo
+       WHERE ebeln = lt_ekpo-ebeln.
+
+  SELECT
+       belnr
+       bldat
+       tcode
+       lifnr
+       FROM rbkp
+       INTO TABLE it_rbkp
+       FOR ALL ENTRIES IN it_rseg
+       WHERE belnr = it_rseg-belnr
+       AND tcode = 'MIRO'.
+
+
+
+  IF lt_ekpo IS NOT INITIAL."ADDED  BY RAJ ON 22.11.2024
+
+    TYPES : BEGIN OF ty_po,
+              ebeln TYPE cdpos-objectid,
+              banfn TYPE cdpos-objectid,
+            END OF ty_po.
+
+    DATA : it_po TYPE STANDARD TABLE OF ty_po,
+           wa_po TYPE ty_po.
+
+
+    LOOP AT lt_ekpo INTO DATA(wa_ekpos).
+      wa_po-ebeln =  wa_ekpos-ebeln.
+      wa_po-banfn = wa_ekpos-banfn.
+      APPEND wa_po TO it_po.
+      CLEAR : wa_po,wa_ekpos.
+    ENDLOOP.
+
+    IF it_po IS NOT INITIAL.
+      SELECT * FROM cdhdr INTO TABLE @DATA(it_cdhdr) FOR ALL ENTRIES IN @it_po
+                      WHERE objectclas = 'EINKBELEG' AND objectid = @it_po-ebeln AND ( tcode = 'ME29N' OR tcode = 'ME28').
+*                  AND FNAME = 'FRGKE' AND VALUE_NEW = '2'.
+
+      SELECT * FROM cdhdr INTO TABLE @DATA(it_cdhdrs) FOR ALL ENTRIES IN @it_po
+              WHERE objectclas = 'BANF' AND objectid = @it_po-banfn AND ( tcode = 'ME54N' OR tcode = 'ME55' OR tcode = 'ME21N' OR tcode = 'ME52N' OR tcode = 'ME51N').
+*                  AND FNAME = 'FRGKE' AND VALUE_NEW = '2'.
+
+
+    ENDIF.
+
+
+    SELECT ebeln,ebelp,budat,menge FROM ekbe INTO TABLE @DATA(it_ekbe) FOR ALL ENTRIES IN @lt_ekpo WHERE ebeln = @lt_ekpo-ebeln AND
+      ebelp = @lt_ekpo-ebelp AND bewtp = 1.
+
+    SELECT ebeln,ebelp,budat,menge,belnr,xblnr,bewtp FROM ekbe INTO TABLE @DATA(it_ekbes) FOR ALL ENTRIES IN @lt_ekpo WHERE ebeln = @lt_ekpo-ebeln AND
+    ebelp = @lt_ekpo-ebelp AND bewtp = 'Q'.
+
+
+                SELECT ebeln,ebelp,budat,menge,belnr,cpudt,cputm,vgabe FROM ekbe INTO TABLE @DATA(it_ekbinv) FOR ALL ENTRIES IN @lt_ekpo WHERE ebeln = @lt_ekpo-ebeln AND
+  ebelp = @lt_ekpo-ebelp AND bewtp = 'Q' and VGABE = '2'.
+
+
+sort it_ekbinv DESCENDING by cpudt cputm.
+
+               SELECT ebeln,ebelp,budat,menge,belnr,cpudt,cputm,wrbtr,VGABE  FROM ekbe INTO TABLE @DATA(it_pay) FOR ALL ENTRIES IN @lt_ekpo WHERE ebeln = @lt_ekpo-ebeln AND
+  ebelp = @lt_ekpo-ebelp AND  VGABE = '4'.
+
+                  SELECT ebeln,ebelp,budat,menge,belnr,cpudt,cputm,wrbtr,VGABE  FROM ekbe INTO TABLE @DATA(it_pa) FOR ALL ENTRIES IN @lt_ekpo WHERE ebeln = @lt_ekpo-ebeln AND
+  ebelp = @lt_ekpo-ebelp AND  VGABE = 'A'.
+
+                 sort it_pay by budat.
+
+
+    IF it_ekbes IS NOT INITIAL.
+      SELECT belnr,budat,bldat FROM rbkp INTO TABLE @DATA(it_rbkps) FOR ALL ENTRIES IN @it_ekbes WHERE belnr = @it_ekbes-belnr AND tcode = 'MIRO' OR tcode = 'MIR7'.
+    ENDIF.
+
+
+    SELECT edokn,revno,erdat FROM erev INTO TABLE @DATA(it_erev) FOR ALL ENTRIES IN @lt_ekpo WHERE edokn = @lt_ekpo-ebeln AND revno =  @lt_ekpo-revno.
+
+    SELECT ebeln,ebelp,banfn,eindt,menge,wemng FROM eket INTO TABLE @DATA(it_eket) FOR ALL ENTRIES IN @lt_ekpo WHERE banfn = @lt_ekpo-banfn.
+
+    TYPES : BEGIN OF ty_kon,
+              knumv TYPE konv-knumv,
+              kposn TYPE konv-kposn,
+            END OF ty_kon.
+
+    DATA : it_kon TYPE STANDARD TABLE OF ty_kon,
+           wa_kon TYPE ty_kon.
+    LOOP AT lt_ekpo INTO DATA(wa_ek).
+      wa_kon-knumv =  wa_ek-knumv.
+      wa_kon-kposn = wa_ek-ebelp.
+      APPEND wa_kon TO it_kon.
+      CLEAR : wa_kon,wa_ek.
+    ENDLOOP.
+
+    SELECT knumv,kposn,kschl,kwert,KAWRT,kbetr FROM konv INTO TABLE @DATA(it_konv)
+       FOR ALL ENTRIES IN @it_kon WHERE knumv = @it_kon-knumv AND kposn = @it_kon-kposn AND
+*      kschl IN ('FRB1','FRB3','FRC2','FRC5','P&F1','P&F2','P&F3','R002','R003','R005','RL01','RL04','RL05','RL06','RL07','RL08','ZFR2','ZIN2','ZINC').
+      KSCHL IN @it_types.
+  ENDIF.
+
+
+
+
+  SELECT ebeln, ebelp, ps_psp_pnr
+     FROM ekkn
+     INTO TABLE @DATA(lt_ekkns)
+     FOR ALL ENTRIES IN @lt_ekpo
+     WHERE ebeln = @lt_ekpo-ebeln
+      AND  ebelp = @lt_ekpo-ebelp.
+*    AND ps_psp_pnr IN @s_pspnr.
+
+  IF lt_ekkn IS NOT INITIAL."Added by Raj on 25.11.2024
+    SELECT bukrs,anln1,aktiv,posnr FROM anla INTO TABLE @DATA(it_anlas) FOR ALL ENTRIES IN @lt_ekkn WHERE posnr = @lt_ekkn-ps_psp_pnr.
+  ENDIF.
+
+
+***************Final Asset logic*************
+
+  TYPES : BEGIN OF ty_tab,
+            bukrs TYPE anla-bukrs,
+            anln1 TYPE anla-anln1,
+            anln2 TYPE anla-anln2,
+            anlu1 TYPE anek-anlu1,
+            lv_no TYPE i,
+          END OF ty_tab.
+
+  DATA : it_tab TYPE STANDARD TABLE OF ty_tab,
+         wa_tab TYPE ty_tab.
+
+
+
+    lt_acca = lt_ekpo[].
+
+  DELETE lt_acca WHERE knttp NE 'A'.
+
+  IF lt_acca IS NOT INITIAL.
+    SELECT ebeln,ebelp,anln1 FROM ekkn INTO TABLE @DATA(it_ekn) FOR ALL ENTRIES IN @lt_acca
+      WHERE  ebeln = @lt_acca-ebeln AND ebelp = @lt_acca-ebelp.
+  ENDIF.
+
+
+  DATA : wa_anl LIKE LINE OF it_anla.
+
+  LOOP AT it_ekn INTO DATA(wa_ekn).
+    IF wa_ekn-anln1 IS NOT INITIAL.
+      wa_anl-anln1 = wa_ekn-anln1.
+      wa_anl-bukrs = lv_bukrss.
+      APPEND wa_anl TO it_anla.
+      CLEAR : wa_anl,wa_ekn.
+    ENDIF.
+  ENDLOOP.
+
+
+
+
+
+
+  IF it_anla IS NOT INITIAL.
+    SELECT bukrs,anlu1,anln1,anln2 FROM anek INTO TABLE @DATA(it_anek)
+      FOR ALL ENTRIES IN @it_anla WHERE bukrs  = @it_anla-bukrs AND anlu1 = @it_anla-anln1.
+  ENDIF.
+
+
+  IF it_anek IS NOT INITIAL.
+
+    LOOP AT it_anla INTO DATA(wa_anla).
+      READ TABLE it_anek INTO DATA(wa_anek) WITH KEY bukrs = wa_anla-bukrs anlu1 = wa_anla-anln1 .
+      IF sy-subrc = 0.
+        MOVE-CORRESPONDING wa_anek TO wa_tab.
+        APPEND wa_tab TO it_tab.
+      ENDIF.
+      CLEAR : wa_tab,wa_anek.
+    ENDLOOP.
+*    endif.
+*    ENDLOOP.
+  ENDIF.
+
+  DATA : lv_no TYPE i.
+
+  LOOP AT it_tab INTO wa_tab.
+    LOOP AT it_anek INTO wa_anek WHERE anlu1 = wa_tab-anlu1.
+      lv_no = lv_no + 1.
+      CLEAR: wa_anek.
+    ENDLOOP.
+    wa_tab-lv_no = lv_no.
+    MODIFY it_tab FROM wa_tab TRANSPORTING lv_no.
+    CLEAR : wa_tab,lv_no.
+  ENDLOOP.
+
+
+***************For final asset logic *******************
+
+
+  SELECT bldat, mblnr,mjahr
+      FROM mkpf
+      INTO TABLE @DATA(lt_mkpf)
+      FOR ALL ENTRIES IN @lt_mseg
+      WHERE mblnr = @lt_mseg-mblnr.
+
+
+if lt_ekpo is NOT INITIAL.
+  SELECt matnr,ERSDA,LAEDA from mara into table @data(it_mar) FOR ALL ENTRIES IN @lt_ekpo
+    WHERE matnr = @lt_ekpo-matnr.
+
+ENDIF.
+
+
+
+
+  LOOP AT lt_ekpo INTO DATA(wa_ekpo).
+
+    wa_final-ebeln = wa_ekpo-ebeln.
+    wa_final-ebelp = wa_ekpo-ebelp.
+    wa_final-zterm  = wa_ekpo-zterm.
+    wa_final-inco1 = wa_ekpo-inco1.
+    wa_final-afnam = wa_ekpo-afnam.
+    wa_final-wkurs  = wa_ekpo-wkurs.
+    wa_final-knttp =  wa_ekpo-knttp. "Added by Raj on 22.11.2024
+    wa_final-dpamt  = wa_ekpo-dpamt."Added by Raj on 25.11.2024
+    wa_final-lgort = wa_ekpo-lgort."Added by Raj on 25.11.2024
+    wa_final-txz01  = wa_ekpo-txz01."added by parth on 27.11.2024
+    wa_final-frgdt = wa_ekpo-frgdt.
+
+
+
+
+
+    wa_final-netpr = wa_ekpo-netpr .
+
+    IF  wa_final-waers = 'USDN'.
+      wa_final-netpr = wa_final-netpr / 1000.
+    ENDIF.
+
+
+
+
+    READ TABLE it_ekbee INTO DATA(wa_ekbee) WITH KEY ebeln = wa_ekpo-ebeln ebelp = wa_ekpo-ebelp.
+    IF sy-subrc = 0.
+      wa_final-belnr1 =  wa_ekbee-belnr.
+      READ TABLE it_essrr INTO DATA(wa_essrr) WITH KEY lblni =  wa_ekbee-belnr.
+      IF sy-subrc = 0.
+        wa_final-budat = wa_essrr-budat.
+      ENDIF.
+    ENDIF.
+
+
+
+
+    READ TABLE it_erev INTO DATA(wa_erev) WITH KEY edokn = wa_ekpo-ebeln revno =  wa_ekpo-revno. "Added by Raj on 25.11.2024
+    IF sy-subrc = 0.
+      wa_final-erdat1    =  wa_erev-erdat.
+    ENDIF.
+
+*    READ TABLE it_konv INTO DATA(wa_konv) WITH KEY knumv = wa_ekpo-knumv kposn =  wa_ekpo-ebelp.
+
+    loop at it_konv into data(wa_konvs) where knumv = wa_ekpo-knumv and kposn =  wa_ekpo-ebelp.
+*    IF sy-subrc = 0.
+      wa_final-pack =   wa_final-pack + wa_konvs-kwert.
+*    ENDIF.
+    clear : wa_konvs.
+    endloop.
+
+    READ TABLE it_eket INTO DATA(wa_eket) WITH KEY banfn =  wa_ekpo-banfn ebelp = wa_ekpo-ebelp.    "Added by Raj on 25.11.2024
+    IF sy-subrc = 0.
+      wa_final-eindt1 = wa_eket-eindt.
+      wa_final-stilld = ( wa_eket-menge - wa_eket-wemng ).
+    ENDIF.
+
+
+    READ TABLE  it_ekbes INTO DATA(wa_ekbes) WITH KEY ebeln =  wa_ekpo-ebeln ebelp = wa_ekpo-ebelp bewtp = 'Q'.
+    IF sy-subrc = 0.
+      wa_final-stillinv =  ( wa_ekpo-menge - wa_ekbes-menge ).
+    ENDIF.
+
+
+
+    CLEAR : wa_final-stilld,wa_final-stillinv.
+
+    wa_final-stilld_val =  wa_final-stilld * wa_ekpo-netpr.
+
+    wa_final-stillinv_val  =  wa_final-stillinv * wa_ekpo-netpr.
+
+    wa_final-mdoc = wa_ekbes-belnr.
+
+     wa_final-xblnr_mkpf = wa_ekbes-xblnr.
+
+
+
+    READ TABLE lt_eslls into data(wa_eslls) with key packno = wa_ekpo-packno.
+*    if sy-subrc = 0.
+*
+*    endif.
+
+
+   read table it_esrv into data(wa_esrv) with key packno = wa_eslls-sub_packno ."extrow = wa_eslls-extrow.
+   if sy-subrc = 0.
+        wa_final-J_1BNBM = wa_esrv-srvpos.
+   endif.
+
+
+    READ TABLE it_rbkps INTO DATA(wa_rbkps) WITH KEY belnr = wa_ekbes-belnr.
+    IF sy-subrc = 0.
+*      wa_final-mdate = wa_rbkps-budat.
+       wa_final-bldats =  wa_rbkps-bldat.
+    ENDIF.
+
+
+
+    select ebeln,ebelp,belnr,budat,VGABE from ekbe into table @data(lt_eks) where
+       ebeln = @wa_ekpo-ebeln and ebelp = @wa_ekpo-ebelp and VGABE = 2.
+    SORT lt_eks by budat DESCENDING.
+
+     read table lt_eks into data(Wa_eks) with key ebeln = wa_ekpo-ebeln ebelp = wa_ekpo-ebelp VGABE = 2.
+     wa_final-mdate = wa_eks-budat.
+
+     wa_final-mdoc = wa_eks-belnr.
+
+    refresh : lt_eks.
+
+
+    READ TABLE it_cdhdr INTO DATA(wa_cdhdr) WITH KEY objectclas = 'EINKBELEG'  objectid = wa_ekpo-ebeln. "Added by Raj on 25.11.2024
+    IF sy-subrc = 0.
+      wa_final-podate = wa_cdhdr-udate.
+    ENDIF.
+
+
+*    READ TABLE it_cdhdrs INTO DATA(wa_cdhdrs) WITH KEY objectclas = 'BANF'  objectid = wa_ekpo-banfn. "Added by Raj on 25.11.2024
+*    IF sy-subrc = 0.
+*      wa_final-frgdt = wa_cdhdrs-udate.
+*    ENDIF.
+
+
+
+    READ TABLE it_ekbe INTO DATA(wa_ekbe) WITH KEY ebeln = wa_ekpo-ebeln.
+    IF sy-subrc = 0.
+*      wa_final-ddate = wa_ekbe-budat.
+    ENDIF.
+
+
+
+    IF wa_ekpo-mfrpn IS NOT INITIAL.
+      wa_final-mfrpn = wa_ekpo-mfrpn.
+
+    ELSE.
+      READ TABLE lt_mara INTO DATA(wa_mara) WITH KEY matnr = wa_ekpo-matnr.
+      IF sy-subrc = 0.
+        wa_final-mfrpn = wa_mara-mfrpn.
+      ENDIF.
+    ENDIF.
+
+    wa_final-lifnr = wa_ekpo-lifnr.
+
+    READ TABLE lt_lfa2 INTO DATA(wa_lfa2) WITH KEY lifnr = wa_ekpo-lifnr.
+    IF sy-subrc = 0.
+      wa_final-sname = wa_lfa2-name1.
+      wa_final-stcd3 = wa_lfa2-stcd3.
+    ENDIF.
+
+    SELECT SINGLE psphi FROM prps INTO wa_final-psphi WHERE pspnr = wa_final-pspnr.
+    WRITE wa_final-psphi TO wa_final-psphi1.
+
+    wa_final-werks = wa_ekpo-werks.
+    wa_final-bsart = wa_ekpo-bsart.
+    wa_final-bedat = wa_ekpo-bedat.
+    wa_final-matnr = wa_ekpo-matnr.
+    wa_final-matkl = wa_ekpo-matkl.
+    wa_final-ekgrp = wa_ekpo-ekgrp.
+    wa_final-ernam = wa_ekpo-ernam.
+    wa_final-frgzu = wa_ekpo-frgzu.
+    wa_final-pstyp = wa_ekpo-pstyp.
+    wa_final-packno = wa_ekpo-packno.
+    CLEAR wa_mara.
+    wa_final-mfrnr = wa_ekpo-mfrnr.
+    wa_final-menge1 = wa_ekpo-menge.
+    wa_final-meins  = wa_ekpo-meins.
+    wa_final-netwr  = wa_ekpo-netwr.
+
+
+
+
+
+*    READ TABLE lt_eslls INTO DATA(wa_eslls) WITH KEY packno = wa_ekpo-packno.
+*    IF sy-subrc EQ 0.
+*     wa_final-J_1BNBM = wa_eslls-srvpos.
+*    endif.
+
+
+*
+    READ TABLE lt_esll INTO DATA(wa_esll) WITH KEY packno = wa_final-packno.
+    IF sy-subrc EQ 0.
+*     wa_final-J_1BNBM = wa_esll-srvpos.
+      LOOP AT lt_esll2 INTO DATA(wa_esll2) WHERE packno = wa_esll-sub_packno.
+        wa_final-menge = wa_final-menge + wa_esll2-menge.
+        wa_final-act_menge = wa_final-act_menge + wa_esll2-act_menge.
+      ENDLOOP.
+    ENDIF.
+    READ TABLE lt_eban INTO DATA(wa_eban) WITH  KEY banfn = wa_ekpo-banfn bnfpo = wa_ekpo-bnfpo .     "Added By Pankaj K
+
+    IF sy-subrc = 0.
+      wa_final-banfn = wa_eban-banfn.
+      wa_final-bnfpo = wa_eban-bnfpo.
+      wa_final-badat = wa_eban-badat.
+      packno_pr  = wa_eban-packno.
+      wa_final-packno_pr  = packno_pr .
+
+      wa_final-ernam1 = wa_eban-ernam."Added by Raj on 22.11.2024
+      wa_final-afnam1 = wa_eban-afnam."Added by Raj on 22.11.2024
+      wa_final-frgkz = wa_eban-frgkz."Added by Raj on 22.11.2024
+      wa_final-erdats =  wa_eban-erdat."Added by Raj on 22.11.2024
+*       wa_final-erdats =  wa_eban-erdat."Added by Raj on 22.11.2024
+
+
+    ENDIF.
+
+
+*    LOOP AT lt_konp INTO ls_konp WHERE mwsk1 = wa_ekpo-mwskz.
+*  read table lt_konp into ls_konp with key MWSK1 = wa_ekpo-mwskz.
+
+
+    lv_taxcom-bukrs = wa_ekpo-bukrs.
+    lv_taxcom-budat = wa_ekpo-aedat.
+    lv_taxcom-bldat = wa_ekpo-aedat.
+    lv_taxcom-waers = wa_ekpo-waers.
+    lv_taxcom-hwaer = wa_ekpo-waers.
+    lv_taxcom-kposn = wa_ekpo-ebelp.
+    lv_taxcom-mwskz = wa_ekpo-mwskz.
+    lv_taxcom-wrbtr = wa_ekpo-netwr.
+    lv_taxcom-lifnr = wa_ekpo-lifnr.
+    lv_taxcom-ekorg = wa_ekpo-ekorg.
+    lv_taxcom-matnr = wa_ekpo-matnr.
+    lv_taxcom-werks = wa_ekpo-werks.
+    lv_taxcom-matkl = wa_ekpo-matkl.
+    lv_taxcom-meins = wa_ekpo-meins.
+    lv_taxcom-mglme = wa_ekpo-menge.
+    lv_taxcom-mtart = wa_ekpo-mtart.
+    lv_taxcom-land1 = wa_ekpo-lands.
+    lv_taxcom-shkzg =  'H'.
+    lv_taxcom-xmwst =  'X'.
+
+*    IF v_mwskz IS INITIAL.
+*      v_mwskz = lv_taxcom-mwskz.
+*    ENDIF.
+
+    CALL FUNCTION 'CALCULATE_TAX_ITEM'
+      EXPORTING
+        i_taxcom            = lv_taxcom
+      TABLES
+        t_xkomv             = it_komv
+      EXCEPTIONS
+        mwskz_not_defined   = 1
+        mwskz_not_found     = 2
+        mwskz_not_valid     = 3
+        steuerbetrag_falsch = 4
+        country_not_found   = 5
+        OTHERS              = 6.
+    IF sy-subrc <> 0.
+* MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*         WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+    ENDIF.
+
+
+
+
+   loop at it_komv into wa_komv ."INDEX 1.
+
+      CASE wa_komv-kschl.
+        WHEN 'JICG'.
+          wa_final-cgst      =  wa_komv-kbetr / 10.
+          wa_final-cgst_rate  = wa_final-cgst * wa_ekpo-netwr / 100.
+
+        WHEN 'JISG'.
+          wa_final-sgst      =  wa_komv-kbetr / 10.
+          wa_final-sgst_rate = wa_final-sgst * wa_ekpo-netwr / 100.
+
+        WHEN 'JIIG'.
+          wa_final-igst     = wa_komv-kbetr / 10.
+          wa_final-igst_rate =  wa_final-igst * wa_ekpo-netwr / 100.
+
+        WHEN 'JIUG' OR 'JIUN'.
+          wa_final-ugst     = wa_komv-kbetr / 10.
+          wa_final-ugst_rate =  wa_final-ugst * wa_ekpo-netwr / 100.
+
+
+
+      ENDCASE.
+      CLEAR wa_komv.
+    ENDLOOP.
+
+    if wa_final-igst is INITIAL.
+    wa_final-gr_val = wa_final-pack + wa_final-cgst_rate + wa_final-sgst_rate + wa_final-igst_rate + wa_final-ugst_rate.
+   ELSE.
+wa_final-gr_val = wa_final-pack +  ( wa_final-pack *  wa_final-igst ) / 100.
+endif.
+
+    READ TABLE lt_ekkn INTO DATA(wa_ekkn) WITH KEY ebeln = wa_ekpo-ebeln ebelp = wa_ekpo-ebelp .
+    IF sy-subrc = 0.
+      wa_final-pspnr = wa_ekkn-ps_psp_pnr.
+
+
+      CALL FUNCTION 'CONVERSION_EXIT_ABPSP_OUTPUT'
+        EXPORTING
+          input  = wa_final-pspnr
+        IMPORTING
+          output = wa_final-pspnrs.
+
+
+      SELECT SINGLE psphi FROM prps INTO wa_final-psphi WHERE pspnr = wa_final-pspnr.
+      WRITE wa_final-psphi TO wa_final-psphi1.
+*    ELSE.
+*      CONTINUE.
+    ENDIF.
+
+
+
+    READ TABLE lt_prps INTO DATA(wa_prps) WITH  KEY pspnr = wa_final-pspnr.
+    IF sy-subrc = 0.
+      wa_final-post1 = wa_prps-post1.
+      CLEAR wa_prps.
+    ENDIF.
+
+
+
+
+
+    READ TABLE lt_esll4 INTO DATA(wa_esll4) WITH  KEY packno = wa_final-packno_pr  .
+    IF sy-subrc = 0.
+      LOOP AT lt_esll5 INTO  DATA(wa_esll5) WHERE packno = wa_esll4-sub_packno .
+        wa_final-pr =  wa_final-pr + wa_esll5-menge.
+      ENDLOOP.
+    ENDIF.
+
+    IF  wa_final-banfn IS INITIAL .
+      wa_final-de_prpo = ' '.
+    ELSE.
+      wa_final-de_prpo = wa_final-bedat - wa_final-badat.
+
+    ENDIF.
+
+    READ TABLE lt_makt INTO DATA(wa_makt) WITH KEY matnr = wa_ekpo-matnr.
+    IF sy-subrc = 0.
+      wa_final-maktx = wa_makt-maktx.
+    ELSE.
+*      wa_final-maktx = wa_ekpo-txz01.
+    ENDIF.
+*
+    READ TABLE lt_eket INTO DATA(wa_ekets) WITH KEY ebeln = wa_ekpo-ebeln ebelp = wa_ekpo-ebelp .
+    IF sy-subrc = 0.
+      wa_final-eindt = wa_ekets-eindt.
+    ENDIF.
+
+    READ TABLE lt_lfa1 INTO DATA(wa_lfa1) WITH KEY lifnr = wa_final-mfrnr.
+    IF sy-subrc = 0.
+      wa_final-mname = wa_lfa1-name1.
+      CLEAR wa_lfa1.
+    ENDIF.
+    wa_final-netpr = wa_ekpo-netpr.
+    wa_final-waers = wa_ekpo-waers.
+
+    wa_final-qty_rec = wa_final-menge.
+
+    IF  wa_final-waers = 'USDN'.
+      wa_final-netpr = wa_final-netpr / 1000.
+      wa_final-netwr = wa_final-netwr / 1000.
+
+    ENDIF.
+
+    wa_final-qty_rec = wa_final-menge.
+
+    SORT lt_mseg BY zeile.
+*    LOOP AT lt_mseg INTO DATA(wa_mseg) WHERE
+*      ( ebeln = wa_ekpo-ebeln AND ebelp = wa_ekpo-ebelp AND bwart = '101' )
+*                                         OR  ( ebeln = wa_ekpo-ebeln AND ebelp = wa_ekpo-ebelp AND bwart = '122' ) .
+
+    READ TABLE lt_mseg INTO DATA(wa_mseg) with key ebeln = wa_ekpo-ebeln ebelp = wa_ekpo-ebelp bwart = '101'.
+
+      wa_final-mblnr = wa_mseg-mblnr.
+      wa_final-grndt = wa_mseg-budat_mkpf.
+      wa_final-grn_qty = wa_mseg-erfmg.
+      wa_final-lfbnr   = wa_mseg-lfbnr.
+      wa_final-maktx = wa_mseg-sgtxt.
+
+      wa_final-qty_rec = wa_final-qty_rec - wa_final-grn_qty.
+      wa_final-rec_qty = wa_final-grn_qty.
+
+      IF wa_final-mblnr IS INITIAL OR wa_final-eindt IS INITIAL.
+        lv_delay_text = ''.
+      ELSE.
+        lv_delay_text = wa_mseg-budat_mkpf - wa_eket-eindt.
+      ENDIF.
+
+      CALL FUNCTION 'CLOI_PUT_SIGN_IN_FRONT'
+        CHANGING
+          value = lv_delay_text.
+      wa_final-lv_delay_text = lv_delay_text .
+
+      READ TABLE lt_mseg INTO DATA(ls_mseg) WITH KEY ebeln = wa_mseg-ebeln ebelp = wa_mseg-ebelp
+                                                           smbln = wa_mseg-mblnr sjahr = wa_mseg-mjahr
+                                                           smblp = wa_mseg-zeile bwart = '102'.
+      IF sy-subrc = 0.
+        wa_final-qty_rec = wa_final-qty_rec + wa_final-grn_qty.
+        wa_final-rec_qty = wa_final-rec_qty - wa_final-grn_qty.
+
+        wa_final-rec_qty = wa_final-grn_qty.
+
+        IF wa_final-rec_qty IS INITIAL.
+*          CLEAR : wa_final-mblnr, wa_final-grndt.
+        ENDIF.
+      ENDIF.
+
+*      READ TABLE LT_ZGATE INTO DATA(LS_ZGATE) WITH KEY MBLNR = WA_MSEG-MBLNR."Commented by Raj on 22.11.2024
+*      IF SY-SUBRC = 0.
+*        WA_FINAL-GT_NO    =  LS_ZGATE-GT_NO.
+*        WA_FINAL-ENTRY_DT = LS_ZGATE-ENTRY_DT.
+*      ENDIF.
+
+*      APPEND wa_final TO it_final.
+*      CLEAR l_endat.
+*      CLEAR : wa_final-mblnr, wa_final-grndt, wa_final-erfmg." , wa_final-grn_qty." wa_final-grn_qty, wa_final-qty_rec,wa_final-menge .
+*      l_flag = 'X'.
+*    ENDLOOP.
+
+
+    READ TABLE it_anla INTO wa_anla WITH KEY posnr = wa_ekkn-ps_psp_pnr.  "Added by Raj on 25.11.2024
+    IF sy-subrc = 0.
+      if wa_final-knttp = 'K'.
+      wa_final-anln1 =  '  '.
+      else.
+      wa_final-anln1 =  wa_anla-anln1.
+      endif.
+*      wa_final-aktiv = wa_anla-aktiv.
+    ENDIF.
+
+
+
+
+
+
+*    IF wa_final-anln1 IS INITIAL.
+      IF wa_final-knttp = 'A'.
+        READ TABLE it_ekn INTO DATA(wa_e) WITH KEY ebeln = wa_ekpo-ebeln ebelp = wa_ekpo-ebelp.
+        wa_final-anln1 =  wa_e-anln1.
+      ENDIF.
+*    ENDIF.
+
+select SINGLE erdat from anla into wa_final-wbsc where anln1 =  wa_final-anln1.
+
+    select SINGLE AEdat from anla into wa_final-wbsch where anln1 =  wa_final-anln1.
+
+
+    READ TABLE it_tab INTO wa_tab WITH KEY bukrs = wa_anla-bukrs anlu1 = wa_anla-anln1 .
+    READ TABLE it_tab INTO wa_tab WITH KEY bukrs = wa_anla-bukrs anlu1 =  wa_final-anln1 .
+    IF sy-subrc = 0.
+      wa_final-anln3 =  wa_tab-anln1.
+      wa_final-anln2 = wa_tab-anln2.
+*      wa_final-anlu1 =  wa_tab-anlu1.
+      wa_final-lv_no = wa_tab-lv_no.
+    ENDIF.
+     select single aktiv from anla into wa_final-aktiv where anln1 =  wa_final-anln3.
+    cleaR:wa_tab.
+
+
+
+    READ TABLE lt_mkpf INTO DATA(wa_mkpf) WITH  KEY mblnr = wa_mseg-mblnr mjahr = wa_mseg-mjahr.
+      IF sy-subrc = 0.
+        wa_final-bldat = wa_mkpf-bldat.
+        CLEAR wa_mkpf.
+      ENDIF.
+
+
+
+
+    READ TABLE it_rseg INTO wa_rseg WITH KEY ebeln = wa_ekpo-ebeln.
+    wa_final-wrbtr = wa_rseg-wrbtr.
+     wa_final-belnrs = wa_rseg-belnr.
+    READ TABLE it_rbkp INTO wa_rbkp WITH KEY belnr = wa_rseg-belnr.
+    wa_final-belnr = wa_rbkp-belnr.
+    wa_final-bldat2 = wa_rbkp-bldat.
+
+
+    READ TABLE it_ekbinv into data(wa_ekbinv) with key ebeln =  wa_ekpo-ebeln ebelp = wa_ekpo-ebelp VGABE = '2'.
+    if sy-subrc = 0.
+*      wa_final-xblnr_mkpf = wa_ekbinv-belnr.
+     ENDIF.
+
+     READ TABLE it_pay into data(wa_pay) with key ebeln =  wa_ekpo-ebeln ebelp = wa_ekpo-ebelp VGABE = '4'.
+     if sy-subrc = 0.
+       wa_final-payd = wa_pay-budat.
+*       wa_final-dpamt = wa_pay-wrbtr.
+     endif.
+
+
+    READ TABLE it_pa into data(wa_pa) with key ebeln =  wa_ekpo-ebeln ebelp = wa_ekpo-ebelp VGABE = 'A'.
+      if sy-subrc = 0.
+        wa_final-dpamt = wa_pa-wrbtr.
+*        wa_final-dpamt = wa_pay-wrbtr.
+         wa_final-ddate = wa_pa-budat.
+      endif.
+
+
+
+     READ TABLE it_mar into data(wa_mar) with key matnr =  wa_ekpo-matnr.
+      if sy-subrc = 0.
+      wa_final-LAEDA = wa_mar-LAEDA.
+*      else.
+      wa_final-ERSDA = wa_mar-ERSDA.
+      ENDIF.
+
+           CALL FUNCTION 'CONVERSION_EXIT_CUNIT_OUTPUT'
+      EXPORTING
+        input          = wa_ekpo-meins
+        language       = sy-langu
+      IMPORTING
+*       LONG_TEXT      =
+        output         = wa_final-meins
+*       SHORT_TEXT     =
+      EXCEPTIONS
+        unit_not_found = 1
+        OTHERS         = 2.
+    IF sy-subrc <> 0.
+* Implement suitable error handling here
+    ENDIF.
+
+
+
+
+*    IF s_grndt IS INITIAL.
+*      IF l_flag IS INITIAL.
+
+
+if wa_final-FRGDT   >  wa_final-bedat.
+wa_final-frgdt = wa_final-ERDATS.
+endif.
+
+
+
+
+
+    APPEND wa_final TO it_final.
+*      ENDIF.
+*    ENDIF.
+    CLEAR : wa_final,l_flag,wa_ekbes,wa_rbkps,lv_taxcom.
+    CLEAR : wa_ekpo,wa_erev,wa_konvs,wa_eket,wa_ekbes,wa_cdhdr,wa_eban.
+    refresh :it_komv.
+     CLEAR l_endat.
+      CLEAR : wa_final-mblnr, wa_final-grndt, wa_final-erfmg,wa_mseg." , wa_final-g
+  ENDLOOP.
+
+*  CONSTANTS : lc_mov_typ TYPE ekbe-bwart VALUE '102'.
+*  SELECT ebeln, ebelp, belnr, buzei, bwart, menge, lfgja, lfbnr,lfpos
+*    FROM ekbe
+*    INTO TABLE @DATA(lt_pur_hist)
+*    FOR ALL ENTRIES IN @it_final
+*    WHERE ebeln = @it_final-ebeln
+*     AND  ebelp = @it_final-ebelp
+*     AND  lfbnr = @it_final-mblnr.
+*
+*  SORT lt_pur_hist BY ebeln ebelp lfbnr.
+*
+*  LOOP AT it_final INTO DATA(wa_final1).
+*    READ TABLE lt_pur_hist INTO DATA(wa_hist) WITH KEY ebeln = wa_final1-ebeln
+*                                                          ebelp = wa_final1-ebelp
+*                                                          lfbnr = wa_final1-mblnr
+*                                                          bwart = lc_mov_typ BINARY SEARCH.
+*    IF sy-subrc EQ 0.
+**      DELETE it_final WHERE mblnr = wa_hist-lfbnr.
+*    ENDIF.
+*  ENDLOOP.
+*
+*  IF s_badat[] IS INITIAL AND s_bedat[] IS INITIAL AND s_banfn[] IS INITIAL AND "s_pspnr[] IS INITIAL AND
+*    s_ekgrp[] IS INITIAL AND s_lifnr[] IS INITIAL AND s_matnr[] IS INITIAL AND s_werks[] IS INITIAL " AND s_werks[] IS INITIAL
+*    AND s_grndt[] IS NOT INITIAL.
+**    DELETE it_final WHERE grndt NOT IN s_grndt.
+*  ENDIF.
+*
+*  REFRESH:  lt_ekpo,lt_mara,lt_makt,lt_eket,lt_eban,lt_esll2,            " it_final,
+*           lt_prps,lt_ekkn,lt_lfa1,lt_lfa2,lt_esll5,lt_esll4,lt_esll.
+
+
+*  PERFORM service_open_po.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form open_pr
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+*FORM open_pr .   " Purchase requisiton
+*  SELECT banfn, bnfpo, loekz,frgzu,ekgrp, ernam, txz01, matnr, werks, matkl, menge,
+*         meins, pstyp,ebeln, ebelp, badat, packno,  mfrpn                                                   "DISUB_PSPNR,"
+*     FROM eban INTO TABLE @DATA(lt_eban)
+*    WHERE banfn IN @s_banfn
+*      AND bedat IN @s_bedat
+*      AND matnr IN @s_matnr
+*      AND ekgrp IN @s_ekgrp
+*      AND werks IN @s_werks
+**      AND mfrnr IN @s_mfrnr
+*      AND lifnr IN @s_lifnr
+*      AND bsart EQ 'SERV'
+*      AND badat IN @s_badat
+*      AND statu NE 'B'
+*      AND loekz NE 'L'.
+*  IF sy-subrc NE 0.
+*    MESSAGE text-003 TYPE sy-abcde+18 DISPLAY LIKE sy-abcde+4.
+*    LEAVE LIST-PROCESSING.
+*  ELSE.
+*    IF sy-subrc EQ 0.
+*      DELETE lt_eban WHERE loekz = 'X'.
+*    ENDIF.
+*  ENDIF.
+*
+*****   Pr Qty Logic ****
+*  IF lt_eban[] IS NOT INITIAL.
+*    DATA(lt_eban_1) = lt_eban[].
+*    DELETE  lt_eban_1 WHERE pstyp <> '9'.
+*
+*    IF lt_eban_1[] IS NOT INITIAL.
+*      SELECT packno,introw,extrow, sub_packno
+*                    FROM esll
+*         INTO TABLE @DATA(lt_esll4)
+*         FOR ALL ENTRIES IN @lt_eban_1
+*      WHERE   packno = @lt_eban_1-packno.
+*      SORT lt_esll4 BY packno extrow.
+*
+*      SELECT packno,
+*             introw,
+*             extrow,
+*             menge
+*            FROM esll
+*            INTO TABLE @DATA(lt_esll5)
+*            FOR ALL ENTRIES IN @lt_esll4
+*      WHERE packno = @lt_esll4-sub_packno.
+*      SORT lt_esll5 BY packno extrow.
+*    ENDIF.
+*
+** wbs element
+*    SELECT banfn, bnfpo, ps_psp_pnr
+*    FROM ebkn
+*    INTO TABLE @DATA(lt_wbs)
+*    FOR ALL ENTRIES IN @lt_eban
+*    WHERE banfn = @lt_eban-banfn
+*    AND bnfpo = @lt_eban-bnfpo.
+*    IF sy-subrc EQ 0.
+*      SORT lt_eban BY banfn bnfpo.
+*    ENDIF.
+*
+**** Ger Project Name From PRPS Table
+*    IF lt_wbs[] IS NOT INITIAL.
+*      SELECT  pspnr ,
+*              posid,
+*              post1 ,
+*              werks ,
+*              matnr
+*     FROM prps
+*     INTO TABLE @DATA(lt_prps)
+*     FOR ALL ENTRIES IN @lt_wbs
+*      WHERE pspnr = @lt_wbs-ps_psp_pnr.
+*    ENDIF.
+*
+**  Get Manufacture part no from MARA
+*    SELECT matnr,
+*           mfrpn
+*      FROM mara
+*      INTO TABLE @DATA(lt_mara)
+*      FOR ALL ENTRIES IN @lt_eban
+*      WHERE matnr = @lt_eban-matnr.
+**    AND mfrnr IN @s_mfrnr.
+*
+*    IF sy-subrc = 0.
+**  Get Material description from MAKT
+*      SELECT matnr, maktx
+*        FROM makt
+*        INTO TABLE @DATA(lt_makt)
+*        FOR ALL ENTRIES IN @lt_mara
+*        WHERE matnr = @lt_mara-matnr
+*      AND spras  = @sy-langu.
+*    ENDIF.
+*  ENDIF.
+*
+*  LOOP AT lt_eban INTO DATA(wa_eban).
+*    wa_final-banfn = wa_eban-banfn.
+*    wa_final-bnfpo = wa_eban-bnfpo.
+*    wa_final-badat = wa_eban-badat.
+*    wa_final-matnr = wa_eban-matnr.
+*    wa_final-werks = wa_eban-werks.
+*    packno_pr      = wa_eban-packno.
+*    wa_final-ebeln  = wa_eban-ebeln.
+*    wa_final-packno_pr = packno_pr .
+*    wa_final-matkl = wa_eban-matkl.
+*    wa_final-ekgrp = wa_eban-ekgrp.
+*    wa_final-ernam = wa_eban-ernam.
+*    wa_final-frgzu = wa_eban-frgzu.
+*    wa_final-pstyp = wa_eban-pstyp.
+*    wa_final-packno = wa_eban-packno.
+*    wa_final-meins  = wa_eban-meins.
+*    IF wa_eban-mfrpn IS NOT INITIAL.
+*      wa_final-mfrpn = wa_eban-mfrpn.
+*    ELSE.
+*      READ TABLE lt_mara INTO DATA(wa_mara) WITH KEY matnr = wa_eban-matnr.
+*      IF sy-subrc = 0.
+*        wa_final-mfrpn = wa_mara-mfrpn.
+*      ENDIF.
+*    ENDIF.
+*
+*    READ TABLE lt_esll4 INTO DATA(wa_esll4) WITH  KEY packno = wa_final-packno_pr  .
+*    IF sy-subrc = 0.
+*      LOOP AT lt_esll5 INTO  DATA(wa_esll5) WHERE packno = wa_esll4-sub_packno .
+*        wa_final-pr =  wa_final-pr + wa_esll5-menge.
+*      ENDLOOP.
+*    ENDIF.
+*
+*    IF wa_final-pr IS INITIAL.
+*      wa_final-pr =  wa_eban-menge.
+*    ENDIF.
+*
+*    IF  wa_final-banfn IS INITIAL .
+*      wa_final-de_prpo = ' '.
+*    ELSE.
+*      wa_final-de_prpo = wa_final-bedat - wa_final-badat.
+*    ENDIF.
+*
+*    READ TABLE lt_makt INTO DATA(wa_makt) WITH KEY matnr = wa_eban-matnr.
+*    IF sy-subrc = 0.
+*      wa_final-maktx = wa_makt-maktx.
+*    ELSE.
+*      wa_final-maktx = wa_eban-txz01.
+*    ENDIF.
+*
+*    READ TABLE lt_wbs INTO DATA(wa_wbs) WITH KEY banfn = wa_final-banfn bnfpo = wa_final-bnfpo.
+*    IF sy-subrc = 0.
+*      wa_final-pspnr = wa_wbs-ps_psp_pnr.
+*
+*             CALL FUNCTION 'CONVERSION_EXIT_ABPSP_OUTPUT'
+*        EXPORTING
+*          input  = wa_final-pspnr
+*        IMPORTING
+*          output = wa_final-pspnrs.
+*
+*
+*
+*
+*
+*      SELECT SINGLE psphi FROM prps INTO wa_final-psphi WHERE pspnr = wa_final-pspnr.
+*      WRITE wa_final-psphi TO wa_final-psphi1.
+*    ENDIF.
+*
+*    READ TABLE lt_prps INTO DATA(wa_prps) WITH  KEY pspnr = wa_final-pspnr.
+*    IF sy-subrc = 0.
+*      wa_final-post1 = wa_prps-post1.
+*      CLEAR wa_prps.
+*    ENDIF.
+*
+*    IF  wa_final-banfn IS INITIAL .
+*      wa_final-de_prpo = ' '.
+*    ELSE.
+*      wa_final-de_prpo = ' '.
+*
+*    ENDIF.
+*    APPEND wa_final TO it_final.
+*    CLEAR wa_final.
+*  ENDLOOP.
+*
+*ENDFORM.
+**&---------------------------------------------------------------------*
+*& Form service_open_po
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM service_open_po .    "Service PO Open LIne
+
+*
+**  Get data from ekko and ekpo
+*  SELECT k~ebeln, k~bedat, k~lifnr, k~bsart,k~ekgrp,k~ernam,k~frgzu,
+*         p~ebelp, p~werks, p~mfrpn, p~mfrnr, p~matnr, p~txz01,p~matkl, netpr, k~waers, p~netwr, p~ematn, p~menge, p~meins, p~banfn , p~bnfpo, p~pstyp, p~packno,
+*         d~menge AS pr, d~badat,d~pstyp AS pstyp1,p~knttp,p~j_1bnbm
+*    FROM ekko AS k INNER JOIN ekpo AS p ON k~ebeln = p~ebeln
+*    LEFT OUTER JOIN eban AS d ON d~banfn = p~banfn AND d~bnfpo = p~bnfpo
+*    INTO TABLE @DATA(lt_ekpo)
+*    WHERE k~ebeln IN @s_banfn
+*    AND k~bedat IN @s_bedat
+*    AND p~matnr IN @s_matnr
+*    AND k~ekgrp IN @s_ekgrp
+*    AND p~werks IN @s_werks
+**    AND p~mfrnr IN @s_mfrnr
+*    AND k~lifnr IN @s_lifnr
+*    AND k~bsart EQ 'SERV'
+*    AND p~loekz NE 'L'
+*    AND d~badat IN @s_badat.
+*  IF sy-subrc EQ 0.
+*    SORT lt_ekpo BY ebeln ebelp.
+*  ELSE.
+*    MESSAGE text-003 TYPE sy-abcde+18 DISPLAY LIKE sy-abcde+4.
+*    LEAVE LIST-PROCESSING.
+*  ENDIF.
+*
+*
+*
+*
+*
+*
+**  IF lt_ekpo[] IS NOT INITIAL.
+**
+**    DATA(lt_ekpo_1) = lt_ekpo[].
+**
+**    DELETE  lt_ekpo_1 WHERE pstyp <> '9'.
+**
+**    IF lt_ekpo_1[] IS NOT INITIAL.
+**      SELECT packno, introw ,extrow ,sub_packno,
+**             menge, meins ,netwr,ktext1,pln_packno, pln_introw,act_menge
+**                    FROM esll
+**         INTO TABLE @DATA(lt_esll)
+**         FOR ALL ENTRIES IN @lt_ekpo_1
+**      WHERE   packno = @lt_ekpo_1-packno.
+**
+**      SELECT packno,introw, extrow,sub_packno,
+**             menge, meins , netwr,tbtwr,ktext1,pln_packno, pln_introw,act_menge
+**            FROM esll
+**            INTO TABLE @DATA(lt_esll2)
+**            FOR ALL ENTRIES IN @lt_esll
+**      WHERE packno = @lt_esll-sub_packno.
+**    ENDIF.
+**  ENDIF.
+*
+*  IF lt_ekpo[] IS NOT INITIAL.
+*    SELECT banfn,
+*           bnfpo,
+*           menge,
+*           badat,
+*           pstyp,
+*           ebeln,
+*           ebelp,
+*           packno,
+*            erdat
+**           DISUB_PSPNR
+*   FROM eban
+*   INTO TABLE @DATA(lt_eban)
+*   FOR ALL ENTRIES IN @lt_ekpo
+*   WHERE  ebeln = @lt_ekpo-ebeln
+*          AND ebelp = @lt_ekpo-ebelp
+*    AND badat IN @s_badat.
+*
+*  ENDIF.
+*
+****   Pr Qty Logic ****
+*  IF lt_eban[] IS NOT INITIAL.
+*
+*    DATA(lt_eban_1) = lt_eban[].
+*
+*    DELETE  lt_eban_1 WHERE pstyp <> '9'.
+*
+*
+*    SELECT packno,introw, extrow, sub_packno
+*                  FROM esll
+*       INTO TABLE @DATA(lt_esll4)
+*       FOR ALL ENTRIES IN @lt_eban_1
+*    WHERE   packno = @lt_eban_1-packno.
+*
+*    SELECT packno,
+*           introw,
+*           extrow,
+*           menge
+*          FROM esll
+*          INTO TABLE @DATA(lt_esll5)
+*          FOR ALL ENTRIES IN @lt_esll4
+*    WHERE packno = @lt_esll4-sub_packno.
+*
+*  ENDIF.
+*
+*
+*  IF lt_ekpo[] IS NOT INITIAL.
+**   Get Supplier name from LFA1
+*    SELECT lifnr, name1
+*      FROM lfa1
+*      INTO TABLE @DATA(lt_lfa2)
+*      FOR ALL ENTRIES IN @lt_ekpo
+*    WHERE lifnr = @lt_ekpo-lifnr.
+*
+**   Get Manufacture name from LFA1
+*    SELECT lifnr, name1
+*      FROM lfa1
+*      INTO TABLE @DATA(lt_lfa1)
+*      FOR ALL ENTRIES IN @lt_ekpo
+*    WHERE lifnr = @lt_ekpo-mfrnr.
+*
+**  Get WBS from EKKN
+*    SELECT ebeln, ebelp, ps_psp_pnr
+*       FROM ekkn
+*       INTO TABLE @DATA(lt_ekkn)
+*       FOR ALL ENTRIES IN @lt_ekpo
+*       WHERE ebeln = @lt_ekpo-ebeln
+*        AND  ebelp = @lt_ekpo-ebelp.
+*
+*
+*    IF lt_ekkn IS NOT INITIAL."Added by Raj on 25.11.2024
+*      SELECT anln1,aktiv,posnr FROM anla INTO TABLE @DATA(it_anla) FOR ALL ENTRIES IN @lt_ekkn WHERE posnr = @lt_ekkn-ps_psp_pnr.
+*    ENDIF.
+*
+*
+*    SELECT ebeln,
+*           ebelp ,
+*           eindt
+*      FROM eket
+*      INTO TABLE @DATA(lt_eket)
+*      FOR ALL ENTRIES IN @lt_ekpo
+*      WHERE ebeln = @lt_ekpo-ebeln
+*      AND ebelp = @lt_ekpo-ebelp
+*    AND bedat IN @s_bedat.                  "
+*
+**  Get Manufacture part no from MARA
+*    SELECT matnr,
+*           mfrpn
+*      FROM mara
+*      INTO TABLE @DATA(lt_mara)
+*      FOR ALL ENTRIES IN @lt_ekpo
+*      WHERE matnr = @lt_ekpo-matnr.
+**    AND mfrnr IN @s_mfrnr.
+*
+*    IF sy-subrc = 0.
+*      SELECT matnr, maktx
+*        FROM makt
+*        INTO TABLE @DATA(lt_makt)
+*        FOR ALL ENTRIES IN @lt_mara
+*        WHERE matnr = @lt_mara-matnr
+*      AND spras  = @sy-langu.
+*    ENDIF.
+*  ENDIF.
+*
+*  IF lt_ekpo[] IS NOT INITIAL.
+*    SELECT a~ebeln, a~ebelp, a~belnr, a~buzei, a~bwart, a~budat, a~menge, a~lfgja, a~lfbnr,a~lfpos,
+*           b~lblni, b~packno
+*     FROM ekbe AS a INNER JOIN essr AS b ON a~belnr = b~lblni
+*     INTO TABLE @DATA(lt_pur_hist)
+*     FOR ALL ENTRIES IN @lt_ekpo
+*     WHERE a~ebeln = @lt_ekpo-ebeln
+*      AND  a~ebelp = @lt_ekpo-ebelp
+*      AND  a~bewtp = 'D'.
+**     AND  lfbnr = @it_final-mblnr.
+*    SORT lt_pur_hist BY belnr lfbnr packno.
+*
+*    IF lt_pur_hist[] IS NOT INITIAL.
+*      SELECT packno,introw, extrow,sub_packno,
+*             menge, meins , netwr,tbtwr,ktext1,pln_packno, pln_introw,act_menge
+*            FROM esll
+*            INTO TABLE @DATA(lt_esll_servies)
+*            FOR ALL ENTRIES IN @lt_pur_hist
+*      WHERE packno = @lt_pur_hist-packno.
+*
+*      SELECT packno,introw, extrow,sub_packno,
+*              menge, meins,netwr,tbtwr,ktext1,pln_packno, pln_introw,act_menge
+*             FROM esll
+*             INTO TABLE @DATA(lt_esll_servies1)
+*             FOR ALL ENTRIES IN @lt_esll_servies
+*       WHERE packno = @lt_esll_servies-sub_packno.
+*    ENDIF.
+*  ENDIF.
+*
+*
+*  IF lt_pur_hist[] IS NOT INITIAL.
+*    SELECT ebeln, ebelp, lblni, txz01_p, packno_p
+*      FROM essr_rel
+*      INTO TABLE @DATA(po_hist_data)
+*      FOR ALL ENTRIES IN @lt_pur_hist
+*      WHERE ebeln = @lt_pur_hist-ebeln
+*        AND ebelp = @lt_pur_hist-ebelp
+*       AND lblni = @lt_pur_hist-belnr.
+*  ENDIF.
+*
+*  SELECT
+*       belnr
+*       ebeln
+*       ebelp
+*       matnr
+*       wrbtr
+*       shkzg
+*       FROM rseg
+*       INTO TABLE it_rseg
+*       FOR ALL ENTRIES IN lt_ekpo
+*       WHERE ebeln = lt_ekpo-ebeln.
+*
+*  SELECT
+*       belnr
+*       bldat
+*       tcode
+*       lifnr
+*       FROM rbkp
+*       INTO TABLE it_rbkp
+*       FOR ALL ENTRIES IN it_rseg
+*       WHERE belnr = it_rseg-belnr
+*       AND tcode = 'MIRO'.
+*
+*  DATA : mblnr TYPE mkpf-mblnr.
+*
+*  LOOP AT lt_ekpo INTO DATA(wa_ekpo).
+*
+*    wa_final-ebeln = wa_ekpo-ebeln.
+*    wa_final-ebelp = wa_ekpo-ebelp.
+*
+*    wa_final-j_1bnbm = wa_ekpo-j_1bnbm.
+*
+*
+*    IF wa_ekpo-mfrpn IS NOT INITIAL.
+*      wa_final-mfrpn = wa_ekpo-mfrpn.
+*
+*    ELSE.
+*      READ TABLE lt_mara INTO DATA(wa_mara) WITH KEY matnr = wa_ekpo-matnr.
+*      IF sy-subrc = 0.
+*        wa_final-mfrpn = wa_mara-mfrpn.
+*      ENDIF.
+*    ENDIF.
+*
+*    wa_final-lifnr = wa_ekpo-lifnr.
+*
+*    READ TABLE lt_lfa2 INTO DATA(wa_lfa2) WITH KEY lifnr = wa_ekpo-lifnr.
+*    IF sy-subrc = 0.
+*      wa_final-sname = wa_lfa2-name1.
+*    ENDIF.
+*
+*    READ TABLE lt_ekkn INTO DATA(wa_ekkn) WITH KEY ebeln = wa_ekpo-ebeln ebelp = wa_ekpo-ebelp.
+*    IF sy-subrc = 0.
+*      wa_final-pspnr = wa_ekkn-ps_psp_pnr.
+*
+*      SELECT SINGLE psphi FROM prps INTO wa_final-psphi WHERE pspnr = wa_final-pspnr.
+*      WRITE wa_final-psphi TO wa_final-psphi1.
+*
+*    ENDIF.
+*
+*    READ TABLE it_anla INTO DATA(wa_anla) WITH KEY posnr = wa_final-pspnr.  "Added by Raj on 25.11.2024
+*    IF sy-subrc = 0.
+*      wa_final-anln1 =  wa_anla-anln1.
+*      wa_final-aktiv = wa_anla-aktiv.
+*    ENDIF.
+*
+*
+*
+*    wa_final-werks = wa_ekpo-werks.
+*    wa_final-bsart = wa_ekpo-bsart.
+*    wa_final-bedat = wa_ekpo-bedat.
+*    wa_final-matnr = wa_ekpo-matnr.
+*    wa_final-matkl = wa_ekpo-matkl.
+*    wa_final-ekgrp = wa_ekpo-ekgrp.
+*    wa_final-ernam = wa_ekpo-ernam.
+*    wa_final-frgzu = wa_ekpo-frgzu.
+*    wa_final-pstyp = wa_ekpo-pstyp.
+*    wa_final-packno = wa_ekpo-packno.
+*    CLEAR wa_mara.
+*    wa_final-mfrnr = wa_ekpo-mfrnr.
+*
+*    wa_final-menge  = wa_ekpo-menge.
+*    wa_final-meins  = wa_ekpo-meins.
+*    wa_final-netwr  = wa_ekpo-netwr.
+*    wa_final-txz01  = wa_ekpo-txz01.
+*
+*    READ TABLE lt_eban INTO DATA(wa_eban) WITH  KEY banfn = wa_ekpo-banfn bnfpo = wa_ekpo-bnfpo .
+*
+*    IF sy-subrc = 0.
+*      wa_final-banfn = wa_eban-banfn.
+*      wa_final-bnfpo = wa_eban-bnfpo.
+*      wa_final-badat = wa_eban-badat.
+*      wa_final-erdats =  wa_eban-erdat."Added by Raj on 22.11.2024
+*      IF wa_final-pstyp = '0'.
+*        wa_final-pr = wa_eban-menge.
+*      ENDIF.
+*      packno_pr  = wa_eban-packno.
+*      wa_final-packno_pr  = packno_pr .
+*    ENDIF.
+*
+*    READ TABLE lt_ekkn INTO wa_ekkn WITH KEY ebeln = wa_ekpo-ebeln ebelp = wa_ekpo-ebelp.
+*    IF sy-subrc = 0.
+*      wa_final-pspnr = wa_ekkn-ps_psp_pnr.
+*
+*      SELECT SINGLE psphi FROM prps INTO wa_final-psphi WHERE pspnr = wa_final-pspnr.
+*      WRITE wa_final-psphi TO wa_final-psphi1.
+**    ELSE.
+**      CONTINUE.
+*    ENDIF.
+*
+*
+*    READ TABLE it_anla INTO wa_anla WITH KEY posnr = wa_ekkn-ps_psp_pnr.  "Added by Raj on 25.11.2024
+*    IF sy-subrc = 0.
+*      wa_final-anln1 =  wa_anla-anln1.
+*      wa_final-aktiv = wa_anla-aktiv.
+*    ENDIF.
+*
+*
+*
+*
+*
+*    READ TABLE lt_esll4 INTO DATA(wa_esll4) WITH  KEY packno = wa_final-packno_pr  .
+*    IF sy-subrc = 0.
+*      READ TABLE lt_esll5 INTO  DATA(wa_esll5) WITH KEY packno = wa_esll4-sub_packno .
+*
+*      IF sy-subrc = 0.
+*        wa_final-pr = wa_esll5-menge.
+*        wa_final-packno_pr = wa_esll5-packno.
+*      ENDIF.
+*    ENDIF.
+*
+*    IF  wa_final-banfn IS INITIAL .
+*      wa_final-de_prpo = ' '.
+*    ELSE.
+*      wa_final-de_prpo = wa_final-bedat - wa_final-badat.
+*    ENDIF.
+*
+*    READ TABLE lt_eket INTO DATA(wa_eket) WITH KEY ebeln = wa_ekpo-ebeln ebelp = wa_ekpo-ebelp .
+*    IF sy-subrc = 0.
+*      wa_final-eindt = wa_eket-eindt.
+*    ENDIF.
+*
+*    READ TABLE lt_lfa1 INTO DATA(wa_lfa1) WITH KEY lifnr = wa_final-mfrnr.
+*    IF sy-subrc = 0.
+*      wa_final-mname = wa_lfa1-name1.
+*      CLEAR wa_lfa1.
+*    ENDIF.
+*    wa_final-netpr = wa_ekpo-netpr.
+*    wa_final-waers = wa_ekpo-waers.
+*
+*    IF  wa_final-waers = 'USDN'.
+*      wa_final-netpr = wa_final-netpr / 1000.
+*      wa_final-netwr = wa_final-netwr / 1000.
+*    ENDIF.
+*
+**    READ TABLE lt_makt INTO DATA(wa_makt) WITH KEY matnr = wa_ekpo-matnr.
+**    IF sy-subrc = 0.
+**      wa_final-maktx = wa_makt-maktx.
+**    ELSE.
+**      wa_final-maktx = wa_ekpo-txz01.
+**    ENDIF.
+*
+*    APPEND wa_final TO it_final.
+*
+*    CLEAR wa_final.
+*
+*    READ TABLE lt_esll INTO DATA(wa_esll) WITH  KEY packno = wa_ekpo-packno.
+*    IF sy-subrc = 0.
+*      LOOP AT lt_esll2 INTO DATA(wa_esll2) WHERE packno = wa_esll-sub_packno.
+*        wa_final-menge =  wa_esll2-menge.
+*        wa_final-meins = wa_esll2-meins.
+*        wa_final-tbtwr = wa_esll2-tbtwr.
+*        wa_final-netwr = wa_esll2-netwr.
+*        wa_final-maktx = wa_esll2-ktext1.
+*        wa_final-packno = wa_esll2-packno.
+*        wa_final-act_menge = wa_esll2-act_menge.
+*        wa_final-ebelp = wa_esll2-extrow.
+*        wa_final-ebeln = wa_ekpo-ebeln.
+*        wa_final-ekgrp = wa_ekpo-ekgrp.
+*        wa_final-banfn = wa_eban-banfn .
+*        wa_final-waers = wa_ekpo-waers.
+*        wa_final-werks = wa_ekpo-werks.
+*        wa_final-matkl = wa_ekpo-matkl.
+*        wa_final-bsart = wa_ekpo-bsart.
+*        wa_final-badat = wa_ekpo-bedat.
+*        wa_final-matnr = wa_ekpo-matnr.
+*        wa_final-mfrpn = wa_mara-mfrpn.
+*        wa_final-mname = wa_lfa1-name1.
+*        wa_final-mfrnr = wa_ekpo-mfrnr.
+*        wa_final-lifnr = wa_ekpo-lifnr.
+*        wa_final-sname = wa_lfa2-name1.
+*        wa_final-netpr = wa_ekpo-netpr.
+*        wa_final-eindt = wa_eket-eindt.
+*        wa_final-ernam = wa_ekpo-ernam.
+*        wa_final-frgzu = wa_ekpo-frgzu.
+*        wa_final-eindt = wa_ekpo-ernam.
+*        wa_final-eindt = wa_eket-eindt.
+*        wa_final-bedat = wa_ekpo-bedat.
+*        wa_final-qty_rec = wa_final-menge - wa_final-act_menge.
+*        wa_final-grn_qty = wa_final-act_menge.
+*        wa_final-pln_packno = wa_esll2-pln_packno.
+*        wa_final-pln_introw = wa_esll2-pln_introw.
+*
+*        IF wa_final-ebeln IS INITIAL OR wa_final-eindt IS INITIAL.
+*          lv_delay_text = ''.
+*        ELSE.
+*          lv_delay_text = wa_final-bedat - wa_final-badat.
+*        ENDIF.
+*
+*        CALL FUNCTION 'CLOI_PUT_SIGN_IN_FRONT'
+*          CHANGING
+*            value = lv_delay_text.
+*
+*        wa_final-lv_delay_text = lv_delay_text .
+*
+*        IF wa_final-banfn IS INITIAL .
+*          wa_final-de_prpo = ' '.
+*        ELSE.
+*          wa_final-de_prpo = wa_final-bedat - wa_final-badat.
+*        ENDIF.
+*
+*        READ TABLE it_rseg INTO wa_rseg WITH KEY ebeln = wa_ekpo-ebeln.
+*        wa_final-wrbtr = wa_rseg-wrbtr.
+*        READ TABLE it_rbkp INTO wa_rbkp WITH KEY belnr = wa_rseg-belnr.
+*        wa_final-belnr = wa_rbkp-belnr.
+*        wa_final-bldat2 = wa_rbkp-bldat.
+*
+*
+*
+**             READ TABLE it_anla INTO wa_anla WITH KEY posnr = wa_final-pspnr.  "Added by Raj on 25.11.2024
+**    IF sy-subrc = 0.
+**      wa_final-anln1 =  wa_anla-anln1.
+**      wa_final-aktiv = wa_anla-aktiv.
+**    ENDIF.
+*
+*
+*
+*
+*        APPEND wa_final TO it_final.
+*        CLEAR: wa_final.
+*        CLEAR : wa_ekpo,wa_eket,wa_anla,wa_eban,wa_anla.
+*      ENDLOOP.
+*
+*    ENDIF.
+*    CLEAR wa_final.
+*    CLEAR : wa_ekpo,wa_eket,wa_anla,wa_eban.
+*  ENDLOOP.
+*
+*  SORT lt_esll4 BY packno.
+*  SORT lt_esll5 BY packno.
+*
+*  LOOP AT it_final INTO wa_final.
+*    READ TABLE lt_esll5 INTO DATA(wa_esll_pr1) WITH KEY packno = wa_final-pln_packno
+*                                                      introw = wa_final-pln_introw .
+*    IF sy-subrc = 0.
+*      wa_final-pr = wa_esll_pr1-menge.
+*   CONCATENATE wa_final-ebeln wa_final-ebelp into wa_final-string.
+*      MODIFY it_final FROM wa_final TRANSPORTING pr string.
+*      CLEAR: wa_final.
+*    ENDIF.
+*  ENDLOOP.
+*
+*
+**  DELETE it_final WHERE qty_rec IS INITIAL.
+**
+**  IF s_badat[] IS INITIAL AND s_bedat[] IS INITIAL AND s_banfn[] IS INITIAL AND "s_pspnr[] IS INITIAL AND
+**    s_ekgrp[] IS INITIAL AND s_lifnr[] IS INITIAL AND s_matnr[] IS INITIAL "AND "s_mfrnr[] IS INITIAL AND s_werks[] IS INITIAL
+**    AND s_grndt[] IS NOT INITIAL.
+**    DELETE it_final WHERE grndt NOT IN s_grndt.
+**  ENDIF.
+*
+*
+*delete ADJACENT DUPLICATES FROM it_final COMPARING string.
+*DELETE it_final WHERE  bnfpo  Is INITIAL." s_grndt.
+
+ENDFORM.

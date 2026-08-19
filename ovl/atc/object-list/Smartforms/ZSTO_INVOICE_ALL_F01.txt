@@ -1,0 +1,1950 @@
+INCLUDE RSTXLCCALC.
+*----------------------------------------------------------------
+*"  subroutines for smart form ZSTO_INVOICE_ALL
+*----------------------------------------------------------------
+
+*----------------------------------------------------------------
+*"  MAKRO FILL_TEXTAREA
+*----------------------------------------------------------------
+
+DEFINE FILL_TEXTAREA.
+  CLEAR %TEXTAREA.
+  %TEXTAREA-ENABLED  = &1.
+  %TEXTAREA-NCOLS    = &2.
+  %TEXTAREA-NROWS    = &3.
+  %TEXTAREA-READONLY = &4.
+END-OF-DEFINITION.
+
+*----------------------------------------------------------------
+*"  FORM %WRITE_TEXT
+*----------------------------------------------------------------
+
+FORM %WRITE_TEXT USING NAME        TYPE SSFKEYNAME
+                       STYLE       TYPE TDSSNAME
+                       STYLEVARI   TYPE TDVARIANT
+                       APP_MODE    TYPE TDSFAMODE
+                       PROTECT     TYPE TDSFFLAG
+                       INPUTFIELDS TYPE TSFINPUT
+                       TEXTAREA    TYPE SSFTXTAREA.
+
+DATA: LANGU TYPE SPRAS,
+      L_TOKEN TYPE TSFTOKEN.
+
+  CALL FUNCTION 'SSFRT_READ_TEXT'
+       EXPORTING I_FORMNAME  = 'ZSTO_INVOICE_ALL'
+                 I_TEXTNAME  = NAME
+                 I_LANGUAGES = %LANGUAGES
+                 I_ACTIVE    = 'X'
+       IMPORTING O_LANGU     = LANGU
+                 O_TEXT      = %TEXT
+       EXCEPTIONS LANGUAGE_NOT_FOUND = 1
+                  OTHERS             = 2.
+  IF SY-SUBRC = 0.
+    SFSY-SUBRC = 0.
+  ELSE.
+    SFSY-SUBRC = 4.
+    CALL FUNCTION 'SSFRT_SET_ERROR_PARAMETERS'
+        EXPORTING I_FORM      = 'ZSTO_INVOICE_ALL'.
+    CALL FUNCTION 'SSFRT_WRITE_ERROR'
+        EXPORTING I_ERRNUMBER = SSF_ERR_NO_TEXTMODULE
+                  I_MSGID     = 'SSFCOMPOSER'
+                  I_MSGTY     = 'W'
+                  I_MSGNO     = '618'
+                  I_MSGV1     = NAME.
+    EXIT.
+  ENDIF.
+  CALL FUNCTION 'SSFCOMP_CONVERT_ITF_TO_TOKEN'
+       EXPORTING I_NAME     = NAME
+                 I_TEXT     = %TEXT
+                 I_TEXTNAME = SPACE
+                 I_TEXTTYPE = SPACE
+                 I_LANGU    = LANGU
+       IMPORTING E_TOKEN    = L_TOKEN.
+  CALL FUNCTION 'SSFCOMP_WRITE_TEXT'
+       EXPORTING  NAME              = NAME
+                  LANGU             = LANGU
+                  STYLE             = STYLE
+                  STYLEVARI         = STYLEVARI
+                  TEXT              = L_TOKEN
+                  TEXTTYPE          = SPACE
+                  APPEND_MODE       = APP_MODE
+                  PROTECT           = PROTECT
+                  INPUTFIELDS       = INPUTFIELDS
+                  TEXTAREA          = TEXTAREA
+       EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                  OTHERS            = 2.
+  CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+  ENDCASE.
+
+ENDFORM.
+
+*----------------------------------------------------------------
+*"  FORM %WRITE_TEXT_MODULE
+*----------------------------------------------------------------
+
+FORM %WRITE_TEXT_MODULE USING NAME        TYPE SSFKEYNAME
+                              TEXT        TYPE TDSFNAME
+                              TLANG       TYPE SPRAS
+                              STYLE       TYPE TDSSNAME
+                              STYLEVARI   TYPE TDVARIANT
+                              APP_MODE    TYPE TDSFAMODE
+                              PROTECT     TYPE TDSFFLAG
+                              IGNORE      TYPE TDSFFLAG
+                              INPUTFIELDS TYPE TSFINPUT
+                              TEXTAREA    TYPE SSFTXTAREA.
+
+DATA: LANGU        TYPE SPRAS,
+      L_TOKEN      TYPE TSFTOKEN,
+      L_LANGUAGES  TYPE SSFRLANG,
+      L_XSF_STATUS TYPE SSFXSF.
+
+  CALL FUNCTION 'SSFRT_ADD_LANGUAGE'
+       EXPORTING  I_LANG       = TLANG
+                  I_LANGUAGES  = %LANGUAGES
+       IMPORTING  O_LANGUAGES  = L_LANGUAGES.
+  CALL FUNCTION 'SSFRT_READ_TEXTMODULE'
+       EXPORTING  I_TEXTMODULE = TEXT
+                  I_LANGUAGES  = L_LANGUAGES
+       IMPORTING  O_LANGU      = LANGU
+                  O_TEXT       = %TEXT
+       EXCEPTIONS LANGUAGE_NOT_FOUND = 1
+                  OTHERS             = 2.
+  IF SY-SUBRC = 0.
+    SFSY-SUBRC = 0.
+  ELSE.
+    SFSY-SUBRC = 4.
+    CALL FUNCTION 'SSFRT_SET_ERROR_PARAMETERS'
+      EXPORTING I_FORM      = 'ZSTO_INVOICE_ALL'.
+    IF IGNORE = SPACE.
+      CALL FUNCTION 'SSFRT_WRITE_ERROR'
+        EXPORTING I_ERRNUMBER = SSF_ERR_NO_TEXTMODULE
+                  I_MSGID     = 'SSFCOMPOSER'
+                  I_MSGTY     = 'E'
+                  I_MSGNO     = '615'
+                  I_MSGV1     = TEXT.
+      PERFORM RESET_ALL IN PROGRAM SAPLSTXBC.
+      RAISE ERROR.
+    ELSE.
+      CALL FUNCTION 'SSFRT_WRITE_ERROR'
+        EXPORTING I_ERRNUMBER = SSF_ERR_NO_TEXTMODULE
+                  I_MSGID     = 'SSFCOMPOSER'
+                  I_MSGTY     = 'W'
+                  I_MSGNO     = '615'
+                  I_MSGV1     = TEXT.
+      PERFORM XSF_IS_ACTIVE IN PROGRAM SAPLSTXBC
+              CHANGING L_XSF_STATUS.
+      IF L_XSF_STATUS = 'X' AND TEXTAREA-ENABLED = 'A'.
+        SFSY-SUBRC = 0.
+        CALL FUNCTION 'SSFRT_XSF_DUMMY_TEXT'
+          EXPORTING  I_LANGUAGES = L_LANGUAGES
+          IMPORTING  O_LANGU     = LANGU
+                     O_TEXT      = %TEXT.
+      ELSE.
+        EXIT.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+  CALL FUNCTION 'SSFCOMP_CONVERT_ITF_TO_TOKEN'
+       EXPORTING I_NAME     = NAME
+                 I_TEXT     = %TEXT
+                 I_TEXTNAME = TEXT
+                 I_TEXTTYPE = 'R'
+                 I_LANGU    = LANGU
+       IMPORTING E_TOKEN    = L_TOKEN.
+  CALL FUNCTION 'SSFCOMP_WRITE_TEXT'
+       EXPORTING  NAME              = NAME
+                  LANGU             = LANGU
+                  STYLE             = STYLE
+                  STYLEVARI         = STYLEVARI
+                  TEXT              = L_TOKEN
+                  TEXTTYPE          = 'R'
+                  APPEND_MODE       = APP_MODE
+                  PROTECT           = PROTECT
+                  INPUTFIELDS       = INPUTFIELDS
+                  TEXTAREA          = TEXTAREA
+       EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                  OTHERS            = 2.
+  CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+  ENDCASE.
+
+ENDFORM.
+
+*----------------------------------------------------------------
+*"  FORM %GET_TEXTSTYLE
+*----------------------------------------------------------------
+
+FORM %GET_TEXTSTYLE USING    NAME     TYPE TDSFNAME
+                             TLANG    TYPE SPRAS
+                             IGNORE   TYPE TDSFFLAG
+                    CHANGING STYLE    TYPE TDSSNAME.
+
+DATA: NODENAME     TYPE SSFNAME VALUE 'HEADER',
+      IVARHEADER   TYPE TSFIVHD,
+      VARHEADER_WA TYPE SSFIVHD,
+      SUBRC        TYPE SY-SUBRC,
+      TEXTSTYLE_WA TYPE TY_TEXTSTYLE.
+
+  READ TABLE %TEXTSTYLE_TAB INTO TEXTSTYLE_WA
+       WITH KEY NAME = NAME TLANG = TLANG.
+  IF SY-SUBRC = 0.
+    STYLE = TEXTSTYLE_WA-STYLE.
+    EXIT.
+  ENDIF.
+
+  CALL FUNCTION 'SSF_READ_FORM'
+       EXPORTING  I_FORMNAME     = NAME
+                  I_LANGUAGE     = TLANG
+       EXCEPTIONS OTHERS         = 4.
+  IF SY-SUBRC <> 0.
+    SUBRC = SY-SUBRC.
+  ENDIF.
+
+  CALL FUNCTION 'SSF_READ_NODE_BEGIN'
+       EXPORTING  I_NODETYPE     = 'SF'
+                  I_NODENAME     = NODENAME
+       EXCEPTIONS OTHERS         = 4.
+  IF SY-SUBRC <> 0.
+    SUBRC = SY-SUBRC.
+  ENDIF.
+
+  CALL FUNCTION 'SSF_READ_DATE'
+       EXPORTING  I_NAME         = 'IVARHEADER'
+       IMPORTING  O_DATE         = IVARHEADER
+       EXCEPTIONS OTHERS         = 4.
+  IF SY-SUBRC <> 0.
+    SUBRC = SY-SUBRC.
+  ENDIF.
+
+  LOOP AT IVARHEADER INTO VARHEADER_WA TO 1.
+    STYLE = VARHEADER_WA-STDSTYLE.
+  ENDLOOP.
+  IF SY-SUBRC <> 0 OR STYLE = SPACE.
+    CALL FUNCTION 'SSFRT_SET_ERROR_PARAMETERS'
+      EXPORTING I_FORM      = 'ZSTO_INVOICE_ALL'.
+    IF IGNORE = SPACE.
+      CALL FUNCTION 'SSFRT_WRITE_ERROR'
+        EXPORTING I_ERRNUMBER = SSF_ERR_NO_TEXTSTYLE
+                  I_MSGID     = 'SSFCOMPOSER'
+                  I_MSGTY     = 'E'
+                  I_MSGNO     = '619'
+                  I_MSGV1     = NAME.
+      PERFORM RESET_ALL IN PROGRAM SAPLSTXBC.
+      RAISE ERROR.
+    ELSE.
+      CALL FUNCTION 'SSFRT_WRITE_ERROR'
+        EXPORTING I_ERRNUMBER = SSF_ERR_NO_TEXTSTYLE
+                  I_MSGID     = 'SSFCOMPOSER'
+                  I_MSGTY     = 'W'
+                  I_MSGNO     = '619'
+                  I_MSGV1     = NAME.
+    ENDIF.
+  ELSE.
+    TEXTSTYLE_WA-NAME  = NAME.
+    TEXTSTYLE_WA-TLANG = TLANG.
+    TEXTSTYLE_WA-STYLE = STYLE.
+    INSERT TEXTSTYLE_WA INTO TABLE %TEXTSTYLE_TAB.
+  ENDIF.
+
+ENDFORM.
+
+*----------------------------------------------------------------
+*"  FORM %WRITE_INCLUDE_TEXT
+*----------------------------------------------------------------
+
+FORM %WRITE_INCLUDE_TEXT USING NAME        TYPE SSFKEYNAME
+                               TEXTKEY     TYPE SSFTKEY
+                               STYLE       TYPE TDSSNAME
+                               STYLEVARI   TYPE TDVARIANT
+                               APP_MODE    TYPE TDSFAMODE
+                               PROTECT     TYPE TDSFFLAG
+                               IGNORE      TYPE TDSFFLAG
+                               INPUTFIELDS TYPE TSFINPUT
+                               TEXTAREA    TYPE SSFTXTAREA.
+
+DATA: LANGU        TYPE SPRAS,
+      L_TOKEN      TYPE TSFTOKEN,
+      L_LANGUAGES  TYPE SSFRLANG,
+      L_XSF_STATUS TYPE SSFXSF.
+
+  CALL FUNCTION 'SSFRT_READ_INCLUDE_TEXT'
+       EXPORTING  I_TEXTKEY   = TEXTKEY
+                  I_LANGUAGES = %LANGUAGES
+       IMPORTING  O_LANGU     = LANGU
+                  O_TEXT      = %TEXT
+       EXCEPTIONS OTHERS      = 1.
+  IF SY-SUBRC <> 0.
+    SFSY-SUBRC = 4.
+      CALL FUNCTION 'SSFRT_SET_ERROR_PARAMETERS'
+        EXPORTING I_FORM      = 'ZSTO_INVOICE_ALL'.
+    IF IGNORE = SPACE.
+      CALL FUNCTION 'SSFRT_WRITE_ERROR'
+        EXPORTING I_ERRNUMBER = SSF_ERR_INCLUDE_TEXT_NOT_FOUND
+                  I_MSGID     = 'SSFCOMPOSER'
+                  I_MSGTY     = 'E'
+                  I_MSGNO     = '610'
+                  I_MSGV1     = TEXTKEY-NAME
+                  I_MSGV2     = TEXTKEY-OBJECT
+                  I_MSGV3     = TEXTKEY-ID.
+      PERFORM RESET_ALL IN PROGRAM SAPLSTXBC.
+      RAISE ERROR.
+    ELSE.
+      CALL FUNCTION 'SSFRT_WRITE_ERROR'
+        EXPORTING I_ERRNUMBER = SSF_ERR_INCLUDE_TEXT_NOT_FOUND
+                  I_MSGID     = 'SSFCOMPOSER'
+                  I_MSGTY     = 'W'
+                  I_MSGNO     = '610'
+                  I_MSGV1     = TEXTKEY-NAME
+                  I_MSGV2     = TEXTKEY-OBJECT
+                  I_MSGV3     = TEXTKEY-ID.
+      PERFORM XSF_IS_ACTIVE IN PROGRAM SAPLSTXBC
+              CHANGING L_XSF_STATUS.
+      IF L_XSF_STATUS = 'X' AND TEXTAREA-ENABLED = 'A'.
+        SFSY-SUBRC = 0.
+        CALL FUNCTION 'SSFRT_ADD_LANGUAGE'
+          EXPORTING  I_LANG       = TEXTKEY-LANG
+                     I_LANGUAGES  = %LANGUAGES
+          IMPORTING  O_LANGUAGES  = L_LANGUAGES.
+        CALL FUNCTION 'SSFRT_XSF_DUMMY_TEXT'
+          EXPORTING  I_LANGUAGES = L_LANGUAGES
+          IMPORTING  O_LANGU     = LANGU
+                     O_TEXT      = %TEXT.
+      ELSE.
+        EXIT.
+      ENDIF.
+    ENDIF.
+  ELSE.
+    SFSY-SUBRC = 0.
+  ENDIF.
+  CALL FUNCTION 'SSFCOMP_CONVERT_ITF_TO_TOKEN'
+       EXPORTING I_NAME     = NAME
+                 I_TEXT     = %TEXT
+                 I_TEXTNAME = SPACE
+                 I_TEXTTYPE = 'I'
+                 I_LANGU    = LANGU
+       IMPORTING E_TOKEN = L_TOKEN.
+  CALL FUNCTION 'SSFCOMP_WRITE_TEXT'
+       EXPORTING  NAME              = NAME
+                  LANGU             = LANGU
+                  STYLE             = STYLE
+                  STYLEVARI         = STYLEVARI
+                  TEXT              = L_TOKEN
+                  TEXTTYPE          = 'I'
+                  APPEND_MODE       = APP_MODE
+                  PROTECT           = PROTECT
+                  INPUTFIELDS       = INPUTFIELDS
+                  TEXTAREA          = TEXTAREA
+       EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                  OTHERS            = 2.
+  CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+  ENDCASE.
+
+ENDFORM.
+
+*----------------------------------------------------------------
+*"  FORM %WRITE_DYNAMIC_TEXT
+*----------------------------------------------------------------
+
+FORM %WRITE_DYNAMIC_TEXT USING NAME        TYPE SSFKEYNAME
+                               DYNTEXT     TYPE TSFTEXT
+                               TLANG       TYPE SPRAS
+                               STYLE       TYPE TDSSNAME
+                               STYLEVARI   TYPE TDVARIANT
+                               APP_MODE    TYPE TDSFAMODE
+                               PROTECT     TYPE TDSFFLAG
+                               INPUTFIELDS TYPE TSFINPUT
+                               TEXTAREA    TYPE SSFTXTAREA.
+
+DATA: L_TOKEN      TYPE TSFTOKEN.
+
+  CALL FUNCTION 'SSFCOMP_CONVERT_ITF_TO_TOKEN'
+       EXPORTING I_NAME     = NAME
+                 I_TEXT     = DYNTEXT
+                 I_TEXTNAME = SPACE
+                 I_TEXTTYPE = 'D'
+                 I_LANGU    = TLANG
+       IMPORTING E_TOKEN    = L_TOKEN.
+  CALL FUNCTION 'SSFCOMP_WRITE_TEXT'
+       EXPORTING  NAME              = NAME
+                  LANGU             = TLANG
+                  STYLE             = STYLE
+                  STYLEVARI         = STYLEVARI
+                  TEXT              = L_TOKEN
+                  TEXTTYPE          = 'D'
+                  APPEND_MODE       = APP_MODE
+                  PROTECT           = PROTECT
+                  INPUTFIELDS       = INPUTFIELDS
+                  TEXTAREA          = TEXTAREA
+       EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                  OTHERS            = 2.
+  CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+  ENDCASE.
+
+ENDFORM.
+
+*----------------------------------------------------------------
+*"  FORM %MOVE
+*----------------------------------------------------------------
+
+FORM %MOVE USING TARGET TYPE ANY
+                 SOURCE TYPE ANY.
+
+DATA: L_PROGRAM LIKE SY-REPID,
+      L_TARGET(1000).
+
+  IF SOURCE(1) = '&'.
+    L_PROGRAM = SY-REPID.
+    CALL FUNCTION 'SSFRT_SYMBOL_VALUE'
+         EXPORTING  I_PROGRAM      = L_PROGRAM
+                    I_SYMBOLNAME   = SOURCE
+                    I_MOVE_LOGIC   = 'X'
+         IMPORTING  O_SYMBOL_VALUE = L_TARGET
+         EXCEPTIONS OTHERS         = 1.
+    IF SY-SUBRC <> 0.
+      PERFORM RESET_ALL IN PROGRAM SAPLSTXBC.
+      RAISE ERROR.
+    ENDIF.
+    TARGET = L_TARGET.
+  ELSE.
+    TARGET = SOURCE.
+  ENDIF.
+
+ENDFORM.
+
+*----------------------------------------------------------------
+*"  FORM %RAISE
+*----------------------------------------------------------------
+
+FORM %RAISE.
+
+DATA: L_ERROR TYPE SSFERROR,
+      L_EXIST(1).
+
+  CALL FUNCTION 'SSFRT_READ_ERROR'
+       IMPORTING  O_ERROR = L_ERROR
+       EXCEPTIONS OTHERS  = 1.
+  IF SY-SUBRC = 0 AND L_ERROR-MSGID <> SPACE.
+    L_EXIST = 'X'.
+  ENDIF.
+  IF L_EXIST = SPACE.
+    MESSAGE E003(SSFCOMPOSER) RAISING INTERNAL_ERROR.
+  ENDIF.
+  CASE L_ERROR-ERRNUMBER(2).
+  WHEN '00'.
+    MESSAGE ID     L_ERROR-MSGID
+            TYPE   L_ERROR-MSGTY
+            NUMBER L_ERROR-MSGNO
+            WITH   L_ERROR-MSGV1 L_ERROR-MSGV2
+                   L_ERROR-MSGV3 L_ERROR-MSGV4
+            RAISING USER_CANCELED.
+  WHEN '01'.
+    MESSAGE ID     L_ERROR-MSGID
+            TYPE   L_ERROR-MSGTY
+            NUMBER L_ERROR-MSGNO
+            WITH   L_ERROR-MSGV1 L_ERROR-MSGV2
+                   L_ERROR-MSGV3 L_ERROR-MSGV4
+            RAISING SEND_ERROR.
+  WHEN '02'.
+    MESSAGE ID     L_ERROR-MSGID
+            TYPE   L_ERROR-MSGTY
+            NUMBER L_ERROR-MSGNO
+            WITH   L_ERROR-MSGV1 L_ERROR-MSGV2
+                   L_ERROR-MSGV3 L_ERROR-MSGV4
+            RAISING FORMATTING_ERROR.
+  WHEN '03'.
+    MESSAGE ID     L_ERROR-MSGID
+            TYPE   L_ERROR-MSGTY
+            NUMBER L_ERROR-MSGNO
+            WITH   L_ERROR-MSGV1 L_ERROR-MSGV2
+                   L_ERROR-MSGV3 L_ERROR-MSGV4
+            RAISING INTERNAL_ERROR.
+  ENDCASE.
+
+ENDFORM.
+
+
+*----------------------------------------------------------------
+*   FORM %GLOBAL_CLEAR
+*----------------------------------------------------------------
+
+FORM %GLOBAL_CLEAR.
+
+CLEAR WA_ITEMF.
+CLEAR V_TOTAL.
+CLEAR V_TAXTOTTEXT1.
+CLEAR V_MAXBT1.
+CLEAR V_MAXBT2.
+CLEAR V_TAXTOTTEXT2.
+CLEAR V_PLECMERGE.
+CLEAR V_RANDIVMERGE.
+CLEAR V_CSTVATMERGE.
+CLEAR V_DIVRANMERGE.
+CLEAR PAY_ADDRESS.
+CLEAR PAY_NAME.
+CLEAR PAY_ECC.
+CLEAR PAY_RANGE.
+CLEAR PAY_DIV.
+CLEAR SHIPTO_VAT.
+CLEAR SHIPTO_CST.
+CLEAR PAY_VAT.
+CLEAR PAY_CST.
+
+ENDFORM.                      " %GLOBAL_CLEAR
+
+*----------------------------------------------------------------
+*   FORM %WI1
+*   NODE %WINDOW9
+*----------------------------------------------------------------
+
+FORM %WI1.
+
+CLEAR %WEXIT.
+PERFORM %WI1_BODY.
+CLEAR %WEXIT.
+
+ENDFORM.                      " %WI1
+
+*----------------------------------------------------------------
+*   FORM %WI1_BODY
+*----------------------------------------------------------------
+
+FORM %WI1_BODY.
+
+
+ENDFORM.                      " %WI1_BODY
+
+*----------------------------------------------------------------
+*   FORM %WI2
+*   NODE %WINDOW7
+*----------------------------------------------------------------
+
+FORM %WI2.
+
+CLEAR %WEXIT.
+PERFORM %WI2_BODY.
+CLEAR %WEXIT.
+
+ENDFORM.                      " %WI2
+
+*----------------------------------------------------------------
+*   FORM %WI2_BODY
+*----------------------------------------------------------------
+
+FORM %WI2_BODY.
+
+CALL FUNCTION 'SSFCOMP_TABLE_BEGIN'
+     EXPORTING  I_DEFINITION = '%TEMPLATE6'
+     EXCEPTIONS OTHERS       = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %OPEN
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+PERFORM %CO1.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 001
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT28' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+IF ( WA_FINAL-SHIPTO_PAN NE ' ' ).
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 002
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT6' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %CLOSE
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+WHEN 1.
+  %WEXIT = 'X'.
+WHEN 2.
+  RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+
+ENDFORM.                      " %WI2_BODY
+
+*----------------------------------------------------------------
+*   FORM %WI3
+*   NODE %WINDOW6
+*----------------------------------------------------------------
+
+FORM %WI3.
+
+CLEAR %WEXIT.
+PERFORM %WI3_BODY.
+CLEAR %WEXIT.
+
+ENDFORM.                      " %WI3
+
+*----------------------------------------------------------------
+*   FORM %WI3_BODY
+*----------------------------------------------------------------
+
+FORM %WI3_BODY.
+
+CALL FUNCTION 'SSFCOMP_TABLE_BEGIN'
+     EXPORTING  I_DEFINITION = '%TEMPLATE5'
+     EXCEPTIONS OTHERS       = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %OPEN
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+PERFORM %CO2.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 002
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT55' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 001
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT54' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %CLOSE
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+WHEN 1.
+  %WEXIT = 'X'.
+WHEN 2.
+  RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+
+ENDFORM.                      " %WI3_BODY
+
+*----------------------------------------------------------------
+*   FORM %WI4
+*   NODE %WINDOW5
+*----------------------------------------------------------------
+
+FORM %WI4.
+
+CLEAR %WEXIT.
+PERFORM %WI4_BODY.
+CLEAR %WEXIT.
+
+ENDFORM.                      " %WI4
+
+*----------------------------------------------------------------
+*   FORM %WI4_BODY
+*----------------------------------------------------------------
+
+FORM %WI4_BODY.
+
+CALL FUNCTION 'SSFCOMP_TABLE_BEGIN'
+     EXPORTING  I_DEFINITION = '%TEMPLATE4'
+     EXCEPTIONS OTHERS       = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %OPEN
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 006
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT61' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 008
+                I_COL  = 002
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT17' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 008
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT16' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 005
+                I_COL  = 002
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT15' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 007
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT14' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 005
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT13' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 004
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT12' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 003
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT11' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 002
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT10' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 001
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT9' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 004
+                I_COL  = 002
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT8' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 003
+                I_COL  = 002
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT7' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 001
+                I_COL  = 002
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT5' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %CLOSE
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+WHEN 1.
+  %WEXIT = 'X'.
+WHEN 2.
+  RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+
+ENDFORM.                      " %WI4_BODY
+
+*----------------------------------------------------------------
+*   FORM %WI5
+*   NODE %WINDOW4
+*----------------------------------------------------------------
+
+FORM %WI5.
+
+CLEAR %WEXIT.
+PERFORM %WI5_BODY.
+CLEAR %WEXIT.
+
+ENDFORM.                      " %WI5
+
+*----------------------------------------------------------------
+*   FORM %WI5_BODY
+*----------------------------------------------------------------
+
+FORM %WI5_BODY.
+
+CALL FUNCTION 'SSFCOMP_TABLE_BEGIN'
+     EXPORTING  I_DEFINITION = '%TEMPLATE3'
+     EXCEPTIONS OTHERS       = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %OPEN
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+PERFORM %CO3.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT4' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %CLOSE
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+WHEN 1.
+  %WEXIT = 'X'.
+WHEN 2.
+  RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+
+ENDFORM.                      " %WI5_BODY
+
+*----------------------------------------------------------------
+*   FORM %WI6
+*   NODE %WINDOW3
+*----------------------------------------------------------------
+
+FORM %WI6.
+
+CLEAR %WEXIT.
+PERFORM %WI6_BODY.
+CLEAR %WEXIT.
+
+ENDFORM.                      " %WI6
+
+*----------------------------------------------------------------
+*   FORM %WI6_BODY
+*----------------------------------------------------------------
+
+FORM %WI6_BODY.
+
+CLEAR %GRAPHICKEY.
+PERFORM %MOVE USING %GRAPHICKEY-TDNAME 'ADVANCE'.
+PERFORM %MOVE USING %GRAPHICKEY-TDOBJECT 'GRAPHICS'.
+PERFORM %MOVE USING %GRAPHICKEY-TDID 'BMAP'.
+PERFORM %MOVE USING %GRAPHICKEY-TDBTYPE 'BCOL'.
+CALL FUNCTION 'SSFCOMP_PRINT_GRAPHIC'
+     EXPORTING  BM_NAME           = %GRAPHICKEY-TDNAME
+                BM_OBJECT         = %GRAPHICKEY-TDOBJECT
+                BM_ID             = %GRAPHICKEY-TDID
+                BM_TYPE           = %GRAPHICKEY-TDBTYPE
+                BM_DPI            = '0100'
+                BM_RESIDENT       = ' '
+                BM_RELMODE        = 'W'
+                BM_ALIGNMENT      = 'L'
+                BM_MARGIN         = '0.00'
+                BM_UMARGIN        = 'CM'
+                BM_VALIGNMENT     = 'C'
+                NAME              = '%GRAPHIC1'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+WHEN 1.
+  %WEXIT = 'X'.
+WHEN 2.
+  RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+
+ENDFORM.                      " %WI6_BODY
+
+*----------------------------------------------------------------
+*   FORM %WI7
+*   NODE %WINDOW2
+*----------------------------------------------------------------
+
+FORM %WI7.
+
+CLEAR %WEXIT.
+PERFORM %WI7_BODY.
+CLEAR %WEXIT.
+
+ENDFORM.                      " %WI7
+
+*----------------------------------------------------------------
+*   FORM %WI7_BODY
+*----------------------------------------------------------------
+
+FORM %WI7_BODY.
+
+CALL FUNCTION 'SSFCOMP_TABLE_BEGIN'
+     EXPORTING  I_DEFINITION = '%TEMPLATE2'
+     EXCEPTIONS OTHERS       = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %OPEN
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 003
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT3' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 002
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT1' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 001
+                I_COL  = 002
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT2' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %CLOSE
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+WHEN 1.
+  %WEXIT = 'X'.
+WHEN 2.
+  RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+
+ENDFORM.                      " %WI7_BODY
+
+*----------------------------------------------------------------
+*   FORM %WI8
+*   NODE %WINDOW1
+*----------------------------------------------------------------
+
+FORM %WI8.
+
+CLEAR %WEXIT.
+PERFORM %WI8_BODY.
+CLEAR %WEXIT.
+
+ENDFORM.                      " %WI8
+
+*----------------------------------------------------------------
+*   FORM %WI8_BODY
+*----------------------------------------------------------------
+
+FORM %WI8_BODY.
+
+CALL FUNCTION 'SSFCOMP_TABLE_BEGIN'
+     EXPORTING  I_DEFINITION = '%TEMPLATE1'
+     EXCEPTIONS OTHERS       = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %OPEN
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 001
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING 'COMP_ADDR' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %CLOSE
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+WHEN 1.
+  %WEXIT = 'X'.
+WHEN 2.
+  RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+
+ENDFORM.                      " %WI8_BODY
+
+*----------------------------------------------------------------
+*   FORM %WI9
+*   NODE MAIN
+*----------------------------------------------------------------
+
+FORM %WI9.
+
+CLEAR %WEXIT.
+PERFORM %WI9_BODY.
+CLEAR %WEXIT.
+
+ENDFORM.                      " %WI9
+
+*----------------------------------------------------------------
+*   FORM %WI9_BODY
+*----------------------------------------------------------------
+
+FORM %WI9_BODY.
+
+CLEAR %SECTION.
+%SECTION-NAME = '%TABLE1'.
+%SECTION-HEADER-EVENT = 'X'.
+%SECTION-HEADER-TABEVENT = 'X'.
+%SECTION-HEADER-PROG  = SY-REPID.
+%SECTION-HEADER-FORM  = '%EV1'.
+%SECTION-FOOTER-EVENT = 'X'.
+%SECTION-FOOTER-TABEVENT = 'X'.
+%SECTION-FOOTER-PROG   = SY-REPID.
+%SECTION-FOOTER-FORM   = '%EV3'.
+%SECTION-FOOTER-HEIGHT = '1.00'.
+%SECTION-FOOTER-UNIT   = 'CM'.
+%SECTION-LANGU = %LANGUAGES-LANGU1.
+CALL FUNCTION 'SSFCOMP_BEGIN_SECTION'
+     EXPORTING  SECTION = %SECTION
+     EXCEPTIONS OTHERS  = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_BEGIN'
+     EXPORTING  I_DEFINITION = '%TABLE1'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_HEADER_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+PERFORM %EV1.
+CALL FUNCTION 'SSFCOMP_TABLE_HEADER_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_BODY_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+PERFORM %EV2.
+CALL FUNCTION 'SSFCOMP_TABLE_BODY_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_FOOTER_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+PERFORM %EV3.
+CALL FUNCTION 'SSFCOMP_TABLE_FOOTER_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_END_SECTION'
+     EXCEPTIONS OTHERS  = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_BEGIN'
+     EXPORTING  I_DEFINITION = '%TEMPLATE7'
+     EXCEPTIONS OTHERS       = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %OPEN
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %CLOSE
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+WHEN 1.
+  %WEXIT = 'X'.
+WHEN 2.
+  RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+PERFORM %CO4.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+IF ( INTSFSY-MAINEND = SPACE ).
+CLEAR %SECTION.
+%SECTION-NAME = '%FOLDER1'.
+%SECTION-MHEIGHTV = '87.00'.
+%SECTION-MHEIGHTU = 'MM'.
+%SECTION-LANGU = %LANGUAGES-LANGU1.
+CALL FUNCTION 'SSFCOMP_BEGIN_SECTION'
+     EXPORTING  SECTION = %SECTION
+     EXCEPTIONS OTHERS  = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_SECTION'
+     EXPORTING  NAME   = '%FOLDER1'
+                MODE   = %OPEN
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %OPEN
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %CLOSE
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_FOOTER'
+     EXPORTING  MODE   = %OPEN
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_DELETE_FOOTER_AT_END'
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+PERFORM %EV4_BODY.
+CALL FUNCTION 'SSFCOMP_XSF_FOOTER'
+     EXPORTING  MODE  = %CLOSE
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_SECTION'
+     EXPORTING  MODE   = %CLOSE
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_END_SECTION'
+     EXCEPTIONS OTHERS  = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+ENDIF.
+
+ENDFORM.                      " %WI9_BODY
+
+*----------------------------------------------------------------
+*   FORM %WI10
+*   NODE %WINDOW8
+*----------------------------------------------------------------
+
+FORM %WI10.
+
+CLEAR %WEXIT.
+INTSFSY-SUPPWIN = 'X'.
+IF SFSY-PAGENAME = '%PAGE1'.
+IF ( INTSFSY-MAINEND <> SPACE ).
+ELSE. EXIT.
+ENDIF.
+ENDIF.
+INTSFSY-SUPPWIN = SPACE.
+PERFORM %WI10_BODY.
+CLEAR %WEXIT.
+
+ENDFORM.                      " %WI10
+
+*----------------------------------------------------------------
+*   FORM %WI10_BODY
+*----------------------------------------------------------------
+
+FORM %WI10_BODY.
+
+IF ( INTSFSY-MAINEND <> SPACE ).
+CALL FUNCTION 'SSFCOMP_TABLE_BEGIN'
+     EXPORTING  I_DEFINITION = '%TEMPLATE10'
+     EXCEPTIONS OTHERS       = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %OPEN
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 001
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT45' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %CLOSE
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+WHEN 1.
+  %WEXIT = 'X'.
+WHEN 2.
+  RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( INTSFSY-MAINEND <> SPACE ).
+CALL FUNCTION 'SSFCOMP_TABLE_BEGIN'
+     EXPORTING  I_DEFINITION = '%TEMPLATE8'
+     EXCEPTIONS OTHERS       = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %OPEN
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 003
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT53' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 004
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT52' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+IF ( NOT V_SERALNO1 IS INITIAL
+   AND V_FKRT EQ 'ZSTO'
+   OR V_FKRT EQ 'YF1' ).
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 002
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT48' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_SERALNO2 IS INITIAL
+   AND V_FKRT EQ 'ZSTO'
+   OR V_FKRT EQ 'YF1' ).
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 002
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT49' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_SERALNO3 IS INITIAL
+   AND V_FKRT EQ 'ZSTO'
+   OR V_FKRT EQ 'YF1' ).
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 002
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT50' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( V_FKRT EQ 'ZDEX'
+   OR V_FKRT EQ 'ZEXP' ).
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 002
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT51' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( V_SERALNO1 IS INITIAL
+   AND V_SERALNO2 IS INITIAL
+   AND V_SERALNO3 IS INITIAL
+   AND V_FKRT NE 'ZDEX'
+   AND V_FKRT NE 'ZEXP'
+   AND V_FKRT NE 'ZSTO' ).
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 002
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT62' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 002
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT60' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 001
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT47' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 004
+                I_COL  = 003
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT46' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 002
+                I_COL  = 003
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT44' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 001
+                I_COL  = 003
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT43' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 004
+                I_COL  = 002
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT42' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 003
+                I_COL  = 002
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT41' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 002
+                I_COL  = 002
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT40' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 001
+                I_COL  = 002
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT39' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %CLOSE
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+WHEN 1.
+  %WEXIT = 'X'.
+WHEN 2.
+  RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( INTSFSY-MAINEND <> SPACE ).
+CALL FUNCTION 'SSFCOMP_TABLE_BEGIN'
+     EXPORTING  I_DEFINITION = '%TEMPLATE9'
+     EXCEPTIONS OTHERS       = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %OPEN
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 003
+                I_COL  = 002
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT59' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 001
+                I_COL  = 002
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT58' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 002
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT57' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 001
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT56' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %CLOSE
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+WHEN 1.
+  %WEXIT = 'X'.
+WHEN 2.
+  RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+
+ENDFORM.                      " %WI10_BODY
+
+
+*----------------------------------------------------------------
+*   FORM %CO1
+*   NODE %CODE3
+*----------------------------------------------------------------
+
+FORM %CO1.
+
+CLEAR : V_CSTVATMERGE , V_DIVRANMERGE,SHIPTO_VAT,SHIPTO_CST.
+CONCATENATE 'VAT TIN: ' WA_FINAL-SHIPTO_CST ' V , CST TIN: '
+WA_FINAL-SHIPTO_CST ' C' INTO V_CSTVATMERGE.
+CONCATENATE WA_FINAL-SHIPTO_VAT '' INTO SHIPTO_VAT.
+CONCATENATE WA_FINAL-SHIPTO_CST '' INTO SHIPTO_CST.
+CONCATENATE 'RANGE: ' WA_FINAL-SHIPTO_RANGE ' , DIVISION: '
+WA_FINAL-SHIPTO_DIV INTO V_DIVRANMERGE.
+
+ENDFORM.                      " %CO1
+
+*----------------------------------------------------------------
+*   FORM %CO2
+*   NODE %CODE4
+*----------------------------------------------------------------
+
+FORM %CO2.
+
+DATA : V_PY TYPE VBPA-KUNNR.
+DATA : V_SH TYPE VBPA-KUNNR.
+DATA : V_ADRNR TYPE VBPA-ADRNR,PAY_NAME1(100),PAY_STREET(100),
+      PAY_HOUSE_NUM1(100),PAY_HOUSE_NUM2(100),PAY_STR_SUPPL1(100),
+      PAY_STR_SUPPL2(100),PAY_STR_SUPPL3(100),PAY_CITY1(100),
+      PAY_CITY2(100),PAY_POST_CODE1(100),PAY_REGION(100),
+      PAY_COUNTRY(100).
+DATA : V_REGION TYPE T005U-BEZEI.
+DATA : V_COUNTRY TYPE T005T-LANDX50.
+SELECT SINGLE KUNNR FROM VBPA INTO V_SH
+  WHERE VBELN = WA_FINAL-ZVBELN AND PARVW = 'WE'.
+SELECT SINGLE KUNNR FROM VBPA INTO V_PY
+  WHERE VBELN = WA_FINAL-ZVBELN AND PARVW = 'AG'.
+  IF V_PY NE V_SH.
+  SELECT SINGLE VBPA~ADRNR ADRC~NAME1 ADRC~STREET
+  ADRC~HOUSE_NUM1 ADRC~HOUSE_NUM2 ADRC~STR_SUPPL1
+  ADRC~STR_SUPPL2 ADRC~STR_SUPPL3 ADRC~CITY1
+  ADRC~CITY2 ADRC~POST_CODE1 ADRC~REGION ADRC~COUNTRY
+  J_1IMOCUST~J_1IEXCD J_1IMOCUST~J_1IEXRG J_1IMOCUST~J_1IEXDI
+  J_1IMOCUST~J_1ICSTNO J_1IMOCUST~J_1ILSTNO
+ FROM VBPA INNER JOIN ADRC ON VBPA~ADRNR = ADRC~ADDRNUMBER
+ INNER JOIN J_1IMOCUST ON J_1IMOCUST~KUNNR = V_PY
+INTO (V_ADRNR,PAY_NAME1,PAY_STREET,
+PAY_HOUSE_NUM1,PAY_HOUSE_NUM2,PAY_STR_SUPPL1,PAY_STR_SUPPL2,
+PAY_STR_SUPPL3,PAY_CITY1,PAY_CITY2,PAY_POST_CODE1,
+PAY_REGION,PAY_COUNTRY,PAY_ECC,PAY_RANGE,PAY_DIV,PAY_CST
+,PAY_VAT)
+WHERE VBPA~KUNNR = V_PY.
+PAY_NAME = PAY_NAME1.
+PAY_ADDRESS = PAY_STREET.
+IF NOT PAY_HOUSE_NUM1 IS INITIAL.
+  CONCATENATE PAY_ADDRESS '  ' PAY_HOUSE_NUM1 INTO PAY_ADDRESS.
+ENDIF.
+IF NOT PAY_HOUSE_NUM2 IS INITIAL.
+  CONCATENATE PAY_ADDRESS '  ' PAY_HOUSE_NUM2 INTO PAY_ADDRESS.
+ENDIF.
+IF NOT PAY_STR_SUPPL1 IS INITIAL.
+  CONCATENATE PAY_ADDRESS '  ' PAY_STR_SUPPL1 INTO PAY_ADDRESS.
+ENDIF.
+IF NOT PAY_STR_SUPPL2 IS INITIAL.
+  CONCATENATE PAY_ADDRESS '  ' PAY_STR_SUPPL2 INTO PAY_ADDRESS.
+ENDIF.
+IF NOT PAY_STR_SUPPL3 IS INITIAL.
+  CONCATENATE PAY_ADDRESS '  ' PAY_STR_SUPPL3 INTO PAY_ADDRESS.
+ENDIF.
+IF NOT PAY_CITY1 IS INITIAL.
+  CONCATENATE PAY_ADDRESS '  ' PAY_CITY1 INTO PAY_ADDRESS.
+ENDIF.
+IF NOT PAY_CITY2 IS INITIAL.
+  CONCATENATE PAY_ADDRESS '  ' PAY_CITY2 INTO PAY_ADDRESS.
+ENDIF.
+IF NOT PAY_POST_CODE1 IS INITIAL.
+  CONCATENATE PAY_ADDRESS '  ' PAY_POST_CODE1 INTO PAY_ADDRESS.
+ENDIF.
+SELECT SINGLE BEZEI FROM T005U INTO V_REGION WHERE
+  BLAND EQ PAY_REGION AND
+  LAND1 = PAY_COUNTRY AND SPRAS = 'EN'.
+SELECT SINGLE LANDX50 FROM T005T INTO V_COUNTRY WHERE
+  LAND1 = PAY_COUNTRY AND SPRAS = 'EN'.
+  IF NOT V_REGION IS INITIAL.
+  CONCATENATE PAY_ADDRESS '  ' V_REGION INTO PAY_ADDRESS.
+ENDIF.
+IF NOT V_COUNTRY IS INITIAL.
+  CONCATENATE PAY_ADDRESS '  ' V_COUNTRY INTO PAY_ADDRESS.
+ENDIF.
+  ENDIF.
+CONCATENATE PAY_VAT '' INTO PAY_VAT.
+CONCATENATE PAY_CST '' INTO PAY_CST.
+
+ENDFORM.                      " %CO2
+
+*----------------------------------------------------------------
+*   FORM %CO3
+*   NODE %CODE2
+*----------------------------------------------------------------
+
+FORM %CO3.
+
+CLEAR: V_PLECMERGE,V_RANDIVMERGE.
+CONCATENATE 'PLA NO: 7323/2002 , ECC NO: '
+ WA_FINAL-PAYER_ECC INTO V_PLECMERGE.
+CONCATENATE 'RANGE: ' WA_FINAL-PAYER_RANGE
+' , DIVISION: ' WA_FINAL-PAYER_DIV INTO V_RANDIVMERGE.
+
+ENDFORM.                      " %CO3
+
+*----------------------------------------------------------------
+*   FORM %EV1
+*   NODE %EVENT1
+*----------------------------------------------------------------
+
+FORM %EV1.
+
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_BEGIN'
+     EXPORTING  I_LINE_TYPE       = '%LTYPE1'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT18' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT19' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT20' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT21' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT22' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT23' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT24' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT25' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT26' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT27' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+
+ENDFORM.                      " %EV1
+
+*----------------------------------------------------------------
+*   FORM %EV2
+*   NODE %EVENT2
+*----------------------------------------------------------------
+
+FORM %EV2.
+
+LOOP AT IT_ITEMF INTO WA_ITEMF .
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_BEGIN'
+     EXPORTING  I_LINE_TYPE       = '%LTYPE2'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT29' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT30' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT31' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT32' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT33' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT34' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT35' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT36' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT37' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT38' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDLOOP.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+
+ENDFORM.                      " %EV2
+
+*----------------------------------------------------------------
+*   FORM %EV3
+*   NODE %EVENT3
+*----------------------------------------------------------------
+
+FORM %EV3.
+
+CLEAR %WEXIT.
+PERFORM %EV3_BODY.
+CLEAR %WEXIT.
+
+ENDFORM.                      " %EV3
+
+*----------------------------------------------------------------
+*   FORM %EV3_BODY
+*----------------------------------------------------------------
+
+FORM %EV3_BODY.
+
+
+ENDFORM.                      " %EV3_BODY
+
+*----------------------------------------------------------------
+*   FORM %CO4
+*   NODE %CODE1
+*----------------------------------------------------------------
+
+FORM %CO4.
+
+MOVE WA_FINAL-TAXTOT TO V_MAXBT1.
+MOVE WA_FINAL-GRANDTOT TO V_MAXBT2.
+CALL FUNCTION 'HR_IN_CHG_INR_WRDS'
+            EXPORTING
+              AMT_IN_NUM   = V_MAXBT1
+            IMPORTING
+              AMT_IN_WORDS = V_TAXTOTTEXT1.
+          IF SY-SUBRC <> 0.
+          ENDIF.
+CALL FUNCTION 'HR_IN_CHG_INR_WRDS'
+            EXPORTING
+              AMT_IN_NUM   = V_MAXBT2
+            IMPORTING
+              AMT_IN_WORDS = V_TAXTOTTEXT2.
+          IF SY-SUBRC <> 0.
+          ENDIF.
+          TRANSLATE V_TAXTOTTEXT1 TO UPPER CASE.
+          TRANSLATE V_TAXTOTTEXT2 TO UPPER CASE.
+
+ENDFORM.                      " %CO4
+
+*----------------------------------------------------------------
+*   FORM %EV4
+*   NODE %EVENT4
+*----------------------------------------------------------------
+
+FORM %EV4.
+
+CLEAR %WEXIT.
+PERFORM %EV4_BODY.
+CLEAR %WEXIT.
+
+ENDFORM.                      " %EV4
+
+*----------------------------------------------------------------
+*   FORM %EV4_BODY
+*----------------------------------------------------------------
+
+FORM %EV4_BODY.
+
+
+ENDFORM.                      " %EV4_BODY

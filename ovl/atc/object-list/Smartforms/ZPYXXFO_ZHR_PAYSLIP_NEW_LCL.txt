@@ -1,0 +1,114 @@
+*----------------------------------------------------------------------*
+*  INCLUDE RSTXLCCALC .
+*----------------------------------------------------------------------*
+
+*&---------------------------------------------------------------------*
+*&       Class LCL_CALCULATION  (Definition)
+*&---------------------------------------------------------------------*
+class LCL_CALCULATION definition.
+
+public section.
+
+  methods: init
+             changing  o_target type any,
+
+           count
+             changing  o_counter type any,
+
+           add
+             importing i_summand type any
+             changing  o_sum type any,
+
+           collect
+             importing i_summand type any
+             changing  o_coll type table,
+
+           average_constr
+             importing i_summand type any,
+
+           average
+             importing i_summand type any
+             changing  o_meanvalue type any.
+
+
+private section.
+
+  data: begin of avg,
+          counter type i,
+          sum     type ref to data,
+        end of avg.
+
+endclass.               "LCL_CALCULATION  (Definition)
+
+
+*&---------------------------------------------------------------------*
+*&       Class LCL_CALCULATION  (Implementation)
+*&---------------------------------------------------------------------*
+class LCL_CALCULATION implementation.
+
+*----------------------------------------------------------------------*
+*        Method INIT
+*----------------------------------------------------------------------*
+method init.
+
+  field-symbols: <avgsum> type any.
+
+  clear: avg-counter.
+  assign avg-sum->* to <avgsum>.
+  clear <avgsum>.
+
+  clear  o_target.
+
+endmethod.                                  "init
+*----------------------------------------------------------------------*
+*        Method COUNT
+*----------------------------------------------------------------------*
+method count.
+
+  o_counter = o_counter + 1.
+
+endmethod.                                  "count
+
+*----------------------------------------------------------------------*
+*        Method ADD
+*----------------------------------------------------------------------*
+method add.
+
+  o_sum = o_sum + i_summand.
+
+endmethod.                 "add
+
+*----------------------------------------------------------------------*
+*        Method COLLECT
+*----------------------------------------------------------------------*
+method collect.
+
+  collect i_summand into o_coll.
+
+endmethod.                 "collect
+
+*----------------------------------------------------------------------*
+*        Method AVERAGE_CONSTR
+*----------------------------------------------------------------------*
+method average_constr.
+
+  create data avg-sum like i_summand.
+
+endmethod.                  "average_constr
+
+*----------------------------------------------------------------------*
+*        Method AVERAGE
+*----------------------------------------------------------------------*
+method average.
+
+  field-symbols: <avgsum> type any.
+
+  assign avg-sum->* to <avgsum>.
+  avg-counter = avg-counter + 1.
+  <avgsum> = <avgsum> + i_summand.
+  o_meanvalue = <avgsum> / avg-counter.
+
+endmethod.                                  "average
+
+
+endclass.               "LCL_CALCULATION  (Implementation)

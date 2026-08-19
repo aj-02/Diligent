@@ -1,0 +1,663 @@
+*----------------------------------------------------------------------*
+*   INCLUDE PCF16IN8                                                   *
+*XXXNTnote number  <date>   Note<note number>:<short description>
+*RSKNT609605       31032003 Note609605: Form 16/12BA changes as per
+*                                       circular 13/2002
+*----------------------------------------------------------------------*
+
+*&---------------------------------------------------------------------*
+*&      Form  RE_T7IN0P
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_PERNR_WERKS  text
+*      -->P_PERNR_BTRTL  text
+*----------------------------------------------------------------------*
+FORM RE_T7IN0P USING    P_PERNR_WERKS
+                        P_PERNR_BTRTL.
+
+  DATA:T7IN0P_TXGRP LIKE T7IN0P-TXGRP .
+
+  SELECT SINGLE TXGRP INTO T7IN0P-TXGRP FROM T7IN0P
+                      WHERE WERKS = P_PERNR_WERKS AND
+                            BTRTL = P_PERNR_BTRTL.
+
+
+*  If no tax grouping is found, move error details to
+*  HR_ERROR and stop the process for this employee.
+  IF SY-SUBRC NE 0.
+    MESSAGE S156(HRPADIN01).
+*  Personnel Area/Subarea grouping not found for the employee.
+    PERFORM BUILD_ERROR TABLES HR_ERROR
+                        USING SPACE SY-MSGID SY-MSGNO
+                        PERNR-PERNR  SPACE  SPACE SPACE.
+    REJECT.
+
+  ENDIF.
+
+* Customer exit has to be called to get TXGRP.
+  PERFORM CUSTOMER_EXIT CHANGING T7IN0P-TXGRP.
+*  p_t7in0p_txgrp = temp_txgrp.
+
+
+ENDFORM.                                                    " RE_T7IN0P
+
+
+*&---------------------------------------------------------------------*
+*&      Form  RE_T7INT5
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_T7IN0P_TXGRP  text
+*----------------------------------------------------------------------*
+FORM RE_T7INT5 USING    P_T7IN0P_TXGRP.
+  SELECT SINGLE * FROM T7INT5 WHERE TXGRP = P_T7IN0P_TXGRP.
+  IF SY-SUBRC = 0.
+    HD_TAB-TDSCR = T7INT5-TDSCR.
+    HD_TAB-ADDRS = T7INT5-ADDRS.
+  ELSE.
+    MESSAGE S164(HRPADIN01) WITH 'T7INT5' P_T7IN0P_TXGRP.
+* No entry found in table & for tax grouping &
+    PERFORM BUILD_ERROR TABLES HR_ERROR
+                         USING SPACE SY-MSGID SY-MSGNO
+                         SY-MSGV1  SY-MSGV2  SY-MSGV3  SY-MSGV4.
+  ENDIF.
+ENDFORM.                                                    " RE_T7INT5
+
+*&---------------------------------------------------------------------*
+*&      Form  GET_WTS
+*&---------------------------------------------------------------------*
+FORM GET_WTS.
+* Check if dates needs to be considered
+  SELECT * FROM T512W WHERE MOLGA = '40' AND BEGDA <= PENDDA "RSKNT609605
+                                         AND ENDDA >= PENDDA."RSKNT609605
+
+    IF  ( T512W-AKLAS+10(2) IS INITIAL )   AND
+        ( T512W-AKLAS+12(2) IS INITIAL ) AND
+        ( T512W-AKLAS+14(2) IS INITIAL ) AND
+        ( T512W-AKLAS+16(2) IS INITIAL ).
+      CONTINUE.
+    ENDIF.
+
+    MOVE-CORRESPONDING T512W TO I512W.
+    APPEND I512W.
+  ENDSELECT.
+  SORT I512W BY LGART.
+
+ENDFORM.                    " GET_WTS
+
+*&---------------------------------------------------------------------*
+*&      Form  READ_SPEC_TXT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_EVCLS     Evaluation class
+*      -->P_SPEC      Evaluation class specification
+*      <--P_SPEC_TXT  Specification text
+*----------------------------------------------------------------------*
+FORM READ_SPEC_TXT USING    P_EVCLS
+                            P_SPEC
+                   CHANGING P_SPEC_TXT.
+
+  SELECT SINGLE EVCVT INTO P_SPEC_TXT FROM T52DB
+                      WHERE SPRSL = SY-LANGU AND
+                            MOLGA = '40' AND
+                            EVCLS = P_EVCLS AND
+                            EVCLV = P_SPEC.
+
+
+ENDFORM.                    " READ_SPEC_TXT
+
+*&---------------------------------------------------------------------*
+*&      Form  RE_T005U
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_COUNTRY  text
+*      -->P_REGION  text
+*      <--P_STATE  text
+*----------------------------------------------------------------------*
+FORM RE_T005U USING    P_COUNTRY
+                       P_REGION
+              CHANGING P_STATE.
+  SELECT SINGLE BEZEI INTO P_STATE FROM T005U
+                      WHERE SPRAS = SY-LANGU AND
+                            LAND1 = P_COUNTRY AND
+                            BLAND = P_REGION.
+
+ENDFORM.                                                    " RE_T005U
+
+
+*&---------------------------------------------------------------------*
+*&      Form  RE549D
+*&---------------------------------------------------------------------*
+FORM RE549D USING
+            MERKMAL      TYPE C
+            KIND_OF_ERROR
+            BACK
+            STATUS.
+*---------------------------------------------------------------------*
+  DATA          STRUC(5).
+  DATA          FEATURE LIKE T549B-NAMEN.
+  FIELD-SYMBOLS <STRUC_CONTENT>.
+*---------------------------------------------------------------------*
+  FEATURE = MERKMAL.
+  SELECT SINGLE STRUC FROM  T549D INTO STRUC
+         WHERE  NAMEN       = MERKMAL.
+  IF SY-SUBRC NE 0.
+*-- Merkmal existiert nicht; d.h. es ist nicht generiert
+    STATUS = 4.
+  ELSE.
+    ASSIGN (STRUC) TO <STRUC_CONTENT>.
+    IF SY-SUBRC NE 0 AND ( KIND_OF_ERROR = SPACE OR
+                           KIND_OF_ERROR = 1 ).
+      STATUS = 8.
+    ELSEIF SY-SUBRC NE 0 AND KIND_OF_ERROR = 2.
+      MESSAGE I568(P0).
+*   Merkmalstruktur nicht bekannt, bitte Langdokumentation lesen.
+    ELSEIF SY-SUBRC NE 0 AND KIND_OF_ERROR = 3.
+      MESSAGE S568(P0).
+    ELSEIF SY-SUBRC NE 0 AND KIND_OF_ERROR = 4.
+      MESSAGE E568(P0).
+    ELSE.
+      CLEAR BACK.
+      CALL FUNCTION 'HR_FEATURE_BACKFIELD'
+        EXPORTING
+          FEATURE       = FEATURE
+          STRUC_CONTENT = <STRUC_CONTENT>
+          KIND_OF_ERROR = KIND_OF_ERROR
+        IMPORTING
+          BACK          = BACK
+        CHANGING
+          STATUS        = STATUS
+        EXCEPTIONS
+          OTHERS        = 0.
+      IF SY-SUBRC <> 0.                                     "#EC *
+*     wg. SLIN
+      ENDIF.
+    ENDIF.
+  ENDIF.
+ENDFORM.                                                    "RE549D
+
+
+*&---------------------------------------------------------------------*
+*&      Form  CUSTOMER_EXIT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      <--P_T7IN0P_TXGRP  text
+*----------------------------------------------------------------------*
+FORM CUSTOMER_EXIT CHANGING T7IN0P-TXGRP.
+
+  CALL CUSTOMER-FUNCTION '001'              "#EC *
+      EXPORTING
+           NPERNR = PERNR-PERNR
+           NBEGDA = PBEGDA
+           NENDDA = PENDDA
+           NWERKS = PERNR-WERKS
+           NBTRTL = PERNR-BTRTL
+      TABLES
+           NP0001 = P0001
+      CHANGING
+           NTXGRP = T7IN0P-TXGRP
+      EXCEPTIONS
+           OTHERS      = 1.
+
+ENDFORM.                    " CUSTOMER_EXIT
+
+
+*&---------------------------------------------------------------------*
+*&      Form  CUSTOMER_EXIT_BTX
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+******************** USED BY PAYROLL FUNCTION INBTX*********************
+*----------------------------------------------------------------------*
+FORM CUSTOMER_EXIT_BTX  TABLES  P_P0001
+                        USING   P_PERNR-PERNR
+                                P_APER_BEGDA
+                                P_APER_ENDDA
+                                P_P0001-WERKS
+                                P_P0001-BTRTL
+                        CHANGING
+                                BT_TXGRP.
+
+  CALL CUSTOMER-FUNCTION '001'                "#EC *
+    EXPORTING
+        NPERNR = P_PERNR-PERNR
+        NBEGDA = P_APER_BEGDA
+        NENDDA = P_APER_ENDDA
+        NWERKS = P_P0001-WERKS
+        NBTRTL = P_P0001-BTRTL
+    TABLES
+        NP0001 = P_P0001
+    CHANGING
+        NTXGRP = BT_TXGRP
+    EXCEPTIONS
+        OTHERS      = 1.
+
+
+ENDFORM.                    " CUSTOMER_EXIT_BTX
+
+*&---------------------------------------------------------------------*
+*&      Form  read_temse
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+*FORM READ_TEMSE.
+*  DATA :   REM_TSOBJ LIKE RPTSTYPE-TSOBJ,
+*           TEMSELIN   TYPE I,
+*           SW_ALLDATA LIKE RSTSTYPE-ALLDATA,
+*           REC_OBJECT TYPE RPTSTYPE-EMPFG.
+*
+*  DATA : BEGIN OF TEMP_TEMSE_TAB OCCURS 0,
+*            EMP_NO LIKE PERNR-PERNR,
+*            PAYPER LIKE PC261-FPPER,
+*            INCOMETAX LIKE PC207-BETRG,
+*            SURCHARGE LIKE PC207-BETRG,
+*            EDUCESS LIKE PC207-BETRG,
+*            TOTTAX LIKE PC207-BETRG,
+*            CHKNO(14) TYPE N,
+*            BR_CODE(7),
+*            DT_CHALLAN TYPE SY-DATUM,
+*            BANK_CHALLAN(9),
+*            BUKRS TYPE P0001-BUKRS,
+*            PAYDATE LIKE PC261-PAYDT,      "MDSNT1015044
+*         END OF TEMP_TEMSE_TAB.
+*
+*
+**clear temsedata.
+*  CLEAR TEMSEFIN_TAB.
+*
+*  LOOP AT TEMSE_TAB.
+*    REM_TSOBJ = TEMSE_TAB-DNAME.
+*    REC_OBJECT = 'HINCF160'.
+*    REFRESH TEMSEDATA.
+*    CLEAR TEMSEDATA.
+*    CLEAR TEMSEFIN_TAB.
+*
+*    CALL FUNCTION 'RSTS_OPEN_RLC'
+*      EXPORTING
+*        NAME             = REM_TSOBJ
+*        PROM             = 'I'
+*      EXCEPTIONS
+*        FB_CALL_HANDLE   = 1
+*        FB_ERROR         = 2
+*        FB_RSTS_NOCONV   = 3
+*        FB_RSTS_OTHER    = 4
+*        NO_OBJECT        = 5
+*        NO_PERMISSION    = 6
+*        ENQ_FOREIGN_LOCK = 7
+*        ENQ_SYS_FAIL     = 8
+*        ENQ_OTHER        = 9
+*        OTHERS           = 10.
+*    IF SY-SUBRC <> 0.
+*      PERFORM ERROR_RSTS USING SY-SUBRC 'RSTS_OPEN_RLC'(OTS).
+*    ENDIF.
+*
+*    WHILE SW_ALLDATA IS INITIAL.
+*
+*      CALL FUNCTION 'RSTS_READ'
+*        IMPORTING
+*          ALLDATA        = SW_ALLDATA
+*        TABLES
+*          DATATAB        = TEMSEDATA
+*        EXCEPTIONS
+*          FB_CALL_HANDLE = 1
+*          FB_ERROR       = 2
+*          FB_RSTS_NOCONV = 3
+*          FB_RSTS_OTHER  = 4
+*          OTHERS         = 5.
+*      IF SY-SUBRC <> 0.
+*        PERFORM ERROR_RSTS USING SY-SUBRC 'RSTS_READ'(RTS).
+*      ENDIF.
+*    ENDWHILE.
+*
+*    CLEAR SW_ALLDATA.
+*
+*    CALL FUNCTION 'RSTS_CLOSE'
+** EXPORTING
+**   FBHANDLE             = 0
+** EXCEPTIONS
+**   FB_CALL_HANDLE       = 1
+**   FB_ERROR             = 2
+**   FB_RSTS_OTHER        = 3
+**   OTHERS               = 4
+*              .
+*    IF SY-SUBRC <> 0.
+** MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+**         WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+*    ENDIF.
+**    LOOP AT EMP_TAB.                                   "RK1067021
+**     loop at temsedata where emp_no eq emp_tab-emp_no and temse_flag ='X'.
+**      IF MULTIPLE_F16 = 'X'.
+**        IF COMP_CD NE TEMSEDATA-BUKRS.
+**          CONTINUE.
+**        ENDIF.
+**      ENDIF.
+**       if temsedata-paydate NE ' ' .
+**          if temsedata-paydate NE '000000'.
+**             read table temsefin_tab with key emp_no  = temsedata-emp_no
+**                                              paydate = temsedata-paydate.
+**          else.
+**             read table temsefin_tab with key emp_no = temsedata-emp_no
+**                                             payper = temsedata-payper.
+**          endif.
+**      ELSE.
+**        READ TABLE TEMSEFIN_TAB WITH KEY EMP_NO = TEMSEDATA-EMP_NO
+**                                         PAYPER = TEMSEDATA-PAYPER.
+**      ENDIF.
+**      IF SY-SUBRC NE 0.
+**        MOVE-CORRESPONDING TEMSEDATA TO TEMP_TEMSE_TAB.
+**        APPEND TEMP_TEMSE_TAB.
+**      ENDIF.
+**     endloop.
+**   endloop.
+**  ENDLOOP.
+**
+**  APPEND LINES OF TEMP_TEMSE_TAB TO TEMSEFIN_TAB.
+**
+**  SORT TEMSEFIN_TAB BY PAYPER.
+*  ENDLOOP.
+*ENDFORM.                    " read_temse
+*&---------------------------------------------------------------------*
+*&      Form  upload_excel
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_FILENAME  text
+*      -->P_FTYPE  text
+*      -->P_FILE_LENGTH  text
+*----------------------------------------------------------------------*
+FORM UPLOAD_EXCEL USING    P_FILENAME
+                           P_FTYPE
+                           P_FILE_LENGTH.
+DATA: wa_excel_tab LIKE LINE OF excel_tab.
+
+  CALL FUNCTION 'GUI_UPLOAD'
+        EXPORTING
+          FILENAME                     = P_FILENAME
+         FILETYPE                      = P_FTYPE
+         HAS_FIELD_SEPARATOR           = 'X'
+*        DAT_MODE                      = 'X'
+        IMPORTING
+          FILELENGTH                    = P_FILE_LENGTH
+       TABLES
+          DATA_TAB                      = EXCEL_TAB
+       EXCEPTIONS
+         FILE_OPEN_ERROR               = 1
+         FILE_READ_ERROR               = 2
+         NO_BATCH                      = 3
+         GUI_REFUSE_FILETRANSFER       = 4
+         INVALID_TYPE                  = 5
+         NO_AUTHORITY                  = 6
+         UNKNOWN_ERROR                 = 7
+         BAD_DATA_FORMAT               = 8
+         HEADER_NOT_ALLOWED            = 9
+         SEPARATOR_NOT_ALLOWED         = 10
+         HEADER_TOO_LONG               = 11
+         UNKNOWN_DP_ERROR              = 12
+         ACCESS_DENIED                 = 13
+         DP_OUT_OF_MEMORY              = 14
+         DISK_FULL                     = 15
+         DP_TIMEOUT                    = 16
+         OTHERS                        = 17.
+  IF SY-SUBRC <> 0.
+* MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*         WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+    WRITE:/ SY-SUBRC, text-999. "' Error:Upload Not Possible'(999).
+  ENDIF.
+
+ENDFORM.                    " upload_excel
+*&---------------------------------------------------------------------*
+*&      Form  error_rsts
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_SY_SUBRC  text
+*      -->P_0534   text
+*----------------------------------------------------------------------*
+FORM ERROR_RSTS USING    P_SY_SUBRC
+                         VALUE(MODULE).
+  CASE P_SY_SUBRC.
+* Error with handles at the CALL interface
+    WHEN '1'. MESSAGE E270(HRPADIN01).
+* Error when accessing function module &
+    WHEN '2'. MESSAGE E271(HRPADIN01) WITH MODULE.
+* Required conversion not possible
+    WHEN '3'. MESSAGE E272(HRPADIN01).
+* Error reported by TemSe C system
+    WHEN '4'. MESSAGE E273(HRPADIN01).
+* Requested TemSe object & does not exist
+    WHEN '5'. MESSAGE E274(HRPADIN01) WITH TSOBJ.
+* No authorization for this operation (access &2)
+    WHEN '6'. MESSAGE E275(HRPADIN01) WITH SPACE SPACE.
+* File was not created using HR application
+    WHEN '7'. MESSAGE E276(HRPADIN01).
+* Version number for TemSe object &1 <> TemSe management number &2
+    WHEN '8'. MESSAGE E277(HRPADIN01) WITH SPACE SPACE.
+* This file is not intended for this report
+    WHEN '9'. MESSAGE E278(HRPADIN01).
+* Error when accessing function module &
+    WHEN OTHERS. MESSAGE E279(HRPADIN01) WITH MODULE.
+  ENDCASE.
+ENDFORM.                    " error_rsts
+*&---------------------------------------------------------------------*
+*&      Form  temse_name
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM GET_TEMSE_NAME.
+
+  DATA :  FILENAME  LIKE RLGRAP-FILENAME,
+          PATHNAME  TYPE STRING,
+          FTYPE(10),
+          FILE_LENGTH TYPE I,
+          QUAT.
+  FTYPE = 'ASC'.
+  PATHNAME = FILE1.
+
+  CLEAR EXCEL_TAB.
+  REFRESH EXCEL_TAB.
+
+  IF FILE1 <> ''.
+    PERFORM UPLOAD_EXCEL USING PATHNAME FTYPE FILE_LENGTH.
+    IF SY-SUBRC EQ 0.
+      QUAT = 4.
+    ELSE.
+      MESSAGE W281(HRPADIN01) WITH FILE1.               "#EC *
+      QUAT = 1.
+    ENDIF.
+  ELSE.
+    QUAT = 1.
+  ENDIF.
+  CONCATENATE 'HR_IN' YEAR+2(2) INTO TOBJ_PREFIX.
+  TOBJ_PREFIX+7(1) = '%'.
+
+  SELECT DNAME DMODTOOL DCRETIME FROM TST01 INTO TEMSE_TAB
+  WHERE DNAME LIKE  TOBJ_PREFIX.
+    APPEND TEMSE_TAB.
+  ENDSELECT.
+
+  SORT TEMSE_TAB BY DNAME.
+  DELETE ADJACENT DUPLICATES FROM TEMSE_TAB COMPARING DNAME.
+
+ENDFORM.                    " get_temse_name
+*&---------------------------------------------------------------------*
+*&      Form  conv_date
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_EXCEL_TAB_DT_CHALLAN  text
+*----------------------------------------------------------------------*
+FORM CONV_DATE USING    P_EXCEL_TAB_DT_CHALLAN
+               CHANGING N_DATE.
+  DATA: TEMP_NDATE(10) TYPE C,
+        TEMP_ODATE(10) TYPE C.
+
+  IF NOT P_EXCEL_TAB_DT_CHALLAN IS INITIAL.
+    TEMP_ODATE = P_EXCEL_TAB_DT_CHALLAN.
+    TEMP_NDATE+0(4) = TEMP_ODATE+6(4).
+    TEMP_NDATE+4(2) = TEMP_ODATE+3(2).
+    TEMP_NDATE+6(2) = TEMP_ODATE+0(2).
+    N_DATE = TEMP_NDATE.
+  ENDIF.
+
+ENDFORM.                    "CONV_DATE
+*&---------------------------------------------------------------------*
+*&      Form  get_excel_data
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM GET_EXCEL_DATA.
+  DATA: p_year type t549q-pabrj,
+        p_period type t549q-pabrp,
+        p_date type t549q-pabrp,
+        PYDTE TYPE t549q-begda.
+  DATA : wa_final  LIKE final_tab,
+         tmp_ctnr2 LIKE final_tab-cntr2.
+  CLEAR tmp_ctnr2.
+  LOOP AT EMP_TAB.
+  loop at excel_tab where emp_no eq emp_tab-emp_no .           "RK1067021
+    clear TEMSEFIN_TAB.
+    IF MULTIPLE_F16 = 'X'.
+      IF  COMP_CD NE EXCEL_TAB-BUKRS.
+        CONTINUE.
+      ENDIF.
+    ENDIF.
+      CLEAR wa_final.
+    PERFORM CONV_DATE USING EXCEL_TAB-DT_CHALLAN CHANGING N_DATE.
+      PERFORM CONV_DATE USING EXCEL_TAB-BEGDA      CHANGING PAY_BEGDA.
+      PERFORM CONV_DATE USING EXCEL_TAB-ENDDA      CHANGING PAY_ENDDA.
+      LOOP AT FINAL_TAB into WA_FINAL WHERE F16_BEGDA LE PAY_BEGDA
+                                        AND F16_ENDDA GE PAY_ENDDA
+                                        AND PERNR     EQ EMP_TAB-EMP_NO.
+          TEMSEFIN_TAB-CNTR2 = WA_FINAL-CNTR2.
+                   TMP_CTNR2 = WA_FINAL-CNTR2.
+      ENDLOOP.
+      IF SY-SUBRC NE 0.
+          TEMSEFIN_TAB-CNTR2 = TMP_CTNR2.
+      ENDIF.
+      MOVE :
+         EXCEL_TAB-EMP_NO    TO TEMSEFIN_TAB-PERNR,
+         PAY_BEGDA           TO TEMSEFIN_TAB-FPBEG,
+         PAY_ENDDA           TO TEMSEFIN_TAB-FPEND,
+         EXCEL_TAB-EMP_NO    TO TEMSEFIN_TAB-PERNR,
+         EXCEL_TAB-INCOMETAX TO TEMSEFIN_TAB-INCOMETAX,
+         EXCEL_TAB-SURCHARGE TO TEMSEFIN_TAB-SURCHARGE,
+         EXCEL_TAB-EDUCESS   TO TEMSEFIN_TAB-EDUCESS,
+         EXCEL_TAB-TOTTAX    TO TEMSEFIN_TAB-BETRG,
+         EXCEL_TAB-CHKNO     TO TEMSEFIN_TAB-CHKNO,
+         EXCEL_TAB-BR_CODE   TO TEMSEFIN_TAB-BRCOD,
+         EXCEL_TAB-BANK_CHALLAN  TO TEMSEFIN_TAB-CHLNO,
+         N_DATE   TO TEMSEFIN_TAB-CHDAT,
+         EXCEL_TAB-PAYPER  TO TEMSEFIN_TAB-FPPER.
+* To convert excel_tab-paydate in char10 format to sy-datum format
+         CLEAR : N_DATE.
+         PERFORM CONV_DATE USING EXCEL_TAB-PAYDATE CHANGING N_DATE.
+         MOVE : N_DATE TO TEMSEFIN_TAB-PAYDATE.
+         APPEND TEMSEFIN_TAB.
+         p_year = EXCEL_TAB-PAYDATE+6(4).
+         p_period = EXCEL_TAB-PAYDATE+3(2).
+         p_date = EXCEL_TAB-PAYDATE+0(2).
+         concatenate p_year p_period p_date INTO PYDTE.
+         READ TABLE PAYMENTS WITH KEY TDATE = PYDTE PERNR = EMP_TAB-EMP_NO.
+         IF sy-subrc EQ 0.
+          MOVE EXCEL_TAB-TOTTAX TO PAYMENTS-TAXPD.
+          MODIFY PAYMENTS INDEX sy-tabix.
+         ELSE.
+          MOVE EXCEL_TAB-TOTTAX TO PAYMENTS-TAXPD.
+          APPEND PAYMENTS.
+         ENDIF.
+         CLEAR: p_year, p_period, p_date, pydte.
+
+  ENDLOOP.
+  ENDLOOP.
+ENDFORM.                    " get_excel_data
+*&---------------------------------------------------------------------*
+*&      Form  conv_payper
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_EXCEL_TAB_PAYPER  text
+*----------------------------------------------------------------------*
+FORM CONV_PAYPER USING    P_EXCEL_TAB_PAYPER.
+  DATA: TEMP_NPAYPER(10) TYPE C,
+        TEMP_OPAYPER(10) TYPE C.
+
+  IF P_EXCEL_TAB_PAYPER NE '000000'.
+    TEMP_OPAYPER = P_EXCEL_TAB_PAYPER.
+    TEMP_NPAYPER+0(4) = TEMP_OPAYPER+2(4).
+    TEMP_NPAYPER+4(2) = TEMP_OPAYPER+0(2).
+    N_PAYPER = TEMP_NPAYPER.
+  ENDIF.
+
+ENDFORM.                    " conv_payper
+*&---------------------------------------------------------------------*
+*&      Form  get_roman_number
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_I  text
+*----------------------------------------------------------------------*
+FORM GET_ROMAN_NUMBER USING    P_I.
+  DATA : COUNTER TYPE I,
+         ALPHA(10) TYPE C,
+         IQ(10) TYPE C,
+         LEN1 TYPE I,
+         LOOPCOUNTER TYPE I VALUE 0,
+         FINALCOUNTER TYPE I VALUE 0.
+  DATA : NUMB(10) TYPE C VALUE '1'.
+  DATA : ROMA(150) TYPE C.
+  ROMA = TEXT-RMN.
+  LEN1 = STRLEN( ROMA ).
+
+  COUNTER = SY-FDPOS + 1.
+
+  NUMB = P_I + 1.
+  NUMB = NUMB - 1.
+
+  WHILE LOOPCOUNTER LT NUMB.
+    LOOPCOUNTER = LOOPCOUNTER + 1.
+    LEN1 = ROMA+0(1).
+    LEN1 = LEN1 + 1.
+    SHIFT ROMA BY LEN1 PLACES LEFT.
+  ENDWHILE.
+
+  LEN1 = ROMA+0(1).
+
+  SHIFT ROMA BY 1 PLACES LEFT.
+
+  WHILE FINALCOUNTER LT LEN1.
+    RESULT+FINALCOUNTER = ROMA+FINALCOUNTER(1).
+    FINALCOUNTER = FINALCOUNTER + 1.
+  ENDWHILE.
+ENDFORM.                    " get_roman_number
+
+*&---------------------------------------------------------------------*
+*&      Form  CONV_DAT_TO_CHAR
+*&---------------------------------------------------------------------*
+*       To convert date in sy-datum format to char 10 format
+*----------------------------------------------------------------------*
+*      -->P_RGDIR_PAYDT  date in sy-datum format
+*      <--P_LV_CH_DATE  date in character format
+*----------------------------------------------------------------------*
+FORM CONV_DAT_TO_CHAR  USING    P_RGDIR_PAYDT TYPE PAY_DATE
+                       CHANGING P_LV_CH_DATE TYPE CHAR10.
+
+ P_LV_CH_DATE+0(2) = P_RGDIR_PAYDT+6(2).
+ P_LV_CH_DATE+2(1) = '.'.
+ P_LV_CH_DATE+3(2) = P_RGDIR_PAYDT+4(2).
+ P_LV_CH_DATE+5(1) = '.'.
+ P_LV_CH_DATE+6(4) = P_RGDIR_PAYDT+0(4).
+
+ENDFORM.                    " CONV_DAT_TO_CHAR

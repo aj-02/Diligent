@@ -1,0 +1,1403 @@
+***INCLUDE RV60AFZZ .
+
+************************************************************************
+*                                                                      *
+* This include is reserved for user modifications                      *
+* Forms for invoicing                                                  *
+* The name of modification modules should begin with 'ZZ'.             *
+*                                                                      *
+************************************************************************
+*       USEREXIT_ACCOUNT_PREP_KOMKCV                                   *
+*       USEREXIT_ACCOUNT_PREP_KOMPCV                                   *
+*       USEREXIT_NUMBER_RANGE                                          *
+*       USEREXIT_PRICING_PREPARE_TKOMK                                 *
+*       USEREXIT_PRICING_PREPARE_TKOMP                                 *
+************************************************************************
+
+************************************************************************
+*       FORM ZZEXAMPLE                                                *
+*---------------------------------------------------------------------*
+*       text......................................                    *
+*---------------------------------------------------------------------*
+*FORM ZZEXAMPLE.
+
+*  ...
+
+*ENDFORM.
+
+*eject
+
+*---------------------------------------------------------------------*
+*       FORM USEREXIT_ACCOUNT_PREP_KOMKCV                             *
+*---------------------------------------------------------------------*
+*       This userexit can be used to move additional fields into the  *
+*       communication table which is used for account allocation:     *
+*       KOMKCV for header fields                                      *
+*       This form is called from form KONTENFINDUNG                   *
+*---------------------------------------------------------------------*
+FORM USEREXIT_ACCOUNT_PREP_KOMKCV.
+
+*  KOMKCV-zzfield = xxxx-zzfield2.
+
+ENDFORM.
+*eject
+
+*---------------------------------------------------------------------*
+*       FORM USEREXIT_ACCOUNT_PREP_KOMPCV                             *
+*---------------------------------------------------------------------*
+*       This userexit can be used to move additional fields into the  *
+*       communication table which is used for account allocation:     *
+*       KOMPCV for item fields                                        *
+*       This form is called from form KONTENFINDUNG                   *
+*---------------------------------------------------------------------*
+FORM USEREXIT_ACCOUNT_PREP_KOMPCV.
+
+*  KOMPCV-zzfield = xxxx-zzfield2.
+
+ENDFORM.
+*eject
+
+*---------------------------------------------------------------------*
+*       FORM USEREXIT_NUMBER_RANGE                                    *
+*---------------------------------------------------------------------*
+*       This userexit can be used to determine the numberranges for   *
+*       the internal document number.                                 *
+*       US_RANGE_INTERN - internal number range                       *
+*       This form is called from form LV60AU02                        *
+*---------------------------------------------------------------------*
+FORM USEREXIT_NUMBER_RANGE USING US_RANGE_INTERN.
+
+* Example: Number range from TVFK like in standard
+* US_RANGE_INTERN = TVFK-NUMKI.
+*{   INSERT         DEVK900548                                        1
+*** Changes Done by Gaurav Dubey (KPIT)
+*** For assigning internal Number range number on the combination of
+*** Plant and Billing Type.
+************** ADDED BY PARTH 06.02.2020 transfer code to save prepare exit 17.04.2024
+TYPES: BEGIN OF ty_tvarv,
+         sign TYPE tvarv_sign,
+         opti TYPE tvarv_opti,
+         low  TYPE tvarv_val,
+         high TYPE tvarv_val,
+       END OF ty_tvarv.
+
+DATA: lt_acc_key3  TYPE STANDARD TABLE OF ty_tvarv.
+DATA: lwa_acc_key3 TYPE ty_tvarv.
+
+DATA: lt_acc_key4  TYPE STANDARD TABLE OF ty_tvarv.
+DATA: lwa_acc_key4 TYPE ty_tvarv.
+
+CONSTANTS :  c_var_user2 TYPE rvari_vnam VALUE 'ZSD_EWAYBILL_TYPE',
+             c_type_user2   TYPE rsscr_kind VALUE 'S'.
+
+CONSTANTS :  c_var_user3 TYPE rvari_vnam VALUE 'ZSD_PROG_NAME',
+             c_type_user3   TYPE rsscr_kind VALUE 'S'.
+
+ SELECT sign
+       opti
+       low
+       high INTO TABLE lt_acc_key3
+                 FROM tvarvc
+                 WHERE name = c_var_user2 AND
+                       type = c_type_user2.
+
+
+SELECT sign
+       opti
+       low
+       high INTO TABLE lt_acc_key4
+                 FROM tvarvc
+                 WHERE name = c_var_user3 AND
+                       type = c_type_user3.
+
+***************ENED BY PARTH 06.02.2020
+DATA: lt_xvbrp TYPE STANDARD TABLE OF vbrpvb,
+      lw_xvbrp TYPE vbrpvb,
+      lv_werks TYPE werks_d,
+      lv_range TYPE NUMKI,
+      lv_line  TYPE i.
+lt_xvbrp[] = xvbrp[].
+
+CONSTANTS lc_zex1 TYPE fkart VALUE 'ZEX1'.
+
+SORT lt_xvbrp BY werks.
+
+DELETE ADJACENT DUPLICATES FROM lt_xvbrp COMPARING werks.
+DESCRIBE TABLE lt_xvbrp LINES lv_line.
+IF lv_line GT 1 and XVBRK-fkart NE lc_zex1.
+  MESSAGE 'Only one plant allowed for Invoice' TYPE 'A'.
+ELSE.
+READ  TABLE lt_xvbrp INDEX 1 into lw_xvbrp.
+IF sy-subrc eq 0.
+  lv_werks = lw_xvbrp-werks.
+ENDIF.
+ENDIF.
+
+ IF XVBRK-RFBSK = 'G'.
+    MESSAGE e011(zsd).
+  ENDIF.
+***************  comment by parth transfer code in include RV60AFZC 26/02/2020.
+********************** added by parth 21/06/2019
+loop at lt_acc_key4 INTO lwa_acc_key4.
+CHECK SY-TCODE = 'VF01'
+* *** 22-01-2020 comment by parth for multinvoice creation vf06
+or SY-CPROG = lwa_acc_key4-low.
+**** ADD BY 01.10.2019
+*SY-CPROG = 'SDBILLDL' "comment by parth 07/02/2020
+*** END BY 01.10.2019
+endloop.
+****************** ended by parth 22-01-2020
+
+LOOP AT lt_acc_key3 INTO lwa_acc_key3.
+if VBRK-ZZIND is INITIAL AND VBRK-FKART = lwa_acc_key3-LOW.
+  MESSAGE 'E-waybill Data Mandtory' type 'E'.
+endif.
+ENDLOOP.
+
+
+*  DELETE XTHEAD WHERE TDSPRAS <> 'E'.
+*  READ TABLE XTHEAD WITH KEY TDID = 'Z019'.
+*  IF XTHEAD-UPDKZ IS INITIAL .
+*    MESSAGE 'EWAYBILL NUMBER MANDTORY' TYPE 'E'.
+*  ENDIF.
+**********************
+TYPES: BEGIN OF ty_tvarvc1,
+         sign TYPE tvarv_sign,
+         opti TYPE tvarv_opti,
+         low  TYPE tvarv_val,
+         high TYPE tvarv_val,
+       END OF ty_tvarvc1.
+
+DATA: lt_acc_key1  TYPE STANDARD TABLE OF ty_tvarvc1.
+DATA: lwa_acc_key1 TYPE ty_tvarvc1.
+
+DATA: lt_acc_key2  TYPE STANDARD TABLE OF ty_tvarvc1.
+DATA: lwa_acc_key2 TYPE ty_tvarvc1.
+
+data: it_mode type STANDARD TABLE OF zsd_mode,
+      wa_mode type zsd_mode.
+
+CONSTANTS :  c_var_user TYPE rvari_vnam VALUE 'ZSD_MODE',
+             c_type_user   TYPE rsscr_kind VALUE 'S'.
+
+CONSTANTS :  c_var_user1 TYPE rvari_vnam VALUE 'ZSD_ETYPE',
+             c_type_user1   TYPE rsscr_kind VALUE 'S'.
+SELECT sign
+       opti
+       low
+       high INTO TABLE lt_acc_key1
+                 FROM tvarvc
+                 WHERE name = c_var_user AND
+                       type = c_type_user.
+
+  SELECT sign
+       opti
+       low
+       high INTO TABLE lt_acc_key2
+                 FROM tvarvc
+                 WHERE name = c_var_user1 AND
+                       type = c_type_user1.
+
+
+*  LOOP AT LT_ACC_KEY1 INTO lwa_acc_key1.
+*    IF lwa_acc_key1-LOW <> VBRK-ZZIND AND lwa_acc_key1-HIGH <> VBRK-ZZIND .
+*     MESSAGE 'INPUT ONLY F OR P FOR MODE OF TYPE' TYPE 'E' .
+*    ENDIF.
+*  ENDLOOP.
+*
+*
+*    SELECT SINGLE modeid
+*    FROM ZSD_MODE
+*    INTO VBRK-ZZMODEID
+*    WHERE modeid = VBRK-ZZMODEID.
+*
+*    IF SY-SUBRC <> 0.
+*    message 'Only Select f4 help data for input' TYPE 'E'.
+*    ENDIF.
+
+LOOP AT LT_ACC_KEY1 INTO lwa_acc_key1.
+ if VBRK-ZZIND = lwa_acc_key1-low.
+ IF ( VBRK-ZZTRUCKNO IS INITIAL ).
+   MESSAGE ' Vehicle no. is mandatory for Full truck load' type  'E'.
+ ENDIF.
+ IF  ( VBRK-ZZLRNO IS INITIAL ).
+    MESSAGE ' LR no. is mandatory for Full truck load' type 'E'.
+ ENDIF.
+ IF ( VBRK-ZZLRDT IS INITIAL ).
+    MESSAGE ' LR Date is mandatory for Full truck load' type 'E'.
+ ENDIF.
+  IF ( VBRK-ZZMODEID IS INITIAL ).
+    MESSAGE ' Transport mode is mandatory for Full truck load' type 'E'.
+ ENDIF.
+ENDIF.
+endloop.
+
+
+LOOP AT lt_acc_key2 INTO LWA_ACC_KEY2.
+*if vbrk-fkart = 'ZEXP' OR  vbrk-fkart = 'YEXP'.
+if vbrk-fkart = LWA_ACC_KEY2-LOW.
+  IF ( VBRK-PORTAD1 IS INITIAL ).
+    MESSAGE 'Port Address Mandatory in Export invoice' type 'E'.
+  ENDIF.
+  IF ( VBRK-PORTCITY IS INITIAL ).
+    MESSAGE 'Port Address Mandatory in Export invoice' type 'E'.
+  ENDIF.
+  IF ( VBRK-PORTREGION IS INITIAL ).
+     MESSAGE 'Port Address Mandatory in Export invoice' type 'E'.
+  ENDIF.
+  IF ( VBRK-PORTPIN IS INITIAL ).
+    MESSAGE 'Port Address Mandatory in Export invoice' type 'E'.
+  ENDIF.
+
+ENDIF.
+ENDLOOP.
+**********************ened by parth for trnasfer code in save prepare 17.04.2024
+
+*************************** start by parth for back date posting not allowed 24.05.2024
+
+*IF sy-tcode <> 'VF11' AND sy-tcode <> 'VF03'.
+
+  TYPES: BEGIN OF ty_stype,
+         sign TYPE tvarv_sign,
+         opti TYPE tvarv_opti,
+         low  TYPE tvarv_val,
+         high TYPE tvarv_val,
+       END OF ty_stype.
+
+ DATA: it_sTYPE  TYPE STANDARD TABLE OF ty_stype,
+       WA_sTYPE TYPE ty_stype.
+
+
+ DATA: it_btcode  TYPE STANDARD TABLE OF ty_stype,
+       WA_btcode TYPE ty_stype.
+
+ data: it_user type STANDARD TABLE OF ZLOG_DETAILS,
+       wa_user type ZLOG_DETAILS.
+
+  CONSTANTS :  c_zsd_stype TYPE rvari_vnam VALUE 'ZSD_IN_ITYPE_SDATE',
+             c_stype   TYPE rsscr_kind VALUE 'S'.
+
+   CONSTANTS :  c_zsd_btcode TYPE rvari_vnam VALUE 'ZSD_BTCODE',
+               c_btype   TYPE rsscr_kind VALUE 'S'.
+
+  SELECT sign
+       opti
+       low
+       high INTO TABLE it_stype
+                 FROM tvarvc
+                 WHERE name = c_zsd_stype AND
+                       type = c_stype.
+
+ SELECT sign
+        opti
+        low
+        high into TABLE it_btcode
+               from tvarvc
+               where name = c_zsd_btcode
+                and  type = c_btype.
+
+ SELECT * from ZLOG_DETAILS into table it_user.
+
+
+ READ TABLE it_user into wa_user with key zuser = sy-uname.
+ if sy-subrc <> 0.
+
+ READ TABLE it_btcode into wa_btcode with key low = sy-tcode.
+ if sy-subrc <> 0.
+
+ READ TABLE it_stype into wa_stype with key low = vbrk-vbtyp.
+ if sy-subrc eq 0.
+
+   if vbrk-fkdat <> sy-datum.
+     MESSAGE 'Backdated posting not allowed' type 'E'.
+   endif.
+
+clear: wa_stype.
+endif.
+
+endif.
+ endif.
+****************************************** end by parth shukla 24.05.2024
+
+*
+*
+*
+*DATA : V_TEXT(255).
+*DATA: LV_LENGTH TYPE I.
+*DATA: CATALOG LIKE TCATALOG OCCURS 0 WITH HEADER LINE,
+*
+*MEMORY_ID(30).
+*
+*data: c_MEMORY_ID(30) VALUE 'SAPLSTXD'.
+*
+*DATA l_head type THEAD.
+*
+*DATA wa_head type THEAD.
+*
+*data: l_lines type table of TLine.
+*
+*data: l_line type TLine.
+*
+*DATA l_CATALOG type TCATALOG.
+*
+*IMPORT CATALOG FROM MEMORY ID 'SAPLSTXD'.
+*
+*loop at catalog into l_catalog.
+*
+** if l_catalog-IS_REFTEXT is initial
+**
+** and l_catalog-keep is initial.
+*IF l_catalog-TDID = 'Z019'.
+*
+*concatenate c_memory_id l_catalog-id into memory_id.
+*
+*import thead to l_head
+*
+*tline to l_lines
+*
+*from memory id memory_id.
+*
+*loop at l_lines into l_line.
+*IF SY-TABIX = 1.
+*  V_TEXT = L_LINE-TDLINE.
+*  LV_LENGTH = STRLEN( V_TEXT ).
+*IF LV_LENGTH > 1.
+*ENDIF.
+*ENDIF.
+*
+*
+**  IF V_TEXT <> 'A' AND  V_TEXT <> 'B'.
+**    MESSAGE 'EWAYBILL MANDTORY OR INPUT A OR B' TYPE 'E'.
+**  ENDIF.
+*
+*endloop.
+*
+*endif.
+*
+*endloop.
+******************* end by parth 21/06/2019
+
+*  READ TABLE XTHEAD WITH key TDID = 'Z019' TDSPRAS = 'E'.
+*  IF  XTHEAD-UPDKZ IS INITIAL.
+*    MESSAGE 'EWAYBILL MANDTORY' TYPE 'E'.
+*  ENDIF.
+************Added by Hardik**************
+***DATA : LT_XCBRK TYPE TABLE OF  VBRKVB.
+**    DATA: lo_send_request         TYPE REF TO cl_bcs.
+**    DATA: lo_document             TYPE REF TO cl_document_bcs.
+**    DATA: l_dockey                TYPE soodk.
+**    DATA: l_service               TYPE ad_pagserv.
+**    DATA: l_number                TYPE ad_pagnmbr.
+**    DATA: li_recipient            TYPE REF TO if_recipient_bcs.
+**    DATA: l_texttype              TYPE so_obj_tp VALUE  'TXT'.
+**    DATA: lt_text                 TYPE bcsy_text.
+**    DATA: l_text                  TYPE LINE OF bcsy_text.
+**    DATA: l_subject               TYPE so_obj_des.
+**    DATA: l_len                   TYPE so_obj_len.
+**    DATA: lt_recipients           TYPE bcsy_re.
+**    DATA: lo_bcs_exception        TYPE REF TO cx_bcs.
+**    DATA: l_msg_text              TYPE string.
+**    DATA: lw_total                TYPE string.
+**    DATA : p_subj TYPE so_obj_des.
+**    DATA : p_body TYPE soli-line.
+**CHECK sy-tcode = 'VF01'.
+**CHECK VBRK-FKART = 'ZF1'  OR
+**      VBRK-FKART = 'ZF2'  OR
+**      VBRK-FKART = 'ZF4'  OR
+**      VBRK-FKART = 'ZEXP' OR
+**      VBRK-FKART = 'ZDEX'.
+** IF lw_xvbrp-netwr or lw_xvbrp-mwsbk IS NOT INITIAL.
+**    lw_total = lw_xvbrp-netwr + lw_xvbrp-mwsbk.
+** ENDIF.
+**
+**if lw_total IS NOT INITIAL .
+**   CONCATENATE 'SMS on dispatch of material- Dear Customer, Invocie No.'  'Dated'     'Amounting to INR' lw_total INTO lv_text.
+**ENDIF.
+**
+**
+**    TRY.
+***   handle request
+**        lo_send_request = cl_bcs=>create_persistent( ).
+***   set 'send immediately' -> no send queue required
+**        lo_send_request->set_send_immediately( 'X' ).
+**
+***   set subject
+**        MOVE p_subj TO l_subject.
+**
+***   set text
+**        MOVE p_body TO l_text.
+**        APPEND l_text TO lt_text.
+**        l_len = strlen( l_text ).
+**
+***   create document
+**        lo_document = cl_document_bcs=>create_document(
+**                              i_type = l_texttype
+**                              i_text = lt_text
+**                              i_language = sy-langu
+**                              i_subject = l_subject
+**                              i_length = l_len
+**                              ).
+***   add document to send request
+**        CALL METHOD lo_send_request->set_document( lo_document ).
+**
+***   document key
+**        l_dockey-objtp = lo_document->get_doctp( ).
+**        l_dockey-objyr = lo_document->get_docyr( ).
+**        l_dockey-objno = lo_document->get_docno( ).
+**
+**        TRY.
+***       create SMS/pager recipient
+**            l_number = p_addr.
+**            CALL METHOD cl_cam_address_bcs=>create_sms_address
+**              EXPORTING
+**                i_service = l_service
+**                i_number  = l_number
+**              RECEIVING
+**                result    = li_recipient.
+**
+***       add recipient to send request
+**            CALL METHOD lo_send_request->add_recipient
+**              EXPORTING
+**                i_recipient = li_recipient.
+**
+**          CATCH cx_address_bcs cx_send_req_bcs.
+**            MESSAGE e038(swn) WITH l_number INTO l_msg_text.
+***       error message
+**            WRITE:/ text-t01, l_msg_text.
+**            EXIT.
+**        ENDTRY.
+**
+***   add recipient with its respective attributes to send request
+**        CALL METHOD lo_send_request->add_recipient
+**          EXPORTING
+**            i_recipient = li_recipient
+**            i_express   = 'X'.
+**
+***   check if document has recipients at all
+**        lt_recipients = lo_send_request->recipients( ).
+**        IF lt_recipients IS INITIAL.
+**          MESSAGE e040(swn) INTO l_msg_text.
+***     error message
+**          WRITE:/ text-t01, l_msg_text.
+**          EXIT.
+**        ELSE.
+***     send document
+**          CALL METHOD lo_send_request->send( ).
+**          COMMIT WORK.
+**          MESSAGE s058(swn) WITH l_dockey INTO l_msg_text.
+***     sms has been sent
+**          WRITE:/ text-t02, l_msg_text.
+**        ENDIF.
+**
+**      CATCH cx_bcs INTO lo_bcs_exception.
+***   error messages
+**        MESSAGE e034(salert) WITH lo_bcs_exception->error_type INTO l_msg_text.
+**        WRITE:/ text-t01, l_msg_text.
+**        MESSAGE e041(salert) WITH p_addr INTO l_msg_text.
+**        WRITE:/ text-t01, l_msg_text.
+**        EXIT.
+**    ENDTRY.
+***  SUBMIT SWN_TEST_SEND_SMS1.
+**    CLEAR: p_body,p_subj,p_addr,lv_text.
+**    REFRESH : lt_text.
+
+
+************End Of Addition by Hardik ***********
+
+
+    SELECT SINGLE nrrangenr
+      INTO lv_range
+        FROM ZSD_BILL_SNRO
+          WHERE fkart = XVBRK-fkart
+            AND werks = lv_werks.
+    IF sy-subrc = 0.
+      us_range_intern = lv_range.
+    ENDIF.
+******Added by Dnyanesh on 14.09.2015 for ASTR4******
+
+CHECK sy-tcode = 'VF01' OR sy-tcode = 'VF02'.
+*CHECK VBRK-FKART = 'ZSTO'.
+*
+*TYPES: BEGIN OF ty_mseg,
+*        mblnr     TYPE mblnr,
+*        mjahr     TYPE mjahr,
+*        parent_id TYPE mb_parent_id,
+*        matnr     TYPE matnr,
+*        bnbtr     TYPE bnbtr,
+*        ebeln     TYPE bstnr,"Add By SAP_ABAP On 10.02.2016 For Tkt#AST4 For TR#
+*        ebelp     TYPE ebelp,
+*       END OF ty_mseg.
+*
+**+Begin Of Add by SAP_ABAP On 10.02.2016 For Tkt# ASTR4 & TR#
+*TYPES: BEGIN OF ty_bseg,
+*        bukrs TYPE bukrs,
+*        belnr TYPE belnr_d,
+*        gjahr TYPE gjahr,
+*        buzei TYPE buzei,
+*        dmbtr TYPE dmbtr,
+*        ktosl  TYPE ktosl,
+*        zuonr TYPE dzuonr,
+*       END OF ty_bseg,
+*
+*       BEGIN OF ty_bkpf,
+*        bukrs TYPE bukrs,
+*        belnr TYPE belnr_d,
+*        gjahr TYPE gjahr,
+*       END OF ty_bkpf,
+*
+*       BEGIN OF ty_zuonr,
+*        mblnr TYPE mblnr,
+*        mjahr TYPE mjahr,
+*        zuonr TYPE dzuonr,
+*        awkey TYPE awkey,
+*       END OF ty_zuonr.
+*
+*DATA: it_bseg  TYPE STANDARD TABLE OF ty_bseg,
+*      it_zuonr TYPE STANDARD TABLE OF ty_zuonr,
+*      it_bkpf  TYPE STANDARD TABLE OF ty_bkpf,
+*      wa_bseg  TYPE ty_bseg,
+*      wa_zuonr TYPE ty_zuonr.
+**+End Of Add by SAP_ABAP On 10.02.2016 For Tkt# ASTR4 & TR#
+*
+*DATA: wa_komv TYPE komv_index,
+*      it_docflow TYPE tdt_docflow,
+*      wa_docflow TYPE tds_docflow,
+*      it_mseg TYPE TABLE OF ty_mseg,
+*      wa_mseg TYPE ty_mseg.
+*CONSTANTS: lc_r TYPE char1 VALUE 'R',
+*           lc_s TYPE char1 VALUE 'S',
+*           lc_jexp TYPE char4 VALUE 'JEXP'.
+*
+*REFRESH it_docflow.
+*  CALL FUNCTION 'SD_DOCUMENT_FLOW_GET'
+*    EXPORTING
+*      iv_docnum         = likp-vbeln
+*   IMPORTING
+*     et_docflow        = it_docflow.
+*  CLEAR wa_docflow.
+*  READ TABLE it_docflow INTO wa_docflow
+*                        WITH KEY vbtyp_n = lc_r.
+*  IF sy-subrc = 0.
+*    REFRESH it_mseg.
+*    SELECT mblnr
+*           mjahr
+*           parent_id
+*           matnr
+*           bnbtr
+*           ebeln "Add By SAP_ABAP On 10.02.2016 For Tkt#AST4 & For TR#
+*           ebelp
+*      FROM mseg
+*      INTO TABLE it_mseg
+*      WHERE mblnr = wa_docflow-docnum
+*      AND shkzg = lc_s.
+*
+**+Begin Of Add by SAP_ABAP On 10.02.2016 For Tkt# ASTR4 & TR#
+* IF it_mseg IS NOT INITIAL.
+*   LOOP AT it_mseg INTO wa_mseg WHERE ebeln IS NOT INITIAL.
+*
+*    wa_zuonr-mblnr = wa_mseg-mblnr.
+*    wa_zuonr-mjahr = wa_mseg-mjahr.
+*
+*    CONCATENATE wa_mseg-ebeln wa_mseg-ebelp INTO wa_zuonr-zuonr.
+*    CONCATENATE wa_mseg-mblnr wa_mseg-mjahr INTO wa_zuonr-awkey.
+*
+*    APPEND wa_zuonr TO it_zuonr.
+*    CLEAR: wa_mseg,wa_zuonr.
+*
+*   ENDLOOP.
+*
+*   SELECT bukrs
+*          belnr
+*          gjahr
+*          FROM bkpf INTO TABLE it_bkpf
+*          FOR ALL ENTRIES IN it_zuonr
+*          WHERE awkey = it_zuonr-awkey.
+*
+*   SELECT bukrs
+*          belnr
+*          gjahr
+*          buzei
+*          dmbtr
+*          ktosl
+*          zuonr
+*          FROM bseg INTO TABLE it_bseg
+*          FOR ALL ENTRIES IN it_bkpf
+*          WHERE bukrs = it_bkpf-bukrs
+*            AND belnr = it_bkpf-belnr
+*            AND gjahr = it_bkpf-gjahr
+*            AND ktosl = 'EIN'.
+**            AND zuonr = it_zuonr-zuonr.
+*ENDIF.
+*
+*
+*  SORT it_bseg BY zuonr.
+*   LOOP AT xkomv INTO wa_komv WHERE kschl = lc_JEXP.
+*    READ TABLE it_mseg INTO wa_mseg WITH KEY parent_id = wa_komv-kposn.
+*    IF sy-subrc = 0.
+*      READ TABLE it_bseg INTO wa_bseg WITH KEY zuonr+0(10) = wa_mseg-ebeln
+*                                               zuonr+10(5) = wa_mseg-ebelp.
+*      IF sy-subrc = 0.
+*        wa_komv-kwert = wa_bseg-dmbtr.
+*        MODIFY xkomv FROM wa_komv.
+*      ENDIF.
+*      CLEAR: wa_komv,wa_bseg,wa_mseg.
+*    ENDIF.
+*  ENDLOOP.
+* ENDIF.
+**+End Of Add by SAP_ABAP On 10.02.2016 For Tkt# ASTR4 & TR#
+*
+**-Begin Of Add by SAP_ABAP On 10.02.2016 For Tkt# ASTR4 & TR#
+****   LOOP AT xkomv INTO wa_komv WHERE kschl = lc_JEXP.
+****    CLEAR:wa_mseg.
+****    READ TABLE it_mseg INTO wa_mseg WITH KEY parent_id = wa_komv-kposn.
+****    IF sy-subrc = 0.
+****      wa_komv-kwert = wa_mseg-bnbtr.
+****      MODIFY xkomv FROM wa_komv.
+****    ENDIF.
+****    CLEAR wa_komv.
+****   ENDLOOP.
+****  ENDIF.
+*
+*******End of addition.*****
+**-End Of Add by SAP_ABAP On 10.02.2016 For Tkt# ASTR4 & TR#
+**
+*}   INSERT
+
+ENDFORM.
+*eject
+
+*---------------------------------------------------------------------*
+*       FORM USEREXIT_PRICING_PREPARE_TKOMK                           *
+*---------------------------------------------------------------------*
+*       This userexit can be used to move additional fields into the  *
+*       communication table which is used for pricing:                *
+*       TKOMK for header fields                                       *
+*       This form is called from form PREISFINDUNG_VORBEREITEN.       *
+*---------------------------------------------------------------------*
+FORM USEREXIT_PRICING_PREPARE_TKOMK.
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""$"$\SE:(1) Form USEREXIT_PRICING_PREPARE_TKOMK, Start                                                                                                        A
+*$*$-Start: (1)---------------------------------------------------------------------------------$*$*
+ENHANCEMENT 1  ZCENVAT_CLEARING.    "active version
+check sy-tcode = 'VF01' or sy-tcode = 'VF02'.
+CHECK VBRK-FKART = 'ZSTO'.
+types: begin of ty_mseg,
+        mblnr     type mblnr,
+        mjahr     type mjahr,
+        parent_id type mb_parent_id,
+        matnr     type matnr,
+        bnbtr     type bnbtr,
+        ebelp     type ebelp,
+       end of ty_mseg.
+data: wa_komv type komv_index,
+      it_docflow type tdt_docflow,
+      wa_docflow type tds_docflow,
+      it_mseg type table of ty_mseg,
+      wa_mseg type ty_mseg.
+CONSTANTS: lv_r TYPE char1 VALUE 'R',
+           lv_s TYPE char1 VALUE 'S',
+           lv_jexp TYPE char4 VALUE 'JEXP'.
+REFRESH it_docflow.
+  call function 'SD_DOCUMENT_FLOW_GET'
+    exporting
+      iv_docnum         = likp-vbeln
+   importing
+     et_docflow        = it_docflow.
+CLEAR wa_docflow.
+  read table it_docflow into wa_docflow
+                        with key vbtyp_n = lv_r.
+  if sy-subrc = 0.
+    REFRESH it_mseg.
+    select mblnr
+           mjahr
+           parent_id
+           matnr
+           bnbtr
+           ebelp
+      from mseg
+      into table it_mseg
+      where mblnr = wa_docflow-docnum
+      and shkzg = lv_s.
+
+   loop at xkomv into wa_komv where kschl = lv_jexp.
+     CLEAR: wa_mseg.
+    read table it_mseg into wa_mseg with key matnr  =  vbrp-matnr
+                                             parent_id = wa_komv-kposn.
+    if sy-subrc = 0.
+      wa_komv-kwert = wa_mseg-bnbtr.
+      modify xkomv from wa_komv.
+      exit.
+    endif.
+    CLEAR: wa_komv.
+   endloop.
+  endif.
+
+******End of addition.*****
+ENDENHANCEMENT.
+*$*$-End:   (1)---------------------------------------------------------------------------------$*$*
+
+* TKOMK-zzfield = xxxx-zzfield2.
+
+* TKOMK-KUNRE = XVBPA_RE-KUNNR.
+* TKOMK-KUNWE = XVBPA_WE-KUNNR.
+* TKOMK-KNRZE = XVBPA_RG-KUNNR.
+
+* PERFORM XVBPA_SELECT USING 'VE'.
+* TKOMK-VRTNR = XVBPA-PERNR.
+
+* PERFORM XVBPA_SELECT USING 'SP'.
+* TKOMK-SPDNR = XVBPA-LIFNR.
+
+* PERFORM XVBPA_SELECT USING 'AP'.
+* TKOMK-PARNR = XVBPA-PARNR.
+*{   INSERT         DEVK900659                                        1
+*
+*}   INSERT
+
+*{   INSERT         DEVK925461                                        2
+
+*}   INSERT
+ENDFORM.
+*eject
+
+*---------------------------------------------------------------------*
+*       FORM USEREXIT_PRICING_PREPARE_TKOMP                           *
+*---------------------------------------------------------------------*
+*       This userexit can be used to move additional fields into the  *
+*       communication table which is used for pricing:                *
+*       TKOMP for item fields                                         *
+*       This form is called from form PREISFINDUNG_VORBEREITEN.       *
+*---------------------------------------------------------------------*
+FORM USEREXIT_PRICING_PREPARE_TKOMP.
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""$"$\SE:(2) Form USEREXIT_PRICING_PREPARE_TKOMP, Start                                                                                                        A
+*$*$-Start: (2)---------------------------------------------------------------------------------$*$*
+ENHANCEMENT 2  ZSD_ENHA_BILLING_TAX_CHECK.    "active version
+*&--------------------------------------------------------------------------------&*
+*& Author   : AIS-Pratap Vaidya/Sanket D.
+*& Ticket No: 7357
+*& Date     : 15-07-2023
+*& Purpose  : Not Allow to post Billing if Tax rates are different
+*&          :
+*&--------------------------------------------------------------------------------&*
+CONSTANTS : LV_VF01  TYPE SY-TCODE    VALUE 'VF01',
+            LV_VF02  TYPE SY-TCODE    VALUE 'VF01',
+            LV_VARV1 TYPE TVARVC-NAME VALUE 'ZITEM',
+            LV_VARV2 TYPE TVARVC-NAME VALUE 'ZCAT',
+            LV_VARV3 TYPE TVARVC-NAME VALUE 'ZCON',
+            lv_ucomm TYPE sy-ucomm    VALUE 'SICH'.
+DATA: lv_trigger TYPE C,
+      lv_val1    TYPE komv-kbetr,
+      lv_val2    TYPE komv-kbetr,
+      lv_cnt     TYPE i.
+*BREAK-POINT.
+IF ( SY-TCODE = LV_VF01 OR  SY-TCODE = LV_VF02 ) AND sy-ucomm = lv_ucomm.
+    SELECT NAME, LOW
+           FROM TVARVC
+           INTO TABLE @data(LT_ZITEM)
+           WHERE NAME = @LV_VARV1.
+    SELECT SINGLE NAME, LOW
+           FROM TVARVC
+           INTO @data(LW_ZCAT)
+           WHERE NAME = @LV_VARV2.
+    SELECT NAME, LOW
+           FROM TVARVC
+           INTO TABLE @data(LT_ZCON)
+           WHERE NAME = @LV_VARV3.
+
+    CLEAR:LV_TRIGGER.
+*    LOOP AT xvbrp INTO data(lw_vbrp).
+      READ TABLE LT_ZITEM INTO data(lw_zitem) WITH KEY low = xvbrp-PSTYV.
+      IF sy-subrc IS INITIAL.
+      ELSE.
+        lv_trigger = abap_true.
+      ENDIF.
+
+      IF LV_TRIGGER = ABAP_TRUE.
+        CLEAR: LV_VAL1,LV_VAL2.
+        IMPORT LV_VAL1 FROM MEMORY ID 'TAX_VAL1'.
+         LOOP AT LT_ZCON INTO DATA(LW_ZCON).
+
+           READ TABLE XKOMV INTO DATA(LW_KOMV) WITH KEY KPOSN = XVBRP-POSNR
+                                                        KNTYP = LW_ZCAT-LOW
+                                                        KSCHL = LW_ZCON-LOW.
+           IF SY-SUBRC IS INITIAL.
+             LV_CNT = LV_CNT + 1.
+             IF LV_CNT = 1 AND LV_VAL1 IS INITIAL.
+              LV_VAL1 = LW_KOMV-KBETR.
+              EXPORT LV_VAL1 TO MEMORY ID 'TAX_VAL1'.
+             ELSE.
+               IF LV_VAL1 NE LW_KOMV-KBETR.
+                 DATA(LV_MSG) = 'Tax Rate is Different along line item.'.
+                 MESSAGE e398(00) WITH LV_MSG.
+               ENDIF.
+             ENDIF.
+           ENDIF.
+         ENDLOOP.
+      ENDIF.
+*    ENDLOOP.
+ENDIF.
+ENDENHANCEMENT.
+*$*$-End:   (2)---------------------------------------------------------------------------------$*$*
+
+*  TKOMP-zzfield = xxxx-zzfield2.
+
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""$"$\SE:(3) Form USEREXIT_PRICING_PREPARE_TKOMP, End                                                                                                          A
+*$*$-Start: (3)---------------------------------------------------------------------------------$*$*
+ENHANCEMENT 1  ZIMPL_ENH_PANNUM.    "active version
+"Start - Update PAN Number Availability field - 27.04.2022
+  DATA: l_panno   TYPE string,
+        ls_mocust TYPE j_1imocust.
+  CLEAR: l_panno, ls_mocust.
+
+  " Get PAN Number from Bill-to party
+  SELECT SINGLE * FROM j_1imocust INTO ls_mocust WHERE kunnr = tkomk-kunre.
+  IF sy-subrc = 0 AND ls_mocust-j_1ipanno IS NOT INITIAL .
+    l_panno = ls_mocust-j_1ipanno.
+    CONDENSE l_panno.
+    " Check for vaild PAN Number
+    IF matches( val = l_panno regex = '[[:alpha:]]{5}[[:digit:]]{4}[[:alpha:]]{1}' ).
+      tkomp-zzpannum = '01'.   "PAN Maintained
+    ELSE.
+      tkomp-zzpannum = '02'.   " Invalid PAN Number
+    ENDIF.
+  ENDIF.
+
+  IF ls_mocust-j_1ipanno IS INITIAL .
+    tkomp-zzpannum = '02'. "No PANMaintained
+  ENDIF.
+
+"End - Update PAN Number Availability field - 27.04.2022
+ENDENHANCEMENT.
+*$*$-End:   (3)---------------------------------------------------------------------------------$*$*
+ENDFORM.
+*eject
+*{   INSERT         DEVK918389                                        1
+form userexit_save_document_prepare.
+
+ DATA : t_vbrk  TYPE STANDARD TABLE OF vbrkvb.
+ DATA : t_vbrp  TYPE STANDARD TABLE OF vbrp.
+ DATA : t_vbpa  TYPE STANDARD TABLE OF vbpa.
+ DATA : t_komv  TYPE STANDARD TABLE OF komv.
+ DATA : l_irn        TYPE char64,
+        l_irndt      TYPE /mvn/e_inv_t_log-irn_date,
+         l_irntime    TYPE /mvn/e_inv_t_log-irn_time,
+         l_auth_time  TYPE cva_time,
+         l_days       TYPE i,
+         l_msg_cd     TYPE char1,
+         l_config_hrs TYPE char4,
+         l_thrs(3)    TYPE n,
+         lv_msg       TYPE char50,
+         ls_return TYPE bapiret2,
+         lv_enc_flag TYPE CHAR1.
+ REFRESH t_vbrk[].
+
+ SELECT SINGLE value from /mvn/einv_g_conf INTO lv_enc_flag where config_key = 'EINV_ENHANCEMENT'.
+  IF sy-subrc <> 0 or lv_enc_flag = '1'.
+   IF sy-tcode <> 'VF11' AND sy-tcode <> 'VF02' AND sy-tcode <> 'VF03'.
+*   IF sy-tcode <> /mvn/e_inv_cl_utilities=>gc_vf11 AND sy-tcode <> /mvn/e_inv_cl_utilities=>gc_vf02 AND sy-tcode <> /mvn/e_inv_cl_utilities=>gc_vf03.
+
+        APPEND xvbrk TO t_vbrk.
+
+        LOOP AT xvbrp INTO xvbrp WHERE vbeln = vbrp-vbeln.
+          APPEND xvbrp TO t_vbrp.
+        ENDLOOP.
+
+        LOOP AT xvbpa INTO xvbpa WHERE vbeln = vbrp-vbeln.
+          APPEND xvbpa TO t_vbpa.
+        ENDLOOP.
+
+        LOOP AT xkomv INTO xkomv WHERE knumv = vbrp-vbeln.
+          APPEND xkomv TO t_komv.
+        ENDLOOP.
+
+       CALL FUNCTION '/MVN/E_INV_FM_DOC_GEN_SEQ' STARTING NEW TASK 'EINVOICE'
+          EXPORTING
+            IV_SAP_TCODE     = sy-tcode
+          TABLES
+            t_vbrk       = t_vbrk[]
+            t_vbrp       = t_vbrp[]
+            t_komv       = t_komv[]
+            t_vbpa       = t_vbpa[].
+
+   ENDIF.
+  ENDIF.
+
+   data : ls_can_eway TYPE /MVN/EWB_ST_CANCEL_REASON,
+       lv_gstin   TYPE /MVN/GST_DE_GSTIN,
+       lv_stcd    TYPE REGIO,
+       ls_ewb_flag TYPE /MVN/EWB_ST_CONFIG_FLAG,
+       ls_eway_result TYPE /MVN/EWB_ST_CANCEL,
+       ls_einv TYPE /MVN/E_INV_T_LOG,
+       LS_EWB_LOG TYPE /MVN/EWB_LOG.
+
+*     IF sy-tcode = /mvn/e_inv_cl_utilities=>gc_vf11.  "Einvoice should Cancel only from VF11 Transaction..
+       IF sy-tcode = 'VF11'.
+
+      SELECT SINGLE irn irn_date irn_time FROM /mvn/e_inv_t_log INTO (l_irn,l_irndt,l_irntime) WHERE doc_no = xvbrk-vbeln
+                                                                                               AND   EINV_STATUS = 'ACT'.
+      SELECT SINGLE * FROM /MVN/EWB_LOG INTO LS_EWB_LOG  WHERE doc_number = xvbrk-vbeln AND EWB_STATUS = 'A'.
+
+      IF l_irn IS NOT INITIAL.  " checking wheather IRN is created or not
+        SELECT SINGLE value INTO l_config_hrs FROM /mvn/einv_g_conf WHERE config_key = /mvn/e_inv_cl_utilities=>gc_irn_cncl_hr.
+
+        CALL FUNCTION 'SCOV_TIME_DIFF'
+          EXPORTING
+            im_date1              = l_irndt
+            im_date2              = sy-datum
+            im_time1              = l_irntime
+            im_time2              = sy-uzeit
+          IMPORTING
+            ex_days               = l_days
+            ex_time               = l_auth_time
+          EXCEPTIONS
+            start_larger_than_end = 1
+            OTHERS                = 2.
+
+        l_thrs = ( l_days * 24 ) + l_auth_time+0(2).
+
+        IF l_thrs > l_config_hrs.
+          SELECT SINGLE cncl_aft_lim FROM /mvn/einv_pl_con INTO l_msg_cd WHERE plant = vbrp-werks AND cocode = vbrk-bukrs
+                                                            AND doc_typ = vbrk-fkart AND cncl_aft_lim NE 'N'.
+          IF sy-subrc = 0 AND l_msg_cd IS NOT INITIAL.
+            MESSAGE 'Invoice will not Cancel, This Invoice exceeds more than Exceed Limit Time' TYPE l_msg_cd.
+          ENDIF.
+        ENDIF.
+
+     ENDIF.
+
+  IF LS_EWB_LOG-EWAY_BILL_NO is NOT INITIAL.
+
+    ls_can_eway-EWB_NO = LS_EWB_LOG-EWAY_BILL_NO.
+    ls_can_eway-CANCEL_RSN_CODE = '1'.
+    ls_can_eway-CANCEL_RMRK = 'Duplicate'.
+
+  SELECT SINGLE gstin STATE_CODE INTO (lv_gstin,lv_stcd)
+    FROM /mvn/ewb_log WHERE eway_bill_no = LS_EWB_LOG-EWAY_BILL_NO
+                            and EWB_STATUS = 'A'.
+
+ IF sy-subrc = 0.
+    ls_ewb_flag-ewb_ecc = 'X'.
+
+     SELECT SINGLE value FROM /mvn/einv_g_conf
+                    INTO @DATA(lv_gsp_call)
+                    WHERE config_key = 'VAY_GSP'.
+
+     IF lv_gsp_call = 'VAY'.
+
+       CALL FUNCTION '/MVN/EWB_FM_CANCEL_VAY'
+         EXPORTING
+           is_ewb_cancellation = ls_can_eway
+           iv_state_code       = lv_stcd
+           is_ewb_flag         = ls_ewb_flag
+           iv_gstin            = lv_gstin
+           iv_doc_no           = xvbrk-vbeln
+         IMPORTING
+*          ev_success          =
+           es_ewb_cancel       = ls_eway_result.
+*           es_error_codes      =.
+   ELSE.
+
+    CALL FUNCTION '/MVN/EWB_FM_CANCELLATION_API'        "'ZEWAYFM_BILL_CANCELLATION_API'
+      EXPORTING
+        is_ewb_cancellation = ls_can_eway
+        iv_state_code       = lv_stcd
+        is_ewb_flag         = ls_ewb_flag
+        iv_gstin            = lv_gstin
+        iv_doc_no           = xvbrk-vbeln
+      IMPORTING
+        es_ewb_cancel       = ls_eway_result.
+
+ ENDIF.
+*    IF ls_eway_result-EWB_ERROR is NOT INITIAL.
+*      MESSAGE ls_eway_result-EWB_ERROR TYPE 'E'.
+*    ENDIF.
+    ENDIF.
+else.
+  ls_eway_result-ewb_status = '1'.
+ENDIF.
+
+ IF l_irn IS NOT INITIAL AND ls_eway_result-ewb_status = '1'.
+
+  CALL FUNCTION '/MVN/E_INV_FM_CANCEL_IRN'
+    EXPORTING
+      iv_irn    = l_irn
+      iv_can_rs = /mvn/e_inv_cl_utilities=>gc_cncl_rsn_code
+      iv_vbeln  = xvbrk-vbeln
+    IMPORTING
+      es_return = ls_return.
+
+*    IF ls_return-message is NOT INITIAL.
+*      CONCATENATE 'IRN is Not Cancelled : ' ls_return-message INTO lv_msg.
+*      MESSAGE lv_msg TYPE 'E'.
+*    ENDIF.
+
+  ELSEIF sy-subrc = 0.
+    "updating custom log table as Invoice is cancelled
+   UPDATE /mvn/e_inv_t_log SET e_inv_status = 'C' WHERE doc_no = xvbrk-vbeln.
+
+  ENDIF.
+ENDIF.
+
+******************************* 11.01.2024 export check move here form number range exit
+************** ADDED BY PARTH 17.04.2024
+*TYPES: BEGIN OF ty_tvarv,
+*         sign TYPE tvarv_sign,
+*         opti TYPE tvarv_opti,
+*         low  TYPE tvarv_val,
+*         high TYPE tvarv_val,
+*       END OF ty_tvarv.
+*
+*DATA: lt_acc_key3  TYPE STANDARD TABLE OF ty_tvarv.
+*DATA: lwa_acc_key3 TYPE ty_tvarv.
+*
+*DATA: lt_acc_key4  TYPE STANDARD TABLE OF ty_tvarv.
+*DATA: lwa_acc_key4 TYPE ty_tvarv.
+*
+*CONSTANTS :  c_var_user2 TYPE rvari_vnam VALUE 'ZSD_EWAYBILL_TYPE',
+*             c_type_user2   TYPE rsscr_kind VALUE 'S'.
+*
+*CONSTANTS :  c_var_user3 TYPE rvari_vnam VALUE 'ZSD_PROG_NAME',
+*             c_type_user3   TYPE rsscr_kind VALUE 'S'.
+*
+* SELECT sign
+*       opti
+*       low
+*       high INTO TABLE lt_acc_key3
+*                 FROM tvarvc
+*                 WHERE name = c_var_user2 AND
+*                       type = c_type_user2.
+*
+*
+*SELECT sign
+*       opti
+*       low
+*       high INTO TABLE lt_acc_key4
+*                 FROM tvarvc
+*                 WHERE name = c_var_user3 AND
+*                       type = c_type_user3.
+*
+****************ENED BY PARTH 06.02.2020
+*DATA: lt_xvbrp TYPE STANDARD TABLE OF vbrpvb,
+*      lw_xvbrp TYPE vbrpvb,
+*      lv_werks TYPE werks_d,
+*      lv_range TYPE NUMKI,
+*      lv_line  TYPE i.
+*lt_xvbrp[] = xvbrp[].
+*
+*CONSTANTS lc_zex1 TYPE fkart VALUE 'ZEX1'.
+*
+*SORT lt_xvbrp BY werks.
+*
+*DELETE ADJACENT DUPLICATES FROM lt_xvbrp COMPARING werks.
+*DESCRIBE TABLE lt_xvbrp LINES lv_line.
+*IF lv_line GT 1 and XVBRK-fkart NE lc_zex1.
+*  MESSAGE 'Only one plant allowed for Invoice' TYPE 'A'.
+*ELSE.
+*READ  TABLE lt_xvbrp INDEX 1 into lw_xvbrp.
+*IF sy-subrc eq 0.
+*  lv_werks = lw_xvbrp-werks.
+*ENDIF.
+*ENDIF.
+*
+* IF XVBRK-RFBSK = 'G'.
+*    MESSAGE e011(zsd).
+*  ENDIF.
+****************  comment by parth transfer code in include RV60AFZC 26/02/2020.
+*********************** added by parth 21/06/2019
+*loop at lt_acc_key4 INTO lwa_acc_key4.
+*CHECK SY-TCODE = 'VF01'
+** *** 22-01-2020 comment by parth for multinvoice creation vf06
+*or SY-CPROG = lwa_acc_key4-low.
+***** ADD BY 01.10.2019
+**SY-CPROG = 'SDBILLDL' "comment by parth 07/02/2020
+**** END BY 01.10.2019
+*endloop.
+******************* ended by parth 22-01-2020
+*
+*LOOP AT lt_acc_key3 INTO lwa_acc_key3.
+*if VBRK-ZZIND is INITIAL AND VBRK-FKART = lwa_acc_key3-LOW.
+*  MESSAGE 'E-waybill Data Mandtory' type 'E'.
+*endif.
+*ENDLOOP.
+*
+*
+**  DELETE XTHEAD WHERE TDSPRAS <> 'E'.
+**  READ TABLE XTHEAD WITH KEY TDID = 'Z019'.
+**  IF XTHEAD-UPDKZ IS INITIAL .
+**    MESSAGE 'EWAYBILL NUMBER MANDTORY' TYPE 'E'.
+**  ENDIF.
+***********************
+*TYPES: BEGIN OF ty_tvarvc1,
+*         sign TYPE tvarv_sign,
+*         opti TYPE tvarv_opti,
+*         low  TYPE tvarv_val,
+*         high TYPE tvarv_val,
+*       END OF ty_tvarvc1.
+*
+*DATA: lt_acc_key1  TYPE STANDARD TABLE OF ty_tvarvc1.
+*DATA: lwa_acc_key1 TYPE ty_tvarvc1.
+*
+*DATA: lt_acc_key2  TYPE STANDARD TABLE OF ty_tvarvc1.
+*DATA: lwa_acc_key2 TYPE ty_tvarvc1.
+*
+*data: it_mode type STANDARD TABLE OF zsd_mode,
+*      wa_mode type zsd_mode.
+*
+*CONSTANTS :  c_var_user TYPE rvari_vnam VALUE 'ZSD_MODE',
+*             c_type_user   TYPE rsscr_kind VALUE 'S'.
+*
+*CONSTANTS :  c_var_user1 TYPE rvari_vnam VALUE 'ZSD_ETYPE',
+*             c_type_user1   TYPE rsscr_kind VALUE 'S'.
+*SELECT sign
+*       opti
+*       low
+*       high INTO TABLE lt_acc_key1
+*                 FROM tvarvc
+*                 WHERE name = c_var_user AND
+*                       type = c_type_user.
+*
+*  SELECT sign
+*       opti
+*       low
+*       high INTO TABLE lt_acc_key2
+*                 FROM tvarvc
+*                 WHERE name = c_var_user1 AND
+*                       type = c_type_user1.
+*
+*
+**  LOOP AT LT_ACC_KEY1 INTO lwa_acc_key1.
+**    IF lwa_acc_key1-LOW <> VBRK-ZZIND AND lwa_acc_key1-HIGH <> VBRK-ZZIND .
+**     MESSAGE 'INPUT ONLY F OR P FOR MODE OF TYPE' TYPE 'E' .
+**    ENDIF.
+**  ENDLOOP.
+**
+**
+**    SELECT SINGLE modeid
+**    FROM ZSD_MODE
+**    INTO VBRK-ZZMODEID
+**    WHERE modeid = VBRK-ZZMODEID.
+**
+**    IF SY-SUBRC <> 0.
+**    message 'Only Select f4 help data for input' TYPE 'E'.
+**    ENDIF.
+*
+*LOOP AT LT_ACC_KEY1 INTO lwa_acc_key1.
+* if VBRK-ZZIND = lwa_acc_key1-low.
+* IF ( VBRK-ZZTRUCKNO IS INITIAL ).
+*   MESSAGE ' Vehicle no. is mandatory for Full truck load' type  'E'.
+* ENDIF.
+* IF  ( VBRK-ZZLRNO IS INITIAL ).
+*    MESSAGE ' LR no. is mandatory for Full truck load' type 'E'.
+* ENDIF.
+* IF ( VBRK-ZZLRDT IS INITIAL ).
+*    MESSAGE ' LR Date is mandatory for Full truck load' type 'E'.
+* ENDIF.
+*  IF ( VBRK-ZZMODEID IS INITIAL ).
+*    MESSAGE ' Transport mode is mandatory for Full truck load' type 'E'.
+* ENDIF.
+*ENDIF.
+*endloop.
+*
+*
+*LOOP AT lt_acc_key2 INTO LWA_ACC_KEY2.
+**if vbrk-fkart = 'ZEXP' OR  vbrk-fkart = 'YEXP'.
+*if vbrk-fkart = LWA_ACC_KEY2-LOW.
+*  IF ( VBRK-PORTAD1 IS INITIAL ).
+*    MESSAGE 'Port Address Mandatory in Export invoice' type 'E'.
+*  ENDIF.
+*  IF ( VBRK-PORTCITY IS INITIAL ).
+*    MESSAGE 'Port Address Mandatory in Export invoice' type 'E'.
+*  ENDIF.
+*  IF ( VBRK-PORTREGION IS INITIAL ).
+*     MESSAGE 'Port Address Mandatory in Export invoice' type 'E'.
+*  ENDIF.
+*  IF ( VBRK-PORTPIN IS INITIAL ).
+*    MESSAGE 'Port Address Mandatory in Export invoice' type 'E'.
+*  ENDIF.
+*
+*ENDIF.
+*ENDLOOP.
+**********************ened by parth for trnasfer code in RV60AFZC include 26/02/2020
+**************************
+
+********************** HSN CODE CHECK
+*CONSTANTS:
+* c_tvarvc_name TYPE rvari_vnam VALUE 'ZMM_EX_MTART'.
+*
+*TYPES: BEGIN OF ty_tvarvc,
+*         low TYPE tvarv_val,
+*       END OF ty_tvarvc.
+*DATA: it_tvarvc  TYPE STANDARD TABLE OF ty_tvarvc.
+*DATA: wa_tvarvc TYPE ty_tvarvc.
+*
+*DATA : htype LIKE dd01v-datatype.
+*DATA : len(08) TYPE n.
+*DATA : lv_mtart type mara-mtart,
+*       lv_steuc type marc-steuc.
+*
+*SELECT low
+* INTO CORRESPONDING FIELDS OF TABLE it_tvarvc
+*             FROM tvarvc
+*             WHERE name = c_tvarvc_name.
+*
+*
+*
+*CLEAR : lv_STEUC,LV_MTART.
+*
+*SELECT SINGLE STEUC INTO lv_STEUC
+*    FROM MARC WHERE MATNR = VBRP-MATNR AND
+*                    WERKS = VBRP-WERKS.
+*
+*SELECT SINGLE MTART INTO LV_MTART
+*    FROM MARA WHERE MATNR = VBRP-MATNR.
+*
+* READ TABLE it_tvarvc INTO wa_tvarvc WITH KEY low = LV_MTART.
+*
+*  IF sy-subrc = 0.
+*
+*  CALL FUNCTION 'NUMERIC_CHECK'
+*    EXPORTING
+*      string_in = lv_STEUC
+*    IMPORTING
+**     STRING_OUT       =
+*      htype     = htype.
+*
+*  IF htype = 'NUMC'.
+*
+*    len = strlen( lv_STEUC ).
+*    IF LEN <> '8'.
+*      MESSAGE ' Valid control code length' TYPE 'E'.
+*    ENDIF.
+*
+*  ELSE.
+*    MESSAGE 'PLEASE ENTER ONLY NUMARIC VALUE' TYPE 'E'.
+*  ENDIF.
+*ENDIF.
+
+
+
+**********************
+***************************** for billvalue more then 2lac and pannumber not enter in master
+*BREAK-POINT.
+Data: billvalue TYPE vbrk-netwr.
+Data: limit  type char200.
+DATA: ls_1ipanno  TYPE j_1imocust-j_1ipanno.
+DATA : len(10) TYPE n.
+
+TYPES: BEGIN OF ty_etype,
+         sign TYPE tvarv_sign,
+         opti TYPE tvarv_opti,
+         low  TYPE tvarv_val,
+         high TYPE tvarv_val,
+       END OF ty_etype.
+
+ DATA: it_ETYPE  TYPE STANDARD TABLE OF ty_etype,
+       WA_ETYPE TYPE ty_etype.
+
+CONSTANTS:
+ c_tvarvc_name TYPE rvari_vnam VALUE 'ZSD_PAN_BVALUE_LIMIT'.
+
+CONSTANTS :  c_zsd_etype TYPE rvari_vnam VALUE 'ZSD_EX_ITYPE_LIMIT',
+             c_etype   TYPE rsscr_kind VALUE 'S'.
+
+
+IF sy-tcode <> 'VF11' AND sy-tcode <> 'VF03'.
+
+SELECT SINGLE low
+         INTO limit
+         FROM tvarvc
+         WHERE name = c_tvarvc_name .
+
+
+ SELECT sign
+       opti
+       low
+       high INTO TABLE it_ETYPE
+                 FROM tvarvc
+                 WHERE name = c_zsd_etype AND
+                       type = c_etype.
+
+billvalue = vbrk-netwr + vbrk-mwsbk.
+
+READ TABLE it_etype into wa_etype with key low = vbrk-fkart.
+if sy-subrc ne 0.
+
+ SELECT SINGLE j_1ipanno FROM j_1imocust INTO ls_1ipanno WHERE kunnr = vbrk-kunag.
+
+ len = strlen( ls_1ipanno ).
+
+ if len <> 10.
+
+ if billvalue > limit .
+  MESSAGE 'Without PANNUMBER customer invoice value limit upto 2 lacs' type 'E'.
+ ENDIF.
+
+endif.
+endif.
+endif.
+clear: wa_etype,ls_1ipanno,billvalue,len.
+
+********************************************  for check invoice date only post system date.
+
+*IF sy-tcode <> 'VF11' AND sy-tcode <> 'VF03'.
+*
+*  TYPES: BEGIN OF ty_stype,
+*         sign TYPE tvarv_sign,
+*         opti TYPE tvarv_opti,
+*         low  TYPE tvarv_val,
+*         high TYPE tvarv_val,
+*       END OF ty_stype.
+*
+* DATA: it_sTYPE  TYPE STANDARD TABLE OF ty_stype,
+*       WA_sTYPE TYPE ty_stype.
+*
+*
+* DATA: it_btcode  TYPE STANDARD TABLE OF ty_stype,
+*       WA_btcode TYPE ty_stype.
+*
+*  CONSTANTS :  c_zsd_stype TYPE rvari_vnam VALUE 'ZSD_IN_ITYPE_SDATE',
+*             c_stype   TYPE rsscr_kind VALUE 'S'.
+*
+*   CONSTANTS :  c_zsd_btcode TYPE rvari_vnam VALUE 'ZSD_BTCODE',
+*               c_btype   TYPE rsscr_kind VALUE 'S'.
+*
+*  SELECT sign
+*       opti
+*       low
+*       high INTO TABLE it_stype
+*                 FROM tvarvc
+*                 WHERE name = c_zsd_stype AND
+*                       type = c_stype.
+*
+* SELECT sign
+*        opti
+*        low
+*        high into TABLE it_btcode
+*               from tvarvc
+*               where name = c_zsd_btcode
+*                and  type = c_btype.
+*
+*
+*
+* READ TABLE it_btcode into wa_btcode with key low = sy-tcode.
+* if sy-subrc <> 0.
+*
+* READ TABLE it_stype into wa_stype with key low = vbrk-fkart.
+*if sy-subrc eq 0.
+*
+*   if vbrk-fkdat <> sy-datum.
+*     MESSAGE 'Backdated posting not allowed' type 'E'.
+*   endif.
+*
+*clear: wa_stype.
+*endif.
+*
+*endif.
+* endif.
+
+***************************
+
+
+ENDFORM.
+
+
+*}   INSERT

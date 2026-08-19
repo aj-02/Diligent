@@ -1,0 +1,764 @@
+*&--------------------------------------------------------------------*
+*&  Include           PCF16IN12
+*&--------------------------------------------------------------------*
+
+DATA: wa_t7insw TYPE t7insw.
+
+DATA: pbegda LIKE sy-datum,
+      pendda LIKE sy-datum.
+
+DATA: disp_flg_lot TYPE i VALUE 1,
+      negtv        TYPE i VALUE -1,
+      print_verif.
+
+DATA: afy_switch    TYPE pin_reval,
+      crun_switch   TYPE pin_reval,
+      htext_cswitch TYPE c,
+      g_t54c0       TYPE t54c0.
+
+DATA: kwert     LIKE t511k-kwert,
+      calcmolga LIKE t500l-molga VALUE '40'.
+
+* Declaration for Mulitple Form 16.
+DATA: multiple_f16(1),
+      indx2    LIKE sy-tabix.
+
+DATA: BEGIN OF i512w OCCURS 0,
+        lgart LIKE t512w-lgart,
+        aklas LIKE t512w-aklas,
+      END OF i512w.
+
+DATA: BEGIN OF cocd OCCURS 10.
+        INCLUDE STRUCTURE pincc.
+DATA: END OF cocd.
+
+DATA: BEGIN OF tmp_cocd OCCURS 10.
+        INCLUDE STRUCTURE pincc.
+DATA: END OF tmp_cocd.
+
+DATA: BEGIN OF tmp_cocd_1 OCCURS 10.
+        INCLUDE STRUCTURE pincc.
+DATA: END OF tmp_cocd_1.
+
+DATA: wa_tmp_cocd   LIKE LINE OF tmp_cocd,
+      wa_tmp_cocd_1 LIKE LINE OF tmp_cocd.
+
+DATA: BEGIN OF old_cocd OCCURS 10.
+        INCLUDE STRUCTURE pincc.
+DATA: END OF old_cocd.
+
+DATA: BEGIN OF f16 OCCURS 10.
+        INCLUDE STRUCTURE pin16.
+DATA: END OF f16.
+
+DATA: BEGIN OF tmp_rgdir OCCURS 100.
+        INCLUDE STRUCTURE pc261.
+DATA: END OF tmp_rgdir.
+
+DATA: BEGIN OF rgdir_afy_crun OCCURS 100.
+        INCLUDE STRUCTURE pc261.
+DATA: END OF rgdir_afy_crun.
+
+DATA: BEGIN OF tmp_afy_crun OCCURS 100.
+        INCLUDE STRUCTURE pc261.
+DATA: END OF tmp_afy_crun.
+
+DATA: BEGIN OF date_range,
+        sign(1),
+        option(2),
+        low       LIKE  sy-datum,
+        high      LIKE sy-datum,
+      END OF date_range.
+DATA: date_tab LIKE TABLE OF date_range.
+DATA: date_low  LIKE sy-datum,
+      date_high LIKE sy-datum.
+
+DATA : BEGIN OF temsefin_tab1 OCCURS 0,                     "1274331GG"
+         cntr2  LIKE pincc-cntr2,
+         pernr  LIKE pernr-pernr,
+         fpper  LIKE pc261-fpper,
+         inper  LIKE pc261-inper,
+         fpbeg  TYPE sy-datum,
+         fpend  TYPE sy-datum,
+         ipend  TYPE sy-datum,
+         tottax LIKE pc207-betrg,
+         ttax   LIKE  pc207-betrg,
+       END OF temsefin_tab1.
+
+DATA: BEGIN OF emp_tab OCCURS 0,
+        emp_no TYPE p_pernr,
+        pernr  TYPE p_pernr,
+      END OF emp_tab.
+
+TYPES: BEGIN OF mon_tax,
+         cntr2  LIKE pincc-cntr2,
+         pernr  LIKE pernr-pernr,
+         payid  LIKE pc261-payid,
+         payty  LIKE pc261-payty,
+         paydt  LIKE pc261-paydt,
+         fpper  LIKE pc261-fpper,
+         inper  LIKE pc261-inper,
+         fpbeg  TYPE sy-datum,
+         fpend  TYPE sy-datum,
+         ipend  TYPE sy-datum,
+         tdedt  TYPE pc207-betrg,
+         tpaid  TYPE pc207-betrg,
+         mecss  TYPE pc207-betrg,        "Monthly Education Cess
+         mhecss TYPE pc207-betrg,       "Monthly Higher Education Cess
+         mtpay  TYPE pc207-betrg,        "Monthly Tax Payable
+         mtinc  TYPE pc207-betrg,        "Monthly Taxable Income
+         mtsur  TYPE pc207-betrg,        "Monthly Surcharge
+         attir  TYPE pc207-betrg,        "MONTHLY ATTIRE
+         rese   TYPE pc207-betrg,        "MONTHLY RESERECH
+         hra   TYPE pc207-betrg,        "House rent allow
+         cfa   TYPE pc207-betrg,        "CFA Exemption
+         rese_arr   TYPE pc207-betrg,    "MONTHLY RESERECH_ARR
+         attir_arr  TYPE pc207-betrg,    "MONTHLY ATTIRE_ARR
+
+         pbegda TYPE sy-datum,
+         pendda TYPE sy-datum,
+       END OF mon_tax.
+
+TYPES: BEGIN OF ty_ch_det,
+         cntr2 LIKE pincc-cntr2,
+         pernr LIKE pernr-pernr,
+         bukrs LIKE p0001-bukrs,
+         payty TYPE payty,
+         payid TYPE payid,
+         fpper LIKE pc261-fpper,
+         inper LIKE pc261-inper,
+         fpbeg TYPE sy-datum,
+         fpend TYPE sy-datum,
+         ipend TYPE sy-datum,
+*          CBEGD TYPE BEGDA,
+*          CENDD TYPE ENDDA,
+         chlno TYPE pin_chlno,
+         vouno TYPE pin_vouno,
+         panno TYPE pin_idnum,
+         chdat TYPE pin_chdat,
+         betrg TYPE pc207-betrg,
+         amont TYPE pc207-betrg,
+         mntax TYPE pc207-betrg,
+         mnedu TYPE pc207-betrg,
+         mninc TYPE pc207-betrg,
+         mnsur TYPE pc207-betrg,
+         chkno TYPE pin_chkno,
+         brcod TYPE pin_brcod,
+       END OF ty_ch_det.
+DATA: BEGIN OF wa_ch_det,
+        cntr2      LIKE pincc-cntr2,
+        pernr      LIKE pernr-pernr,
+        bukrs      LIKE p0001-bukrs,
+        payty      TYPE payty,
+        payid      TYPE payid,
+        fpper      LIKE pc261-fpper,
+        inper      LIKE pc261-inper,
+        fpbeg      TYPE sy-datum,
+        fpend      TYPE sy-datum,
+        ipend      TYPE sy-datum,
+*          CBEGD TYPE BEGDA,
+*          CENDD TYPE ENDDA,
+        chlno      TYPE pin_chlno,
+        vouno      TYPE pin_vouno,
+        panno      TYPE pin_idnum,
+        chdat      TYPE pin_chdat,
+        betrg      TYPE pc207-betrg,
+        amont      TYPE pc207-betrg,
+        mntax      TYPE pc207-betrg,
+        mnedu      TYPE pc207-betrg,
+        mninc      TYPE pc207-betrg,
+        mnsur      TYPE pc207-betrg,
+        chkno      TYPE pin_chkno,
+        brcod      TYPE pin_brcod,
+        status(15),
+      END OF wa_ch_det.
+
+DATA: mon_tax_comp TYPE TABLE OF mon_tax,
+      wa_tax_com   TYPE mon_tax.
+
+DATA: mon_tax_comp_h TYPE TABLE OF mon_tax,
+      wa_tax_com_h   TYPE mon_tax.
+
+DATA: result_tab      TYPE TABLE OF pc207,
+      wa_result_table LIKE LINE OF result_tab.
+
+********************** for Z  FORM-16 06-07-2022
+TYPES: BEGIN OF sec10,
+         pernr TYPE pernr-pernr,
+         attir TYPE pc207-betrg,        "MONTHLY ATTIRE
+         rese  TYPE pc207-betrg,        "MONTHLY RESERECH
+         hra   TYPE pc207-betrg,        "House rent allow
+         cfa   TYPE pc207-betrg,        "CFA Exemption
+         rese_arr type pc207-betrg,     "MONTHLY ATTIRE_ARR
+         attir_arr type pc207-betrg,    ""MONTHLY RESERECH_ARR
+       END OF sec10.
+DATA: it_sec10 TYPE STANDARD TABLE OF sec10,
+      wa_sec10 TYPE sec10.
+*************************************
+
+**************
+
+DATA: ch_det LIKE TABLE OF wa_ch_det.
+*      wa_ch_det LIKE LINE OF ch_det.
+
+DATA: BEGIN OF main_tab OCCURS 10,
+        cntr1                     LIKE pincc-cntr2,
+        gross_sal                 LIKE pc207-betrg,
+        sec10_all                 LIKE pc207-betrg,
+        balance                   LIKE pc207-betrg,
+        std_ded                   LIKE pc207-betrg,
+        ptax                      LIKE pc207-betrg,
+        aggr_ded                  LIKE pc207-betrg,
+        salaries                  LIKE pc207-betrg,
+        oth_income                LIKE pc207-betrg,
+        bus_prof                  LIKE pc207-betrg,
+        gross_tot_income          LIKE pc207-betrg,
+        sec80_ded                 LIKE pc207-betrg,
+        epf_tot                   LIKE pc207-betrg,
+        sec88_ded                 LIKE pc207-betrg,
+        sec88b_ded                LIKE pc207-betrg,
+        sec88c_ded                LIKE pc207-betrg,
+        sec88d_ded                LIKE pc207-betrg,
+        tot_income                LIKE pc207-betrg,
+        tax_tot_income            LIKE pc207-betrg,
+        chapvi_ded                LIKE pc207-betrg,
+        surchg                    LIKE pc207-betrg,                " MDSNT927906
+        edu_cess                  LIKE pc207-betrg,              " MDSNT927906
+        tax_payable_before_relief LIKE pc207-betrg,
+        tax_payable               LIKE pc207-betrg,
+        sec89_relief              LIKE pc207-betrg,
+        tds_petd                  LIKE pc207-betrg,
+        tds_ifos                  LIKE pc207-betrg,
+        tax_ded_so_far            LIKE pc207-betrg,
+        tax_this_month            LIKE pc207-betrg,
+        vol_tax                   LIKE pc207-betrg,
+        tax_deducted              LIKE pc207-betrg,
+        tot_tax_deducted          LIKE pc207-betrg,     " Sum of TAX_DED_SO_FAR
+        " and TAX_THIS_MONTH
+        tax_paid_employer         LIKE pc207-betrg,
+        net_tax_payable           LIKE pc207-betrg,
+        petd_s172                 LIKE pc207-betrg,
+        petd_s173                 LIKE pc207-betrg,
+        dedn_s24                  LIKE pc207-betrg,
+        tax_credit                LIKE pc207-betrg,
+        ftext(60),
+        prev_emp_sal              LIKE pc207-betrg,
+        prev_com_sal              TYPE pc207-betrg,
+      END OF main_tab.
+
+DATA: employer_tax LIKE pc207-betrg.
+
+DATA: med_reim          LIKE pc207-lgart VALUE '/414',
+      gross_sal         LIKE pc207-lgart VALUE '/416',
+      balance           LIKE pc207-lgart VALUE '/418',
+      std_ded           LIKE pc207-lgart VALUE '/420',
+      ptax              LIKE pc207-lgart VALUE '/422',
+      aggr_ded          LIKE pc207-lgart VALUE '/424',
+      salaries          LIKE pc207-lgart VALUE '/426',
+      gross_tot_income  LIKE pc207-lgart VALUE '/430',
+      sec80_ded         LIKE pc207-lgart VALUE '/432',
+      tot_income        LIKE pc207-lgart VALUE '/434',
+      tax_tot_income    LIKE pc207-lgart VALUE '/436',
+      tax_credit        LIKE pc207-lgart VALUE '/437',
+      sec88_ded         LIKE pc207-lgart VALUE '/438',
+      sec88b_ded        LIKE pc207-lgart VALUE '/440',
+      sec88c_ded        LIKE pc207-lgart VALUE '/441',
+      sec88d_ded        LIKE pc207-lgart VALUE '/442',        " MKINT811821
+      chapvi_ded        LIKE pc207-lgart VALUE '/444',
+      sec_cess          LIKE pc207-lgart VALUE '/447',
+      surchg_amt        LIKE pc207-lgart VALUE '/448',
+      edu_cess          LIKE pc207-lgart VALUE '/449',          " MDSNT927906
+      tax_payable       LIKE pc207-lgart VALUE '/450',
+      sec89_relief      LIKE pc207-lgart VALUE '/451',
+      tax_ded_so_far    LIKE pc207-lgart VALUE '/456',
+      tax_this_month    LIKE pc207-lgart VALUE '/460',
+      vol_tax           LIKE pc207-lgart VALUE '/462',
+      epf_tot           LIKE pc207-lgart VALUE '/3F6',
+      tds_petd          LIKE pc207-lgart VALUE '/4V5',
+      tds_petd_sap      LIKE pc207-lgart VALUE '/4VE',
+      sec10_all         LIKE pc207-lgart VALUE '/130',
+      oth_income        LIKE pc207-lgart VALUE '/131',
+      bus_prof          LIKE pc207-lgart VALUE '/3O2',
+      gain_longn        LIKE pc207-lgart VALUE '/3O3',
+      gain_longs        LIKE pc207-lgart VALUE '/3OD',
+      gain_short        LIKE pc207-lgart VALUE '/3O4',
+      dvdnd             LIKE pc207-lgart VALUE '/3O5',
+      intst             LIKE pc207-lgart VALUE '/3O6',
+      oth_in            LIKE pc207-lgart VALUE '/3O7',
+      tax_pay           LIKE pc207-lgart VALUE '/446',
+
+      tds_ifos          LIKE pc207-lgart VALUE '/4OC',
+      pet_s172          LIKE pc207-lgart VALUE '/4VJ',
+      pet_s173          LIKE pc207-lgart VALUE '/4VK',
+      pyr_epf           LIKE pc207-lgart VALUE '/6I2',
+      dedn_interest_s24 LIKE pc207-lgart VALUE  '/3O9',
+      dedn_repair_s24   LIKE pc207-lgart VALUE '/3OA',
+      dedn_others_s24   LIKE pc207-lgart VALUE '/3OB',
+      tot_lettable_val  LIKE pc207-lgart VALUE '/3O1',
+      tot_limit_s24     LIKE pc207-lgart VALUE '/3OL',
+      health_edu_cess   TYPE pc207-lgart VALUE '/44A',
+      prev_emp_sal      TYPE pc207-lgart VALUE '/4V1',
+      prev_com_sal      TYPE pc207-lgart VALUE '/4VA'.
+
+DATA: f16_cntr2 LIKE pincc-cntr2.
+
+DATA: BEGIN OF hd_tab OCCURS 10,
+        cntr2            LIKE pincc-cntr2,
+        f16_begda        LIKE sy-datum,
+        f16_endda        LIKE sy-datum,
+        pernr            LIKE pernr-pernr,
+        ename(80), "LIKE PERNR-ENAME,
+        position         TYPE char80,
+        icnum            LIKE p0185-icnum,
+        dob              LIKE p0002-gbdat,
+        gender           LIKE p0002-gesch,
+        ffname           LIKE pernr-ename,
+        flname           LIKE pernr-ename,
+        hnumb            LIKE p0006-stras,
+        locality         LIKE p0006-locat,
+        pin              LIKE p0006-pstlz,
+        city             LIKE p0006-ort01,
+        country          LIKE p0006-land1,
+        teln             LIKE p0006-telnr,
+        panno(16),
+        tanno(15),
+        girno(20),
+        tdscr            LIKE t7int5-tdscr,
+        addrs            LIKE t7int5-addrs,
+        dirst(1),
+        emp_refno(15),
+        cert_no(40),
+        last_upd(15),
+        emp_address(200),
+        emp_id           TYPE c LENGTH 20,
+      END OF hd_tab.
+
+DATA: page3_flg ,             " Case X flg
+      page3_flg1,             " Case Y flg
+      page3_flg2,             " Case Z flg
+      print_sign,             " to control sign   block in script
+      print_verif2,           " to control verif2 block in script
+      page1_cntr(4)   TYPE i, " to control page1 count
+      page3_cntr(4)   TYPE i, " to control page3 count
+      entries(4)      TYPE i, " to count no.of entries in cmap table
+      print_space1(4) TYPE i, " to control space printing in page1
+      print_space2(4) TYPE i, " to control space printing in page2
+      print_flg(1)    TYPE c, " to control print flg b/w Pg1 and Pg3
+      entries_cntr(4) TYPE c, "
+      fyear(4)        TYPE i, " to store the financial year in YYYY
+      lv_status(15)   TYPE c. " to store status for Challan details
+
+DATA: BEGIN OF final_tab OCCURS 10.
+        INCLUDE STRUCTURE hd_tab.
+*        PERNR LIKE PERNR-PERNR.
+        INCLUDE STRUCTURE main_tab.
+DATA: END OF final_tab.
+
+DATA: alpha(26) TYPE c VALUE 'abcdefghijklmnopqrstuvwxyz',
+      temp(10)  TYPE c,i TYPE i,
+      temp1     LIKE t7ini3-itext.
+DATA: counter TYPE i VALUE 5.
+DATA: gs_t511p   LIKE t511p,
+      gv_ded_s24 TYPE flag.
+
+DATA : wa_s80 TYPE pc2_in05.
+DATA: BEGIN OF int_s80 OCCURS 10,
+        cntr2 LIKE pincc-cntr2,
+        pernr LIKE pernr-pernr,
+        sbsec LIKE pc2_in05-sbsec,
+        sbtds LIKE t7ini5-sbtds,
+        sbdiv LIKE pc2_in05-sbdiv,
+        coamt LIKE pc2_in05-coamt,
+        qlamt LIKE pc2_in05-qlamt,
+        dedmt LIKE pc2_in05-dedmt,
+      END OF int_s80.
+
+DATA: BEGIN OF int_s88 OCCURS 10,
+        cntr2 LIKE pincc-cntr2,
+        pernr LIKE pernr-pernr,
+        icode LIKE pc2_in06-icode,
+        itext LIKE t7ini3-itext,
+        invmt LIKE pc2_in06-invmt,
+        itlmt LIKE pc2_in06-itlmt,
+        qlamt LIKE pc2_in06-qlamt,
+        inamt LIKE pc2_in06-inamt,
+      END OF int_s88.
+
+DATA: BEGIN OF int_nps OCCURS 10,
+        pernr TYPE pernr_d,
+        wgtyp TYPE lgart,
+        amt   TYPE maxbt,
+      END OF int_nps.
+
+DATA : s88_total  LIKE pc207-betrg,
+       s80ccd_amt LIKE pc207-betrg,
+       s80_total  LIKE pc207-betrg.
+
+DATA: BEGIN OF comm_struc,
+        cntr2      LIKE pincc-cntr2,
+        pernr      LIKE pernr-pernr,
+        evcls_spec LIKE t52d4-evclv,
+        spec_txt   LIKE t52db-evcvt,
+        amount     LIKE pc207-betrg,
+        sign       LIKE pc207-anzhl,
+      END OF comm_struc.
+
+DATA: BEGIN OF gross_tab OCCURS 10.
+        INCLUDE STRUCTURE comm_struc.
+DATA: END OF gross_tab.
+
+DATA: BEGIN OF ifos_tab OCCURS 10.
+        INCLUDE STRUCTURE comm_struc.
+DATA: END OF ifos_tab.
+
+DATA: BEGIN OF perk_tab OCCURS 10.
+        INCLUDE STRUCTURE comm_struc.
+DATA: END OF perk_tab.
+
+DATA: BEGIN OF sec10_tab OCCURS 10.
+        INCLUDE STRUCTURE comm_struc.
+DATA: END OF sec10_tab.
+
+DATA:  f16_begda TYPE sy-datum,
+       f16_endda TYPE sy-datum.
+DATA  cocd_lines TYPE i.
+
+DATA: BEGIN OF sum_tab OCCURS 0.       " Summary Table
+        INCLUDE STRUCTURE hcm_hincf160_f16_ack.
+*        CNTR2        LIKE PINCC-CNTR2,
+*        PERNR        LIKE PERNR-PERNR,
+*        ACKNO_Q1_1(30) TYPE C,           " Acknowledgement Number Q1
+*        ACKNO_Q1_2(30) TYPE C,           " Acknowledgement Number Q1
+*        ACKNO_Q1_3(30) TYPE C,           " Acknowledgement Number Q1
+*        ACKNO_Q1_4(30) TYPE C,           " Acknowledgement Number Q1
+*        ACKNO_Q2_1(30) TYPE C,           " Acknowledgement Number Q2
+*        ACKNO_Q2_2(30) TYPE C,           " Acknowledgement Number Q2
+*        ACKNO_Q2_3(30) TYPE C,           " Acknowledgement Number Q2
+*        ACKNO_Q2_4(30) TYPE C,           " Acknowledgement Number Q2
+*        ACKNO_Q3_1(30) TYPE C,           " Acknowledgement Number Q3
+*        ACKNO_Q3_2(30) TYPE C,           " Acknowledgement Number Q3
+*        ACKNO_Q3_3(30) TYPE C,           " Acknowledgement Number Q3
+*        ACKNO_Q3_4(30) TYPE C,           " Acknowledgement Number Q3
+*        ACKNO_Q4_1(30) TYPE C,           " Acknowledgement Number Q4
+*        ACKNO_Q4_2(30) TYPE C,           " Acknowledgement Number Q4
+*        ACKNO_Q4_3(30) TYPE C,           " Acknowledgement Number Q4
+*        ACKNO_Q4_4(30) TYPE C,           " Acknowledgement Number Q4
+*        TAX_DED_Q1   TYPE PC207-BETRG, " Tax Deducted Q1
+*        TAX_DED_Q2   TYPE PC207-BETRG, " Tax Deducted Q2
+*        TAX_DED_Q3   TYPE PC207-BETRG, " Tax Deducted Q3
+*        TAX_DED_Q4   TYPE PC207-BETRG, " Tax Deducted Q4
+*        TAX_DEP_Q1   TYPE PC207-BETRG, " Tax Deposited Q1
+*        TAX_DEP_Q2   TYPE PC207-BETRG, " Tax Deposited Q2
+*        TAX_DEP_Q3   TYPE PC207-BETRG, " Tax Deposited Q3
+*        TAX_DEP_Q4   TYPE PC207-BETRG, " Tax Deposited Q4
+DATA: END OF sum_tab.
+
+DATA: BEGIN OF form12ba_tab OCCURS 10,
+        cntr2      LIKE pincc-cntr2,
+        pernr      LIKE pernr-pernr,
+        evcls_spec LIKE t52d4-evclv,
+        tax_perk   LIKE pc207-betrg,
+        eerecvr    LIKE pc207-betrg,
+        val_perk   LIKE pc207-betrg,
+      END OF form12ba_tab.
+
+DATA: BEGIN OF payments OCCURS 10.
+        INCLUDE STRUCTURE pinbk.
+DATA: END OF payments.
+
+TYPES: BEGIN OF ts_i2_key,           " Cluster I2 key
+         tanno   TYPE pin_tanno,
+         fpbeg   TYPE fpbeg,
+         fpend   TYPE fpend,
+         pernr   TYPE p_pernr,
+         idty(1) TYPE c,
+       END OF ts_i2_key.
+
+TYPES:  BEGIN OF ts_i1_key,            "Cluster I1 Key
+          tanno TYPE pin_tanno,
+          fpend TYPE fpend,
+        END OF ts_i1_key.
+
+DATA: oi1version LIKE pc201_pay.
+DATA: i1_version LIKE pc201_pay.
+
+DATA: oi2version LIKE pc201_pay.
+DATA: i2_version LIKE pc201_pay.
+*****************************END***********
+DATA: op4chln TYPE STANDARD TABLE OF pinchl.
+DATA: op4dedt TYPE STANDARD TABLE OF pindd.
+
+DATA: rp_imp_i2_subrc TYPE sy-subrc,
+      rp_exp_i2_subrc TYPE sy-subrc,
+      rp_del_subrc    TYPE sy-subrc.
+*****************************************
+DATA: rp_imp_i1_subrc TYPE sy-subrc,
+      rp_exp_i1_subrc TYPE sy-subrc.
+
+DATA: p4dedt TYPE STANDARD TABLE OF pindd WITH HEADER LINE.
+
+DATA: p4chln TYPE STANDARD TABLE OF pinchl WITH HEADER LINE.
+
+DATA: BEGIN OF excel_tab OCCURS 0,
+        emp_no          LIKE pernr-pernr,
+        bukrs           TYPE p0001-bukrs,
+        payper          LIKE pc261-fpper,
+        fpbeg(10)       TYPE c,
+        fpend(10)       TYPE c,
+        incometax       LIKE pc207-betrg,
+        surcharge       LIKE pc207-betrg,
+        educess         LIKE pc207-betrg,
+        tottax          LIKE pc207-betrg,
+        chkno(14)       TYPE n,
+        br_code(7)                ,
+        dt_challan(10)  TYPE c,
+        bank_challan(9)            ,
+        paydate(10)     TYPE c,
+        payty           TYPE payty,
+        payid(1)        TYPE c,
+        begda(10)       TYPE c,
+        endda(10)       TYPE c,
+      END OF excel_tab.
+
+DATA :    pay_begda TYPE sy-datum,
+          pay_endda TYPE sy-datum.
+
+DATA :   BEGIN OF f24 ,                            " MDSNT927906
+           emp_no          LIKE pernr-pernr,
+           payper          LIKE pc261-fpper,
+           incometax       LIKE pc207-betrg,
+           surcharge       LIKE pc207-betrg,
+           educess         LIKE pc207-betrg,
+           tottax          LIKE pc207-betrg,
+           chkno(14)       TYPE n,
+           br_code(7)                ,
+           dt_challan      TYPE sy-datum,
+           bank_challan(9)           ,
+           werks           TYPE p0001-werks,
+           btrtl           TYPE p0001-btrtl,
+           abkrs           TYPE p0001-abkrs,
+           bukrs           TYPE p0001-bukrs,
+           temse_flag      TYPE c VALUE space,
+           paydate         LIKE pc261-paydt ,              "MDSNT1015044
+         END OF f24.
+
+DATA : n_payper LIKE f24-payper.
+DATA: ftype(10),
+      file_length TYPE i.
+
+DATA : result(10) TYPE c.
+
+CONSTANTS : gc_x TYPE c VALUE 'X'.
+
+DATA:pers_area TYPE p0001-werks.
+DATA:sadr_empr      TYPE sadr,
+     sadr_cit       TYPE sadr,
+     addr1_val_empr TYPE addr1_val,
+     addr1_val_cit  TYPE addr1_val.
+
+DATA: gs_log_file TYPE hcm_hincf160_mail_log.
+DATA: gt_log_file TYPE TABLE OF hcm_hincf160_mail_log.
+
+DATA: BEGIN OF disp_tab OCCURS 10,
+        pernr                     LIKE pernr-pernr,
+        f16_begda                 LIKE sy-datum,
+        f16_endda                 LIKE sy-datum,
+        ename(80)," LIKE PERNR-ENAME,
+        position                  LIKE t528t-plstx,
+        icnum                     LIKE p0185-icnum,
+        dob                       LIKE p0002-gbdat,
+        gender                    LIKE p0002-gesch,
+        hnumb                     LIKE p0006-stras,
+        locality                  LIKE p0006-locat,
+        pin                       LIKE p0006-pstlz,
+        city                      LIKE p0006-ort01,
+        country                   LIKE p0006-land1,
+        teln                      LIKE p0006-telnr,
+        panno(16),
+        tanno(15),
+        girno(20),
+        gross_sal                 LIKE pc207-betrg,
+        sec10_all                 LIKE pc207-betrg,
+        balance                   LIKE pc207-betrg,
+        salaries                  LIKE pc207-betrg,
+        oth_income                LIKE pc207-betrg,
+        gross_tot_income          LIKE pc207-betrg,
+        tot_income                LIKE pc207-betrg,
+        tax_tot_income            LIKE pc207-betrg,
+        chapvi_ded                LIKE pc207-betrg,
+        surchg                    LIKE pc207-betrg,                " MDSNT927906
+        edu_cess                  LIKE pc207-betrg,              " MDSNT927906
+        tax_payable_before_relief LIKE pc207-betrg,
+        tax_payable               LIKE pc207-betrg,
+        sec89_relief              LIKE pc207-betrg,
+        tds_petd                  LIKE pc207-betrg,
+        tds_ifos                  LIKE pc207-betrg,
+        vol_tax                   LIKE pc207-betrg,
+        tot_tax_deducted          LIKE pc207-betrg,     " Sum of TAX_DED_SO_FAR
+        " and TAX_THIS_MONTH
+        tax_paid_employer         LIKE pc207-betrg,
+        net_tax_payable           LIKE pc207-betrg,
+      END OF disp_tab.
+
+DATA: tax_deducted_wrds(130).
+
+TYPES : BEGIN OF t_pay_result,
+          versc  TYPE pc202,
+          rt_tab TYPE pc207_tab,
+          s80    TYPE hrpayin_s80,
+          s88    TYPE hrpayin_s88,
+        END OF t_pay_result.
+DATA: pay_result TYPE TABLE OF t_pay_result.
+DATA: wa_rgdir LIKE LINE OF tmp_rgdir.
+DATA: wa_pay_result TYPE t_pay_result.
+DATA: last_result TYPE t_pay_result.
+
+DATA: p4dedt_tab TYPE STANDARD TABLE OF pindd WITH HEADER LINE,
+      p4chln_tab TYPE STANDARD TABLE OF pinchl WITH HEADER LINE.
+
+DATA: BEGIN OF hr_error OCCURS 10.
+        INCLUDE STRUCTURE hrerror.
+DATA: END OF hr_error.
+
+DATA: tsobj           LIKE rptstype-tsobj,
+      slno(3)         TYPE n VALUE 1,
+      tobj_prefix(15),
+      w_filex         LIKE rlgrap-filename,
+      w_filex2        LIKE rlgrap-filename,
+      n_date          LIKE sy-datum,
+      pay_date(10)    TYPE c.
+DATA: BEGIN OF temse_tab OCCURS 0,
+        dname    LIKE tst01-dname,
+        dmodtool LIKE tst01-dmodtool,
+        dcreater LIKE tst01-dcreater,
+      END OF temse_tab.
+
+DATA : BEGIN OF temsefin_tab OCCURS 0,                      "1274331GG"
+         cntr2            LIKE pincc-cntr2,
+         f16_begda        LIKE sy-datum,
+         f16_endda        LIKE sy-datum,
+         pernr            LIKE pernr-pernr,
+         fpper            LIKE pc261-fpper,
+         fpbeg            TYPE sy-datum,
+         fpend            TYPE sy-datum,
+         incometax        LIKE pc207-betrg,
+         surcharge        LIKE pc207-betrg,
+         educess          LIKE pc207-betrg,
+         tottax           LIKE pc207-betrg,
+         ttax             LIKE pc207-betrg,
+         chkno(14)        TYPE n,
+         brcod(7)                ,
+         dt_challan       TYPE sy-datum,
+         bank_challan(10)           ,
+         bukrs            TYPE p0001-bukrs,
+         paydate          TYPE sy-datum     ,             "MDSNT1015044
+         betrg            TYPE p LENGTH 10 DECIMALS 2,
+         vouno(15),
+         tanno(20),
+         chlno(10) ,
+         chdat            TYPE sy-datum,
+       END OF temsefin_tab.
+
+DATA : gs_fpoutparams TYPE sfpoutputparams, "output parameters
+       gv_fmname      TYPE rs38l_fnam, " function module name
+       gs_fpdocparams TYPE sfpdocparams,
+       error_string   TYPE string.
+
+DATA: tmp_result_flag(1),
+      wa_tmp_rgdir LIKE LINE OF tmp_rgdir.
+DATA   : cor_sw  TYPE  pin_reval.       " correction switch
+DATA   : cor_rgdir     TYPE TABLE OF pc261, " itab for correction run rslts
+         wa_cor_rgdir  TYPE pc261,
+         lsx_result    TYPE  payin_result,
+         wa_lsx_result TYPE t_pay_result,
+         cor_flg(1)    TYPE c,
+         seq_nxt_fpper TYPE cdseq.
+
+TYPES: BEGIN OF ty_cor_rgdir,
+*        ccode type bukrs.
+         cocdesdt TYPE begda,
+         cocdeedt TYPE begda.
+        INCLUDE TYPE pc261.
+TYPES: END OF ty_cor_rgdir.
+DATA : tmp_cor_rgdir    TYPE TABLE OF  ty_cor_rgdir,
+       wa_tmp_cor_rgdir TYPE   ty_cor_rgdir.
+DATA : tmp_cor_rgdir1    TYPE TABLE OF  ty_cor_rgdir,
+       wa_tmp_cor_rgdir1 TYPE   ty_cor_rgdir.
+DATA: cor_pay_result    TYPE TABLE OF t_pay_result,
+      wa_cor_pay_result TYPE t_pay_result.
+DATA: delta_tab LIKE pay_result OCCURS 0.
+DATA :tmp_paydate TYPE dats.
+DATA: pay_result_afy_crun TYPE TABLE OF t_pay_result.
+
+DATA : lst_abkrs TYPE pin_st_abkrs,
+       lst_werks TYPE pin_st_werks,
+       lst_btrtl TYPE pin_st_btrtl,
+       ltb_abkrs TYPE pin_tt_abkrs,
+       ltb_werks TYPE pin_tt_werks,
+       ltb_btrtl TYPE pin_tt_btrtl,
+       err_struc TYPE bapiret2,
+       err_tab   TYPE bapiret2_tab.
+DATA:  file_tab TYPE TABLE OF sdokpath.
+DATA:  wa_file    TYPE sdokpath.
+DATA:  dir_tab  TYPE TABLE OF sdokpath.
+
+*-- data declaration for mail log
+DATA: mail_counter_mail TYPE i.
+DATA: l_length_mail TYPE i,
+      l_table_mail  TYPE tsfixml.
+DATA: lst_formoutput_mail  TYPE fpformoutput,
+      lv_filename_out_mail TYPE string.
+DATA  lv_w_cx_root_mail    TYPE REF TO cx_root.
+DATA: p_assm_start_mail(4).
+DATA: p_assm_end_mail(4).
+
+* Income Tax rounding
+DATA: gv_t511k LIKE t511k.
+DATA: page3_flg3.
+
+** Form 12BB
+DATA: gs_f12bb_header TYPE hcm_form12bb_header_pdf.
+
+DATA: gs_f12bb_hra TYPE hcm_form12bb_hra_pdf,
+      gt_f12bb_hra TYPE TABLE OF hcm_form12bb_hra_pdf.
+
+DATA: gs_f12bb_lta TYPE hcm_form12bb_lta_pdf,
+      gt_f12bb_lta TYPE TABLE OF hcm_form12bb_lta_pdf.
+
+DATA: gs_f12bb_ios TYPE hcm_form12bb_ios_pdf,
+      gt_f12bb_ios TYPE TABLE OF hcm_form12bb_ios_pdf.
+
+DATA: gv_sec80_ccc(18) TYPE c,
+      gv_s80ccc_evdnc  TYPE alpfstring,
+      gv_sec80_ccd(18) TYPE c,
+      gv_s80ccd_evdnc  TYPE alpfstring.
+
+DATA: gs_f12bb_deductions TYPE hcm_form12bb_deductions_pdf,
+      gt_f12bb_deductions TYPE TABLE OF hcm_form12bb_deductions_pdf.
+
+DATA: gs_f12bb_rebate TYPE hcm_form12bb_rebate_pdf,
+      gt_f12bb_rebate TYPE TABLE OF hcm_form12bb_rebate_pdf.
+
+DATA: gs_f12bb_verify TYPE hcm_form12bb_verify_pdf.
+
+DATA: w_filex3 LIKE rlgrap-filename.
+
+DATA: f12bb_file_tab TYPE TABLE OF sdokpath.
+DATA: f12bb_dir_tab  TYPE TABLE OF sdokpath.
+DATA: gv_hra_note(128) TYPE c.
+
+DATA: p_fin_start_mail(4).
+DATA: p_fin_end_mail(4).
+
+*** Form 12BB mail log
+TYPES: BEGIN OF st_f12bb_mail_log,
+         pernr      TYPE pernr-pernr,
+         error(100) TYPE c,
+       END OF st_f12bb_mail_log.
+
+DATA: gt_f12bb_mail_log TYPE TABLE OF st_f12bb_mail_log,
+      gs_f12bb_mail_log TYPE st_f12bb_mail_log.
+
+DATA: log_12bb TYPE c.
+DATA: f16_new TYPE c.
+DATA: w_filex4 TYPE rlgrap-filename.

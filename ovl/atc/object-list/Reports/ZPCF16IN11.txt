@@ -1,0 +1,33 @@
+*&---------------------------------------------------------------------*
+*&  Include           PCF16IN11
+*&---------------------------------------------------------------------*
+
+INFOTYPES:            0001,            " Organizational Assignment
+                      0002,            " Personal data infotype
+                      0185,            " Subtype 2 for PAN no
+                      0021,            " Subtype 11 for Father's Name
+                      0000,            " Actions
+                      0580,            " Previous Employment details
+                      0006,            " Subtype 5 for Addresses
+                      0105,            " Subtype 10 for e-Mail
+                      0581,
+                      0582,
+                      0584,
+                      0585,
+                      0586,
+                      0587,
+                      0588.
+
+TABLES: T7INTN,
+        T7INI7,
+        T7INI5,
+        T512W,
+        SADR,
+        ADDR1_VAL,
+        T528T,
+        T596F,                         " HR Subroutines
+        PME01,
+        SSCRFIELDS,
+        PERNR,                        " Std Selections PA Master Data
+        T7INT5,                        " Employer info.
+        T7IN0P.                        " Personnel Area/Subarea India        .

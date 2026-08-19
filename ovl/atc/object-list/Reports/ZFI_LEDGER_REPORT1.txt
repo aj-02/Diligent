@@ -1,0 +1,4184 @@
+**&-------------------------------------------------------------------*
+**& REPORT AUTHOR         : Jeevan Raj V
+**& FUNCTIONAL CONSULTANT :
+**& REPORT CREATION DATE  : 02/06/2018
+**& TRANSACTION CODE      : ZFI_VC_LEDGER
+**& REQUEST NUMBER        :
+**& Purpose               : To get Legder Vendor/Customer Ledger Details Debit/Credit Wise
+**&-------------------------------------------------------------------*
+
+REPORT zfi_ledger_report.
+*************Database Structures Used
+TABLES:bsik,bsak,bsid,bsad,lfa1,knvv.
+*************Selection Screen
+
+*SELECTION-SCREEN:BEGIN OF BLOCK b1 WITH FRAME TITLE text-000.
+*PARAMETERS:p_cust RADIOBUTTON GROUP rg1 DEFAULT 'X' USER-COMMAND abc,
+*           p_vend RADIOBUTTON GROUP rg1.
+*SELECTION-SCREEN:END OF BLOCK b1.
+
+
+
+
+SELECTION-SCREEN:BEGIN OF BLOCK b2 WITH FRAME TITLE text-001.
+
+
+SELECT-OPTIONS:
+*s_bukrs FOR bsid-bukrs OBLIGATORY,
+*               s_ktokk FOR lfa1-ktokk , " Added by Carina Jose on 12.03.2021
+               s_vkorg FOR knvv-vkorg NO INTERVALS  OBLIGATORY,
+               s_kunnr FOR bsid-kunnr ," MODIF ID KUN,
+               s_lifnr FOR bsik-lifnr ," MODIF ID LIF,
+               s_bldat FOR bsid-bldat NO-DISPLAY,
+               s_budat FOR bsid-budat," OBLIGATORY,
+               s_blart FOR bsid-blart,
+               s_vkbur FOR knvv-vkbur,
+               s_bzirk FOR knvv-bzirk,"added by raj on 05.05.2023
+               s_vkgrp FOR knvv-vkgrp."added by raj on 05.05.2023
+PARAMETERS : s_bukrs TYPE bsid-bukrs NO-DISPLAY.
+SELECTION-SCREEN:END OF BLOCK b2.
+
+SELECTION-SCREEN:BEGIN OF BLOCK b3 WITH FRAME TITLE text-002.
+
+PARAMETER:p_alv RADIOBUTTON GROUP rg2 DEFAULT 'X',
+          p_pdf RADIOBUTTON GROUP rg2,
+          p_pdf1 RADIOBUTTON GROUP rg2,
+          p_chk1 RADIOBUTTON GROUP rg2," added by Mayank 26.06.2023
+          p_mail RADIOBUTTON GROUP rg2." added by parth 04.03.2021
+
+SELECTION-SCREEN:END OF BLOCK b3.
+
+
+
+
+SELECTION-SCREEN:BEGIN OF BLOCK b4 WITH FRAME TITLE text-003.
+
+PARAMETER:p_chk AS CHECKBOX.
+*PARAMETER:p_chk1 AS CHECKBOX.
+PARAMETER:p_chk2 AS CHECKBOX.
+*PARAMETER:p_noted AS CHECKBOX.    " Commented on 24.05.2023 by Pramod
+PARAMETER:p_noted TYPE xfeld NO-DISPLAY. " Added on 24.05.2023 by Pramod
+
+SELECTION-SCREEN:END OF BLOCK b4.
+
+PARAMETERS:p_cust RADIOBUTTON GROUP rg1 DEFAULT 'X' USER-COMMAND abc,
+           p_vend RADIOBUTTON GROUP rg1.
+
+"Adding Start by Rahul Vasita on 02.01.2024 14:58:24
+*SELECTION-SCREEN BEGIN OF BLOCK b6 WITH FRAME.
+PARAMETERS : p_chkbx AS CHECKBOX.
+*SELECTION-SCREEN END OF BLOCK b6.
+"Adding End by Rahul Vasita on 02.01.2024 14:58:24
+
+*AT SELECTION-SCREEN OUTPUT.
+
+*  LOOP AT SCREEN.
+*    IF screen-name = 'P_VEND'.
+*      screen-active = 0.
+*      MODIFY SCREEN.
+*    ENDIF.
+*  ENDLOOP.
+
+************************************************************************
+*                Data Declaration                                      *
+************************************************************************
+
+*INCLUDE zfi_ledger_report_dec.
+******** Added changes for company code description by Carina Jose on 02.09.2019
+TYPES : BEGIN OF ty_t001,
+          bukrs TYPE t001-bukrs,
+          butxt TYPE t001-butxt,
+        END OF ty_t001 .
+DATA : it_t001 TYPE STANDARD TABLE OF ty_t001,
+       wa_t001 TYPE ty_t001.
+
+******** End of changes by Carina Jose on 02.09.2019
+TYPES:BEGIN OF ty_bsid,
+        bukrs TYPE bsid-bukrs,
+        kunnr TYPE bsid-kunnr,
+        umskz TYPE bsid-umskz,
+        augdt TYPE bsid-augdt,
+        augbl TYPE bsid-augbl,
+        zuonr TYPE bsid-zuonr,
+        gjahr TYPE bsid-gjahr,
+        belnr TYPE bsid-belnr,
+        budat TYPE bsid-budat,
+        bldat TYPE bsid-bldat,
+        waers TYPE bsid-waers,
+        xblnr TYPE bsid-xblnr,
+        blart TYPE bsid-blart,
+        bschl TYPE bsid-bschl,
+        shkzg TYPE bsid-shkzg,
+        mwskz TYPE bsid-mwskz,
+        dmbtr TYPE bsid-dmbtr,
+        wrbtr TYPE bsid-wrbtr,
+        saknr TYPE bsid-saknr,
+        hkont TYPE bsid-hkont,
+        sgtxt TYPE bsid-sgtxt,
+      END OF ty_bsid.
+TYPES : BEGIN OF ty_t003t,
+          spras TYPE t003t-spras,
+          blart TYPE t003t-blart,
+          ltext TYPE t003t-ltext,
+        END OF ty_t003t.
+
+DATA:wa_bsid TYPE ty_bsid,
+     it_bsid TYPE STANDARD TABLE OF ty_bsid.
+
+TYPES : BEGIN OF ty_vbrp,
+          vbeln TYPE vbrp-vbeln,
+          aubel TYPE vbrp-aubel,
+        END OF ty_vbrp.
+
+DATA : wa_vbrp TYPE ty_vbrp,
+       it_vbrp TYPE STANDARD TABLE OF ty_vbrp.
+
+TYPES : BEGIN OF ty_1vbrp,
+          vbeln TYPE vbrp-vbeln,
+          aubel TYPE vbrp-aubel,
+        END OF ty_1vbrp.
+
+DATA : wa_1vbrp TYPE ty_1vbrp,
+       it_1vbrp TYPE STANDARD TABLE OF ty_1vbrp.
+
+
+TYPES: BEGIN OF ty_vbak,
+         vbeln TYPE vbak-vbeln,
+         bstnk TYPE vbak-bstnk,
+         bstdk TYPE vbak-bstdk,
+       END OF ty_vbak.
+
+
+DATA : it_vbak TYPE STANDARD TABLE OF ty_vbak,
+       wa_vbak TYPE ty_vbak.
+
+TYPES: BEGIN OF ty_1vbak,
+         vbeln TYPE vbak-vbeln,
+         bstnk TYPE vbak-bstnk,
+         bstdk TYPE vbak-bstdk,
+       END OF ty_1vbak.
+
+TYPES : BEGIN OF t_t001,
+          bukrs TYPE t001-bukrs,
+        END OF t_t001.
+
+DATA: it_bukrs TYPE STANDARD TABLE OF t_t001,
+      wa_bukrs TYPE t_t001.
+
+TYPES: BEGIN OF t_tvko,
+         vkorg TYPE tvko-vkorg,
+       END OF t_tvko.
+
+DATA : it_tvko TYPE STANDARD TABLE OF t_tvko,
+       wa_tvko TYPE t_tvko.
+
+DATA: it_t024e TYPE STANDARD TABLE OF t024e,
+      wa_t024e TYPE t024e.
+
+DATA : it_1vbak TYPE STANDARD TABLE OF ty_1vbak,
+       wa_1vbak TYPE ty_1vbak.
+
+TYPES : BEGIN OF ty_1bsid,
+          xblnr TYPE vbrk-vbeln,
+        END OF ty_1bsid.
+DATA:wa_1bsid TYPE ty_1bsid,
+     it_1bsid TYPE STANDARD TABLE OF ty_1bsid.
+
+TYPES : BEGIN OF ty_1bsad,
+          xblnr TYPE vbrk-vbeln,
+        END OF ty_1bsad.
+DATA:wa_1bsad TYPE ty_1bsad,
+     it_1bsad TYPE STANDARD TABLE OF ty_1bsad.
+
+TYPES:BEGIN OF ty_bsad,
+        bukrs TYPE bsid-bukrs,
+        kunnr TYPE bsid-kunnr,
+        umskz TYPE bsid-umskz,
+        augdt TYPE bsid-augdt,
+        augbl TYPE bsid-augbl,
+        zuonr TYPE bsid-zuonr,
+        gjahr TYPE bsid-gjahr,
+        belnr TYPE bsid-belnr,
+        budat TYPE bsid-budat,
+        bldat TYPE bsid-bldat,
+        waers TYPE bsid-waers,
+        xblnr TYPE bsid-xblnr,
+        blart TYPE bsid-blart,
+        bschl TYPE bsid-bschl,
+        shkzg TYPE bsid-shkzg,
+        mwskz TYPE bsid-mwskz,
+        dmbtr TYPE bsid-dmbtr,
+        wrbtr TYPE bsid-wrbtr,
+        saknr TYPE bsid-saknr,
+        hkont TYPE bsid-hkont,
+        sgtxt TYPE bsid-sgtxt,
+      END OF ty_bsad.
+
+DATA:wa_bsad TYPE ty_bsad,
+     it_bsad TYPE STANDARD TABLE OF ty_bsad.
+
+*TYPES:BEGIN OF ty_t003t,          " Added by  Raj Kumar
+*        blart TYPE t003t-blart,
+*        ltext TYPE t003t-ltext,
+*      END OF ty_t003t.
+
+DATA:wa_t003t TYPE ty_t003t,
+     it_t003t TYPE TABLE OF ty_t003t.
+
+TYPES: BEGIN OF ty_knvv_bsid,
+         kunnr TYPE knvv-kunnr,
+         bzirk TYPE knvv-bzirk, "Added by Raj
+         vkgrp TYPE knvv-vkgrp, "Added by Raj
+         vkbur TYPE knvv-vkbur,
+       END OF ty_knvv_bsid.
+DATA: it_knvv_bsid TYPE TABLE OF ty_knvv_bsid,
+      wa_knvv_bsid TYPE ty_knvv_bsid.
+
+TYPES: BEGIN OF ty_kna1_bsid,
+         kunnr TYPE kna1-kunnr,
+         begru TYPE kna1-begru,
+       END OF ty_kna1_bsid.
+DATA: it_kna1_bsid TYPE TABLE OF ty_kna1_bsid,
+      wa_kna1_bsid TYPE ty_kna1_bsid.
+
+
+TYPES: BEGIN OF ty_knvv_bsad,
+         kunnr TYPE knvv-kunnr,
+         bzirk TYPE knvv-bzirk, "Added by Raj
+         vkgrp TYPE knvv-vkgrp, "Added by Raj
+         vkbur TYPE knvv-vkbur,
+       END OF ty_knvv_bsad.
+DATA: it_knvv_bsad TYPE TABLE OF ty_knvv_bsad,
+      wa_knvv_bsad TYPE ty_knvv_bsad.
+
+TYPES: BEGIN OF ty_kna1_aut,
+         kunnr TYPE kna1-kunnr,
+         begru TYPE kna1-begru,
+       END OF ty_kna1_aut.
+DATA: it_kna1_aut TYPE TABLE OF ty_kna1_aut,
+      wa_kna1_aut TYPE ty_kna1_aut.
+
+TYPES:BEGIN OF ty_kna1,
+        kunnr TYPE kna1-kunnr,
+        name1 TYPE kna1-name1,
+        name2 TYPE kna1-name2,
+        ort01 TYPE kna1-ort01,
+      END OF ty_kna1.
+
+DATA:wa_kna1 TYPE ty_kna1,
+     it_kna1 TYPE TABLE OF ty_kna1.
+
+TYPES:BEGIN OF ty_skat,
+        saknr TYPE skat-saknr,
+        txt50 TYPE skat-txt50,
+      END OF ty_skat.
+
+DATA:wa_skat TYPE ty_skat,
+     it_skat TYPE TABLE OF ty_skat.
+
+TYPES:BEGIN OF ty_bseg,
+        bukrs TYPE bseg-bukrs,
+        belnr TYPE bseg-belnr,
+        gjahr TYPE bseg-gjahr,
+        augbl TYPE bseg-augbl,
+        zuonr TYPE bseg-zuonr,
+        prctr TYPE bseg-prctr,
+        hkont TYPE bseg-hkont,
+      END OF ty_bseg.
+
+DATA:wa_bseg TYPE ty_bseg,
+     it_bseg TYPE TABLE OF ty_bseg.
+
+DATA:wa_bseg1 TYPE ty_bseg,
+     it_bseg1 TYPE TABLE OF ty_bseg.
+
+DATA:wa_bseg2 TYPE ty_bseg,
+     it_bseg2 TYPE TABLE OF ty_bseg.
+
+DATA:wa_bseg3 TYPE ty_bseg,
+     it_bseg3 TYPE TABLE OF ty_bseg.
+
+TYPES:BEGIN OF ty_t001w,
+        werks TYPE werks_d,
+        name1 TYPE name1,
+      END OF ty_t001w.
+
+DATA:wa_t001w TYPE ty_t001w,
+     it_t001w TYPE TABLE OF ty_t001w.
+
+DATA : gv_umskz TYPE umskz.
+
+RANGES: s_umskz FOR gv_umskz.
+
+TYPES:BEGIN OF ty_final,
+        bukrs       TYPE bsid-bukrs,
+        kunnr       TYPE bsid-kunnr,
+        name1(60)   TYPE c,
+        umskz       TYPE bsid-umskz,
+        augbl       TYPE bsid-augbl,
+        augdt       TYPE bsid-augdt,
+        zuonr       TYPE bsid-zuonr,
+        gjahr       TYPE bsid-gjahr,
+        belnr       TYPE bsid-belnr,
+        budat       TYPE bsid-budat,
+        bldat       TYPE bsid-bldat,
+        xblnr       TYPE bsid-xblnr,
+        blart       TYPE bsid-blart,
+        ltext       TYPE t003t-ltext,
+        bschl       TYPE bsid-bschl,
+        shkzg       TYPE bsid-shkzg,
+        mwskz       TYPE bsid-mwskz,
+        dmbtr       TYPE bsid-dmbtr,
+        wrbtr       TYPE bsid-wrbtr,
+        saknr       TYPE bsid-saknr,
+        txt50       TYPE skat-txt50,
+        hkont       TYPE bsid-hkont,
+        debit       TYPE bsid-dmbtr,
+        credit      TYPE bsid-dmbtr,
+        opening     TYPE bsid-dmbtr,
+        closing     TYPE bsid-dmbtr,
+        sgtxt       TYPE bsid-sgtxt,
+        color(4)    TYPE c,
+        prctr       TYPE bseg-prctr,
+        werks       TYPE bseg-werks,
+        plant       TYPE name1,
+        ind1        TYPE c,
+        ind2        TYPE c,
+        amount      TYPE bsid-dmbtr,
+
+        doctype(30),
+      END OF ty_final.
+
+"Comment Start by Rahul Vasita on 02.01.2024 15:01:45
+*DATA:wa_final TYPE zss_fi_ledger_customer,
+*     it_final TYPE ztt_fi_ledger_customer.
+"Comment End by Rahul Vasita on 02.01.2024 15:01:45
+"Adding Start by Rahul Vasita on 02.01.2024 15:03:43
+TYPES : BEGIN OF ty_ledger_cust.
+          INCLUDE STRUCTURE zss_fi_ledger_customer.
+          TYPES : knkli TYPE knkk-knkli.
+TYPES END OF ty_ledger_cust.
+DATA:wa_final TYPE ty_ledger_cust,
+     it_final TYPE TABLE OF ty_ledger_cust.
+FIELD-SYMBOLS : <ls_final> TYPE ty_ledger_cust.
+"Adding End by Rahul Vasita on 02.01.2024 15:03:43
+DATA:wa_final3 TYPE zss_fi_ledger_customer,
+     it_final3 TYPE ztt_fi_ledger_customer.
+
+DATA:wa_demo TYPE zss_fi_ledger_customer,
+     it_demo TYPE ztt_fi_ledger_customer.
+
+DATA:wa_header TYPE zss_fi_ledger_customer,
+     it_header TYPE ztt_fi_ledger_customer.
+
+DATA:wa_open TYPE bapi3007_3,
+     it_open TYPE TABLE OF bapi3007_3.
+
+*********************
+TYPES: BEGIN OF ty_1final,
+         kunnr      TYPE  bseg-kunnr,
+         zuonr      TYPE  dzuonr,
+*        ZBELNR(11),
+         belnr      TYPE  belnr_d,
+         blart      TYPE  blart,
+         shkzg      TYPE  shkzg,
+         bukrs      TYPE bseg-bukrs,
+         name1      TYPE  txt50,
+         umskz      TYPE  umskz,
+         augbl      TYPE  augbl,
+         augdt      TYPE  augdt,
+         gjahr      TYPE  gjahr,
+         budat      TYPE  budat,
+         bldat      TYPE  bldat,
+         xblnr      TYPE  xblnr,
+         ltext      TYPE  ltext,
+         bschl      TYPE  bschl,
+         mwskz      TYPE  mwskz,
+         dmbtr      TYPE  dmbtr,
+         wrbtr      TYPE  wrbtr,
+         saknr      TYPE  saknr,
+         txt50      TYPE  txt50,
+         hkont      TYPE  hkont,
+         debit      TYPE  dmbtr,
+         credit     TYPE  dmbtr,
+         opening    TYPE  dmbtr,
+         closing    TYPE  dmbtr,
+         sgtxt      TYPE  sgtxt,
+         color      TYPE char4,
+         prctr      TYPE  prctr,
+         werks      TYPE  werks_d,
+         plant      TYPE  name1,
+         ind1       TYPE  char1,
+         ind2       TYPE char1,
+         amount     TYPE  dmbtr,
+         doctype    TYPE  char30,
+         debitusd   TYPE  dmbtr,
+         creditusd  TYPE  dmbtr,
+         closingusd TYPE  dmbtr,
+         waers      TYPE  waers,
+         bstnk      TYPE  char70,
+         bstdk      TYPE  bstdk,
+         ind        TYPE  char01,
+         vkbur      TYPE  vkbur,
+         vkdes      TYPE  bezei20,
+         vkgrp      TYPE  vkgrp,
+         vgdes      TYPE  bezei20,
+         bzirk      TYPE  bzirk,
+         bzdes      TYPE  bztxt,
+       END OF ty_1final.
+*******************
+DATA: wa_1final TYPE ty_1final,
+      it_1final TYPE STANDARD TABLE OF ty_1final.
+
+DATA: wa_2final TYPE ty_1final,
+      it_2final TYPE STANDARD TABLE OF ty_1final.
+
+*DATA:wa_final TYPE ty_final,
+*     it_final TYPE TABLE OF ty_final.
+
+DATA:wa_fcat TYPE slis_fieldcat_alv,
+     it_fcat TYPE slis_t_fieldcat_alv.
+
+DATA:wa_layout TYPE slis_layout_alv.
+
+DATA:wa_event TYPE slis_listheader,
+     it_event TYPE TABLE OF slis_listheader.
+
+DATA:v_debit   TYPE bsid-dmbtr,
+     v_credit  TYPE bsid-dmbtr,
+     v_kunnr   TYPE bsid-kunnr,
+     v_bukrs   TYPE bsid-bukrs,
+     v_opening TYPE bsid-dmbtr,
+     v_lifnr   TYPE bsik-lifnr,
+     v_closing TYPE bsid-dmbtr.
+
+DATA:v_debitusd TYPE bsid-dmbtr.
+DATA:v_creditusd TYPE bsid-dmbtr.
+DATA:v_totalusd TYPE bsid-dmbtr.
+DATA:v_closingusd TYPE bsid-dmbtr.
+
+
+DATA:v_waers TYPE bsid-waers.
+DATA : zuonr      TYPE  dzuonr,
+       belnr      TYPE  belnr_d,
+       blart      TYPE  blart,
+       bukrs      TYPE bseg-bukrs,
+       kunnr      TYPE  bseg-kunnr,
+       name1      TYPE  txt50,
+       umskz      TYPE  umskz,
+       augbl      TYPE  augbl,
+       augdt      TYPE  augdt,
+
+       gjahr      TYPE  gjahr,
+
+       budat      TYPE  budat,
+       bldat      TYPE  bldat,
+       xblnr      TYPE  xblnr,
+
+       ltext      TYPE  ltext,
+       bschl      TYPE  bschl,
+       shkzg      TYPE  shkzg,
+       mwskz      TYPE  mwskz,
+       dmbtr      TYPE  dmbtr,
+       wrbtr      TYPE  wrbtr,
+       saknr      TYPE  saknr,
+       txt50      TYPE  txt50,
+       hkont      TYPE  hkont,
+       debit      TYPE  dmbtr,
+       credit     TYPE  dmbtr,
+       opening    TYPE  dmbtr,
+       closing    TYPE  dmbtr,
+       sgtxt      TYPE  sgtxt,
+       color      TYPE char4,
+       prctr      TYPE  prctr,
+       werks      TYPE  werks_d,
+       plant      TYPE  name1,
+       ind1       TYPE  char1,
+       ind2       TYPE char1,
+       amount     TYPE  dmbtr,
+       doctype    TYPE  char30,
+       debitusd   TYPE  dmbtr,
+       creditusd  TYPE  dmbtr,
+       closingusd TYPE  dmbtr,
+       waers      TYPE  waers,
+       bstnk      TYPE  char70,
+       bstdk      TYPE  bstdk,
+       ind        TYPE  char01,
+       vkbur      TYPE  vkbur,
+       vkdes      TYPE  bezei20,
+       vkgrp      TYPE  vkgrp,
+       vgdes      TYPE  bezei20,
+       bzirk      TYPE  bzirk,
+       bzdes      TYPE  bztxt,
+       kna1_name1 TYPE kna1-name1.
+
+
+
+************************************************************************
+*                FOR VENDOR                                            *
+************************************************************************
+
+TYPES: BEGIN OF ty_bsik,
+         bukrs TYPE bsik-bukrs,
+         lifnr TYPE bsik-lifnr,
+         umskz TYPE bsik-umskz,
+         augdt TYPE bsik-augdt,
+         augbl TYPE bsik-augbl,
+         zuonr TYPE bsik-zuonr,
+         gjahr TYPE bsik-gjahr,
+         belnr TYPE bsik-belnr,
+         budat TYPE bsik-budat,
+         bldat TYPE bsik-bldat,
+         waers TYPE bsik-waers,
+         xblnr TYPE bsik-xblnr,
+         blart TYPE bsik-blart,
+         bschl TYPE bsik-bschl,
+         shkzg TYPE bsik-shkzg,
+         mwskz TYPE bsik-mwskz,
+         dmbtr TYPE bsik-dmbtr,
+         wrbtr TYPE bsik-wrbtr,
+         saknr TYPE bsik-saknr,
+         hkont TYPE bsik-hkont,
+         sgtxt TYPE bsik-sgtxt,
+       END OF ty_bsik.
+
+DATA:wa_bsik TYPE ty_bsik,
+     it_bsik TYPE STANDARD TABLE OF ty_bsik.
+
+TYPES:BEGIN OF ty_bsak,
+        bukrs TYPE bsik-bukrs,
+        lifnr TYPE bsik-lifnr,
+        umskz TYPE bsik-umskz,
+        augdt TYPE bsik-augdt,
+        augbl TYPE bsik-augbl,
+        zuonr TYPE bsik-zuonr,
+        gjahr TYPE bsik-gjahr,
+        belnr TYPE bsik-belnr,
+        budat TYPE bsik-budat,
+        bldat TYPE bsik-bldat,
+        waers TYPE bsik-waers,
+        xblnr TYPE bsik-xblnr,
+        blart TYPE bsik-blart,
+        bschl TYPE bsik-bschl,
+        shkzg TYPE bsik-shkzg,
+        mwskz TYPE bsik-mwskz,
+        dmbtr TYPE bsik-dmbtr,
+        wrbtr TYPE bsik-wrbtr,
+        saknr TYPE bsik-saknr,
+        hkont TYPE bsik-hkont,
+        sgtxt TYPE bsik-sgtxt,
+      END OF ty_bsak.
+
+DATA:wa_bsak TYPE ty_bsak,
+     it_bsak TYPE STANDARD TABLE OF ty_bsak.
+
+TYPES:BEGIN OF ty_lfa1,
+        lifnr TYPE lfa1-lifnr,
+        name1 TYPE lfa1-name1,
+        name2 TYPE lfa1-name2,
+        ort01 TYPE lfa1-ort01,
+        adrnr TYPE lfa1-adrnr,
+        ktokk TYPE lfa1-ktokk,
+      END OF ty_lfa1.
+
+DATA:wa_lfa1 TYPE ty_lfa1,
+     it_lfa1 TYPE TABLE OF ty_lfa1.
+
+DATA:wa_open1 TYPE bapi3008_3,
+     it_open1 TYPE TABLE OF bapi3008_3.
+
+*DATA:WA_OPEN1 TYPE BAPI3008_9,
+*     IT_OPEN1 TYPE TABLE OF BAPI3008_9.
+
+TYPES:BEGIN OF ty_final1,
+        bukrs     TYPE bsik-bukrs,
+        lifnr     TYPE bsik-lifnr,
+        name1(60) TYPE c,
+        umskz     TYPE bsik-umskz,
+        augbl     TYPE bsik-augbl,
+        augdt     TYPE bsik-augdt,
+        zuonr     TYPE bsik-zuonr,
+        gjahr     TYPE bsik-gjahr,
+        belnr     TYPE bsik-belnr,
+        budat     TYPE bsik-budat,
+        bldat     TYPE bsik-bldat,
+        xblnr     TYPE bsik-xblnr,
+        blart     TYPE bsik-blart,
+        ltext     TYPE t003t-ltext,
+        bschl     TYPE bsik-bschl,
+        shkzg     TYPE bsik-shkzg,
+        mwskz     TYPE bsik-mwskz,
+        dmbtr     TYPE bsik-dmbtr,
+        wrbtr     TYPE bsik-wrbtr,
+        saknr     TYPE bsik-saknr,
+        txt50     TYPE skat-txt50,
+        hkont     TYPE bsik-hkont,
+        debit     TYPE bsik-dmbtr,
+        credit    TYPE bsik-dmbtr,
+        opening   TYPE bsik-dmbtr,
+        closing   TYPE bsik-dmbtr,
+        sgtxt     TYPE bsik-sgtxt,
+        color(4)  TYPE c,
+        prctr     TYPE bseg-prctr,
+        werks     TYPE bseg-werks,
+      END OF ty_final1.
+
+
+DATA:wa_final1 TYPE zss_fi_ledger_vendor,
+     it_final1 TYPE ztt_fi_ledger_vendor.
+
+DATA:wa_final2 TYPE zss_fi_ledger_vendor,
+     it_final2 TYPE ztt_fi_ledger_vendor.
+
+DATA:wa_demo1 TYPE zss_fi_ledger_vendor,
+     it_demo1 TYPE ztt_fi_ledger_vendor.
+
+DATA:wa_header1 TYPE  zss_fi_ledger_vendor,
+     it_header1 TYPE  ztt_fi_ledger_vendor.
+
+*
+*DATA:wa_final1 TYPE ty_final1,
+*     it_final1 TYPE TABLE OF ty_final1.
+
+DATA:v_date1 TYPE sy-datum.
+
+DATA:wa_sort TYPE slis_sortinfo_alv,
+     it_sort TYPE slis_t_sortinfo_alv.
+
+
+DATA:v_customer TYPE txt50.
+DATA:v_vendor   TYPE txt50.
+DATA:v_date     TYPE txt50.
+DATA:v_name     TYPE txt50.
+
+DATA:v_low      TYPE txt50.
+DATA:v_high     TYPE txt50.
+DATA:m_adrnr TYPE ad_addrnum,
+     m_email TYPE ad_smtpadr.
+
+DATA:fmname TYPE rs38l_fnam.
+DATA:v_header TYPE txt50.
+DATA:v_city TYPE txt50.
+
+DATA: gs_docdata TYPE sodocchgi1, " Data of an object which can be changed
+      gs_ctrlop  TYPE ssfctrlop, " Smart Forms: Control structure
+      gs_outopt  TYPE ssfcompop, " SAP Smart Forms: Smart Composer (transfer) options
+      gs_otfdata TYPE ssfcrescl, " Smart Forms: Return value at end of form printing
+      gs_reclist TYPE somlreci1, " SAPoffice: Structure of the API Recipient List
+      gs_pdf_tab TYPE tline, " Workarea for SAP Script Text Lines
+      gs_objbin  TYPE solisti1, " SAPoffice: Single List with Column Length 255
+      gs_objpack TYPE sopcklsti1. " SAPoffice: Description of Imported Object
+
+********Internal tables Declarations ****************************
+
+DATA: gt_reclist TYPE TABLE OF somlreci1, " SAPoffice: Structure of the API Recipient List
+      gt_pdf_tab TYPE TABLE OF tline, " SAPscript: Text Lines
+      gt_otf     TYPE TABLE OF itcoo, " OTF Structure
+      gt_objbin  TYPE TABLE OF solisti1, " SAPoffice: Single List with Column Length 255
+      gt_objpack TYPE TABLE OF sopcklsti1. " SAPoffice: Description of Imported
+
+DATA:it_body LIKE solisti1 OCCURS 0 WITH HEADER LINE.
+DATA:it_message TYPE TABLE OF solisti1.
+****************************
+
+gs_outopt-xdfcmode = 'X'.
+gs_outopt-xsfcmode = 'X'.
+
+DATA: ssfcrescl      TYPE ssfcrescl,
+      output_options TYPE ssfcresop,
+      ssfcompop      TYPE ssfcompop,
+      ssfctrlop      TYPE ssfctrlop,
+      l_spoolid      TYPE tsp01-rqident,
+      li_pdf         TYPE STANDARD TABLE OF tline.
+
+ssfctrlop-no_dialog = 'X'.
+ssfctrlop-device    = 'PRINTER'.
+ssfcompop-tdnewid   = 'X'.
+ssfcompop-tdimmed   = 'X'.
+ssfctrlop-preview = 'X'.
+ssfcompop-tdprinter = 'PDF1'.
+ssfcompop-tddest    = 'LP01'.
+ssfctrlop-getotf    = 'X'.
+****************
+
+DATA: gv_form_name    TYPE rs38l_fnam, " Used to store the function module generated by Smartform
+      gv_bin_filesize TYPE i, " Store the file size
+      gv_pos          TYPE i,
+      gv_len          TYPE i,
+      gv_tab_lines    TYPE i.
+
+DATA : gc_text(11)    TYPE c VALUE 'Form Output',
+       gc_tst(3)      TYPE c VALUE 'TST',
+       gc_testing(50) TYPE c VALUE 'ASTRAL - SAP - Ledger Report'.
+
+
+DATA:v_total TYPE bsid-dmbtr.
+DATA:v_text TYPE txt40.
+
+DATA: para TYPE tpara-paramid VALUE 'ZREX',
+      prog TYPE xuvalue.
+
+CONSTANTS : c_var_user  TYPE rvari_vnam VALUE 'ZFI_VC_EMAIL',
+            c_type_user TYPE rsscr_kind VALUE 'S'.
+
+TYPES : BEGIN OF ty_mail,
+          sign TYPE tvarv_sign,
+          opti TYPE tvarv_opti,
+          low  TYPE tvarv_val,
+          high TYPE tvarv_val,
+        END OF ty_mail.
+DATA: it_mail TYPE STANDARD TABLE OF ty_mail,
+      wa_mail TYPE ty_mail.
+
+DATA l_sender TYPE soextreci1-receiver.
+DATA : v_emailid TYPE somlreci1-receiver.
+
+DATA: zparam(30).
+DATA: cc_email(75),
+      cc1(75),
+      cc2(75),
+      vc_date(75),
+      dd1(75),
+      dd2(75).
+
+
+
+AT SELECTION-SCREEN OUTPUT.
+
+  SELECT sign
+   opti
+   low
+   high
+   FROM tvarvc
+   INTO TABLE it_mail
+          WHERE name = c_var_user AND
+               type = c_type_user.
+
+  LOOP AT SCREEN.
+
+*    *****      Added by Carina Jose on 12.03.2021
+*    IF p_vend = 'X' .
+*      IF screen-name CS 'S_KTOKK'.
+*        screen-active = 1.
+**        screen-required = 1.
+*        MODIFY SCREEN.
+*      ENDIF.
+*    ELSE.
+*      IF screen-name CS 'S_KTOKK'.
+*        screen-active = 0.
+**        screen-required = 0.
+*        MODIFY SCREEN.
+*      ENDIF.
+*    ENDIF.
+
+*****      End of changes by Carina Jose on 12.03.2021
+    IF p_vend = 'X'.
+*********Commented by Jeevan
+*      IF screen-name = 'S_KUNNR-LOW' OR screen-name = 'S_KUNNR-HIGH' OR screen-name = '%_S_KUNNR_%_APP_%-TEXT' .
+*********Commented by Jeevan
+*********Added by Jeevan
+      IF screen-name CS 'S_KUNNR'.
+*********Added by Jeevan
+        screen-active = 0.
+        MODIFY SCREEN.
+      ENDIF.
+    ENDIF.
+
+
+
+    IF p_cust = 'X'.
+*********Commented by Jeevan
+*      IF screen-name = 'S_LIFNR-LOW' OR screen-name = 'S_LIFNR-HIGH' OR screen-name = '%_S_LIFNR_%_APP_%-TEXT'.
+*********Commented by Jeevan
+*********Added by Jeevan
+      IF screen-name CS 'S_LIFNR'.
+*********Added by Jeevan
+        screen-active = 0.
+        MODIFY SCREEN.
+      ENDIF.
+    ENDIF.
+
+
+    READ TABLE it_mail INTO wa_mail WITH KEY low = sy-uname.
+    IF sy-subrc <> 0.
+      IF screen-name = 'P_MAIL'.
+        screen-active = 0.
+        MODIFY SCREEN.
+      ENDIF.
+    ENDIF.
+
+    IF screen-name = 'P_VEND'.
+      screen-active = 0.
+      MODIFY SCREEN.
+    ELSEIF screen-name = 'P_CUST'.
+      screen-active = 0.
+      MODIFY SCREEN.
+    ELSEIF screen-name = 'P_MAIL'.
+      screen-active = 0.
+      MODIFY SCREEN.
+    ELSEIF screen-name = 'S_BUKRS'.
+      screen-active = 0.
+      MODIFY SCREEN.
+    ENDIF.
+
+  ENDLOOP.
+
+
+START-OF-SELECTION.
+*  IF p_vend = 'X' AND p_mail = 'X'.
+*    MESSAGE 'Vendor & account group mandtory.' TYPE 'E'.
+*  ENDIF.
+
+  IF p_cust = 'X' AND p_mail = 'X'.
+    MESSAGE 'Only Vendor auto email send facilty available.' TYPE 'E'.
+  ENDIF.
+  PERFORM authorization_check.
+  IF p_cust EQ 'X'.
+    PERFORM get_cust.
+    PERFORM fill_cat.
+    IF p_pdf EQ 'X'.
+      PERFORM smartform1.
+    ELSEIF p_pdf1 EQ 'X'.
+      PERFORM smartform3.
+    ELSE.
+      PERFORM display.
+    ENDIF.
+
+  ELSE.
+    PERFORM get_vend.
+    PERFORM fill_cat.
+    IF p_pdf EQ 'X'.
+      PERFORM smartform2.
+    ELSEIF p_mail EQ 'X'.
+      PERFORM smartform_mail.
+    ELSEIF p_pdf1 EQ 'X'.
+      PERFORM smartform4.
+    ELSE.
+      PERFORM display.
+    ENDIF.
+
+  ENDIF.
+
+*&---------------------------------------------------------------------*
+*&      Form  GET_CUST
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM get_cust.
+
+  READ TABLE s_vkorg INTO DATA(ls_vkorg) INDEX 1.
+
+  SELECT SINGLE * FROM tvko INTO @DATA(ls_tvko)  WHERE vkorg = @ls_vkorg-low.
+  s_bukrs = ls_tvko-bukrs.
+
+  SELECT * FROM knvv INTO TABLE @DATA(lt_knvv) WHERE vkorg IN @s_vkorg AND
+                                                     kunnr IN @s_kunnr AND
+                                                     vkbur IN @s_vkbur AND
+                                                     bzirk IN @s_bzirk AND
+                                                     vkgrp IN @s_vkgrp.
+
+  IF lt_knvv IS NOT INITIAL.
+*  SELECT bukrs kunnr umskz augdt augbl zuonr gjahr belnr budat bldat waers xblnr
+*         blart bschl shkzg mwskz dmbtr wrbtr saknr hkont sgtxt FROM bsid
+*                                                               INTO TABLE it_bsid
+*                                                               WHERE bukrs = s_bukrs
+*                                                               AND kunnr IN s_kunnr
+*                                                               AND bldat IN s_bldat
+*                                                               AND budat IN s_budat
+*                                                               AND blart IN s_blart
+*                                                               AND bstat NE 'S'.
+*
+*
+*  SELECT bukrs kunnr umskz augdt augbl zuonr gjahr belnr budat bldat waers xblnr
+*         blart bschl shkzg mwskz dmbtr wrbtr saknr hkont sgtxt FROM bsad
+*                                                               INTO TABLE it_bsad
+*                                                               WHERE bukrs  = s_bukrs
+*                                                               AND kunnr IN s_kunnr
+*                                                               AND bldat IN s_bldat
+*                                                               AND budat IN s_budat
+*                                                               AND blart IN s_blart
+*                                                               AND bstat NE 'S'.
+*    IF p_chk1 = 'X'.       "Start added on 24.05.2023 by Pramod
+*
+*      IF s_budat-high IS INITIAL.
+*        MESSAGE 'Posting Date is mandatory' TYPE 'S' DISPLAY LIKE 'E'.
+*        LEAVE LIST-PROCESSING.
+*      ENDIF.
+*
+*      s_budat-low = '00000101'.
+
+*      SELECT bukrs kunnr umskz augdt augbl zuonr gjahr belnr budat bldat waers xblnr
+*           blart bschl shkzg mwskz dmbtr wrbtr saknr hkont sgtxt FROM bsid
+*                                                                 INTO TABLE it_bsid
+*                                                                 FOR ALL ENTRIES IN lt_knvv
+*                                                                 WHERE kunnr =  lt_knvv-kunnr
+*                                                                 AND bukrs = s_bukrs
+*                                                                 AND bldat IN s_bldat
+*                                                                 AND budat IN s_budat
+**                                                                 AND budat GE s_budat-low
+*                                                                 AND blart IN s_blart
+*                                                                 AND bstat NE 'S'.
+*
+*
+*      SELECT bukrs kunnr umskz augdt augbl zuonr gjahr belnr budat bldat waers xblnr
+*             blart bschl shkzg mwskz dmbtr wrbtr saknr hkont sgtxt FROM bsad
+*                                                                   INTO TABLE it_bsad
+*                                                                   FOR ALL ENTRIES IN lt_knvv
+*                                                                   WHERE kunnr = lt_knvv-kunnr
+*                                                                   AND bukrs = s_bukrs
+*                                                                   AND bldat IN s_bldat
+*                                                                   AND budat IN s_budat
+**                                                                   AND budat GE s_budat-low
+**                                                                   AND augdt GE s_budat-high
+*                                                                   AND augdt GT s_budat-high
+*                                                                   AND blart IN s_blart
+*                                                                   AND bstat NE 'S'.
+
+*    ELSE.
+*
+*      IF s_budat IS INITIAL.
+*        MESSAGE 'Posting Date is mandatory' TYPE 'S' DISPLAY LIKE 'E'.
+*        LEAVE LIST-PROCESSING.
+*      ENDIF.
+
+      SELECT bukrs kunnr umskz augdt augbl zuonr gjahr belnr budat bldat waers xblnr
+             blart bschl shkzg mwskz dmbtr wrbtr saknr hkont sgtxt FROM bsid
+                                                                   INTO TABLE it_bsid
+                                                                   FOR ALL ENTRIES IN lt_knvv
+                                                                   WHERE kunnr = lt_knvv-kunnr
+                                                                   AND bukrs = s_bukrs
+                                                                   AND bldat IN s_bldat
+                                                                   AND budat IN s_budat
+                                                                   AND blart IN s_blart
+                                                                   AND bstat NE 'S'.
+
+
+      SELECT bukrs kunnr umskz augdt augbl zuonr gjahr belnr budat bldat waers xblnr
+             blart bschl shkzg mwskz dmbtr wrbtr saknr hkont sgtxt FROM bsad
+                                                                   INTO TABLE it_bsad
+                                                                   FOR ALL ENTRIES IN lt_knvv
+                                                                   WHERE kunnr = lt_knvv-kunnr
+                                                                   AND bukrs = s_bukrs
+                                                                   AND bldat IN s_bldat
+                                                                   AND budat IN s_budat
+                                                                   AND blart IN s_blart
+                                                                   AND bstat NE 'S'.
+    ENDIF.
+*  ENDIF.     "End on 24.05.2023 by Pramod
+
+  IF p_noted = 'X'.
+
+*    SELECT bukrs kunnr umskz augdt augbl zuonr gjahr belnr budat bldat waers xblnr
+*          blart bschl shkzg mwskz dmbtr wrbtr saknr hkont sgtxt FROM bsid
+*                                                                INTO TABLE it_bsid
+*                                                                WHERE bukrs = s_bukrs
+*                                                                AND kunnr IN s_kunnr
+*                                                                AND bldat IN s_bldat
+*                                                                AND budat IN s_budat
+*                                                                AND blart IN s_blart
+*                                                                AND bstat EQ 'S'.
+*
+*    SELECT bukrs kunnr umskz augdt augbl zuonr gjahr belnr budat bldat waers xblnr
+*           blart bschl shkzg mwskz dmbtr wrbtr saknr hkont sgtxt FROM bsad
+*                                                                 INTO TABLE it_bsad
+*                                                                 WHERE bukrs  = s_bukrs
+*                                                                 AND kunnr IN s_kunnr
+*                                                                 AND bldat IN s_bldat
+*                                                                 AND budat IN s_budat
+*                                                                 AND blart IN s_blart
+*                                                                 AND bstat EQ 'S'.
+    IF lt_knvv IS NOT INITIAL.
+
+      SELECT bukrs kunnr umskz augdt augbl zuonr gjahr belnr budat bldat waers xblnr
+            blart bschl shkzg mwskz dmbtr wrbtr saknr hkont sgtxt FROM bsid
+                                                                  INTO TABLE it_bsid
+                                                                  FOR ALL ENTRIES IN lt_knvv
+                                                                  WHERE kunnr = lt_knvv-kunnr
+                                                                  AND bukrs = s_bukrs
+                                                                  AND bldat IN s_bldat
+                                                                  AND budat IN s_budat
+                                                                  AND blart IN s_blart
+                                                                  AND bstat EQ 'S'.
+
+      SELECT bukrs kunnr umskz augdt augbl zuonr gjahr belnr budat bldat waers xblnr
+             blart bschl shkzg mwskz dmbtr wrbtr saknr hkont sgtxt FROM bsad
+                                                                   INTO TABLE it_bsad
+                                                                   FOR ALL ENTRIES IN lt_knvv
+                                                                   WHERE kunnr = lt_knvv-kunnr
+                                                                   AND bukrs = s_bukrs
+                                                                   AND bldat IN s_bldat
+                                                                   AND budat IN s_budat
+                                                                   AND blart IN s_blart
+                                                                   AND bstat EQ 'S'.
+    ENDIF.
+
+  ENDIF.
+
+
+  IF it_bsid IS NOT INITIAL.
+
+    SELECT bukrs belnr gjahr augbl zuonr prctr hkont FROM bseg INTO TABLE it_bseg
+                                                     FOR ALL ENTRIES IN it_bsid
+                                                     WHERE bukrs = it_bsid-bukrs
+                                                     AND belnr = it_bsid-belnr
+                                                     AND prctr NE ' '.
+*                                                     AND bschl EQ '40'.
+
+  ENDIF.
+
+  IF it_bsad IS NOT INITIAL.
+
+    SELECT bukrs belnr gjahr augbl zuonr prctr hkont FROM bseg INTO TABLE it_bseg1
+                                                     FOR ALL ENTRIES IN it_bsad
+                                                     WHERE bukrs =  it_bsad-bukrs
+                                                     AND belnr = it_bsad-belnr
+
+                                                     AND prctr NE ' '.
+*                                                     AND bschl EQ '50'.
+
+  ENDIF.
+
+  SELECT saknr txt50 FROM skat INTO TABLE it_skat WHERE spras EQ 'EN'.
+
+*  SELECT blart ltext FROM t003t INTO TABLE it_t003t WHERE spras EQ 'EN'.
+
+  SELECT spras blart ltext FROM t003t INTO TABLE it_t003t WHERE spras EQ 'EN'.   " Added by RAJ
+
+  SELECT werks name1 FROM t001w INTO TABLE it_t001w.
+
+  SELECT kunnr bzirk vkgrp vkbur FROM knvv INTO TABLE it_knvv_bsid FOR ALL ENTRIES IN it_bsid WHERE kunnr = it_bsid-kunnr. "bzirk vkgrp added by raj on 05.05.2023
+  SELECT kunnr bzirk vkgrp vkbur FROM knvv INTO TABLE it_knvv_bsad FOR ALL ENTRIES IN it_bsad WHERE kunnr = it_bsad-kunnr.  "bzirk vkgrp added by raj on 05.05.2023
+
+
+****************** add by parth for authorization 14.12.2019
+*  SELECT kunnr begru FROM kna1 INTO TABLE it_kna1_bsad FOR ALL ENTRIES IN it_bsad WHERE kunnr = it_bsad-kunnr.
+*  SELECT kunnr begru FROM kna1 INTO TABLE it_kna1_bsad FOR ALL ENTRIES IN it_bsad WHERE kunnr = it_bsad-kunnr.
+*********** end by parth authorization 14.12.2019
+*********  Added by Carina Jose on 02.09.2019
+  SELECT bukrs butxt FROM t001 INTO TABLE it_t001 WHERE bukrs = s_bukrs .
+*********  End of changes by Carina Jose on 02.09.2019
+*******************************************
+  LOOP AT it_bsid INTO wa_bsid.
+    wa_1bsid-xblnr = wa_bsid-xblnr.
+    APPEND wa_1bsid TO it_1bsid.
+  ENDLOOP.
+
+  IF it_1bsid[] IS NOT INITIAL.
+    SELECT vbeln aubel FROM vbrp INTO TABLE it_vbrp
+             FOR ALL ENTRIES IN it_1bsid
+                WHERE vbeln = it_1bsid-xblnr.
+  ENDIF.
+  IF it_1bsid IS NOT INITIAL.
+    SELECT vbeln bstnk bstdk
+        FROM vbak
+        INTO TABLE it_vbak
+        FOR ALL ENTRIES IN it_vbrp
+      WHERE vbeln = it_vbrp-aubel.
+  ENDIF.
+********************************************
+*************************
+  LOOP AT it_bsad INTO wa_bsad.
+    wa_1bsad-xblnr = wa_bsad-xblnr.
+    APPEND wa_1bsad TO it_1bsad.
+  ENDLOOP.
+
+  IF it_1bsad IS NOT INITIAL.
+    SELECT vbeln aubel FROM vbrp INTO TABLE it_1vbrp
+             FOR ALL ENTRIES IN it_1bsad
+                WHERE vbeln = it_1bsad-xblnr.
+  ENDIF.
+  IF it_1bsad IS NOT INITIAL.
+    SELECT vbeln bstnk bstdk
+        FROM vbak
+        INTO TABLE it_1vbak
+        FOR ALL ENTRIES IN it_1vbrp
+      WHERE vbeln = it_1vbrp-aubel.
+*******************
+  ENDIF.
+  SORT it_bsid BY kunnr budat.
+  SORT it_bsad BY kunnr budat.
+
+  LOOP AT it_bsid INTO wa_bsid.
+
+    v_waers = wa_bsid-waers.
+
+    AT NEW kunnr.
+
+*      CALL FUNCTION 'OIL_LAST_DAY_OF_PREVIOUS_MONTH'
+*        EXPORTING
+*          i_date_old = s_budat-low
+*        IMPORTING
+*          e_date_new = v_date1.
+
+*      v_date1 = s_budat-low.
+
+      CALL FUNCTION 'RP_CALC_DATE_IN_INTERVAL'
+        EXPORTING
+          date      = s_budat-low
+          days      = 1
+          months    = 0
+          signum    = '-'
+          years     = 0
+        IMPORTING
+          calc_date = v_date1.
+
+      CALL FUNCTION 'BAPI_AR_ACC_GETKEYDATEBALANCE'
+        EXPORTING
+          companycode = wa_bsid-bukrs
+          customer    = wa_bsid-kunnr
+          keydate     = v_date1
+        TABLES
+          keybalance  = it_open.
+
+      READ TABLE it_open INTO wa_open INDEX 1.
+      IF sy-subrc EQ 0.
+
+        wa_final-bukrs = wa_bsid-bukrs.
+        wa_final-kunnr = wa_bsid-kunnr.
+
+        IF v_waers EQ 'INR'.
+
+          IF wa_open-lc_bal > 0.
+            wa_final-debit = wa_open-lc_bal.
+          ELSE.
+            wa_final-credit = wa_open-lc_bal  * ( -1 ).
+          ENDIF.
+        ELSE.
+          IF wa_open-t_curr_bal > 0.
+            wa_final-debit = wa_open-lc_bal.
+            wa_final-debitusd = wa_open-t_curr_bal.
+          ELSE.
+            wa_final-credit = wa_open-lc_bal  * ( -1 ).
+            wa_final-creditusd = wa_open-t_curr_bal  * ( -1 ).
+          ENDIF.
+        ENDIF.
+
+        wa_final-ltext = 'Opening Balance'.
+        wa_final-color = 'C510'.
+
+        READ TABLE it_knvv_bsid INTO wa_knvv_bsid WITH KEY kunnr = wa_bsid-kunnr.
+        IF sy-subrc = 0.
+          wa_final-vkbur = wa_knvv_bsid-vkbur.
+          wa_final-bzirk = wa_knvv_bsid-bzirk. " Added by Raj on 05.05.2023
+          wa_final-vkgrp = wa_knvv_bsid-vkgrp. " Added by Raj on 05.05.2023
+        ENDIF.
+
+*        READ TABLE it_kna1_bsid into wa_kna1_bsid with key kunnr = wa_bsid-kunnr.
+*       if sy-subrc = 0.
+*       wa_final-begru = wa_kna1_bsid-begru.
+*       endif.
+*        SELECT SINGLE knkli FROM knkk INTO wa_final-knkli WHERE kunnr = wa_final-kunnr. "Added by Rahul Vasita on 02.01.2024 15:47:35
+        APPEND wa_final TO it_final.
+        CLEAR:wa_final,wa_open,v_date1,wa_knvv_bsid,wa_kna1_bsid.
+      ENDIF.
+
+    ENDAT.
+
+    MOVE-CORRESPONDING wa_bsid TO wa_final.
+
+    READ TABLE it_bseg INTO wa_bseg WITH KEY belnr = wa_bsid-belnr gjahr = wa_bsid-gjahr.
+
+    IF sy-subrc EQ 0.
+      wa_final-prctr = wa_bseg-prctr.
+      wa_final-werks = wa_bseg-prctr+0(4).
+      CLEAR:wa_bseg1.
+
+    ENDIF.
+
+    READ TABLE it_t001w INTO wa_t001w WITH KEY werks = wa_final-werks.
+    IF sy-subrc EQ 0.
+
+      wa_final-plant = wa_t001w-name1.
+      CLEAR:wa_t001w.
+
+    ENDIF.
+
+    READ TABLE it_knvv_bsid INTO wa_knvv_bsid WITH KEY kunnr = wa_bsid-kunnr.
+    IF sy-subrc = 0.
+      wa_final-vkbur = wa_knvv_bsid-vkbur.
+      wa_final-bzirk = wa_knvv_bsid-bzirk. " Added by Raj on 05.05.2023
+      wa_final-vkgrp = wa_knvv_bsid-vkgrp. " Added by Raj on 05.05.2023
+    ENDIF.
+
+    READ TABLE it_t003t INTO wa_t003t WITH KEY blart = wa_bsid-blart. "Added by Raj Kumar
+    wa_final-ltext = wa_t003t-ltext.
+
+*     READ TABLE it_kna1_bsid into wa_kna1_bsid with key kunnr = wa_bsid-kunnr.
+*       if sy-subrc = 0.
+*       wa_final-begru = wa_kna1_bsid-begru.
+*       endif.
+
+    IF wa_final-blart EQ 'DZ'.
+
+      READ TABLE it_bseg INTO wa_bseg WITH KEY belnr = wa_bsid-belnr  gjahr = wa_bsid-gjahr.
+
+      IF sy-subrc EQ 0.
+        wa_final-zuonr = wa_bseg-zuonr.
+        wa_final-hkont = wa_bseg-hkont.
+*        wa_final-prctr = wa_bseg-prctr.
+
+        READ TABLE it_skat INTO wa_skat WITH KEY saknr = wa_bseg-hkont.
+        IF sy-subrc EQ 0.
+          wa_final-txt50 = wa_skat-txt50.
+          CLEAR:wa_skat.
+        ENDIF.
+
+      ELSE.
+
+        READ TABLE it_skat INTO wa_skat WITH KEY saknr = wa_bsid-hkont.
+        IF sy-subrc EQ 0.
+          wa_final-txt50 = wa_skat-txt50.
+          CLEAR:wa_skat.
+        ENDIF.
+      ENDIF.
+
+    ENDIF.
+
+    IF wa_bsid-shkzg EQ 'S'.
+
+      IF wa_bsid-waers EQ 'INR'.
+        wa_final-debit = wa_bsid-dmbtr." * ( -1 ).
+      ELSE.
+        wa_final-debit = wa_bsid-dmbtr.
+        wa_final-debitusd = wa_bsid-wrbtr.
+      ENDIF.
+
+      READ TABLE it_t003t INTO wa_t003t WITH KEY blart = wa_bsid-blart. "Added by Raj Kumar
+      IF sy-subrc = 0.
+        wa_final-ltext = wa_t003t-ltext.
+      ENDIF.
+
+      IF  wa_bsid-blart = 'UE'.
+        wa_final-ltext = 'Opening'.
+      ENDIF.
+
+
+
+
+*        IF wa_bsid-blart EQ 'DZ'.
+*          wa_final-ltext = 'Receipt Reversal'.
+*        ELSEIF wa_bsid-blart EQ 'RV'.
+*          wa_final-ltext = 'Invoice'.
+*        ELSEIF wa_bsid-blart EQ 'AB'.
+*          wa_final-ltext = 'Accounting Document'.
+*        ELSEIF wa_bsid-blart EQ 'DG'.
+*          wa_final-ltext = 'Credit Note Reversal'.
+*        ELSEIF wa_bsid-blart EQ 'DR'.
+*          wa_final-ltext = 'Debit Note'.
+*        ELSEIF wa_bsid-blart EQ 'UE'.
+*          wa_final-ltext = 'Opening'.
+*        ELSEIF wa_bsid-blart EQ 'CR'.
+*          wa_final-ltext = 'Cash Receipt'.
+*       ELSEIF wa_t003t-blart = 'UE'.
+*        wa_final-ltext = 'Data Transfer'.
+*        ENDIF.
+    ELSE.
+      IF wa_bsid-waers EQ 'INR'.
+        wa_final-credit = wa_bsid-dmbtr.
+      ELSE.
+        wa_final-credit = wa_bsid-dmbtr.
+        wa_final-creditusd = wa_bsid-wrbtr.
+      ENDIF.
+
+
+      READ TABLE it_t003t INTO wa_t003t WITH KEY blart = wa_bsid-blart. "Added by Raj Kumar
+      IF sy-subrc = 0.
+        wa_final-ltext = wa_t003t-ltext.
+      ENDIF.
+
+      IF  wa_bsid-blart = 'UE'.
+        wa_final-ltext = 'Opening'.
+      ENDIF.
+
+*        IF wa_bsid-blart EQ 'DZ'.
+*          wa_final-ltext = 'Receipt'.
+*        ELSEIF wa_bsid-blart EQ 'RV'.
+*          wa_final-ltext = 'Credit Note'.
+*        ELSEIF wa_bsid-blart EQ 'AB'.
+*          wa_final-ltext = 'Accounting Document'.
+*        ELSEIF wa_bsid-blart EQ 'DG'.
+*          wa_final-ltext = 'Credit Note'.
+*        ELSEIF wa_bsid-blart EQ 'DR'.
+*          wa_final-ltext = 'Debit Note Reversal'.
+*        ELSEIF wa_bsid-blart EQ 'UE'.
+*          wa_final-ltext = 'Opening'.
+*        ELSEIF wa_bsid-blart EQ 'CR'.
+*          wa_final-ltext = 'Cash Receipt'.
+*        ELSEIF wa_t003t-blart = 'UE'.
+*        wa_final-ltext = 'Data Transfer'.
+*        ENDIF.
+
+    ENDIF.
+
+*    READ TABLE it_t003t INTO wa_t003t WITH KEY blart = wa_bsid-blart.
+*    IF sy-subrc EQ 0.
+*      wa_final-ltext = wa_t003t-ltext.
+*    ENDIF.
+
+*     READ TABLE it_vbrp into wa_vbrp WITH KEY vbeln = wa_bsid-xblnr.
+    SORT it_vbrp BY vbeln.
+    LOOP AT  it_vbrp INTO wa_vbrp WHERE vbeln = wa_bsid-xblnr.
+*     if sy-subrc = 0.
+      READ TABLE it_vbak INTO wa_vbak WITH KEY vbeln = wa_vbrp-aubel.
+*      wa_final-bstnk = wa_vbak-bstnk.
+      IF NOT wa_final-bstnk IS INITIAL.
+        IF NOT wa_vbak-bstnk IS INITIAL.
+          CONCATENATE wa_final-bstnk ',' wa_vbak-bstnk  INTO wa_final-bstnk.
+        ENDIF.
+      ELSE.
+        IF NOT wa_vbak-bstnk IS INITIAL.
+          wa_final-bstnk = wa_vbak-bstnk.
+        ENDIF.
+      ENDIF.
+*     endif.
+      wa_final-bstdk = wa_vbak-bstdk.
+    ENDLOOP.
+
+    SELECT SINGLE bezei INTO wa_final-vkdes FROM tvkbt WHERE spras = 'EN' AND vkbur = wa_final-vkbur.
+    SELECT SINGLE bztxt INTO wa_final-bzdes FROM t171t WHERE spras = 'EN' AND bzirk = wa_final-bzirk.
+    SELECT SINGLE bezei INTO wa_final-vgdes FROM tvgrt WHERE spras = 'EN' AND vkgrp = wa_final-vkgrp.
+*    SELECT SINGLE knkli FROM knkk INTO wa_final-knkli WHERE kunnr = wa_final-kunnr. "Added by Rahul Vasita on 02.01.2024 15:47:35
+    APPEND wa_final TO it_final.
+    CLEAR:wa_final,wa_bsid,wa_t003t,wa_bseg,v_waers,wa_vbak,wa_vbrp,wa_knvv_bsid,wa_kna1_bsid.
+
+  ENDLOOP.
+*  IF p_chk1 = 'X' OR p_alv = 'X'.
+  IF p_chk1 <> 'X'.
+    LOOP AT it_bsad INTO wa_bsad.
+
+      v_waers = wa_bsad-waers.
+
+      AT NEW kunnr.
+        READ TABLE it_bsid INTO wa_bsid WITH KEY kunnr = wa_bsad-kunnr.
+        IF sy-subrc EQ 0.
+
+        ELSE.
+*        CALL FUNCTION 'OIL_LAST_DAY_OF_PREVIOUS_MONTH'
+*          EXPORTING
+*            i_date_old = s_budat-low
+*          IMPORTING
+*            e_date_new = v_date1.
+
+*          v_date1 = s_budat-low.
+
+          """"""""""""""' Add by SS: KPIT (12.12.2017)
+          CALL FUNCTION 'RP_CALC_DATE_IN_INTERVAL'
+            EXPORTING
+              date      = s_budat-low
+              days      = 1
+              months    = 0
+              signum    = '-'
+              years     = 0
+            IMPORTING
+              calc_date = v_date1.
+
+
+          """"""""""""""""""""""""""""""""""""""""""""
+          CALL FUNCTION 'BAPI_AR_ACC_GETKEYDATEBALANCE'
+            EXPORTING
+              companycode = wa_bsad-bukrs
+              customer    = wa_bsad-kunnr
+              keydate     = v_date1
+            TABLES
+              keybalance  = it_open.
+
+          READ TABLE it_open INTO wa_open INDEX 1.
+          IF sy-subrc EQ 0.
+            wa_final-bukrs = wa_bsad-bukrs.
+            wa_final-kunnr = wa_bsad-kunnr.
+
+            IF v_waers EQ 'INR'.
+              IF wa_open-lc_bal > 0.
+                wa_final-debit = wa_open-lc_bal.
+              ELSE.
+                wa_final-credit = wa_open-lc_bal  * ( -1 ).
+              ENDIF.
+            ELSE.
+              IF wa_open-t_curr_bal > 0.
+                wa_final-debit = wa_open-lc_bal.
+                wa_final-debitusd = wa_open-t_curr_bal.
+              ELSE.
+                wa_final-credit = wa_open-lc_bal  * ( -1 ).
+                wa_final-creditusd = wa_open-t_curr_bal  * ( -1 ).
+              ENDIF.
+            ENDIF.
+            wa_final-ltext = 'Opening Balance'.
+            wa_final-color = 'C510'.
+
+            READ TABLE it_knvv_bsad INTO wa_knvv_bsad WITH KEY kunnr = wa_bsad-kunnr.
+            IF sy-subrc = 0.
+              wa_final-vkbur = wa_knvv_bsid-vkbur.
+              wa_final-bzirk = wa_knvv_bsid-bzirk. " Added by Raj on 05.05.2023
+              wa_final-vkgrp = wa_knvv_bsid-vkgrp. " Added by Raj on 05.05.2023
+            ENDIF.
+
+*            READ TABLE it_kna1_bsad into wa_kna1_bsad with key kunnr = wa_bsad-kunnr.
+*            if sy-subrc = 0.
+*            wa_final-begru = wa_kna1_bsid-begru.
+*            endif.
+            APPEND wa_final TO it_final.
+            CLEAR:wa_final,wa_open,v_date1,wa_knvv_bsad.
+          ENDIF.
+
+        ENDIF.
+      ENDAT.
+
+      MOVE-CORRESPONDING wa_bsad TO wa_final.
+
+      READ TABLE it_bseg1 INTO wa_bseg1 WITH KEY belnr = wa_bsad-belnr gjahr = wa_bsad-gjahr .
+      IF sy-subrc EQ 0.
+
+        wa_final-prctr = wa_bseg1-prctr.
+        wa_final-werks = wa_bseg1-prctr+0(4).
+        CLEAR:wa_bseg1.
+
+      ENDIF.
+
+      READ TABLE it_t001w INTO wa_t001w WITH KEY werks = wa_final-werks.
+      IF sy-subrc EQ 0.
+
+        wa_final-plant = wa_t001w-name1.
+        CLEAR:wa_t001w.
+
+      ENDIF.
+
+      READ TABLE it_knvv_bsad INTO wa_knvv_bsad WITH KEY kunnr = wa_bsad-kunnr.
+      IF sy-subrc = 0.
+        wa_final-vkbur = wa_knvv_bsad-vkbur.
+        wa_final-bzirk = wa_knvv_bsad-bzirk. " Added by Raj on 05.05.2023
+        wa_final-vkgrp = wa_knvv_bsad-vkgrp. " Added by Raj on 05.05.2023
+      ENDIF.
+
+*     READ TABLE it_kna1_bsad into wa_kna1_bsad with key kunnr = wa_bsad-kunnr.
+*    if sy-subrc = 0.
+*      wa_final-begru = wa_kna1_bsad-begru.
+*    endif.
+      IF wa_final-blart EQ 'DZ'.
+
+        READ TABLE it_bseg1 INTO wa_bseg1 WITH KEY belnr = wa_bsad-belnr gjahr = wa_bsad-gjahr.
+        IF sy-subrc EQ 0.
+          wa_final-zuonr = wa_bseg1-zuonr.
+          wa_final-hkont = wa_bseg1-hkont.
+*        wa_final-prctr = wa_bseg1-prctr.
+
+          READ TABLE it_skat INTO wa_skat WITH KEY saknr = wa_bseg1-hkont.
+          IF sy-subrc EQ 0.
+            wa_final-txt50 = wa_skat-txt50.
+            CLEAR:wa_skat.
+          ENDIF.
+
+        ELSE.
+          READ TABLE it_skat INTO wa_skat WITH KEY saknr = wa_bsad-saknr.
+          IF sy-subrc EQ 0.
+            wa_final-txt50 = wa_skat-txt50.
+            CLEAR:wa_skat.
+          ENDIF.
+
+        ENDIF.
+
+      ENDIF.
+
+      IF wa_bsad-shkzg EQ 'S'.
+
+        IF wa_bsad-waers EQ 'INR'.
+          wa_final-debit = wa_bsad-dmbtr." * ( -1 ).
+        ELSE.
+          wa_final-debit = wa_bsad-dmbtr.
+          wa_final-debitusd = wa_bsad-wrbtr.
+        ENDIF.
+*        * *****************************************************************BEGIN OF CHANGES
+        READ TABLE it_t003t INTO wa_t003t WITH KEY blart = wa_bsad-blart. "Added by Raj Kumar
+        IF sy-subrc = 0.
+          wa_final-ltext = wa_t003t-ltext.
+        ENDIF.
+
+        IF  wa_bsid-blart = 'UE'.
+          wa_final-ltext = 'Opening'.
+        ENDIF.
+
+*          IF wa_bsad-blart EQ 'DZ'.
+*            wa_final-ltext = 'Receipt Reversal'.
+*          ELSEIF wa_bsad-blart EQ 'RV'.
+*            wa_final-ltext = 'Invoice'.
+*          ELSEIF wa_bsad-blart EQ 'AB'.
+*            wa_final-ltext = 'Accounting Document'.
+*          ELSEIF wa_bsad-blart EQ 'DG'.
+*            wa_final-ltext = 'Credit Note Reversal'.
+*          ELSEIF wa_bsad-blart EQ 'DR'.
+*            wa_final-ltext = 'Debit Note'.
+*          ELSEIF wa_bsad-blart EQ 'UE'.
+*            wa_final-ltext = 'Opening'.
+*          ENDIF.
+
+      ELSE.
+
+        IF wa_bsad-waers EQ 'INR'.
+          wa_final-credit = wa_bsad-dmbtr.
+        ELSE.
+          wa_final-credit = wa_bsad-dmbtr.
+          wa_final-creditusd = wa_bsad-wrbtr.
+        ENDIF.
+
+        READ TABLE it_t003t INTO wa_t003t WITH KEY blart = wa_bsad-blart. "Added by Raj Kumar
+        IF sy-subrc = 0.
+          wa_final-ltext = wa_t003t-ltext.
+        ENDIF.
+
+        IF  wa_bsid-blart = 'UE'.
+          wa_final-ltext = 'Opening'.
+        ENDIF.
+
+
+
+*          IF wa_bsad-blart EQ 'DZ'.
+*            wa_final-ltext = 'Receipt'.
+*          ELSEIF wa_bsad-blart EQ 'RV'.
+*            wa_final-ltext = 'Credit Note'.
+*          ELSEIF wa_bsad-blart EQ 'AB'.
+*            wa_final-ltext = 'Accounting Document'.
+*          ELSEIF wa_bsad-blart EQ 'DG'.
+*            wa_final-ltext = 'Credit Note'.
+*          ELSEIF wa_bsad-blart EQ 'DR'.
+*            wa_final-ltext = 'Debit Note Reversal'.
+*          ELSEIF wa_bsad-blart EQ 'UE'.
+*            wa_final-ltext = 'Opening'.
+*          ENDIF.
+* *****************************************************************END OF CHANGES
+      ENDIF.
+
+*      READ TABLE it_t003t INTO wa_t003t WITH KEY blart = wa_bsad-blart.
+*      IF sy-subrc EQ 0.
+*        wa_final-ltext = wa_t003t-ltext.
+*      ENDIF.
+
+      SORT it_1vbrp BY vbeln.
+      LOOP AT  it_1vbrp INTO wa_1vbrp WHERE vbeln = wa_bsad-xblnr.
+*     if sy-subrc = 0.
+        READ TABLE it_1vbak INTO wa_1vbak WITH KEY vbeln = wa_1vbrp-aubel.
+*      wa_final-bstnk = wa_vbak-bstnk.
+        IF NOT wa_final-bstnk IS INITIAL.
+          IF NOT wa_1vbak-bstnk IS INITIAL.
+            CONCATENATE wa_final-bstnk ',' wa_1vbak-bstnk  INTO wa_final-bstnk.
+          ENDIF.
+        ELSE.
+          IF NOT wa_1vbak-bstnk IS INITIAL.
+            wa_final-bstnk = wa_1vbak-bstnk.
+          ENDIF.
+        ENDIF.
+*     endif.
+        wa_final-bstdk = wa_1vbak-bstdk.
+      ENDLOOP.
+
+      SELECT SINGLE bezei INTO wa_final-vkdes FROM tvkbt WHERE spras = 'EN' AND vkbur = wa_final-vkbur.
+      SELECT SINGLE bztxt INTO wa_final-bzdes FROM t171t WHERE spras = 'EN' AND bzirk = wa_final-bzirk.
+      SELECT SINGLE bezei INTO wa_final-vgdes FROM tvgrt WHERE spras = 'EN' AND vkgrp = wa_final-vkgrp.
+*      SELECT SINGLE knkli FROM knkk INTO wa_final-knkli WHERE kunnr = wa_final-kunnr. "Added by Rahul Vasita on 02.01.2024 15:47:35
+      APPEND wa_final TO it_final.
+*      DELETE it_final WHERE blart = 'DA'.                   "ADD BY GOKUL
+      CLEAR:wa_final,wa_bsad,wa_bseg1,wa_1vbak,wa_1vbrp,wa_knvv_bsad.
+
+    ENDLOOP.
+  ENDIF.
+
+****  Added auth. check by Carina Jose on 25.02.2022
+*  LOOP AT it_final INTO wa_final.
+**  IF WA_FINAL-BELNR IS NOT INITIAL.
+*    AUTHORITY-CHECK OBJECT 'Z_VC_PRCTR'
+*    ID 'PRCTR' FIELD wa_final-prctr
+*    ID 'ACTVT' FIELD '03'.
+*    IF sy-subrc NE 0.
+**      MESSAGE e018(zfi) WITH wa_final-prctr.
+*      DELETE it_final WHERE belnr = wa_final-belnr AND budat = wa_final-budat AND prctr = wa_final-prctr.
+*    ENDIF.
+**  ENDIF.
+*  ENDLOOP.
+
+****  End of Channges by carina Jose on 25.02.2022
+  IF it_final IS NOT INITIAL.
+    SELECT kunnr name1 name2 ort01 FROM kna1 INTO TABLE it_kna1 WHERE kunnr IN s_kunnr.
+  ENDIF.
+
+
+*  SORT it_final BY kunnr budat.
+*  SORT IT_FINAL BY KUNNR BLDAT.
+
+*  DATA:wa_final1 TYPE zss_fi_ledger_customer,
+*       it_final1 TYPE TABLE OF  zss_fi_ledger_customer. "ZTT_FI_LEDGER_CUSTOMER.
+
+*  DATA:v_closing1 TYPE bsid-dmbtr.
+
+*  it_final1[] = it_final[].
+
+*  SORT it_final1 BY kunnr budat.
+*  SORT IT_FINAL1 BY KUNNR BLDAT.
+
+*  DELETE ADJACENT DUPLICATES FROM it_final1 COMPARING kunnr.
+  IF p_chk2 = 'X'.
+    DELETE it_final WHERE blart = 'AB'.
+    it_final3[] = it_final[].
+    DELETE it_final3 WHERE blart <> 'DA'.
+    DELETE it_final WHERE blart = 'DA'.
+
+    LOOP AT it_final INTO wa_final.
+      READ TABLE it_final3 INTO wa_final3 WITH KEY augbl = wa_final-augbl.
+      IF sy-subrc = 0.
+        IF wa_final3-augbl IS NOT INITIAL.
+          wa_final-ind = 'X'.
+          MODIFY it_final FROM wa_final TRANSPORTING ind.
+        ENDIF.
+      ENDIF.
+*      SELECT SINGLE knkli FROM knkk INTO wa_final-knkli WHERE kunnr = wa_final-kunnr. "Added by Rahul Vasita on 02.01.2024 15:47:35
+*      MODIFY it_final FROM wa_final TRANSPORTING knkli. "Added by Rahul Vasita on 05.01.2024 14:17:48
+    ENDLOOP.
+    DELETE it_final WHERE ind = 'X'.
+  ENDIF.
+
+  SORT it_final BY kunnr budat.
+
+
+  IF p_chk EQ 'X'.
+
+    LOOP AT it_final INTO wa_final.
+
+      IF wa_final-belnr IS INITIAL.
+        v_debit = wa_final-debit.
+        v_credit = wa_final-credit.
+
+        v_debitusd = wa_final-debitusd.
+        v_creditusd = wa_final-creditusd.
+
+        AT NEW kunnr.
+          v_total = v_total + v_debit - v_credit.
+          v_totalusd = v_totalusd + v_debitusd - v_creditusd.
+
+          wa_final-ind1 = 'X'.
+          MODIFY it_final FROM wa_final TRANSPORTING ind1.
+        ENDAT.
+      ENDIF.
+
+      AT LAST.
+        DELETE it_final WHERE ind1 EQ 'X'.
+      ENDAT.
+    ENDLOOP.
+
+    LOOP AT it_final INTO wa_final.
+      v_customer = wa_final-kunnr.
+      v_text     = 'Opening Balance'.
+
+      AT FIRST.
+        CLEAR:wa_final.
+        wa_final-kunnr = v_customer.
+        wa_final-ltext = v_text.
+        IF v_total LT 0.
+          wa_final-credit = v_total.
+        ELSE.
+          wa_final-debit = v_total.
+        ENDIF.
+
+        IF v_totalusd LT 0.
+          wa_final-creditusd = v_totalusd.
+        ELSE.
+          wa_final-debitusd = v_totalusd.
+        ENDIF.
+
+        IF wa_final-credit LT 0.
+          wa_final-credit = wa_final-credit * ( -1 ).
+        ENDIF.
+
+        IF wa_final-creditusd LT 0.
+          wa_final-creditusd = wa_final-creditusd * ( -1 ).
+        ENDIF.
+
+        wa_final-color = 'C510'.
+        APPEND wa_final TO it_final.
+      ENDAT.
+    ENDLOOP.
+
+    SORT it_final BY kunnr budat.
+
+    LOOP AT it_final INTO wa_final.
+
+      READ TABLE it_kna1 INTO wa_kna1 WITH KEY kunnr = wa_final-kunnr.
+      IF sy-subrc EQ 0.
+
+        CONCATENATE wa_kna1-name1 wa_kna1-name2 INTO wa_final-name1 SEPARATED BY ' '.
+*      wa_final-name1 = wa_kna1-name1.
+        MODIFY it_final FROM wa_final TRANSPORTING name1.
+        CLEAR:wa_kna1.
+      ENDIF.
+
+      IF wa_final-debit IS NOT INITIAL.
+        wa_final-closing = v_closing + wa_final-debit.
+        v_closing = wa_final-closing.
+      ELSE.
+        wa_final-closing = v_closing - wa_final-credit.
+        v_closing = wa_final-closing.
+      ENDIF.
+
+      IF wa_final-debitusd IS NOT INITIAL.
+        wa_final-closingusd = v_closingusd + wa_final-debitusd.
+        v_closingusd = wa_final-closingusd.
+      ELSE.
+        wa_final-closingusd = v_closingusd - wa_final-creditusd.
+        v_closingusd = wa_final-closingusd.
+      ENDIF.
+
+      MODIFY it_final FROM wa_final TRANSPORTING closing closingusd.
+
+*    AT END OF kunnr.
+*      CLEAR:wa_final, v_closing.
+*
+*    ENDAT.
+
+    ENDLOOP.
+  ELSE.
+
+    SORT it_final BY kunnr budat.
+    LOOP AT it_final INTO wa_final.
+
+      READ TABLE it_kna1 INTO wa_kna1 WITH KEY kunnr = wa_final-kunnr.
+      IF sy-subrc EQ 0.
+
+        CONCATENATE wa_kna1-name1 wa_kna1-name2 INTO wa_final-name1 SEPARATED BY ' '.
+*      wa_final-name1 = wa_kna1-name1.
+        MODIFY it_final FROM wa_final TRANSPORTING name1.
+        CLEAR:wa_kna1.
+      ENDIF.
+
+      IF wa_final-debit IS NOT INITIAL.
+        wa_final-closing = v_closing + wa_final-debit.
+        v_closing = wa_final-closing.
+      ELSE.
+        wa_final-closing = v_closing - wa_final-credit.
+        v_closing = wa_final-closing.
+      ENDIF.
+
+      IF wa_final-debitusd IS NOT INITIAL.
+        wa_final-closingusd = v_closingusd + wa_final-debitusd.
+        v_closingusd = wa_final-closingusd.
+      ELSE.
+        wa_final-closingusd = v_closingusd - wa_final-creditusd.
+        v_closingusd = wa_final-closingusd.
+      ENDIF.
+
+      IF wa_final-color = 'C510'.
+        wa_final-closing = ''.
+      ENDIF.
+
+      MODIFY it_final FROM wa_final TRANSPORTING closing closingusd.
+
+      AT END OF kunnr.
+        CLEAR:wa_final, v_closing.
+      ENDAT.
+    ENDLOOP.
+  ENDIF.
+
+*  SORT it_final BY kunnr budat.
+
+*  LOOP AT it_final INTO wa_final.
+*
+*    READ TABLE it_kna1 INTO wa_kna1 WITH KEY kunnr = wa_final-kunnr.
+*    IF sy-subrc EQ 0.
+*
+*      CONCATENATE wa_kna1-name1 wa_kna1-name2 INTO wa_final-name1 SEPARATED BY ' '.
+**      wa_final-name1 = wa_kna1-name1.
+*      MODIFY it_final FROM wa_final TRANSPORTING name1.
+*      CLEAR:wa_kna1.
+*    ENDIF.
+*
+*    IF wa_final-debit IS NOT INITIAL.
+*      wa_final-closing = v_closing + wa_final-debit.
+*      v_closing = wa_final-closing.
+*    ELSE.
+*      wa_final-closing = v_closing - wa_final-credit.
+*      v_closing = wa_final-closing.
+*    ENDIF.
+*    MODIFY it_final FROM wa_final TRANSPORTING closing.
+*
+**    AT END OF kunnr.
+**      CLEAR:wa_final, v_closing.
+**
+**    ENDAT.
+*
+*  ENDLOOP.
+
+*SORT it_final BY kunnr budat.
+*IT_1FINAL[] = IT_FINAL[].
+  LOOP AT it_final INTO wa_final.
+    MOVE-CORRESPONDING wa_final TO wa_1final.
+*    CONCATENATE wa_final-BELNR wa_final-SHKZG INTO WA_1FINAL-ZBELNR.
+    APPEND wa_1final TO it_1final.
+  ENDLOOP.
+  DELETE it_final WHERE kunnr NE ' '.
+  SORT it_1final BY kunnr zuonr belnr.
+
+  it_2final[] = it_1final[].
+
+*  delete it_1final where blart <> 'DZ' AND SHKZG <> 'H'.
+*  DELETE it_2final where blart = 'DZ' AND SHKZG = 'H'.
+
+  LOOP AT it_1final INTO wa_1final.
+*    if wa_1final-blart = 'DZ' AND WA_1FINAL-SHKZG ='H'.
+    IF wa_1final-blart = 'DZ'.
+      credit = credit + wa_1final-credit.
+      debit = debit + wa_1final-debit.
+      closing = closing + wa_1final-closing.
+      belnr  = wa_1final-belnr.
+      blart  = wa_1final-blart.
+      zuonr  = wa_1final-zuonr.
+      bukrs  = wa_1final-bukrs.
+      ltext  = wa_1final-ltext.
+      budat  = wa_1final-budat.
+      bldat  = wa_1final-bldat.
+      augbl  = wa_1final-augbl.
+      augdt  = wa_1final-augdt.
+      kunnr  = wa_1final-kunnr.
+      vkbur  = wa_1final-vkbur.
+      vkdes  = wa_1final-vkdes.
+      vkgrp  = wa_1final-vkgrp.
+      vgdes  = wa_1final-vgdes.
+      bzirk  = wa_1final-bzirk.
+      bzdes  = wa_1final-bzdes.
+      prctr  = wa_1final-prctr.
+      werks  = wa_1final-werks.
+      plant  = wa_1final-plant.
+      saknr  = wa_1final-saknr.
+      hkont  = wa_1final-hkont.
+      txt50  = wa_1final-txt50.
+      xblnr  = wa_1final-xblnr.
+      kna1_name1  = wa_1final-name1.
+      AT END OF belnr.
+        wa_final-credit = credit - debit.
+        wa_final-belnr  = belnr.
+        wa_final-blart  = blart.
+        wa_final-closing = closing.
+        wa_final-zuonr   = zuonr.
+        wa_final-bukrs   = bukrs.
+        wa_final-ltext   = ltext.
+        wa_final-budat   = budat.
+        wa_final-bldat   = bldat.
+        wa_final-augbl   = augbl.
+        wa_final-augdt   = augdt.
+        wa_final-kunnr   = kunnr.
+        wa_final-vkbur   = vkbur.
+        wa_final-vkdes   = vkdes.
+        wa_final-vkgrp   = vkgrp.
+        wa_final-vgdes   = vgdes.
+        wa_final-bzirk   = bzirk.
+        wa_final-bzdes   = bzdes.
+        wa_final-prctr   = prctr.
+        wa_final-werks   = werks.
+        wa_final-plant   = plant.
+        wa_final-saknr   = saknr.
+        wa_final-hkont   = hkont.
+        wa_final-txt50   = txt50.
+        wa_final-xblnr   = xblnr.
+        wa_final-name1 = kna1_name1.
+*        SELECT SINGLE knkli FROM knkk INTO wa_final-knkli WHERE kunnr = wa_final-kunnr. "Added by Rahul Vasita on 02.01.2024 15:47:35
+        CLEAR: wa_final-debit, wa_final-closing.
+        APPEND wa_final TO it_final.
+        CLEAR: credit,belnr,blart,closing,zuonr,bukrs,ltext,budat,bldat,augdt,kunnr,debit,vkbur,prctr,werks,plant,saknr,hkont,txt50,augbl.
+      ENDAT.
+    ELSE.
+      MOVE-CORRESPONDING wa_1final TO wa_final.
+*      SELECT SINGLE knkli FROM knkk INTO wa_final-knkli WHERE kunnr = wa_final-kunnr. "Added by Rahul Vasita on 02.01.2024 15:47:35
+      APPEND wa_final TO it_final.
+      CLEAR: wa_final.
+    ENDIF.
+  ENDLOOP.
+*   Obsolete Code Commented
+*  loop at it_final into wa_final.
+*     if wa_final-blart = 'DZ'.
+*     endif.
+*  endloop.
+  SORT it_final BY kunnr budat.
+
+  LOOP AT it_final INTO wa_final.
+
+    IF sy-subrc EQ 0.
+*      CONCATENATE wa_kna1-name1 wa_kna1-name2 INTO wa_final-name1 SEPARATED BY ' '.      "Added BY Mayank on 01/May/2023
+*      wa_final-name1 = wa_kna1-name1.
+*      MODIFY it_final FROM wa_final TRANSPORTING name1.                                  "Added BY Mayank on 01/May/2023
+*      CLEAR:wa_kna1.                                                                     "Added BY Mayank on 01/May/2023
+    ENDIF.
+
+    IF wa_final-debit IS NOT INITIAL.
+      wa_final-closing = v_closing + wa_final-debit.
+      v_closing = wa_final-closing.
+    ELSE.
+      wa_final-closing = v_closing - wa_final-credit.
+      v_closing = wa_final-closing.
+    ENDIF.
+
+    MODIFY it_final FROM wa_final TRANSPORTING closing closingusd.
+
+    AT END OF kunnr.
+      CLEAR:wa_final, v_closing.
+    ENDAT.
+
+  ENDLOOP.
+
+**********Added by Jeevan 05.06.2018
+  DATA : v_date1 TYPE datum.
+  LOOP AT it_kna1 INTO wa_kna1.
+    READ TABLE it_final INTO wa_final WITH KEY kunnr = wa_kna1-kunnr.
+    IF sy-subrc <> 0.
+      v_date1 = s_budat-low.
+      CALL FUNCTION 'RP_CALC_DATE_IN_INTERVAL'
+        EXPORTING
+          date      = s_budat-low
+          days      = 1
+          months    = 0
+          signum    = '-'
+          years     = 0
+        IMPORTING
+          calc_date = v_date1.
+      REFRESH it_open.
+      CLEAR   wa_open.
+      CALL FUNCTION 'BAPI_AR_ACC_GETKEYDATEBALANCE'
+        EXPORTING
+          companycode = s_bukrs
+          customer    = wa_kna1-kunnr
+          keydate     = v_date1
+        TABLES
+          keybalance  = it_open.
+
+      READ TABLE it_open INTO wa_open INDEX 1.
+      IF sy-subrc EQ 0.
+        CLEAR wa_final.
+        wa_final-bukrs = s_bukrs.
+        wa_final-kunnr = wa_kna1-kunnr.
+        wa_final-ltext = 'Opening Balance'.
+        wa_final-opening = wa_open-lc_bal.
+        wa_final-closing = wa_open-lc_bal.
+* BEGIN OF NP FOR TKT#ASTG9 ON 21.06.2018
+        IF wa_open-db_cr_ind = 'H'.
+          wa_final-credit =  wa_final-closing.
+        ELSEIF wa_open-db_cr_ind = 'S'.
+          wa_final-debit = wa_final-closing.
+        ENDIF.
+* END OF NP FOR TKT#ASTG9 ON 21.06.2018
+        APPEND wa_final TO it_final.
+        CLEAR  wa_final.
+      ELSE.
+        CLEAR wa_final.
+        wa_final-bukrs = s_bukrs.
+        wa_final-kunnr = wa_kna1-kunnr.
+        wa_final-ltext = 'Opening Balance'.
+        wa_final-color = 'C300'.
+        wa_final-opening = wa_final-closing = '0.00'.
+        APPEND wa_final TO it_final.
+        CLEAR  wa_final.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+**********Added by Jeevan 05.06.2018
+  IF p_chkbx = 'X'.
+    LOOP AT it_final ASSIGNING <ls_final>.
+      SELECT SINGLE knkli FROM knkk INTO <ls_final>-knkli WHERE kunnr = <ls_final>-kunnr. "Added by Rahul Vasita on 02.01.2024 15:47:35
+    ENDLOOP.
+  ENDIF.
+ENDFORM.                    " GET_CUST
+*&---------------------------------------------------------------------*
+*&      Form  GET_VEND
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM get_vend.
+
+  DATA: fiscal_year TYPE bapi0002_4-fiscal_year.
+
+  CONSTANTS : c_var_splgl  TYPE rvari_vnam VALUE 'ZFI_VC_EX_GLIND',
+              c_type_splgl TYPE rsscr_kind VALUE 'S'.
+
+
+  TYPES : BEGIN OF ty_splgl,
+            sign TYPE tvarv_sign,
+            opti TYPE tvarv_opti,
+            low  TYPE tvarv_val,
+            high TYPE tvarv_val,
+          END OF ty_splgl.
+  DATA: it_splgl TYPE STANDARD TABLE OF ty_splgl,
+        wa_splgl TYPE ty_splgl.
+
+  CALL FUNCTION 'BAPI_COMPANYCODE_GET_PERIOD'
+    EXPORTING
+      companycodeid = s_bukrs
+      posting_date  = s_budat-high
+    IMPORTING
+      fiscal_year   = fiscal_year
+*     FISCAL_PERIOD =
+*     RETURN        =
+    .
+
+  SELECT sign
+  opti
+  low
+  high
+  FROM tvarvc
+  INTO TABLE it_splgl
+         WHERE name = c_var_splgl AND
+              type = c_type_splgl.
+
+  LOOP AT it_splgl INTO wa_splgl.
+
+    s_umskz-sign = 'I'.
+    s_umskz-option = 'EQ'.
+    s_umskz-low = wa_splgl-low.
+    APPEND s_umskz.
+  ENDLOOP.
+
+  SELECT bukrs lifnr umskz augdt augbl zuonr gjahr belnr budat bldat waers xblnr
+          blart bschl shkzg mwskz dmbtr wrbtr saknr hkont sgtxt FROM bsik
+                                                                INTO TABLE it_bsik
+                                                                WHERE bukrs = s_bukrs
+                                                                AND lifnr IN s_lifnr
+                                                                AND bldat IN s_bldat
+                                                                AND budat IN s_budat
+                                                                AND blart IN s_blart
+                                                                AND bstat NE 'S'.
+*
+*    *                                                         AND blart NE 'KA'.
+
+  SELECT bukrs lifnr umskz augdt augbl zuonr gjahr belnr budat bldat waers xblnr
+         blart bschl shkzg mwskz dmbtr wrbtr saknr hkont sgtxt FROM bsak
+                                                               INTO TABLE it_bsak
+                                                               WHERE bukrs = s_bukrs
+                                                               AND lifnr IN s_lifnr
+                                                               AND bldat IN s_bldat
+                                                               AND budat IN s_budat
+                                                               AND blart IN s_blart
+                                                               AND bstat NE 'S'.
+  IF p_noted = 'X'.
+
+    SELECT bukrs lifnr umskz augdt augbl zuonr gjahr belnr budat bldat waers xblnr
+           blart bschl shkzg mwskz dmbtr wrbtr saknr hkont sgtxt FROM bsik
+                                                                APPENDING  TABLE it_bsik
+                                                                 WHERE bukrs = s_bukrs
+                                                                 AND lifnr IN s_lifnr
+                                                                 AND bldat IN s_bldat
+                                                                 AND budat IN s_budat
+                                                                 AND blart IN s_blart
+                                                                 AND bstat  = 'S'.
+
+*    *                                                         AND blart NE 'KA'.
+
+    SELECT bukrs lifnr umskz augdt augbl zuonr gjahr belnr budat bldat waers xblnr
+           blart bschl shkzg mwskz dmbtr wrbtr saknr hkont sgtxt FROM bsak
+                                                                 APPENDING TABLE it_bsak
+                                                                 WHERE bukrs = s_bukrs
+                                                                 AND lifnr IN s_lifnr
+                                                                 AND bldat IN s_bldat
+                                                                 AND budat IN s_budat
+                                                                 AND blart IN s_blart
+                                                                 AND bstat = 'S'.
+  ENDIF.
+
+  IF it_bsik IS NOT INITIAL.
+
+    SELECT bukrs belnr gjahr augbl zuonr prctr hkont FROM bseg INTO TABLE it_bseg2
+                                                     FOR ALL ENTRIES IN it_bsik
+                                                     WHERE bukrs = it_bsik-bukrs
+                                                     AND belnr = it_bsik-belnr
+                                                     AND gjahr = fiscal_year
+                                                     AND prctr NE ' '.
+*                                                     AND bschl EQ '50'.
+
+  ENDIF.
+
+  IF it_bsak IS NOT INITIAL.
+
+    SELECT bukrs belnr gjahr augbl zuonr prctr hkont FROM bseg INTO TABLE it_bseg3
+                                                     FOR ALL ENTRIES IN it_bsak
+                                                     WHERE bukrs = it_bsak-bukrs
+                                                     AND belnr = it_bsak-belnr
+                                                     AND gjahr = fiscal_year
+                                                     AND prctr NE ' '.
+*                                                     AND bschl EQ '50'.
+
+  ENDIF.
+
+  SELECT saknr txt50 FROM skat INTO TABLE it_skat WHERE spras EQ 'EN'.
+
+  SELECT blart ltext FROM t003t INTO TABLE it_t003t WHERE spras EQ 'EN'.
+
+  SELECT werks name1 FROM t001w INTO TABLE it_t001w.
+*********  Added by Carina Jose on 02.09.2019
+  SELECT bukrs butxt FROM t001 INTO TABLE it_t001 WHERE bukrs = s_bukrs .
+*********  End of changes by Carina Jose on 02.09.2019
+*
+*  SORT it_bsik BY lifnr.
+*  SORT it_bsak BY lifnr.
+
+  SORT it_bsik BY lifnr budat.
+  SORT it_bsak BY lifnr budat.
+
+  LOOP AT it_bsik INTO wa_bsik.
+
+    v_waers = wa_bsik-waers.
+
+    AT NEW lifnr.
+*
+*      CALL FUNCTION 'OIL_LAST_DAY_OF_PREVIOUS_MONTH'
+*        EXPORTING
+*          i_date_old = s_budat-low
+*        IMPORTING
+*          e_date_new = v_date1.
+*
+*      v_date1 = s_budat-low.
+
+      CALL FUNCTION 'RP_CALC_DATE_IN_INTERVAL'
+        EXPORTING
+          date      = s_budat-low
+          days      = 1
+          months    = 0
+          signum    = '-'
+          years     = 0
+        IMPORTING
+          calc_date = v_date1.
+
+
+      CALL FUNCTION 'BAPI_AP_ACC_GETKEYDATEBALANCE'
+        EXPORTING
+          companycode = wa_bsik-bukrs
+          vendor      = wa_bsik-lifnr
+          keydate     = v_date1
+        TABLES
+          keybalance  = it_open1.
+
+      READ TABLE it_open1 INTO wa_open1 INDEX 1.
+      IF sy-subrc EQ 0.
+        wa_final1-bukrs = wa_bsik-bukrs.
+        wa_final1-lifnr = wa_bsik-lifnr.
+
+        IF v_waers EQ 'INR'.
+          IF wa_open1-lc_bal > 0.
+            wa_final1-debit = wa_open1-lc_bal.
+          ELSE.
+            wa_final1-credit = wa_open1-lc_bal  * ( -1 ).
+          ENDIF.
+        ELSE.
+
+          IF wa_open1-t_curr_bal > 0.
+            wa_final1-debit = wa_open1-lc_bal.
+            wa_final1-debitusd = wa_open1-t_curr_bal.
+          ELSE.
+            wa_final1-credit = wa_open1-lc_bal  * ( -1 ).
+            wa_final1-creditusd = wa_open1-t_curr_bal * ( -1 ).
+          ENDIF.
+
+        ENDIF.
+
+        wa_final1-ltext = 'Opening Balance'.
+        wa_final1-color = 'C510'.
+        APPEND wa_final1 TO it_final1.
+        CLEAR:wa_final1,wa_open1,v_date1.
+      ENDIF.
+    ENDAT.
+
+    MOVE-CORRESPONDING wa_bsik TO wa_final1.
+
+    READ TABLE it_bseg2 INTO wa_bseg2 WITH KEY belnr = wa_bsik-belnr.
+    IF sy-subrc EQ 0.
+
+      wa_final1-prctr = wa_bseg2-prctr.
+      wa_final1-werks = wa_bseg2-prctr+0(4).
+      CLEAR:wa_bseg2.
+    ENDIF.
+
+    READ TABLE it_t001w INTO wa_t001w WITH KEY werks = wa_final1-werks.
+    IF sy-subrc EQ 0.
+      wa_final1-plant = wa_t001w-name1.
+    ENDIF.
+
+    IF wa_final1-blart EQ 'KZ'.
+
+      READ TABLE it_bseg2 INTO wa_bseg2 WITH KEY belnr = wa_bsik-belnr.
+      IF sy-subrc EQ 0.
+        wa_final1-zuonr = wa_bseg2-zuonr.
+        wa_final1-hkont = wa_bseg2-hkont.
+*        wa_final1-prctr = wa_bseg2-prctr.
+
+        READ TABLE it_skat INTO wa_skat WITH KEY saknr = wa_bseg2-hkont.
+        IF sy-subrc EQ 0.
+          wa_final1-txt50 = wa_skat-txt50.
+          CLEAR:wa_skat.
+        ENDIF.
+
+      ELSE.
+
+        READ TABLE it_skat INTO wa_skat WITH KEY saknr = wa_bsik-hkont.
+        IF sy-subrc EQ 0.
+          wa_final1-txt50 = wa_skat-txt50.
+          CLEAR:wa_skat.
+        ENDIF.
+
+      ENDIF.
+
+    ENDIF.
+
+    IF wa_bsik-shkzg EQ 'S'.
+      IF wa_bsik-waers EQ 'INR'.
+        wa_final1-debit = wa_bsik-dmbtr." * ( -1 ).
+      ELSE.
+        wa_final1-debit = wa_bsik-dmbtr.
+        wa_final1-debitusd = wa_bsik-wrbtr.
+      ENDIF.
+
+      IF wa_bsik-blart EQ 'KZ'.
+        wa_final1-ltext = 'Payment'.
+      ELSEIF wa_bsik-blart EQ 'KR'.
+        wa_final1-ltext = 'Debit Note'.
+      ELSEIF wa_bsik-blart EQ 'RE'.
+        wa_final1-ltext = 'Debit Note'.
+      ELSEIF wa_bsik-blart EQ 'AB'.
+        wa_final1-ltext = 'Accounting Document'.
+      ELSEIF wa_bsik-blart EQ 'KA'.
+        wa_final1-ltext = 'Payment'.
+      ELSEIF wa_bsik-blart EQ 'KG'.
+        wa_final1-ltext = 'Credit Note Reversal'.
+      ELSEIF wa_bsik-blart EQ 'UE'.
+        wa_final1-ltext = 'Opening'.
+      ENDIF.
+
+
+    ELSE.
+
+      IF wa_bsik-waers EQ 'INR'.
+        wa_final1-credit = wa_bsik-dmbtr.
+      ELSE.
+        wa_final1-credit = wa_bsik-dmbtr.
+        wa_final1-creditusd = wa_bsik-wrbtr.
+      ENDIF.
+
+      IF wa_bsik-blart EQ 'KZ'.
+        wa_final1-ltext = 'Payment Reversal'.
+      ELSEIF wa_bsik-blart EQ 'KR'.
+        wa_final1-ltext = 'Invoice'.
+      ELSEIF wa_bsik-blart EQ 'RE'.
+        wa_final1-ltext = 'Invoice'.
+      ELSEIF wa_bsik-blart EQ 'AB'.
+        wa_final1-ltext = 'Accounting Document'.
+      ELSEIF wa_bsik-blart EQ 'KA'.
+        wa_final1-ltext = 'Payment Reversal'.
+      ELSEIF wa_bsik-blart EQ 'KG'.
+        wa_final1-ltext = 'Credit Note'.
+      ELSEIF wa_bsik-blart EQ 'UE'.
+        wa_final1-ltext = 'Opening'.
+      ENDIF.
+
+
+    ENDIF.
+
+*    READ TABLE it_t003t INTO wa_t003t WITH KEY blart = wa_bsik-blart.
+*    IF sy-subrc EQ 0.
+*      wa_final1-ltext = wa_t003t-ltext.
+*    ENDIF.
+
+    APPEND wa_final1 TO it_final1.
+    CLEAR:wa_final1,wa_bsik,wa_t003t,v_waers.
+
+  ENDLOOP.
+
+  LOOP AT it_bsak INTO wa_bsak.
+
+    v_waers = wa_bsak-waers.
+
+    AT NEW lifnr.
+      READ TABLE it_bsik INTO wa_bsik WITH KEY lifnr = wa_bsak-lifnr.
+      IF sy-subrc EQ 0.
+
+      ELSE.
+*        CALL FUNCTION 'OIL_LAST_DAY_OF_PREVIOUS_MONTH'
+*          EXPORTING
+*            i_date_old = s_budat-low
+*          IMPORTING
+*            e_date_new = v_date1.
+        " BOC Added by Jeevan 09.07.2018
+        CALL FUNCTION 'RP_CALC_DATE_IN_INTERVAL'
+          EXPORTING
+            date      = s_budat-low
+            days      = 1
+            months    = 0
+            signum    = '-'
+            years     = 0
+          IMPORTING
+            calc_date = v_date1.
+        " EOC Added by Jeevan 09.07.2018
+        CALL FUNCTION 'BAPI_AP_ACC_GETKEYDATEBALANCE'
+          EXPORTING
+            companycode = wa_bsak-bukrs
+            vendor      = wa_bsak-lifnr
+            keydate     = v_date1
+          TABLES
+            keybalance  = it_open1.
+
+
+        READ TABLE it_open1 INTO wa_open1 INDEX 1.
+        IF sy-subrc EQ 0.
+
+          wa_final1-bukrs = wa_bsak-bukrs.
+          wa_final1-lifnr = wa_bsak-lifnr.
+
+          IF v_waers EQ 'INR'.
+            IF wa_open1-lc_bal > 0.
+              wa_final1-debit = wa_open1-lc_bal.
+            ELSE.
+              wa_final1-credit = wa_open1-lc_bal * ( -1 ).
+            ENDIF.
+          ELSE.
+            IF wa_open1-t_curr_bal > 0.
+              wa_final1-debit = wa_open1-lc_bal.
+              wa_final1-debitusd = wa_open1-t_curr_bal.
+            ELSE.
+              wa_final1-credit = wa_open1-lc_bal * ( -1 ).
+              wa_final1-creditusd = wa_open1-t_curr_bal * ( -1 ).
+            ENDIF.
+
+          ENDIF.
+          wa_final1-ltext = 'Opening Balance'.
+          wa_final1-color = 'C510'.
+          APPEND wa_final1 TO it_final1.
+          CLEAR:wa_final1,wa_open1,v_date1.
+        ENDIF.
+      ENDIF.
+    ENDAT.
+
+    MOVE-CORRESPONDING wa_bsak TO wa_final1.
+
+    READ TABLE it_bseg3 INTO wa_bseg3 WITH KEY belnr = wa_bsak-belnr.
+    IF sy-subrc EQ 0.
+
+      wa_final1-prctr = wa_bseg3-prctr.
+      wa_final1-werks = wa_bseg3-prctr+0(4).
+      CLEAR:wa_bseg3-prctr.
+    ENDIF.
+
+
+    READ TABLE it_t001w INTO wa_t001w WITH KEY werks = wa_final1-werks.
+    IF sy-subrc EQ 0.
+
+      wa_final1-plant = wa_t001w-name1.
+
+    ENDIF.
+
+    IF wa_final1-blart EQ 'KZ'.
+
+      READ TABLE it_bseg3 INTO wa_bseg3 WITH KEY belnr = wa_bsak-belnr.
+      IF sy-subrc EQ 0.
+
+        wa_final1-zuonr = wa_bseg3-zuonr.
+        wa_final1-hkont = wa_bseg3-hkont.
+*        wa_final1-prctr = wa_bseg3-prctr.
+
+        READ TABLE it_skat INTO wa_skat WITH KEY saknr = wa_bseg3-hkont.
+        IF sy-subrc EQ 0.
+
+          wa_final1-txt50 = wa_skat-txt50.
+          CLEAR:wa_skat.
+        ENDIF.
+
+      ELSE.
+
+        READ TABLE it_skat INTO wa_skat WITH KEY saknr = wa_bsak-hkont.
+        IF sy-subrc EQ 0.
+
+          wa_final1-txt50 = wa_skat-txt50.
+          CLEAR:wa_skat.
+        ENDIF.
+
+      ENDIF.
+
+    ENDIF.
+
+    IF wa_bsak-shkzg EQ 'S'.
+
+      IF wa_bsak-waers EQ 'INR'.
+        wa_final1-debit = wa_bsak-dmbtr." * ( -1 ).
+      ELSE.
+        wa_final1-debit = wa_bsak-dmbtr.
+        wa_final1-debitusd = wa_bsak-wrbtr.
+      ENDIF.
+
+      IF wa_bsak-blart EQ 'KZ'.
+        wa_final1-ltext = 'Payment'.
+      ELSEIF wa_bsak-blart EQ 'KR'.
+        wa_final1-ltext = 'Debit Note'.
+      ELSEIF wa_bsak-blart EQ 'RE'.
+        wa_final1-ltext = 'Debit Note'.
+      ELSEIF wa_bsak-blart EQ 'AB'.
+        wa_final1-ltext = 'Accounting Document'.
+      ELSEIF wa_bsak-blart EQ 'KA'.
+        wa_final1-ltext = 'Payment'.
+      ELSEIF wa_bsak-blart EQ 'KG'.
+        wa_final1-ltext = 'Credit Note Reversal'.
+      ELSEIF wa_bsak-blart EQ 'UE'.
+        wa_final1-ltext = 'Opening'.
+      ENDIF.
+
+    ELSE.
+      IF wa_bsak-waers EQ 'INR'.
+        wa_final1-credit = wa_bsak-dmbtr.
+      ELSE.
+        wa_final1-credit = wa_bsak-dmbtr.
+        wa_final1-creditusd = wa_bsak-wrbtr.
+      ENDIF.
+
+      IF wa_bsak-blart EQ 'KZ'.
+        wa_final1-ltext = 'Payment Reversal'.
+      ELSEIF wa_bsak-blart EQ 'KR'.
+        wa_final1-ltext = 'Invoice'.
+      ELSEIF wa_bsak-blart EQ 'RE'.
+        wa_final1-ltext = 'Invoice'.
+      ELSEIF wa_bsak-blart EQ 'AB'.
+        wa_final1-ltext = 'Accounting Document'.
+      ELSEIF wa_bsak-blart EQ 'KA'.
+        wa_final1-ltext = 'Payment Reversal'.
+      ELSEIF wa_bsak-blart EQ 'KG'.
+        wa_final1-ltext = 'Credit Note'.
+      ELSEIF wa_bsak-blart EQ 'UE'.
+        wa_final1-ltext = 'Opening'.
+      ENDIF.
+
+    ENDIF.
+*
+*    READ TABLE it_t003t INTO wa_t003t WITH KEY blart = wa_bsak-blart.
+*    IF sy-subrc EQ 0.
+*      wa_final1-ltext = wa_t003t-ltext.
+*    ENDIF.
+
+    APPEND wa_final1 TO it_final1.
+    CLEAR:wa_final1,wa_bsak.
+
+  ENDLOOP.
+
+
+*  SELECT lifnr name1 name2 ort01 FROM lfa1 INTO TABLE it_lfa1 FOR ALL ENTRIES IN it_final1 WHERE lifnr = it_final1-lifnr.
+  SELECT lifnr name1 name2 ort01 adrnr ktokk FROM lfa1 INTO TABLE it_lfa1 WHERE lifnr IN s_lifnr.
+
+  SORT it_final1 BY lifnr budat.
+
+  IF p_chk EQ 'X'.
+
+    LOOP AT it_final1 INTO wa_final1." WHERE BELNR = ' '.
+
+      IF wa_final1-belnr IS INITIAL.
+        v_debit = wa_final1-debit.
+        v_credit = wa_final1-credit.
+
+        v_debitusd = wa_final1-debitusd.
+        v_creditusd = wa_final1-creditusd.
+
+
+        AT NEW lifnr.
+          v_total = v_total + v_debit - v_credit.
+          v_totalusd = v_totalusd + v_debitusd - v_creditusd.
+
+          wa_final1-ind1 = 'X'.
+          MODIFY it_final1 FROM wa_final1 TRANSPORTING ind1.
+        ENDAT.
+
+      ENDIF.
+      AT LAST.
+        DELETE it_final1 WHERE ind1 EQ 'X'.
+      ENDAT.
+    ENDLOOP.
+
+    LOOP AT it_final1 INTO wa_final1.
+      v_vendor = wa_final1-lifnr.
+      v_text     = 'Opening Balance'.
+
+      AT FIRST.
+        CLEAR:wa_final1.
+        wa_final1-lifnr = v_lifnr.
+        wa_final1-ltext = v_text.
+
+        IF v_total LT 0.
+          wa_final1-credit = v_total.
+        ELSE.
+          wa_final1-debit = v_total.
+        ENDIF.
+
+        IF v_totalusd LT 0.
+          wa_final1-creditusd = v_totalusd.
+        ELSE.
+          wa_final1-debitusd = v_totalusd.
+        ENDIF.
+
+        IF wa_final1-credit LT 0.
+          wa_final1-credit = wa_final1-credit * ( -1 ).
+        ENDIF.
+
+        IF wa_final1-creditusd LT 0.
+          wa_final1-creditusd = wa_final1-creditusd * ( -1 ).
+        ENDIF.
+
+        wa_final1-color = 'C510'.
+        APPEND wa_final1 TO it_final1.
+      ENDAT.
+    ENDLOOP.
+
+    SORT it_final1 BY lifnr budat.
+
+    LOOP AT it_final1 INTO wa_final1.
+
+      READ TABLE it_lfa1 INTO wa_lfa1 WITH KEY lifnr = wa_final1-lifnr.
+      IF sy-subrc EQ 0.
+
+        CONCATENATE wa_lfa1-name1 wa_lfa1-name2 INTO wa_final1-name1 SEPARATED BY ' '.
+
+*      wa_final1-name1 = wa_kna1-name1.
+        MODIFY it_final1 FROM wa_final1 TRANSPORTING name1.
+        CLEAR:wa_kna1.
+      ENDIF.
+
+      IF wa_final1-debit IS NOT INITIAL.
+        wa_final1-closing = v_closing + wa_final1-debit.
+        v_closing = wa_final1-closing.
+      ELSE.
+        wa_final1-closing = v_closing - wa_final1-credit.
+        v_closing = wa_final1-closing.
+      ENDIF.
+
+      IF wa_final1-debitusd IS NOT INITIAL.
+        wa_final1-closingusd = v_closingusd + wa_final1-debitusd.
+        v_closingusd = wa_final1-closingusd.
+      ELSE.
+        wa_final1-closingusd = v_closingusd - wa_final1-creditusd.
+        v_closingusd = wa_final1-closingusd.
+      ENDIF.
+
+
+      MODIFY it_final1 FROM wa_final1 TRANSPORTING closing closingusd.
+
+*    AT END OF lifnr.
+*      CLEAR:wa_final1,v_closing.
+*    ENDAT.
+*
+    ENDLOOP.
+  ELSE.
+
+    SORT it_final1 BY lifnr budat.
+
+    LOOP AT it_final1 INTO wa_final1.
+
+      READ TABLE it_lfa1 INTO wa_lfa1 WITH KEY lifnr = wa_final1-lifnr.
+      IF sy-subrc EQ 0.
+
+        CONCATENATE wa_lfa1-name1 wa_lfa1-name2 INTO wa_final1-name1 SEPARATED BY ' '.
+*      wa_final1-name1 = wa_kna1-name1.
+        MODIFY it_final1 FROM wa_final1 TRANSPORTING name1.
+        CLEAR:wa_kna1.
+      ENDIF.
+
+      IF wa_final1-debit IS NOT INITIAL.
+        wa_final1-closing = v_closing + wa_final1-debit.
+        v_closing = wa_final1-closing.
+      ELSE.
+        wa_final1-closing = v_closing - wa_final1-credit.
+        v_closing = wa_final1-closing.
+      ENDIF.
+
+      IF wa_final1-debitusd IS NOT INITIAL.
+        wa_final1-closingusd = v_closingusd + wa_final1-debitusd.
+        v_closingusd = wa_final1-closingusd.
+      ELSE.
+        wa_final1-closingusd = v_closingusd - wa_final1-creditusd.
+        v_closingusd = wa_final1-closingusd.
+
+      ENDIF.
+
+      MODIFY it_final1 FROM wa_final1 TRANSPORTING closing closingusd.
+
+      AT END OF lifnr.
+        CLEAR:wa_final1,v_closing.
+      ENDAT.
+
+    ENDLOOP.
+
+  ENDIF.
+
+
+*  LOOP AT it_final1 INTO wa_final1.
+*
+*    READ TABLE it_lfa1 INTO wa_lfa1 WITH KEY lifnr = wa_final1-lifnr.
+*    IF sy-subrc EQ 0.
+*
+*      CONCATENATE wa_lfa1-name1 wa_lfa1-name2 INTO wa_final1-name1 SEPARATED BY ' '.
+**      wa_final1-name1 = wa_kna1-name1.
+*      MODIFY it_final1 FROM wa_final1 TRANSPORTING name1.
+*      CLEAR:wa_kna1.
+*    ENDIF.
+*
+*    IF wa_final1-debit IS NOT INITIAL.
+*      wa_final1-closing = v_closing + wa_final1-debit.
+*      v_closing = wa_final1-closing.
+*    ELSE.
+*      wa_final1-closing = v_closing - wa_final1-credit.
+*      v_closing = wa_final1-closing.
+*    ENDIF.
+*
+*    MODIFY it_final1 FROM wa_final1 TRANSPORTING closing.
+*
+*    AT END OF lifnr.
+*      CLEAR:wa_final1,v_closing.
+*    ENDAT.
+*
+*  ENDLOOP.
+
+**********Added by Jeevan 05.06.2018(Vendor)
+  DATA : v_date2 TYPE datum.
+  LOOP AT it_lfa1 INTO wa_lfa1.
+    READ TABLE it_final1 INTO wa_final1 WITH KEY lifnr = wa_lfa1-lifnr.
+    IF sy-subrc <> 0.
+      v_date2 = s_budat-low.
+      CALL FUNCTION 'RP_CALC_DATE_IN_INTERVAL'
+        EXPORTING
+          date      = s_budat-low
+          days      = 1
+          months    = 0
+          signum    = '-'
+          years     = 0
+        IMPORTING
+          calc_date = v_date2.
+      REFRESH it_open1.
+      CLEAR   wa_open1.
+      CALL FUNCTION 'BAPI_AP_ACC_GETKEYDATEBALANCE'
+        EXPORTING
+          companycode = s_bukrs
+          vendor      = wa_lfa1-lifnr
+          keydate     = v_date2
+        TABLES
+          keybalance  = it_open1.
+
+      READ TABLE it_open1 INTO wa_open1 INDEX 1.
+      IF sy-subrc EQ 0.
+        CLEAR wa_final1.
+        wa_final1-bukrs = s_bukrs.
+        wa_final1-lifnr = wa_lfa1-lifnr.
+        wa_final1-name1 = wa_lfa1-name1.
+        wa_final1-ltext = 'Opening Balance'.
+        wa_final1-opening = wa_open1-lc_bal.
+        wa_final1-closing = wa_open1-lc_bal.
+* BEGIN OF NP FOR TKT#ASTG9 ON 21.06.2018
+        IF wa_open1-db_cr_ind = 'H'.
+          wa_final1-credit =  wa_final1-closing.
+        ELSEIF wa_open1-db_cr_ind = 'S'.
+          wa_final1-debit = wa_final1-closing.
+        ENDIF.
+* END OF NP FOR TKT#ASTG9 ON 21.06.2018
+        wa_final1-color = 'C300'.
+        APPEND wa_final1 TO it_final1.
+        CLEAR  wa_final1.
+      ELSE.
+        CLEAR wa_final1.
+        wa_final1-bukrs = s_bukrs.
+        wa_final1-lifnr = wa_lfa1-lifnr.
+        wa_final1-ltext = 'Opening Balance'.
+        wa_final1-color = 'C300'.
+        wa_final1-opening = wa_final1-closing = '0.00'.
+        APPEND wa_final1 TO it_final1.
+        CLEAR  wa_final1.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+**********Added by Jeevan 05.06.2018
+****  Added auth. check by Carina Jose on 25.02.2022
+  LOOP AT it_final1 INTO wa_final1.
+*  IF WA_FINAL-BELNR IS NOT INITIAL.
+    AUTHORITY-CHECK OBJECT 'Z_VC_PRCTR'
+    ID 'PRCTR' FIELD wa_final1-prctr
+    ID 'ACTVT' FIELD '03'.
+    IF sy-subrc NE 0.
+*      MESSAGE e018(zfi) WITH wa_final-prctr.
+      DELETE it_final1 WHERE belnr = wa_final1-belnr AND budat = wa_final1-budat AND prctr = wa_final1-prctr.
+    ENDIF.
+*  ENDIF.
+  ENDLOOP.
+
+****  End of Channges by carina Jose on 25.02.2022
+
+
+ENDFORM.                    " GET_VEND
+*&---------------------------------------------------------------------*
+*&      Form  FILL_CAT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM fill_cat .
+
+  DEFINE fillcat.
+
+    WA_FCAT-col_pos    = &1.
+    WA_FCAT-TABNAME    = &2.
+    WA_FCAT-FIELDNAME  = &3.
+    WA_FCAT-SELTEXT_L  = &4.
+    WA_FCAT-NO_OUT     = &5.
+    WA_fCAT-do_sum     = &6.
+    WA_fCAT-NO_ZERO    = &7.
+    WA_FCAT-HOTSPOT    = &8.
+    APPEND WA_fCAT TO IT_FCAT.
+
+  END-OF-DEFINITION.
+
+
+  IF p_cust EQ 'X'.
+
+    fillcat 1 'IT_FINAL' 'BUKRS'      'Company Code'                  'X'     ' '  ' ' ' '.
+    fillcat 1 'IT_FINAL' 'KUNNR'      'Customer Number'               'X'     ' '  ' ' ' '.
+    "Adding Start by Rahul Vasita on 02.01.2024 15:12:17
+    IF p_chkbx = 'X'.
+      fillcat 1 'IT_FINAL' 'KNKLI'      'Parent Customer Number'               'X'     ' '  ' ' ' '.
+    ENDIF.
+    "Adding End by Rahul Vasita on 02.01.2024 15:12:17
+    fillcat 1 'IT_FINAL' 'NAME1'      'Customer Name'                 'X'     ' '  ' ' ' '.
+    fillcat 1 'IT_FINAL' 'BELNR'      'Document Number'               ' '     ' '  ' ' 'X'.
+    fillcat 1 'IT_FINAL' 'BUDAT'      'Posting Date'                  ' '     ' '  ' ' ' '.
+    fillcat 1 'IT_FINAL' 'XBLNR'      'Reference Document Number'     ' '     ' '  ' ' ' '.
+    fillcat 1 'IT_FINAL' 'BLDAT'      'Document Date'                 ' '     ' '  ' ' ' '.
+    fillcat 1 'IT_FINAL' 'BLART'      'Document Type'                 ' '     ' '  ' ' ' '.
+    fillcat 1 'IT_FINAL' 'LTEXT'      'Doc. Type Text'                ' '     ' '  ' ' ' '.
+    fillcat 1 'IT_FINAL' 'UMSKZ'      'Spl. G/L Indicator'            ' '     ' '  ' ' ' '.
+    fillcat 1 'IT_FINAL' 'ZUONR'      'Cheque No./ NEFT/ RTGS No.'    ' '     ' '  ' ' ' '.
+    fillcat 1 'IT_FINAL' 'DEBIT '     'Debit Amount'                  ' '     ' '  'X' ' '.
+    fillcat 1 'IT_FINAL' 'CREDIT'     'Credit Amount'                 ' '     ' '  'X' ' '.
+    fillcat 1 'IT_FINAL' 'CLOSING'    'Closing'                       ' '     ' '  'X' ' '.
+    fillcat 1 'IT_FINAL' 'DEBITUSD'   'Debit Amt. in Doc. Currency'   ' '     ' '  'X' ' '.
+    fillcat 1 'IT_FINAL' 'CREDITUSD'  'Credit Amt. in Doc. Currency'  ' '     ' '  'X' ' '.
+    fillcat 1 'IT_FINAL' 'CLOSINGUSD' 'Closing in Doc. Currency'      ' '     ' '  'X' ' '.
+    fillcat 1 'IT_FINAL' 'WAERS'      'Currency'                      ' '     ' '  'X' ' '.
+    fillcat 1 'IT_FINAL' 'PRCTR'      'Profit Center'                 ' '     ' '  ' ' ' '.
+    fillcat 1 'IT_FINAL' 'WERKS'      'Plant'                         ' '     ' '  ' ' ' '.
+    fillcat 1 'IT_FINAL' 'PLANT'      'Plant Desc.'                   ' '     ' '  ' ' ' '.
+    fillcat 1 'IT_FINAL' 'AUGBL'      'Clearing Doc. Num'             ' '     ' '  ' ' ' '.
+    fillcat 1 'IT_FINAL' 'AUGDT'      'Clearing Date'                 ' '     ' '  ' ' ' '.
+    fillcat 1 'IT_FINAL' 'SGTXT'      'Text'                          ' '     ' '  ' ' ' '.
+    fillcat 1 'IT_FINAL' 'SAKNR'      'G/L Account Number'            ' '     ' '  ' ' ' '.
+    fillcat 1 'IT_FINAL' 'HKONT'      'General Ledger Account'        ' '     ' '  ' ' ' '.
+    fillcat 1 'IT_FINAL' 'TXT50'      'G/L Account Text'              ' '     ' '  ' ' ' '.
+
+
+    fillcat 1 'IT_FINAL' 'GJAHR'      'Fiscal Year'                 'X'     ' '  ' ' ' '.
+    fillcat 1 'IT_FINAL' 'BSCHL'      'Posting Key'                 'X'     ' '  ' ' ' '.
+    fillcat 1 'IT_FINAL' 'SHKZG'      'Debit/Credit Indicator'      'X'     ' '  ' ' ' '.
+    fillcat 1 'IT_FINAL' 'MWSKZ'      'Tax on sales/purchases code' 'X'     ' '  ' ' ' '.
+    fillcat 1 'IT_FINAL' 'DMBTR'      'Amount'                      'X'     ' '  ' ' ' '.
+    fillcat 1 'IT_FINAL' 'WRBTR'      'Amount In Global'            'X'     ' '  ' ' ' '.
+    fillcat 1 'IT_FINAL' 'BSTNK'      'PO'            'X'     ' '  ' ' ' '.
+    fillcat 1 'IT_FINAL' 'BSTDK'      'PO Date'            'X'     ' '  ' ' ' '.
+*    fillcat 1 'IT_FINAL' 'OPENING'    'Opening'                    'X'     'X'  'X'  .
+    fillcat 1 'IT_FINAL1' 'VKBUR'      'Sales Office'            'X'     ' '  ' '  ' '. "Added by Raj on 05.05.2023
+    fillcat 1 'IT_FINAL1' 'VKDES'      'Sales Office Desc.'            'X'     ' '  ' '  ' '. "Added by Raj on 05.05.2023
+    fillcat 1 'IT_FINAL1' 'BZIRK'      'Sales district'            'X'     ' '  ' '  ' '. "Added by Raj on 05.05.2023
+    fillcat 1 'IT_FINAL1' 'BZDES'      'Sales district Desc.'            'X'     ' '  ' '  ' '. "Added by Raj on 05.05.2023
+    fillcat 1 'IT_FINAL1' 'VKGRP'      'Sales group'            'X'     ' '  ' '  ' '. "Added by Raj on 05.05.2023
+    fillcat 1 'IT_FINAL1' 'VGDES'      'Sales group Desc.'            'X'     ' '  ' '  ' '. "Added by Raj on 05.05.2023
+
+  ELSE.
+
+    fillcat 1 'IT_FINAL1' 'BUKRS'      'Company Code'                   'X'     ' '   ' '   ' '.
+    fillcat 1 'IT_FINAL1' 'LIFNR'      'Vendor Number'                  'X'     ' '   ' '   ' '.
+    fillcat 1 'IT_FINAL1' 'NAME1'      'Vendor Name'                    'X'     ' '   ' '   ' '.
+    fillcat 1 'IT_FINAL1' 'BELNR'      'Document Number'                ' '     ' '   ' '   'X'.
+    fillcat 1 'IT_FINAL1' 'BUDAT'      'Posting Date'                   ' '     ' '   ' '    ' '.
+    fillcat 1 'IT_FINAL1' 'XBLNR'      'Reference Document Number'      ' '     ' '   ' '   ' '.
+    fillcat 1 'IT_FINAL1' 'BLDAT'      'Document Date'                  ' '     ' '   ' '  ' '.
+    fillcat 1 'IT_FINAL1' 'BLART'      'Document Type'                  ' '     ' '   ' '   ' '.
+    fillcat 1 'IT_FINAL1' 'LTEXT'      'Doc. Type Text'                 ' '     ' '   ' '   ' '.
+    fillcat 1 'IT_FINAL1' 'UMSKZ'      'Spl. G/L Indicator'             ' '     ' '   ' '   ' '.
+    fillcat 1 'IT_FINAL1' 'ZUONR'      'Cheque No./ NEFT/ RTGS No.'     ' '     ' '   ' '   ' '.
+
+    fillcat 1 'IT_FINAL1' 'DEBIT '     'Debit Amount'                   ' '     ' '   'X'   ' '.
+    fillcat 1 'IT_FINAL1' 'CREDIT'     'Credit Amount'                  ' '     ' '   'X'   ' '.
+    fillcat 1 'IT_FINAL1' 'CLOSING'    'Closing'                        ' '     ' '   'X'   ' '.
+    fillcat 1 'IT_FINAL1' 'DEBITUSD'   'Debit Amt. in Doc. Currency'    ' '     ' '   'X'   ' '.
+    fillcat 1 'IT_FINAL1' 'CREDITUSD'  'Credit Amt. in Doc. Currency'   ' '     ' '   'X'   ' '.
+    fillcat 1 'IT_FINAL1' 'CLOSINGUSD' 'Closing in Doc. Currency'       ' '     ' '   'X'   ' '.
+    fillcat 1 'IT_FINAL'  'WAERS'      'Currency'                       ' '     ' '   'X'   ' '.
+    fillcat 1 'IT_FINAL1' 'PRCTR'      'Profit Center'                  ' '     ' '   ' '   ' '.
+    fillcat 1 'IT_FINAL1' 'WERKS'      'Plant'                          ' '     ' '   ' '   ' '.
+    fillcat 1 'IT_FINAL1' 'PLANT'      'Plant Desc.'                    ' '     ' '   ' '   ' '.
+    fillcat 1 'IT_FINAL1' 'AUGBL'      'Clearing Doc. Num'              ' '     ' '   ' '   ' '.
+    fillcat 1 'IT_FINAL1' 'AUGDT'      'Clearing Date'                  ' '     ' '   ' '   ' '.
+    fillcat 1 'IT_FINAL1' 'SGTXT'      'Text'                           ' '     ' '   ' '   ' '.
+    fillcat 1 'IT_FINAL1' 'SAKNR'      'G/L Account Number'             ' '     ' '   ' '   ' '.
+    fillcat 1 'IT_FINAL1' 'HKONT'      'General Ledger Account'         ' '     ' '   ' '   ' '.
+    fillcat 1 'IT_FINAL1' 'TXT50'      'G/L Account Text'               ' '     ' '   ' '   ' '.
+    fillcat 1 'IT_FINAL1' 'GJAHR'      'Fiscal Year'                    'X'     ' '   ' '   ' '.
+    fillcat 1 'IT_FINAL1' 'BSCHL'      'Posting Key'                    'X'     ' '   ' '   ' '.
+    fillcat 1 'IT_FINAL1' 'SHKZG'      'Debit/Credit Indicator'         'X'     ' '   ' '   ' '.
+    fillcat 1 'IT_FINAL1' 'MWSKZ'      'Tax on sales/purchases code'    'X'     ' '   ' '   ' '.
+    fillcat 1 'IT_FINAL1' 'DMBTR'      'Amount'                         'X'     ' '   ' '   ' '.
+    fillcat 1 'IT_FINAL1' 'WRBTR'      'Amount In Global'               'X'     ' '   ' '   ' '.
+
+
+    fillcat 1 'IT_FINAL1' 'GJAHR'      'Fiscal Year'                 'X'     ' '  ' '  ' '.
+    fillcat 1 'IT_FINAL1' 'BSCHL'      'Posting Key'                 'X'     ' '  ' '  ' '.
+    fillcat 1 'IT_FINAL1' 'SHKZG'      'Debit/Credit Indicator'      'X'     ' '  ' '  ' '.
+    fillcat 1 'IT_FINAL1' 'MWSKZ'      'Tax on sales/purchases code' 'X'     ' '  ' '  ' '.
+    fillcat 1 'IT_FINAL1' 'DMBTR'      'Amount'                      'X'     ' '  ' '  ' '.
+    fillcat 1 'IT_FINAL1' 'WRBTR'      'Amount In Global'            'X'     ' '  ' '  ' '.
+*    fillcat 1 'IT_FINAL' 'OPENING'    'Opening'                    'X'     'X'  'X'  .
+    fillcat 1 'IT_FINAL1' 'VKBUR'      'Sales Office'            'X'     ' '  ' '  ' '. "Added by Raj on 05.05.2023
+    fillcat 1 'IT_FINAL1' 'BZIRK'      'Sales district'            'X'     ' '  ' '  ' '. "Added by Raj on 05.05.2023
+    fillcat 1 'IT_FINAL1' 'VKGRP'      'Sales group'            'X'     ' '  ' '  ' '. "Added by Raj on 05.05.2023
+
+
+  ENDIF.
+
+  wa_layout-zebra = 'X'.
+  wa_layout-colwidth_optimize = 'X'.
+  wa_layout-info_fieldname = 'COLOR'.
+
+*  wa_sort-spos      = 1.
+*  wa_sort-fieldname = 'BUKRS'.
+*  wa_sort-up        = 'X'.
+**  wa_sort-subtot    = 'X'.
+*  APPEND wa_sort TO it_sort.
+*  clear: wa_sort.
+
+*  wa_sort-spos      = 2.
+*  wa_sort-fieldname = 'KUNNR'.
+*  wa_sort-up        = 'X'.
+*  wa_sort-subtot    = 'X'.
+*  APPEND wa_sort TO it_sort.
+*  CLEAR: wa_sort.
+
+  wa_sort-spos = 1.
+  wa_sort-fieldname = 'KUNNR'.
+  wa_sort-up        = ' '.
+  wa_sort-subtot    = 'X'.
+  APPEND wa_sort TO it_sort.
+  CLEAR:wa_sort.
+
+
+
+ENDFORM.                    " FILL_CAT
+*&---------------------------------------------------------------------*
+*&      Form  DISPLAY
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM display .
+
+  IF p_cust EQ 'X'.
+
+*    SORT it_final BY kunnr budat.
+*     SORT IT_FINAL BY KUNNR BLDAT.
+
+*    SORT it_final BY kunnr budat.
+*BREAK-POINT.
+*    LOOP AT it_final INTO wa_final.
+*
+*      AUTHORITY-CHECK OBJECT 'K_PCAR_REP'
+*      ID 'PRCTR' FIELD wa_final-prctr.
+**      ID 'ACTVT' FIELD '03'.
+*      IF sy-subrc NE 0.
+*        DELETE TABLE it_final FROM wa_final.
+*      ENDIF.
+**       AUTHORITY-CHECK OBJECT 'V_VBKA_VKO'
+**         ID 'VKBUR' FIELD wa_final-vkbur
+**         ID 'ACTVT' FIELD '03'.
+**      IF sy-subrc <> 0.
+**         DELETE TABLE it_final FROM wa_final.
+**      ENDIF.
+*    ENDLOOP.
+
+
+    CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+      EXPORTING
+        i_callback_program      = sy-repid
+        i_callback_user_command = 'USER_COMMAND'
+        i_callback_top_of_page  = 'TOP_PAGE'
+        is_layout               = wa_layout
+        it_fieldcat             = it_fcat
+*       it_sort                 = wa_sort
+        i_save                  = 'X'
+*       IT_EVENTS               =
+      TABLES
+        t_outtab                = it_final.
+
+  ELSE.
+
+*    SORT it_final1 BY lifnr budat.
+*    SORT IT_FINAL1 BY LIFNR BLDAT.
+*    LOOP AT it_final1 INTO wa_final1.
+*
+*      AUTHORITY-CHECK OBJECT 'K_PCAR_REP'
+*      ID 'PRCTR' FIELD wa_final-prctr
+*      ID 'ACTVT' FIELD '03'.
+*      IF sy-subrc NE 0.
+*        DELETE TABLE it_final FROM wa_final.
+*      ENDIF.
+*    ENDLOOP.
+
+
+    CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+      EXPORTING
+        i_callback_program      = sy-repid
+        i_callback_user_command = 'USER_COMMAND1'
+        i_callback_top_of_page  = 'TOP_PAGE'
+        is_layout               = wa_layout
+        it_fieldcat             = it_fcat
+*       IT_SORT                 =
+        i_save                  = 'X'
+*       IT_EVENTS               =
+      TABLES
+        t_outtab                = it_final1.
+
+  ENDIF.
+
+ENDFORM.                    " DISPLAY
+
+FORM top_page.
+
+  DATA : wa_header TYPE slis_listheader.
+  DATA : it_header TYPE slis_t_listheader.
+******* Added changes by Carina Jose on 02.09.2019
+  READ TABLE it_t001 INTO wa_t001 WITH KEY bukrs = s_bukrs .
+
+******* End of changes by Carina Jose on 02.09.2019
+
+  IF p_cust EQ 'X'.
+    IF s_kunnr-high IS INITIAL.
+      LOOP AT s_kunnr.
+
+        SHIFT s_kunnr-low LEFT DELETING LEADING '0'.
+
+        CONCATENATE v_customer ', ' s_kunnr-low INTO v_customer.
+      ENDLOOP.
+      SHIFT v_customer LEFT DELETING LEADING ','.
+
+      CONCATENATE 'Customer Number' v_customer INTO v_customer SEPARATED BY ':'.
+
+
+*      IF s_bukrs EQ '1000'.
+
+*        wa_header-info = 'ASTRAL POLY TECHNIK LIMITED'.
+      wa_header-info = wa_t001-butxt .
+      wa_header-typ = 'S'.
+      APPEND wa_header TO it_header.
+
+*      ELSE.
+
+**        wa_header-info = 'ADVANCED ADHESIVES LIMITED'.
+*        wa_header-info = wa_t001-butxt .
+*        wa_header-typ = 'S'.
+*        APPEND wa_header TO it_header.
+
+*      ENDIF.
+
+      wa_header-info = v_customer.
+      wa_header-typ = 'S'.
+      APPEND wa_header TO it_header.
+
+      READ TABLE it_kna1 INTO wa_kna1 INDEX 1.
+      IF sy-subrc EQ 0.
+        CONCATENATE 'Customer Name:' wa_kna1-name1 wa_kna1-name2 INTO v_name.
+      ENDIF.
+
+      wa_header-info = v_name.
+      wa_header-typ = 'S'.
+      APPEND wa_header TO it_header.
+
+      CONCATENATE 'City:' wa_kna1-ort01 INTO wa_kna1-ort01 SEPARATED BY ' '.
+
+      wa_header-info = wa_kna1-ort01.
+      wa_header-typ = 'S'.
+      APPEND wa_header TO it_header.
+
+      CONCATENATE 'Statement of Account from:' s_budat-low+6(2) '/' s_budat-low+4(2) '/' s_budat-low+0(4) INTO v_low."  'to'
+      CONCATENATE                               s_budat-high+6(2) '/' s_budat-high+4(2) '/' s_budat-high+0(4) INTO v_high.
+      CONCATENATE v_low 'to' v_high INTO v_date SEPARATED BY ' '.
+
+      wa_header-info = v_date.
+      wa_header-typ = 'S'.
+      APPEND wa_header TO it_header.
+
+      CALL FUNCTION 'REUSE_ALV_COMMENTARY_WRITE'
+        EXPORTING
+          it_list_commentary = it_header.
+*      I_LOGO             = 'ASTRALS'.
+
+      CLEAR: wa_header,v_customer,v_name, wa_kna1.
+      REFRESH it_header.
+
+    ENDIF.
+
+  ELSE.
+
+    IF s_lifnr-high IS INITIAL.
+
+      LOOP AT s_lifnr.
+
+        SHIFT s_lifnr-low LEFT DELETING LEADING '0'.
+
+        CONCATENATE v_vendor ', ' s_lifnr-low INTO v_vendor.
+      ENDLOOP.
+
+      SHIFT v_vendor LEFT DELETING LEADING ','.
+
+      CONCATENATE 'Vendor Number' v_vendor INTO v_vendor SEPARATED BY ':'.
+
+*      IF s_bukrs EQ '1000'.
+
+**        wa_header-info = 'ASTRAL POLY TECHNIK LIMITED'.
+      wa_header-info = wa_t001-butxt .
+      wa_header-typ = 'S'.
+      APPEND wa_header TO it_header.
+
+*      ELSE.
+*
+**        wa_header-info = 'ADVANCED ADHESIVES LIMITED'.
+*        wa_header-info = wa_t001-butxt .
+*        wa_header-typ = 'S'.
+*        APPEND wa_header TO it_header.
+
+*      ENDIF.
+
+      wa_header-info = v_vendor.
+      wa_header-typ = 'S'.
+      APPEND wa_header TO it_header.
+
+      READ TABLE it_lfa1 INTO wa_lfa1 INDEX 1.
+      IF sy-subrc EQ 0.
+        CONCATENATE 'Vendor Name:' wa_lfa1-name1 wa_lfa1-name2 INTO v_name.
+      ENDIF.
+
+      wa_header-info = v_name.
+      wa_header-typ = 'S'.
+      APPEND wa_header TO it_header.
+
+      CONCATENATE 'City:' wa_lfa1-ort01 INTO wa_lfa1-ort01 SEPARATED BY ' '.
+
+      wa_header-info = wa_lfa1-ort01.
+      wa_header-typ = 'S'.
+      APPEND wa_header TO it_header.
+
+      CONCATENATE 'Statement of Account from:' s_budat-low+6(2) '/' s_budat-low+4(2) '/' s_budat-low+0(4) INTO v_low."  'to'
+      CONCATENATE                               s_budat-high+6(2) '/' s_budat-high+4(2) '/' s_budat-high+0(4) INTO v_high.
+
+      CONCATENATE v_low 'to' v_high INTO v_date SEPARATED BY ' '.
+
+      wa_header-info = v_date.
+      wa_header-typ = 'S'.
+      APPEND wa_header TO it_header.
+
+      CALL FUNCTION 'REUSE_ALV_COMMENTARY_WRITE'
+        EXPORTING
+          it_list_commentary = it_header.
+*      I_LOGO             = 'ASTRALS'.
+
+      CLEAR: wa_header,v_name,v_vendor,wa_lfa1.
+      REFRESH it_header.
+
+    ENDIF.
+
+
+  ENDIF.
+
+ENDFORM.
+
+FORM user_command USING ucomm LIKE sy-ucomm
+                        selfield TYPE slis_selfield.
+  CASE ucomm.
+    WHEN '&IC1'.
+      CLEAR wa_final.
+      READ TABLE it_final INTO wa_final INDEX selfield-tabindex.
+      SET PARAMETER ID: 'BLN' FIELD wa_final-belnr,
+                        'BUK' FIELD wa_final-bukrs,
+                        'GJR' FIELD wa_final-gjahr.
+      CALL TRANSACTION 'FB03' AND SKIP FIRST SCREEN.
+  ENDCASE.
+ENDFORM.
+
+FORM user_command1 USING ucomm LIKE sy-ucomm
+                        selfield TYPE slis_selfield.
+  CASE ucomm.
+    WHEN '&IC1'.
+      CLEAR wa_final1.
+      READ TABLE it_final1 INTO wa_final1 INDEX selfield-tabindex.
+      SET PARAMETER ID: 'BLN' FIELD wa_final1-belnr,
+                        'BUK' FIELD wa_final1-bukrs,
+                        'GJR' FIELD wa_final1-gjahr.
+      CALL TRANSACTION 'FB03' AND SKIP FIRST SCREEN.
+  ENDCASE.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  SMARTFORM1
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM smartform1 .
+
+  DATA:m_adrnr TYPE ad_addrnum,
+       m_email TYPE ad_smtpadr.
+
+  DATA : control_parameters  TYPE ssfctrlop.
+  DATA : w_cnt TYPE i.
+  DATA : w_cnt2 TYPE i.
+
+  it_header[] = it_final[].
+
+  SORT it_header BY kunnr.
+  DELETE ADJACENT DUPLICATES FROM it_header COMPARING kunnr.
+
+  DESCRIBE TABLE it_header LINES w_cnt.
+*  IF s_kunnr-high IS INITIAL.
+
+  CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
+    EXPORTING
+      formname = 'ZFI_LEDGER_CUSTOMER'
+    IMPORTING
+      fm_name  = fmname.
+
+  LOOP AT it_header INTO wa_header.
+
+    LOOP AT it_final INTO wa_final WHERE kunnr = wa_header-kunnr.
+
+*       AUTHORITY-CHECK OBJECT 'K_PCAR_REP'
+*      ID 'PRCTR' FIELD wa_final-prctr
+*      ID 'ACTVT' FIELD '03'.
+*      IF sy-subrc NE 0.
+*        DELETE TABLE it_final FROM wa_final.
+*      ENDIF.
+*       AUTHORITY-CHECK OBJECT 'V_VBKA_VKO'
+*         ID 'VKBUR' FIELD wa_final-vkbur
+*         ID 'ACTVT' FIELD '03'.
+*      IF sy-subrc <> 0.
+*         DELETE TABLE it_final FROM wa_final.
+*      ENDIF.
+*    ENDLOOP.
+      MOVE-CORRESPONDING wa_final TO wa_demo.
+      APPEND wa_demo TO it_demo.
+      CLEAR:wa_demo.
+    ENDLOOP.
+
+    CLEAR:v_customer.
+    s_kunnr-low = wa_header-kunnr.
+    SHIFT s_kunnr-low LEFT DELETING LEADING '0'.
+
+    CONCATENATE v_customer ',' wa_header-kunnr INTO v_customer.
+
+    SHIFT v_customer LEFT DELETING LEADING ','.
+
+*    IF s_bukrs EQ '1000'.
+*      v_header = 'ASTRAL POLY TECHNIK LIMITED'.
+    v_header = wa_t001-butxt.
+*    ELSE.
+*      v_header = 'RESINOVA CHEMIE LTD.'.
+*      v_header = wa_t001-butxt .
+*      v_header = 'ADVANCED ADHESIVES LIMITED'.
+*    ENDIF.
+
+    IF w_cnt GT 1.
+      w_cnt2 = sy-tabix .
+      CASE w_cnt2.
+        WHEN 1.
+          control_parameters-no_open   = space .
+          control_parameters-no_close  = 'X' .
+        WHEN w_cnt .
+          control_parameters-no_open   = 'X' .
+          control_parameters-no_close  = space .
+        WHEN OTHERS.
+          control_parameters-no_open   = 'X' .
+          control_parameters-no_close  = 'X' .
+      ENDCASE.
+    ENDIF.
+
+    READ TABLE it_kna1 INTO wa_kna1 WITH KEY kunnr = wa_header-kunnr.
+    IF sy-subrc EQ 0.
+      CONCATENATE wa_kna1-name1 wa_kna1-name2 INTO v_name.
+      v_city = wa_kna1-ort01.
+    ENDIF.
+
+    CONCATENATE s_budat-low+6(2) '/' s_budat-low+4(2) '/' s_budat-low+0(4) INTO v_low.
+    CONCATENATE                               s_budat-high+6(2) '/' s_budat-high+4(2) '/' s_budat-high+0(4) INTO v_high.
+    CONCATENATE v_low 'to' v_high INTO v_date SEPARATED BY ' '.
+
+    IF sy-batch EQ 'X'.
+      gs_ctrlop-getotf = 'X'.
+*  gs_ctrlop-device = 'PRINTER'.
+      gs_ctrlop-preview = ' '.
+      gs_ctrlop-no_dialog = ' '.
+      gs_outopt-tddest = 'LOCL'.
+    ENDIF.
+
+
+    IF w_cnt = 1.
+      CALL FUNCTION fmname
+        EXPORTING
+          v_customer      = v_customer
+          v_name          = v_name
+          v_date          = v_date
+          v_low           = v_low
+          v_high          = v_high
+          v_city          = v_city
+          v_header        = v_header
+          v_bukrs         = s_bukrs
+          wa_kunnr        = wa_header-kunnr
+        IMPORTING
+          job_output_info = gs_otfdata
+        TABLES
+          it_final        = it_demo.
+*          it_final        = it_final.
+    ENDIF.
+
+    IF w_cnt GT 1.
+      CALL FUNCTION fmname
+        EXPORTING
+          control_parameters = control_parameters
+          v_customer         = v_customer
+          v_name             = v_name
+          v_date             = v_date
+          v_low              = v_low
+          v_high             = v_high
+          v_city             = v_city
+          v_header           = v_header
+          v_bukrs            = s_bukrs
+          wa_kunnr           = wa_header-kunnr
+        IMPORTING
+          job_output_info    = gs_otfdata
+        TABLES
+          it_final           = it_demo.
+    ENDIF.
+
+
+    CLEAR:v_customer, v_name, v_date, v_low, v_high, v_city, v_header, wa_header,control_parameters.
+    REFRESH:it_demo[].
+
+
+  ENDLOOP.
+
+  CLEAR:v_customer.
+
+ENDFORM.                    " SMARTFORM1
+*&---------------------------------------------------------------------*
+*&      Form  SMARTFORM2
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM smartform2 .
+
+  DATA : control_parameters  TYPE ssfctrlop.
+  DATA : w_cnt TYPE i.
+  DATA : w_cnt2 TYPE i.
+
+
+  SORT it_final1 BY lifnr budat.
+
+  it_header1[] = it_final1[].
+  SORT it_header1 BY lifnr.
+  DELETE ADJACENT DUPLICATES FROM it_header1 COMPARING lifnr.
+
+  DESCRIBE TABLE it_header1 LINES w_cnt.
+
+  CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
+    EXPORTING
+      formname = 'ZFI_LEDGER_VENDOR'
+    IMPORTING
+      fm_name  = fmname.
+
+  LOOP AT it_header1 INTO wa_header1.
+
+    LOOP AT it_final1 INTO wa_final1 WHERE lifnr = wa_header1-lifnr.
+
+*      AUTHORITY-CHECK OBJECT 'K_PCAR_REP'
+*      ID 'PRCTR' FIELD wa_final-prctr
+*      ID 'ACTVT' FIELD '03'.
+*      IF sy-subrc NE 0.
+*        DELETE TABLE it_final FROM wa_final.
+*      ENDIF.
+*      AUTHORITY-CHECK OBJECT 'K_PCAR_REP'
+*   ID 'PRCTR' FIELD wa_final1-prctr
+*   ID 'ACTVT' FIELD '03'.
+*      IF sy-subrc NE 0.
+*        DELETE TABLE it_final1 FROM wa_final1.
+*      ENDIF.
+
+      MOVE-CORRESPONDING wa_final1 TO wa_demo1.
+      APPEND wa_demo1 TO it_demo1.
+      CLEAR:wa_demo1.
+    ENDLOOP.
+
+    CLEAR:v_vendor.
+
+*  IF s_lifnr-high IS INITIAL.
+*    LOOP AT s_lifnr.
+*      SHIFT s_lifnr-low LEFT DELETING LEADING '0'.
+*      CONCATENATE v_vendor ', ' s_lifnr-low INTO v_vendor.
+*    ENDLOOP.
+
+    s_lifnr-low = wa_header1-lifnr.
+    SHIFT s_lifnr-low LEFT DELETING LEADING '0'.
+    CONCATENATE v_vendor ', ' s_lifnr-low INTO v_vendor.
+    SHIFT v_vendor LEFT DELETING LEADING ','.
+
+*    IF s_bukrs EQ '1000'.
+*      v_header = 'ASTRAL POLY TECHNIK LIMITED'.
+    v_header = wa_t001-butxt.
+*    ELSE.
+*      v_header = 'RESINOVA CHEMIE LTD.'.
+*      v_header = wa_t001-butxt .
+*      v_header = 'ADVANCED ADHESIVES LIMITED'.
+*    ENDIF.
+
+    IF w_cnt GT 1.
+      w_cnt2 = sy-tabix .
+      CASE w_cnt2.
+        WHEN 1.
+          control_parameters-no_open   = space .
+          control_parameters-no_close  = 'X' .
+        WHEN w_cnt .
+          control_parameters-no_open   = 'X' .
+          control_parameters-no_close  = space .
+        WHEN OTHERS.
+          control_parameters-no_open   = 'X' .
+          control_parameters-no_close  = 'X' .
+      ENDCASE.
+    ENDIF.
+
+    READ TABLE it_lfa1 INTO wa_lfa1 WITH KEY lifnr = wa_header1-lifnr.
+    IF sy-subrc EQ 0.
+      CONCATENATE wa_lfa1-name1 wa_lfa1-name2 INTO v_name.
+      v_city = wa_lfa1-ort01.
+    ENDIF.
+
+
+
+    CONCATENATE s_budat-low+6(2) '/' s_budat-low+4(2) '/' s_budat-low+0(4) INTO v_low.
+    CONCATENATE                               s_budat-high+6(2) '/' s_budat-high+4(2) '/' s_budat-high+0(4) INTO v_high.
+    CONCATENATE v_low 'to' v_high INTO v_date SEPARATED BY ' '.
+
+    IF w_cnt = 1.
+      CALL FUNCTION fmname
+        EXPORTING
+          v_vendor  = v_vendor
+          v_name    = v_name
+          v_date    = v_date
+          v_low     = v_low
+          v_high    = v_high
+          v_city    = v_city
+          v_header  = v_header
+          v_bukrs   = s_bukrs
+          wa_lifnr  = wa_header1-lifnr
+        TABLES
+          it_final1 = it_demo1.
+    ENDIF.
+
+    IF w_cnt GT 1.
+      CALL FUNCTION fmname
+        EXPORTING
+          control_parameters = control_parameters
+          v_vendor           = v_vendor
+          v_name             = v_name
+          v_date             = v_date
+          v_low              = v_low
+          v_high             = v_high
+          v_city             = v_city
+          v_header           = v_header
+          v_bukrs            = s_bukrs
+          wa_lifnr           = wa_header1-lifnr
+        TABLES
+          it_final1          = it_demo1.
+    ENDIF.
+
+    CLEAR:v_vendor, v_name, v_date, v_low, v_high, v_city, v_header.
+    REFRESH:it_demo1[].
+
+  ENDLOOP.
+
+
+*  ENDIF.
+ENDFORM.                    " SMARTFORM2
+
+END-OF-SELECTION.
+*&---------------------------------------------------------------------*
+*&      Form  SMARTFORM3
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM smartform3 .
+  DATA:m_adrnr TYPE ad_addrnum,
+       m_email TYPE ad_smtpadr.
+
+  DATA : control_parameters  TYPE ssfctrlop.
+  DATA : w_cnt TYPE i.
+  DATA : w_cnt2 TYPE i.
+
+  it_header[] = it_final[].
+
+  SORT it_header BY kunnr.
+  DELETE ADJACENT DUPLICATES FROM it_header COMPARING kunnr.
+
+  DESCRIBE TABLE it_header LINES w_cnt.
+*  IF s_kunnr-high IS INITIAL.
+
+  CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
+    EXPORTING
+      formname = 'ZFI_LEDGER_CUSTOMER_VIEW'
+    IMPORTING
+      fm_name  = fmname.
+
+  LOOP AT it_header INTO wa_header.
+
+    LOOP AT it_final INTO wa_final WHERE kunnr = wa_header-kunnr.
+*
+*      AUTHORITY-CHECK OBJECT 'K_PCAR_REP'
+*         ID 'PRCTR' FIELD wa_final-vkbur
+*         ID 'ACTVT' FIELD '03'.
+*      IF sy-subrc <> 0.
+*         DELETE TABLE it_final FROM wa_final.
+*      ENDIF.
+
+      MOVE-CORRESPONDING wa_final TO wa_demo.
+      APPEND wa_demo TO it_demo.
+      CLEAR:wa_demo.
+    ENDLOOP.
+
+    CLEAR:v_customer.
+    s_kunnr-low = wa_header-kunnr.
+    SHIFT s_kunnr-low LEFT DELETING LEADING '0'.
+
+    CONCATENATE v_customer ',' wa_header-kunnr INTO v_customer.
+
+    SHIFT v_customer LEFT DELETING LEADING ','.
+
+*    IF s_bukrs EQ '1000'.
+*      v_header = 'ASTRAL POLY TECHNIK LIMITED'.
+    v_header = wa_t001-butxt .
+*    ELSE.
+*      v_header = 'RESINOVA CHEMIE LTD.'.
+*      v_header = wa_t001-butxt .
+*      v_header = 'ADVANCED ADHESIVES LIMITED'.
+*    ENDIF.
+
+    IF w_cnt GT 1.
+      w_cnt2 = sy-tabix .
+      CASE w_cnt2.
+        WHEN 1.
+          control_parameters-no_open   = space .
+          control_parameters-no_close  = 'X' .
+        WHEN w_cnt .
+          control_parameters-no_open   = 'X' .
+          control_parameters-no_close  = space .
+        WHEN OTHERS.
+          control_parameters-no_open   = 'X' .
+          control_parameters-no_close  = 'X' .
+      ENDCASE.
+    ENDIF.
+
+    READ TABLE it_kna1 INTO wa_kna1 WITH KEY kunnr = wa_header-kunnr.
+    IF sy-subrc EQ 0.
+      CONCATENATE wa_kna1-name1 wa_kna1-name2 INTO v_name.
+      v_city = wa_kna1-ort01.
+    ENDIF.
+
+    CONCATENATE s_budat-low+6(2) '/' s_budat-low+4(2) '/' s_budat-low+0(4) INTO v_low.
+    CONCATENATE                               s_budat-high+6(2) '/' s_budat-high+4(2) '/' s_budat-high+0(4) INTO v_high.
+    CONCATENATE v_low 'to' v_high INTO v_date SEPARATED BY ' '.
+
+    IF sy-batch EQ 'X'.
+      gs_ctrlop-getotf = 'X'.
+*  gs_ctrlop-device = 'PRINTER'.
+      gs_ctrlop-preview = ' '.
+      gs_ctrlop-no_dialog = ' '.
+      gs_outopt-tddest = 'LOCL'.
+    ENDIF.
+
+
+    IF w_cnt = 1.
+      CALL FUNCTION fmname
+        EXPORTING
+          v_customer      = v_customer
+          v_name          = v_name
+          v_date          = v_date
+          v_low           = v_low
+          v_high          = v_high
+          v_city          = v_city
+          v_header        = v_header
+          v_bukrs         = s_bukrs
+          wa_kunnr        = wa_header-kunnr
+        IMPORTING
+          job_output_info = gs_otfdata
+        TABLES
+          it_final        = it_demo.
+*          it_final        = it_final.
+    ENDIF.
+
+    IF w_cnt GT 1.
+      CALL FUNCTION fmname
+        EXPORTING
+          control_parameters = control_parameters
+          v_customer         = v_customer
+          v_name             = v_name
+          v_date             = v_date
+          v_low              = v_low
+          v_high             = v_high
+          v_city             = v_city
+          v_header           = v_header
+          v_bukrs            = s_bukrs
+          wa_kunnr           = wa_header-kunnr
+        IMPORTING
+          job_output_info    = gs_otfdata
+        TABLES
+          it_final           = it_demo.
+    ENDIF.
+
+
+    CLEAR:v_customer, v_name, v_date, v_low, v_high, v_city, v_header, wa_header,control_parameters.
+    REFRESH:it_demo[].
+
+
+  ENDLOOP.
+
+  CLEAR:v_customer.
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  SMARTFORM4
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM smartform4 .
+
+  DATA : control_parameters  TYPE ssfctrlop.
+  DATA : w_cnt TYPE i.
+  DATA : w_cnt2 TYPE i.
+
+
+  SORT it_final1 BY lifnr budat.
+
+  it_header1[] = it_final1[].
+  SORT it_header1 BY lifnr.
+  DELETE ADJACENT DUPLICATES FROM it_header1 COMPARING lifnr.
+
+  DESCRIBE TABLE it_header1 LINES w_cnt.
+
+  CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
+    EXPORTING
+      formname = 'ZFI_LEDGER_VENDOR_VIEW'
+    IMPORTING
+      fm_name  = fmname.
+
+  LOOP AT it_header1 INTO wa_header1.
+
+    LOOP AT it_final1 INTO wa_final1 WHERE lifnr = wa_header1-lifnr.
+
+*      AUTHORITY-CHECK OBJECT 'K_PCAR_REP'
+*   ID 'PRCTR' FIELD wa_final1-prctr
+*   ID 'ACTVT' FIELD '03'.
+*      IF sy-subrc NE 0.
+*        DELETE TABLE it_final1 FROM wa_final1.
+*      ENDIF.
+
+      MOVE-CORRESPONDING wa_final1 TO wa_demo1.
+      APPEND wa_demo1 TO it_demo1.
+      CLEAR:wa_demo1.
+    ENDLOOP.
+
+    CLEAR:v_vendor.
+
+*  IF s_lifnr-high IS INITIAL.
+*    LOOP AT s_lifnr.
+*      SHIFT s_lifnr-low LEFT DELETING LEADING '0'.
+*      CONCATENATE v_vendor ', ' s_lifnr-low INTO v_vendor.
+*    ENDLOOP.
+
+    s_lifnr-low = wa_header1-lifnr.
+    SHIFT s_lifnr-low LEFT DELETING LEADING '0'.
+    CONCATENATE v_vendor ', ' s_lifnr-low INTO v_vendor.
+    SHIFT v_vendor LEFT DELETING LEADING ','.
+
+*    IF s_bukrs EQ '1000'.
+*      v_header = 'ASTRAL POLY TECHNIK LIMITED'.
+    v_header = wa_t001-butxt .
+*    ELSE.
+*      v_header = 'RESINOVA CHEMIE LTD.'.
+*      v_header = wa_t001-butxt .
+*      v_header = 'ADVANCED ADHESIVES LIMITED'.
+*    ENDIF.
+
+    IF w_cnt GT 1.
+      w_cnt2 = sy-tabix .
+      CASE w_cnt2.
+        WHEN 1.
+          control_parameters-no_open   = space .
+          control_parameters-no_close  = 'X' .
+        WHEN w_cnt .
+          control_parameters-no_open   = 'X' .
+          control_parameters-no_close  = space .
+        WHEN OTHERS.
+          control_parameters-no_open   = 'X' .
+          control_parameters-no_close  = 'X' .
+      ENDCASE.
+    ENDIF.
+
+    READ TABLE it_lfa1 INTO wa_lfa1 WITH KEY lifnr = wa_header1-lifnr.
+    IF sy-subrc EQ 0.
+      CONCATENATE wa_lfa1-name1 wa_lfa1-name2 INTO v_name.
+      v_city = wa_lfa1-ort01.
+    ENDIF.
+
+
+
+    CONCATENATE s_budat-low+6(2) '/' s_budat-low+4(2) '/' s_budat-low+0(4) INTO v_low.
+    CONCATENATE                               s_budat-high+6(2) '/' s_budat-high+4(2) '/' s_budat-high+0(4) INTO v_high.
+    CONCATENATE v_low 'to' v_high INTO v_date SEPARATED BY ' '.
+
+    IF w_cnt = 1.
+      CALL FUNCTION fmname
+        EXPORTING
+          v_vendor  = v_vendor
+          v_name    = v_name
+          v_date    = v_date
+          v_low     = v_low
+          v_high    = v_high
+          v_city    = v_city
+          v_header  = v_header
+          v_bukrs   = s_bukrs
+          wa_lifnr  = wa_header1-lifnr
+        TABLES
+          it_final1 = it_demo1.
+    ENDIF.
+
+    IF w_cnt GT 1.
+      CALL FUNCTION fmname
+        EXPORTING
+          control_parameters = control_parameters
+          v_vendor           = v_vendor
+          v_name             = v_name
+          v_date             = v_date
+          v_low              = v_low
+          v_high             = v_high
+          v_city             = v_city
+          v_header           = v_header
+          v_bukrs            = s_bukrs
+          wa_lifnr           = wa_header1-lifnr
+        TABLES
+          it_final1          = it_demo1.
+    ENDIF.
+
+    CLEAR:v_vendor, v_name, v_date, v_low, v_high, v_city, v_header.
+    REFRESH:it_demo1[].
+
+  ENDLOOP.
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  AUTHORIZATION_CHECK
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM authorization_check .
+*  SELECT bukrs
+*   INTO TABLE it_bukrs
+*    FROM t001
+*WHERE bukrs = s_bukrs.
+*
+*  LOOP AT it_bukrs INTO wa_bukrs.
+*    AUTHORITY-CHECK OBJECT 'F_BKPF_BUK'
+*    ID 'BUKRS' FIELD wa_bukrs-bukrs
+*    ID 'ACTVT' FIELD '03'.
+*    IF sy-subrc NE 0.
+*      MESSAGE 'YOU ARE NOT AUTHORIZED FOR THIS COMAPNY CODE' TYPE 'E'.
+*    ENDIF.
+*  ENDLOOP.
+
+  SELECT vkorg FROM knvv INTO TABLE @DATA(lt_knvvcheck)
+       WHERE vkorg  IN @s_vkorg.
+
+  LOOP AT lt_knvvcheck INTO DATA(ls_knvvcheck).
+    AUTHORITY-CHECK OBJECT 'ZLEDG_VKRG'
+  ID 'VKORG' FIELD ls_knvvcheck-vkorg
+  ID 'ACTVT' FIELD '03'.
+    IF sy-subrc NE 0.
+      MESSAGE 'You Are Not Authorized For This Sales Organization' TYPE 'E'.
+    ENDIF.
+  ENDLOOP.
+*  IF p_cust = 'X'.
+*    SELECT vkorg FROM tvko
+*      INTO TABLE it_tvko
+*       WHERE bukrs = s_bukrs.
+*
+*    LOOP AT it_tvko INTO wa_tvko.
+*      AUTHORITY-CHECK OBJECT 'ZFVC_VKORG'
+*      ID 'BUKRS' FIELD wa_tvko-vkorg
+*      ID 'ACTVT' FIELD '03'.
+*      IF sy-subrc NE 0.
+**      MESSAGE 'YOU ARE NOT AUTHORIZED FOR THIS SALES ORGANIZATIN' TYPE 'E'.
+*        MESSAGE e013(zsd) WITH wa_tvko-vkorg.
+*      ENDIF.
+*    ENDLOOP.
+*  ELSE.
+*    SELECT * FROM t024e
+*      INTO TABLE it_t024e.
+*
+*    LOOP AT it_t024e INTO wa_t024e.
+*      AUTHORITY-CHECK OBJECT 'ZFVC_EKORG'
+*      ID 'EKORG' FIELD wa_t024e-ekorg
+*      ID 'ACTVT' FIELD '03'.
+*      IF sy-subrc NE 0.
+**      MESSAGE 'YOU ARE NOT AUTHORIZED FOR THIS SALES ORGANIZATIN' TYPE 'E'.
+*        MESSAGE e038(zmm) WITH wa_t024e-ekorg.
+*      ENDIF.
+*    ENDLOOP.
+*  ENDIF.
+
+**************** for rex user 14.11.2019
+  GET PARAMETER ID para FIELD prog .
+*  BREAK-POINT.
+  IF prog = 'Y'.
+    IF s_kunnr-low IS INITIAL.
+      MESSAGE 'Customer is Mandatory' TYPE 'E'.
+    ENDIF.
+    SELECT kunnr begru FROM kna1 INTO TABLE it_kna1_aut WHERE kunnr IN s_kunnr.
+    LOOP AT it_kna1_aut INTO wa_kna1_aut.
+
+      AUTHORITY-CHECK OBJECT 'F_BKPF_BED'
+      ID 'BRGRU' FIELD wa_kna1_aut-begru
+      ID 'ACTVT' FIELD '03'.
+      IF sy-subrc <> 0.
+        MESSAGE e012(zsd) WITH wa_kna1_aut-kunnr.
+      ENDIF.
+      CLEAR: wa_kna1_aut.
+
+    ENDLOOP.
+  ENDIF.
+*****************  end of rex user 14.11.2019
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  SMARTFORM_MAIL
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM smartform_mail .
+  DATA : control_parameters  TYPE ssfctrlop.
+  DATA : w_cnt TYPE i.
+  DATA : w_cnt2 TYPE i.
+
+
+
+  TYPES: BEGIN OF ty_vmail,
+           addrnumber TYPE adr6-addrnumber,
+           smtp_addr  TYPE adr6-smtp_addr,
+         END OF ty_vmail.
+  DATA: it_vemail TYPE STANDARD TABLE OF ty_vmail,
+        wa_vemail TYPE ty_vmail.
+
+  CONSTANTS : c_vag_user        TYPE rvari_vnam VALUE 'ZFI_VC_VAG',
+              c_vc_date         TYPE rvari_vnam VALUE 'VC_DATE',
+              c_tvarvc_mailsend TYPE rvari_vnam VALUE 'ZSENDER_MAIL',
+              c_type_vag        TYPE rsscr_kind VALUE 'S'.
+
+  TYPES : BEGIN OF ty_vag,
+            sign TYPE tvarv_sign,
+            opti TYPE tvarv_opti,
+            low  TYPE tvarv_val,
+            high TYPE tvarv_val,
+          END OF ty_vag.
+  DATA: it_vag TYPE STANDARD TABLE OF ty_vag,
+        wa_vag TYPE ty_vag.
+
+************* for cc mail id
+  CONCATENATE 'CONF_LATTER_' s_bukrs INTO zparam.
+
+**********
+  SELECT SINGLE low
+        INTO cc_email
+        FROM tvarvc
+        WHERE name = zparam .
+
+  SPLIT cc_email AT ',' INTO cc1 cc2.
+***************  for covering latter date
+  SELECT SINGLE low
+    INTO vc_date
+    FROM tvarvc
+    WHERE name = c_vc_date .
+  SPLIT vc_date AT ',' INTO dd1 dd2.
+**********
+
+********** for account type
+  SELECT sign
+   opti
+   low
+   high
+   FROM tvarvc
+   INTO TABLE it_vag
+          WHERE name = c_vag_user AND
+               type = c_type_vag.
+
+  SELECT SINGLE low
+   INTO v_emailid
+   FROM tvarvc
+   WHERE name = c_tvarvc_mailsend.
+***************
+  SORT it_final1 BY lifnr budat.
+
+  it_header1[] = it_final1[].
+  SORT it_header1 BY lifnr.
+  DELETE ADJACENT DUPLICATES FROM it_header1 COMPARING lifnr.
+
+  SELECT addrnumber smtp_addr FROM adr6
+    INTO TABLE it_vemail
+    FOR ALL ENTRIES IN it_lfa1
+    WHERE addrnumber = it_lfa1-adrnr.
+
+  DESCRIBE TABLE it_header1 LINES w_cnt.
+
+  CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
+    EXPORTING
+      formname = 'ZFI_LEDGER_VENDOR'
+    IMPORTING
+      fm_name  = fmname.
+
+  LOOP AT it_header1 INTO wa_header1.
+
+********************    covering mail
+    CONCATENATE 'Please find attached herewith the Imprest Confirmation statement as on'dd1'.' 'You are requested to please take print of attached PDF Copy and confirm that the stated amount is correct / not correct with your signature.'
+    INTO it_body SEPARATED BY space.
+    APPEND it_body. CLEAR:it_body.
+
+    CONCATENATE 'In case of difference in the balance please contact us urgent. Also requested to please send original copy after confirmation to Head Office without fail upto'dd2
+    INTO it_body SEPARATED BY space.
+    APPEND it_body. CLEAR:it_body.
+
+    it_body = 'Pls. note that this is System generated mail, do not reply on this mail.'.
+    APPEND it_body. CLEAR:it_body.
+
+    CONCATENATE 'You have to send balance confirmation to mail ID'cc1
+    INTO it_body SEPARATED BY space.
+    APPEND it_body. CLEAR:it_body.
+
+
+*********
+
+    READ TABLE it_lfa1 INTO wa_lfa1 WITH KEY lifnr = wa_header1-lifnr.
+    IF sy-subrc = 0.
+
+      READ TABLE it_vag INTO wa_vag WITH KEY low = wa_lfa1-ktokk.
+      IF sy-subrc = 0.
+
+        READ TABLE it_vemail INTO wa_vemail WITH KEY addrnumber = wa_lfa1-adrnr.
+        IF sy-subrc = 0.
+          m_email = wa_vemail-smtp_addr.
+
+          LOOP AT it_final1 INTO wa_final1 WHERE lifnr = wa_header1-lifnr.
+
+*      AUTHORITY-CHECK OBJECT 'K_PCAR_REP'
+*      ID 'PRCTR' FIELD wa_final-prctr
+*      ID 'ACTVT' FIELD '03'.
+*      IF sy-subrc NE 0.
+*        DELETE TABLE it_final FROM wa_final.
+*      ENDIF.
+*      AUTHORITY-CHECK OBJECT 'K_PCAR_REP'
+*   ID 'PRCTR' FIELD wa_final1-prctr
+*   ID 'ACTVT' FIELD '03'.
+*      IF sy-subrc NE 0.
+*        DELETE TABLE it_final1 FROM wa_final1.
+*      ENDIF.
+
+            MOVE-CORRESPONDING wa_final1 TO wa_demo1.
+            APPEND wa_demo1 TO it_demo1.
+            CLEAR:wa_demo1.
+          ENDLOOP.
+
+          CLEAR:v_vendor.
+
+*  IF s_lifnr-high IS INITIAL.
+*    LOOP AT s_lifnr.
+*      SHIFT s_lifnr-low LEFT DELETING LEADING '0'.
+*      CONCATENATE v_vendor ', ' s_lifnr-low INTO v_vendor.
+*    ENDLOOP.
+
+          s_lifnr-low = wa_header1-lifnr.
+          SHIFT s_lifnr-low LEFT DELETING LEADING '0'.
+          CONCATENATE v_vendor ', ' s_lifnr-low INTO v_vendor.
+          SHIFT v_vendor LEFT DELETING LEADING ','.
+
+*    IF s_bukrs EQ '1000'.
+*      v_header = 'ASTRAL POLY TECHNIK LIMITED'.
+          v_header = wa_t001-butxt.
+*    ELSE.
+*      v_header = 'RESINOVA CHEMIE LTD.'.
+*      v_header = wa_t001-butxt .
+*      v_header = 'ADVANCED ADHESIVES LIMITED'.
+*    ENDIF.
+
+          IF w_cnt GT 1.
+            w_cnt2 = sy-tabix .
+            CASE w_cnt2.
+              WHEN 1.
+                control_parameters-no_open   = space .
+                control_parameters-no_close  = 'X' .
+              WHEN w_cnt .
+                control_parameters-no_open   = 'X' .
+                control_parameters-no_close  = space .
+              WHEN OTHERS.
+                control_parameters-no_open   = 'X' .
+                control_parameters-no_close  = 'X' .
+            ENDCASE.
+          ENDIF.
+
+          READ TABLE it_lfa1 INTO wa_lfa1 WITH KEY lifnr = wa_header1-lifnr.
+          IF sy-subrc EQ 0.
+            CONCATENATE wa_lfa1-name1 wa_lfa1-name2 INTO v_name.
+            v_city = wa_lfa1-ort01.
+          ENDIF.
+
+
+
+          CONCATENATE s_budat-low+6(2) '/' s_budat-low+4(2) '/' s_budat-low+0(4) INTO v_low.
+          CONCATENATE                               s_budat-high+6(2) '/' s_budat-high+4(2) '/' s_budat-high+0(4) INTO v_high.
+          CONCATENATE v_low 'to' v_high INTO v_date SEPARATED BY ' '.
+
+          IF w_cnt = 1.
+            CALL FUNCTION fmname
+              EXPORTING
+                control_parameters = ssfctrlop
+                output_options     = ssfcompop
+                v_vendor           = v_vendor
+                v_name             = v_name
+                v_date             = v_date
+                v_low              = v_low
+                v_high             = v_high
+                v_city             = v_city
+                v_header           = v_header
+                v_bukrs            = s_bukrs
+                wa_lifnr           = wa_header1-lifnr
+              IMPORTING
+                job_output_info    = gs_otfdata
+              TABLES
+                it_final1          = it_demo1.
+
+            IF sy-subrc <> 0.
+              MESSAGE  'ERROR RELATED TO SMARTFORM OR PAGE FORMAT OR PRINTER' TYPE 'E'.
+            ENDIF.
+            PERFORM email.
+          ENDIF.
+
+          IF w_cnt GT 1.
+            CALL FUNCTION fmname
+              EXPORTING
+                control_parameters = ssfctrlop
+                output_options     = ssfcompop
+*               control_parameters = control_parameters
+                v_vendor           = v_vendor
+                v_name             = v_name
+                v_date             = v_date
+                v_low              = v_low
+                v_high             = v_high
+                v_city             = v_city
+                v_header           = v_header
+                v_bukrs            = s_bukrs
+                wa_lifnr           = wa_header1-lifnr
+              IMPORTING
+                job_output_info    = gs_otfdata
+              TABLES
+                it_final1          = it_demo1.
+            IF sy-subrc <> 0.
+              MESSAGE  'ERROR RELATED TO SMARTFORM OR PAGE FORMAT OR PRINTER' TYPE 'E'.
+            ENDIF.
+            PERFORM email.
+          ENDIF.
+
+          CLEAR:v_vendor, v_name, v_date, v_low, v_high, v_city, v_header.
+          REFRESH:it_demo1[],gt_otf,gt_pdf_tab,gt_objpack,gt_objbin,gt_reclist,it_body.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+    CLEAR: wa_lfa1,wa_vemail,wa_vag.
+  ENDLOOP.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  EMAIL
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM email .
+  IF m_email IS NOT INITIAL.
+
+    gt_otf[] = gs_otfdata-otfdata[].
+    CLEAR gt_pdf_tab.
+
+
+    CALL FUNCTION 'CONVERT_OTF'
+      EXPORTING
+        format                = 'PDF'
+        max_linewidth         = 132
+      IMPORTING
+        bin_filesize          = gv_bin_filesize
+      TABLES
+        otf                   = gt_otf
+        lines                 = gt_pdf_tab
+      EXCEPTIONS
+        err_max_linewidth     = 1
+        err_format            = 2
+        err_conv_not_possible = 3
+        OTHERS                = 4.
+
+    IF sy-subrc <> 0.
+
+      MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+      WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+
+    ENDIF.
+
+    CLEAR gs_docdata.
+    gs_docdata-obj_name = gc_tst.
+    gs_docdata-obj_descr = gc_testing.
+    gs_docdata-sensitivty = 'F'.
+    gs_docdata-obj_langu = 'E'.
+
+    CLEAR : gt_reclist, gs_reclist.
+
+*  if external mail id
+
+    gs_reclist-receiver = m_email.
+    gs_reclist-rec_type = 'U'.
+    APPEND gs_reclist TO gt_reclist.
+
+    gs_reclist-receiver = cc1.
+    gs_reclist-rec_type = 'U'.
+    gs_reclist-copy     = 'X'.
+    APPEND gs_reclist TO gt_reclist.
+
+    gs_reclist-receiver = cc2.
+    gs_reclist-rec_type = 'U'.
+    gs_reclist-copy     = 'X'.
+    APPEND gs_reclist TO gt_reclist.
+
+    CLEAR : gs_objbin, gs_pdf_tab.
+
+    LOOP AT gt_pdf_tab INTO gs_pdf_tab.
+
+      gv_pos = 255 - gv_len.
+      IF gv_pos > 134. "length of pdf_table
+        gv_pos = 134.
+      ENDIF.
+
+      gs_objbin+gv_len = gs_pdf_tab(gv_pos).
+      gv_len = gv_len + gv_pos.
+
+      IF gv_len = 255. "length of out (contents_bin)
+
+        APPEND gs_objbin TO gt_objbin.
+        CLEAR: gs_objbin, gv_len.
+
+        IF gv_pos < 134.
+          gs_objbin = gs_pdf_tab+gv_pos.
+          gv_len = 134 - gv_pos.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+    IF gv_len > 0.
+      APPEND gs_objbin TO gt_objbin.
+    ENDIF.
+
+    DESCRIBE TABLE gt_objbin LINES gv_tab_lines.
+
+    CLEAR gs_objbin.
+
+    READ TABLE gt_objbin INTO gs_objbin INDEX gv_tab_lines.
+
+    IF sy-subrc = 0.
+
+
+      CLEAR:gs_objpack.
+      gs_objpack-transf_bin = space."'X'."space.
+      gs_objpack-head_start = 1.
+      gs_objpack-head_num = 0.
+      gs_objpack-body_start = 1.
+      DESCRIBE TABLE it_body LINES gs_objpack-body_num.
+      gs_objpack-doc_type = 'RAW'.
+      APPEND gs_objpack TO gt_objpack.
+
+
+      gs_objpack-doc_size = ( gv_tab_lines - 1 ) * 255 + strlen( gs_objbin ).
+      gs_objpack-transf_bin = 'X'.
+      gs_objpack-head_start = 1.
+      gs_objpack-head_num = 0.
+      gs_objpack-body_start = 1.
+      gs_objpack-body_num = gv_tab_lines.
+      gs_objpack-doc_type = 'PDF'.
+      gs_objpack-obj_name = 'ATTACHMENT'.
+      gs_objpack-obj_descr = wa_header1-lifnr. "'Invoice'.
+      APPEND gs_objpack TO gt_objpack.
+    ENDIF.
+    l_sender  = v_emailid.
+
+* Sending the Form Output in the PDF format to email
+
+*    CALL FUNCTION 'SO_NEW_DOCUMENT_ATT_SEND_API1'
+    CALL FUNCTION 'SO_DOCUMENT_SEND_API1'
+      EXPORTING
+        document_data              = gs_docdata
+        put_in_outbox              = 'X'
+        sender_address             = l_sender
+        sender_address_type        = 'INT'
+        commit_work                = 'X'
+      TABLES
+        packing_list               = gt_objpack
+        contents_bin               = gt_objbin
+        receivers                  = gt_reclist
+        contents_txt               = it_body
+      EXCEPTIONS
+        too_many_receivers         = 1
+        document_not_sent          = 2
+        document_type_not_exist    = 3
+        operation_no_authorization = 4
+        parameter_error            = 5
+        x_error                    = 6
+        enqueue_error              = 7
+        OTHERS                     = 8.
+
+    IF sy-subrc <> 0.
+      MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+      WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+    ELSE.
+*    WRITE 'Sent Successfully'.
+      MESSAGE 'Sent Succesfull' TYPE 'S'.
+
+    ENDIF.
+    SUBMIT rsconn01 WITH mode EQ 'INT' AND RETURN.
+
+  ENDIF.
+
+ENDFORM.

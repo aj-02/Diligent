@@ -1,0 +1,1925 @@
+*&---------------------------------------------------------------------*
+*& Report  ZHR_NOMINATION_BDC
+*&
+*&---------------------------------------------------------------------*
+*&    Created By     : Carina Jose
+*&    Creation Date  : 06.01.2021
+*&---------------------------------------------------------------------*
+REPORT zhr_nomination_bdc_upload.
+
+DATA : it_filedata    TYPE STANDARD TABLE OF zhr_nomination,
+       wa_filedata    TYPE zhr_nomination,
+       it_filedata_up TYPE STANDARD TABLE OF zhr_nomination,
+       wa_filedata_up TYPE zhr_nomination,
+       it_email_sent  TYPE TABLE OF zhr_email_maint,
+       wa_email_sent  TYPE zhr_email_maint,
+       f_option       TYPE ctu_params.
+
+CONSTANTS:c_x              TYPE c VALUE 'X'.
+CONSTANTS:
+  c_e TYPE char1 VALUE 'E',
+  c_w TYPE char1 VALUE 'W',
+  c_s TYPE char1 VALUE 'S'.
+TYPES: BEGIN OF ty_tvarvc,
+         sign TYPE tvarv_sign,
+         opti TYPE tvarv_opti,
+         low  TYPE tvarv_val,
+         high TYPE tvarv_val,
+       END OF ty_tvarvc.
+TYPES: BEGIN OF ty_final1,
+         pernr(20),
+         subty(20),
+         begda(8),
+         endda(8),
+         nam01(20),
+         add01(20),
+         rel01(20),
+         dat01(8),
+         shp01(20),
+         gra01(20),
+*         orgeh(20),
+       END OF ty_final1.
+DATA : it_filedata_err TYPE TABLE OF ty_final1,
+       wa_filedata_err TYPE ty_final1.
+DATA: it_excel TYPE TABLE OF ty_final1,
+      wa_excel TYPE ty_final1.
+
+DATA: it_dat  TYPE STANDARD TABLE OF ty_final1,
+      it_dat1 TYPE truxs_t_text_data,
+      wa_dat  LIKE LINE OF it_dat.
+DATA : v_emailid TYPE somlreci1-receiver.
+DATA l_sender TYPE soextreci1-receiver.
+DATA: it_tvarvc  TYPE STANDARD TABLE OF ty_tvarvc.
+DATA: wa_tvarvc TYPE ty_tvarvc.
+DATA: it_tvarvc2  TYPE STANDARD TABLE OF ty_tvarvc.
+DATA: wa_tvarvc2 TYPE ty_tvarvc.
+DATA : v_pernr TYPE pa0001-pernr.
+*&---------------------------------------------------------------------*
+*&                                                                     *
+*&              INTERNAL TABLES : IT_                                  *
+*&                                                                     *
+*&---------------------------------------------------------------------*
+DATA:it_bdcdata TYPE TABLE OF bdcdata,
+     it_messtab TYPE bdcmsgcoll OCCURS 0 WITH HEADER LINE.
+*&---------------------------------------------------------------------*
+*&                                                                     *
+*&    Workareas :wa_                                                   *
+*&                                                                     *
+*&---------------------------------------------------------------------*
+DATA:wa_bdcdata TYPE bdcdata,
+     wa_messtab TYPE bdcmsgcoll.
+DATA: field_bdc(20).
+TYPES : BEGIN OF ty_mail,
+          pernr  TYPE zhr_nomination-pernr,
+          subty  TYPE zhr_nomination-subty,
+          msgtyp TYPE char1,
+          msg    TYPE char255,
+        END OF ty_mail.
+
+TYPES : BEGIN OF ty_mail_t,
+          pernr TYPE zhr_act_hiring-pernr,
+          subty TYPE zhr_nomination-subty,
+          werks TYPE zhr_act_hiring-werks,
+        END OF ty_mail_t.
+
+DATA : it_mail_t TYPE STANDARD TABLE OF ty_mail_t,
+       wa_mail_t TYPE ty_mail_t.
+
+DATA : it_mail TYPE STANDARD TABLE OF ty_mail,
+       wa_mail TYPE ty_mail.
+DATA : it_mail2 TYPE STANDARD TABLE OF ty_mail,
+       wa_mail2 TYPE ty_mail.
+DATA:lv_string TYPE string.
+DATA :it_type TYPE truxs_t_text_data.
+DATA: wrk_file1 LIKE epsf-epsdirnam.
+DATA: wrk_file2 LIKE epsf-epsdirnam.
+TYPES : BEGIN OF ty_files,
+          appsrv_fname TYPE localfile, " rlgrap-filename,
+        END   OF ty_files.
+DATA :        tab_lines          LIKE sy-tabix.
+DATA :  shp01(7).
+DATA: lt_mailsubject     TYPE sodocchgi1.
+DATA: lt_mailrecipients  TYPE STANDARD TABLE OF somlrec90 WITH HEADER LINE.
+DATA: lt_mailtxt         TYPE STANDARD TABLE OF soli      WITH HEADER LINE.
+
+DATA : lt_objpack LIKE sopcklsti1 OCCURS 2  WITH HEADER LINE,
+       lt_objhead LIKE solisti1   OCCURS 1  WITH HEADER LINE,
+       lt_objbin  LIKE solisti1   OCCURS 10 WITH HEADER LINE,
+       lt_objtxt  LIKE solisti1   OCCURS 10 WITH HEADER LINE,
+       lt_reclist LIKE somlreci1  OCCURS 5  WITH HEADER LINE.
+
+DATA:it_body LIKE solisti1 OCCURS 0 WITH HEADER LINE.
+
+DATA:it_message TYPE TABLE OF solisti1.
+DATA: t_file_list  TYPE TABLE OF epsfili WITH HEADER LINE,
+      t_files      TYPE TABLE OF ty_files WITH HEADER LINE,
+      lv_filename1 TYPE sapb-sappfad, "rcgfiletr-ftappl,
+      lv_filename2 TYPE rcgfiletr-ftappl.
+TYPES : BEGIN OF ty_t591a,
+          infty TYPE t591a-infty,
+          subty TYPE t591a-subty,
+        END OF ty_t591a.
+DATA : it_t591a TYPE STANDARD TABLE OF ty_t591a,
+       wa_t591a TYPE ty_t591a.
+TYPES: BEGIN OF ty_tvarvc1,
+*           wrk_file1  TYPE tvarv_val,
+         wrk_file1 TYPE epsf-epsdirnam,
+       END OF ty_tvarvc1.
+
+DATA: lt_acc_key1  TYPE STANDARD TABLE OF ty_tvarvc1.
+DATA: lwa_acc_key1 TYPE ty_tvarvc1.
+DATA : v_werks TYPE pa0001-werks.
+
+***
+CONSTANTS : c_tvarvc_name1 TYPE rvari_vnam VALUE 'ZHR_ACTION',
+            c_type_user1   TYPE rsscr_kind VALUE 'S'.
+*CONSTANTS : c_tvarvc_name1 TYPE rvari_vnam VALUE 'ZHR_ACTION'.
+CONSTANTS : c_tvarvc_name2 TYPE rvari_vnam VALUE 'ZHR_ACTION_DEL'.
+CONSTANTS:
+  c_tvarvc_mailrec     TYPE rvari_vnam VALUE 'ZHR_EMAIL_RECIPIENT',
+  c_tvarvc_mailrec2000 TYPE rvari_vnam VALUE 'ZHR_EMAIL_RECIPIENT_2000',
+  c_tvarvc_mailsend    TYPE rvari_vnam VALUE 'ZHR_EMAILID',
+  c_type_user          TYPE rsscr_kind VALUE 'P'.
+
+DATA: it_t0591a TYPE TABLE OF t591a,
+      wa_t0591a TYPE t591a.
+
+CONSTANTS : c_tvarvc_user TYPE rvari_vnam VALUE 'PS_USER',
+            c_tvarvc_pwd  TYPE rvari_vnam VALUE 'PS_PWD',
+            c_tvarvc_host TYPE rvari_vnam VALUE  'PS_HOST',
+            c_tvarvc_dest TYPE rvari_vnam VALUE  'PS_DEST'.
+DATA: wrk_file TYPE char200.
+CONSTANTS   : c_tvarvc_ps  TYPE rvari_vnam VALUE 'PS_PATH'.
+DATA : l_user(30) ,
+       l_pwd(30)  ,
+       l_host(64),
+       l_dest LIKE rfcdes-rfcdest.
+DATA: ps_path(500).
+DATA : w_date      TYPE sy-datum,
+       w_date1(10),
+       w_time      TYPE sy-uzeit,
+       w_time1(10).
+
+DATA: it_pa0591 TYPE TABLE OF pa0591,
+      wa_pa0591 TYPE pa0591.
+
+DATA: it_payroll_area TYPE TABLE OF zhr_payroll_area,
+      wa_payroll_area TYPE zhr_payroll_area.
+**      it_pa0001 TYPE TABLE OF pa0001,
+**      wa_pa0001 TYPE pa0001.
+
+*------------------------------SELECTION SCREEN--------------------------------------*
+SELECTION-SCREEN: BEGIN  OF BLOCK blk1 WITH FRAME TITLE text-001.
+PARAMETER p_file TYPE rlgrap-filename.
+PARAMETERS : p_mode TYPE ctu_mode DEFAULT 'N' NO-DISPLAY.
+SELECTION-SCREEN: END OF BLOCK blk1 .
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_file.
+
+  DATA: it_filename TYPE filetable,
+        wa_filename TYPE file_table,
+        lv_rc       TYPE i,
+        lv_action   TYPE i.
+
+  CALL METHOD cl_gui_frontend_services=>file_open_dialog
+    CHANGING
+      file_table              = it_filename
+      rc                      = lv_rc
+      user_action             = lv_action
+    EXCEPTIONS
+      file_open_dialog_failed = 1
+      cntl_error              = 2
+      error_no_gui            = 3
+      not_supported_by_gui    = 4
+      OTHERS                  = 5.
+  IF sy-subrc = 0 AND lv_action <> cl_gui_frontend_services=>action_cancel.
+
+    READ TABLE it_filename INTO wa_filename INDEX 1.
+    IF sy-subrc = 0.
+      MOVE wa_filename-filename TO p_file.
+    ENDIF.
+    CLEAR wa_filename.
+  ENDIF.
+
+START-OF-SELECTION.
+**  PERFORM read_file_from_remote.
+  PERFORM upload.
+*  PERFORM f009_bdc.
+*  PERFORM send_mail.
+*  PERFORM movefile.
+*&---------------------------------------------------------------------*
+*&      Form  READ_FILE_FROM_REMOTE
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+**FORM read_file_from_remote .
+**  DATA:lv_cmd    TYPE sxpgcolist-name VALUE 'ZPEOPLESTRONG',
+**       lv_status TYPE extcmdexex-status,
+**       lv_code   TYPE extcmdexex-exitcode.
+**
+**  DATA: t_result         TYPE STANDARD TABLE OF btcxpm.
+**
+**  CALL FUNCTION 'SXPG_COMMAND_EXECUTE'
+**    EXPORTING
+**      commandname                   = lv_cmd
+***     ADDITIONAL_PARAMETERS         = lv_parm
+***     OPERATINGSYSTEM               = SY-OPSYS
+***     TARGETSYSTEM                  = SY-HOST
+***     DESTINATION                   =
+***     STDOUT                        = 'X'
+***     STDERR                        = 'X'
+***     TERMINATIONWAIT               = 'X'
+***     TRACE                         =
+***     DIALOG                        =
+**    IMPORTING
+**      status                        = lv_status
+**      exitcode                      = lv_code
+**    TABLES
+**      exec_protocol                 = t_result
+**    EXCEPTIONS
+**      no_permission                 = 1
+**      command_not_found             = 2
+**      parameters_too_long           = 3
+**      security_risk                 = 4
+**      wrong_check_call_interface    = 5
+**      program_start_error           = 6
+**      program_termination_error     = 7
+**      x_error                       = 8
+**      parameter_expected            = 9
+**      too_many_parameters           = 10
+**      illegal_command               = 11
+**      wrong_asynchronous_parameters = 12
+**      cant_enq_tbtco_entry          = 13
+**      jobcount_generation_error     = 14
+**      OTHERS                        = 15.
+**  IF sy-subrc <> 0.
+**    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+**     WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+**  ENDIF.
+**ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  UPLOAD
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM upload .
+*  SELECT SINGLE low
+*              INTO wrk_file1
+*              FROM tvarvc
+*              WHERE name = c_tvarvc_name1 .
+
+  SELECT low INTO TABLE lt_acc_key1
+            FROM tvarvc
+            WHERE name = c_tvarvc_name1 AND
+                  type = c_type_user1.
+
+  SELECT SINGLE low
+      INTO wrk_file2
+      FROM tvarvc
+      WHERE name = c_tvarvc_name2 .
+
+  SELECT sign
+         opti
+         low
+         high INTO TABLE it_tvarvc
+            FROM tvarvc
+            WHERE name = c_tvarvc_mailrec AND
+                  type = c_type_user1.
+
+
+  SELECT sign
+       opti
+       low
+       high INTO TABLE it_tvarvc2
+          FROM tvarvc
+          WHERE name = c_tvarvc_mailrec2000 AND
+                type = c_type_user1.
+
+
+  SELECT SINGLE low
+   INTO v_emailid
+   FROM tvarvc
+   WHERE name = c_tvarvc_mailsend.
+
+  SELECT * FROM t591a INTO TABLE it_t0591a WHERE infty = '0591'.
+
+  CALL FUNCTION 'TEXT_CONVERT_XLS_TO_SAP'
+    EXPORTING
+*     I_FIELD_SEPERATOR    =
+*     I_LINE_HEADER        =
+      i_tab_raw_data       = it_type
+      i_filename           = p_file
+*     I_STEP               = 1
+    TABLES
+      i_tab_converted_data = it_excel
+*     EXCEPTIONS
+*     CONVERSION_FAILED    = 1
+*     OTHERS               = 2
+    .
+  IF sy-subrc <> 0.
+* Implement suitable error handling here
+  ENDIF.
+
+  DELETE it_excel INDEX 1.
+
+  LOOP AT it_excel INTO wa_excel.
+**    IF wa_excel-subty CP 'All*'.
+**      LOOP AT it_t0591a INTO wa_t0591a.
+**        wa_filedata-mandt = sy-mandt.
+**        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+**          EXPORTING
+**            input  = wa_excel-pernr
+**          IMPORTING
+**            output = wa_excel-pernr.
+**        wa_filedata-pernr      = wa_excel-pernr.
+**        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+**          EXPORTING
+**            input  = wa_excel-begda
+**          IMPORTING
+**            output = wa_excel-begda.
+**
+**        CONCATENATE wa_excel-begda+4(4)
+**                    wa_excel-begda+2(2)
+**                    wa_excel-begda+0(2) INTO wa_filedata-begda.
+**
+**        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+**          EXPORTING
+**            input  = wa_excel-endda
+**          IMPORTING
+**            output = wa_excel-endda.
+**
+**        CONCATENATE wa_excel-endda+4(4)
+**                    wa_excel-endda+2(2)
+**                    wa_excel-endda+0(2) INTO wa_filedata-endda.
+**
+**        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+**          EXPORTING
+**            input  = wa_excel-dat01
+**          IMPORTING
+**            output = wa_excel-dat01.
+**
+**        CONCATENATE wa_excel-dat01+4(4)
+**                    wa_excel-dat01+2(2)
+**                    wa_excel-dat01+0(2) INTO wa_filedata-dat01.
+**
+**        wa_filedata-subty = wa_excel-subty.
+**        wa_filedata-add01 = wa_excel-add01.
+**        wa_filedata-gra01 = wa_excel-gra01.
+**        wa_filedata-nam01 = wa_excel-nam01.
+**        wa_filedata-rel01 = wa_excel-rel01.
+**        wa_filedata-shp01 = wa_excel-shp01.
+**        wa_filedata-upload_ind = 'MANUAL'.
+**        APPEND wa_filedata TO it_filedata.
+**      ENDLOOP.
+**      CLEAR wa_filedata.
+**    ELSE.
+      wa_filedata-mandt = sy-mandt.
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+        EXPORTING
+          input  = wa_excel-pernr
+        IMPORTING
+          output = wa_excel-pernr.
+      wa_filedata-pernr      = wa_excel-pernr.
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+        EXPORTING
+          input  = wa_excel-begda
+        IMPORTING
+          output = wa_excel-begda.
+
+      CONCATENATE wa_excel-begda+4(4)
+                  wa_excel-begda+2(2)
+                  wa_excel-begda+0(2) INTO wa_filedata-begda.
+
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+        EXPORTING
+          input  = wa_excel-endda
+        IMPORTING
+          output = wa_excel-endda.
+
+      CONCATENATE wa_excel-endda+4(4)
+                  wa_excel-endda+2(2)
+                  wa_excel-endda+0(2) INTO wa_filedata-endda.
+
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+        EXPORTING
+          input  = wa_excel-dat01
+        IMPORTING
+          output = wa_excel-dat01.
+
+      CONCATENATE wa_excel-dat01+4(4)
+                  wa_excel-dat01+2(2)
+                  wa_excel-dat01+0(2) INTO wa_filedata-dat01.
+
+      wa_filedata-subty = wa_excel-subty.
+      wa_filedata-add01 = wa_excel-add01.
+      wa_filedata-gra01 = wa_excel-gra01.
+      wa_filedata-nam01 = wa_excel-nam01.
+      wa_filedata-rel01 = wa_excel-rel01.
+      wa_filedata-shp01 = wa_excel-shp01.
+      wa_filedata-upload_ind = 'MANUAL'.
+      APPEND wa_filedata TO it_filedata.
+      CLEAR wa_filedata.
+**    ENDIF.
+  ENDLOOP.
+
+**  LOOP AT lt_acc_key1 INTO lwa_acc_key1.
+**    CALL FUNCTION 'EPS_GET_DIRECTORY_LISTING '
+**      EXPORTING
+***       dir_name     =
+***       dir_name     =
+**        dir_name     = lwa_acc_key1-wrk_file1
+**        file_mask    = '*.*'
+**      TABLES
+**        dir_list     = t_file_list
+**      EXCEPTIONS
+**        access_error = 1
+**        OTHERS       = 2.
+**    IF sy-subrc IS INITIAL.
+**      LOOP AT t_file_list .
+**        t_files-appsrv_fname = t_file_list-name.
+**        APPEND t_files.
+**        CLEAR  t_files.
+**      ENDLOOP.
+**    ENDIF.
+
+*  IF t_files[] IS INITIAL.
+*    MESSAGE 'Files not found !!!!' TYPE 'S' DISPLAY LIKE 'E'.
+*    LEAVE LIST-PROCESSING.
+*  ENDIF.
+
+  DATA:lv_string TYPE string.
+**    SORT t_files BY appsrv_fname ASCENDING.
+**    LOOP AT t_files.
+**      IF t_files-appsrv_fname CP 'nomi*'.
+**
+**
+**        CONCATENATE  lwa_acc_key1-wrk_file1 '\' t_files-appsrv_fname INTO lv_filename1.
+**        CONDENSE: lv_filename1.
+**        OPEN DATASET  lv_filename1 FOR INPUT IN TEXT MODE ENCODING DEFAULT.
+**
+**        IF sy-subrc NE 0.
+**          MESSAGE 'File not readable' TYPE 'E'.
+**        ELSE.
+**          DO.
+**            CLEAR: lv_string.
+**
+**            READ DATASET   lv_filename1 INTO lv_string .
+**            IF sy-subrc NE 0.
+**              EXIT.
+**            ELSE.
+**              SPLIT lv_string AT '|' INTO   wa_filedata-pernr
+**                                            wa_filedata-subty
+**                                            wa_filedata-begda
+**                                            wa_filedata-endda
+**                                            wa_filedata-nam01
+**                                            wa_filedata-add01
+**                                            wa_filedata-rel01
+**                                            wa_filedata-dat01
+**                                            wa_filedata-shp01
+**                                            wa_filedata-gra01.
+***            wa_filedata-shp01 = shp01.
+**              CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+**                EXPORTING
+**                  input  = wa_filedata-begda
+**                IMPORTING
+**                  output = wa_filedata-begda.
+**
+**              CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+**                EXPORTING
+**                  input  = wa_filedata-endda
+**                IMPORTING
+**                  output = wa_filedata-endda.
+**
+**              CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+**                EXPORTING
+**                  input  = wa_filedata-dat01
+**                IMPORTING
+**                  output = wa_filedata-dat01.
+**
+**              CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+**                EXPORTING
+**                  input  = wa_filedata-subty
+**                IMPORTING
+**                  output = wa_filedata-subty.
+**
+**
+**              CONCATENATE wa_filedata-begda+4(4) wa_filedata-begda+2(2) wa_filedata-begda+0(2) INTO wa_filedata-begda.
+**              CONCATENATE wa_filedata-endda+4(4) wa_filedata-endda+2(2) wa_filedata-endda+0(2) INTO wa_filedata-endda.
+**              CONCATENATE wa_filedata-dat01+4(4) wa_filedata-dat01+2(2) wa_filedata-dat01+0(2) INTO wa_filedata-dat01.
+**              APPEND wa_filedata TO it_filedata.
+**
+**              CLEAR: wa_filedata,shp01.
+**            ENDIF.
+**          ENDDO.
+**          CLOSE DATASET  lv_filename1 .
+**        ENDIF.
+**        DELETE it_filedata INDEX 1.
+  IF it_filedata IS NOT INITIAL.
+    MODIFY zhr_nomination FROM TABLE it_filedata.
+    SELECT * FROM pa0591 INTO TABLE it_pa0591
+          FOR ALL ENTRIES IN it_filedata WHERE pernr = it_filedata-pernr
+                                          AND  subty = it_filedata-subty.
+
+**    SELECT * FROM pa0001 INTO TABLE it_pa0001
+**         FOR ALL ENTRIES IN it_filedata WHERE pernr = it_filedata-pernr
+**                                         AND  endda = '99991231'.
+**
+**    IF it_pa0001 IS NOT INITIAL.
+    SELECT * FROM zhr_email_maint INTO TABLE it_email_sent.
+    SELECT * FROM zhr_payroll_area INTO TABLE it_payroll_area.
+**      FOR ALL ENTRIES IN it_pa0001 WHERE personnel_area = it_pa0001-werks.
+**    ENDIF.
+
+  ENDIF.
+
+  LOOP AT it_filedata INTO wa_filedata.
+    READ TABLE it_pa0591 INTO wa_pa0591 WITH KEY pernr = wa_filedata-pernr
+                                                 subty = wa_filedata-subty.
+    IF sy-subrc = 0.
+      wa_filedata_up = wa_filedata.
+      DELETE it_filedata WHERE pernr = wa_pa0591-pernr AND subty = wa_pa0591-subty.
+      APPEND wa_filedata_up TO it_filedata_up.
+      CLEAR: wa_filedata_up,wa_filedata.
+    ENDIF.
+  ENDLOOP.
+**      ELSE.
+**        DELETE t_files WHERE appsrv_fname = t_files-appsrv_fname.
+**      ENDIF.
+  IF it_filedata IS NOT INITIAL OR it_filedata_up IS NOT INITIAL.
+    PERFORM f009_bdc.
+    PERFORM send_mail.
+**    PERFORM movefile.
+    REFRESH : it_filedata,it_filedata_err,it_mail,it_mail2.
+  ENDIF.
+**    ENDLOOP.
+  CLEAR : lwa_acc_key1.
+  REFRESH : t_file_list,t_files.
+**  ENDLOOP.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  F009_BDC
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM f009_bdc .
+   DATA: lv_cur_begda TYPE t549q-begda,
+        lv_cur_endda TYPE t549q-endda,
+        lv_fol_begda TYPE t549q-begda,
+        lv_fol_endda TYPE t549q-endda,
+        lv_state     TYPE pv000-statetxt,
+        lv_back_date TYPE sy-datum.
+
+  LOOP AT it_filedata INTO wa_filedata.
+    REFRESH: it_bdcdata[],it_messtab[].
+
+    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+      EXPORTING
+        input  = wa_filedata-pernr
+      IMPORTING
+        output = v_pernr.
+
+    SELECT SINGLE werks INTO v_werks
+      FROM pa0001
+      WHERE pernr = v_pernr
+        AND endda = '99991231'.
+
+    IF v_werks IS NOT INITIAL.
+      CALL FUNCTION 'PA03_PCR_READ'
+        EXPORTING
+          f_abkrs               = wa_payroll_area-payroll_area
+        IMPORTING
+          f_current_begda       = lv_cur_begda
+          f_current_endda       = lv_cur_endda
+          f_following_begda     = lv_fol_begda
+          f_following_endda     = lv_fol_endda
+          f_state_text          = lv_state
+        EXCEPTIONS
+          abkrs_no_accounting   = 1
+          pcr_does_not_exist    = 2
+          abkrs_does_not_exist  = 3
+          period_does_not_exist = 4
+          no_pcr_authority      = 5
+          OTHERS                = 6.
+      IF sy-subrc = 0 AND lv_state IS NOT INITIAL.
+        IF lv_state = 'Exit payroll'.
+          IF wa_filedata-begda GE lv_fol_begda.
+            CONCATENATE wa_filedata-begda+6(2) wa_filedata-begda+4(2) wa_filedata-begda+0(4) INTO wa_filedata-begda.
+            CONCATENATE wa_filedata-endda+6(2) wa_filedata-endda+4(2) wa_filedata-endda+0(4) INTO wa_filedata-endda.
+            CONCATENATE wa_filedata-dat01+6(2) wa_filedata-dat01+4(2) wa_filedata-dat01+0(4) INTO wa_filedata-dat01.
+
+            PERFORM bdc_dynpro      USING 'SAPMP50A' '1000'.
+            PERFORM bdc_field       USING 'BDC_OKCODE'
+                                          '=INS'.
+            PERFORM bdc_field       USING 'RP50G-PERNR'
+                                          wa_filedata-pernr.
+            PERFORM bdc_field       USING 'RP50G-TIMR6'
+                                          'X'.
+            PERFORM bdc_field       USING 'BDC_CURSOR'
+                                          'RP50G-SUBTY'.
+            PERFORM bdc_field       USING 'RP50G-CHOIC'
+                                           '0591'.
+            PERFORM bdc_field       USING 'RP50G-SUBTY'
+                                          wa_filedata-subty.
+            PERFORM bdc_dynpro      USING 'MP059100' '2000'.
+            PERFORM bdc_field       USING 'BDC_CURSOR'
+                                          'ITAB_NOM-GRADD(01)'.
+            PERFORM bdc_field       USING 'BDC_OKCODE'
+                                          'UPD'.
+            PERFORM bdc_field       USING 'P0591-BEGDA'
+                                          wa_filedata-begda.
+            PERFORM bdc_field       USING 'P0591-ENDDA'
+                                          wa_filedata-endda.
+            PERFORM bdc_field       USING 'ITAB_NOM-NNAME(01)'
+                                          wa_filedata-nam01.
+            PERFORM bdc_field       USING 'ITAB_NOM-NMADD(01)'
+                                          wa_filedata-add01.
+            PERFORM bdc_field       USING 'ITAB_NOM-RELTN(01)'
+                                          wa_filedata-rel01.
+            PERFORM bdc_field       USING 'ITAB_NOM-DATOB(01)'
+                                          wa_filedata-dat01.
+
+*    shp01 =  wa_filedata-shp01.
+*    CONDENSE shp01.
+            CONDENSE wa_filedata-shp01.
+            PERFORM bdc_field       USING 'ITAB_NOM-SHPRC(01)'
+                                         wa_filedata-shp01.
+            PERFORM bdc_field       USING 'ITAB_NOM-GRADD(01)'
+                                          wa_filedata-gra01.
+
+
+            wa_mail-pernr = wa_filedata-pernr.
+            wa_mail_t-pernr = wa_filedata-pernr.
+            wa_mail_t-subty = wa_filedata-subty.
+            wa_mail_t-werks = v_werks.
+            wa_mail-subty = wa_filedata-subty.
+            APPEND wa_mail_t TO it_mail_t.
+            CLEAR wa_email_sent.
+
+            APPEND wa_mail TO it_mail.
+
+
+*    APPEND wa_mail TO it_mail.
+*    CLEAR : wa_mail.
+            CALL TRANSACTION 'PA30' USING it_bdcdata MODE p_mode UPDATE 'E'
+            MESSAGES INTO it_messtab.
+            DELETE it_messtab WHERE msgid = '00' AND msgnr = '344'.
+            PERFORM f_write_message.
+            CLEAR : wa_filedata,wa_mail,v_werks,v_pernr.
+          ELSE.
+            wa_mail-pernr = wa_filedata-pernr.
+            wa_mail-subty = wa_filedata-subty.
+            wa_mail_t-pernr = wa_filedata-pernr.
+            wa_mail_t-subty = wa_filedata-subty.
+            wa_mail_t-werks = v_werks.
+            wa_mail-msgtyp  = 'E'.
+            wa_mail-msg     = 'Backdated entry is not possible or Payroll Area is not opened'.
+            wa_filedata-zindicator = 'E'.
+            wa_filedata-created_by = sy-uname.
+            wa_filedata-created_on = sy-datum.
+            wa_filedata-created_at = sy-uzeit.
+            APPEND wa_mail_t TO it_mail_t.
+            APPEND wa_mail TO it_mail.
+            MODIFY it_filedata FROM wa_filedata TRANSPORTING zindicator created_by created_at created_on
+            WHERE pernr = wa_filedata-pernr
+              AND subty = wa_filedata-subty.
+            IF it_filedata IS NOT INITIAL.
+              MODIFY zhr_nomination FROM TABLE it_filedata.
+            ENDIF.
+          ENDIF.
+        ELSEIF lv_state  = 'Payroll correction'.
+          IF wa_filedata-begda  GE lv_cur_begda.
+            CONCATENATE wa_filedata-begda+6(2) wa_filedata-begda+4(2) wa_filedata-begda+0(4) INTO wa_filedata-begda.
+            CONCATENATE wa_filedata-endda+6(2) wa_filedata-endda+4(2) wa_filedata-endda+0(4) INTO wa_filedata-endda.
+            CONCATENATE wa_filedata-dat01+6(2) wa_filedata-dat01+4(2) wa_filedata-dat01+0(4) INTO wa_filedata-dat01.
+
+            PERFORM bdc_dynpro      USING 'SAPMP50A' '1000'.
+            PERFORM bdc_field       USING 'BDC_OKCODE'
+                                          '=INS'.
+            PERFORM bdc_field       USING 'RP50G-PERNR'
+                                          wa_filedata-pernr.
+            PERFORM bdc_field       USING 'RP50G-TIMR6'
+                                          'X'.
+            PERFORM bdc_field       USING 'BDC_CURSOR'
+                                          'RP50G-SUBTY'.
+            PERFORM bdc_field       USING 'RP50G-CHOIC'
+                                           '0591'.
+            PERFORM bdc_field       USING 'RP50G-SUBTY'
+                                          wa_filedata-subty.
+            PERFORM bdc_dynpro      USING 'MP059100' '2000'.
+            PERFORM bdc_field       USING 'BDC_CURSOR'
+                                          'ITAB_NOM-GRADD(01)'.
+            PERFORM bdc_field       USING 'BDC_OKCODE'
+                                          'UPD'.
+            PERFORM bdc_field       USING 'P0591-BEGDA'
+                                          wa_filedata-begda.
+            PERFORM bdc_field       USING 'P0591-ENDDA'
+                                          wa_filedata-endda.
+            PERFORM bdc_field       USING 'ITAB_NOM-NNAME(01)'
+                                          wa_filedata-nam01.
+            PERFORM bdc_field       USING 'ITAB_NOM-NMADD(01)'
+                                          wa_filedata-add01.
+            PERFORM bdc_field       USING 'ITAB_NOM-RELTN(01)'
+                                          wa_filedata-rel01.
+            PERFORM bdc_field       USING 'ITAB_NOM-DATOB(01)'
+                                          wa_filedata-dat01.
+
+*    shp01 =  wa_filedata-shp01.
+*    CONDENSE shp01.
+            CONDENSE wa_filedata-shp01.
+            PERFORM bdc_field       USING 'ITAB_NOM-SHPRC(01)'
+                                         wa_filedata-shp01.
+            PERFORM bdc_field       USING 'ITAB_NOM-GRADD(01)'
+                                          wa_filedata-gra01.
+
+
+            wa_mail-pernr = wa_filedata-pernr.
+            wa_mail_t-pernr = wa_filedata-pernr.
+            wa_mail_t-subty = wa_filedata-subty.
+            wa_mail_t-werks = v_werks.
+            wa_mail-subty = wa_filedata-subty.
+            APPEND wa_mail_t TO it_mail_t.
+            CLEAR wa_email_sent.
+
+            APPEND wa_mail TO it_mail.
+
+
+*    APPEND wa_mail TO it_mail.
+*    CLEAR : wa_mail.
+            CALL TRANSACTION 'PA30' USING it_bdcdata MODE p_mode UPDATE 'E'
+            MESSAGES INTO it_messtab.
+            DELETE it_messtab WHERE msgid = '00' AND msgnr = '344'.
+            PERFORM f_write_message.
+            CLEAR : wa_filedata,wa_mail,v_werks,v_pernr.
+          ELSE.
+            wa_mail-pernr = wa_filedata-pernr.
+            wa_mail-subty = wa_filedata-subty.
+            wa_mail_t-pernr = wa_filedata-pernr.
+            wa_mail_t-subty = wa_filedata-subty.
+            wa_mail_t-werks = v_werks.
+            wa_mail-msgtyp  = 'E'.
+            wa_mail-msg     = 'Backdated entry is not possible or Payroll Area is not opened'.
+            wa_filedata-zindicator = 'E'.
+            wa_filedata-created_by = sy-uname.
+            wa_filedata-created_on = sy-datum.
+            wa_filedata-created_at = sy-uzeit.
+            APPEND wa_mail_t TO it_mail_t.
+            APPEND wa_mail TO it_mail.
+            MODIFY it_filedata FROM wa_filedata TRANSPORTING zindicator created_by created_at created_on
+            WHERE pernr = wa_filedata-pernr
+              AND subty = wa_filedata-subty.
+            IF it_filedata IS NOT INITIAL.
+              MODIFY zhr_nomination FROM TABLE it_filedata.
+            ENDIF.
+          ENDIF.
+        ELSEIF lv_state  = 'Released for payroll'.
+          wa_mail-pernr = wa_filedata-pernr.
+          wa_mail-subty = wa_filedata-subty.
+          wa_mail_t-pernr = wa_filedata-pernr.
+          wa_mail_t-subty = wa_filedata-subty.
+          wa_mail_t-werks = v_werks.
+          wa_mail-msgtyp  = 'E'.
+          wa_mail-msg     = 'Payroll control record is released for payroll'.
+          wa_filedata-zindicator = 'E'.
+          wa_filedata-created_by = sy-uname.
+          wa_filedata-created_on = sy-datum.
+          wa_filedata-created_at = sy-uzeit.
+          APPEND wa_mail_t TO it_mail_t.
+          APPEND wa_mail TO it_mail.
+          MODIFY it_filedata FROM wa_filedata TRANSPORTING zindicator created_by created_at created_on
+          WHERE pernr = wa_filedata-pernr
+            AND subty = wa_filedata-subty.
+          IF it_filedata IS NOT INITIAL.
+            MODIFY zhr_nomination FROM TABLE it_filedata.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+    ELSE.
+      CONCATENATE wa_filedata-begda+6(2) wa_filedata-begda+4(2) wa_filedata-begda+0(4) INTO wa_filedata-begda.
+      CONCATENATE wa_filedata-endda+6(2) wa_filedata-endda+4(2) wa_filedata-endda+0(4) INTO wa_filedata-endda.
+      CONCATENATE wa_filedata-dat01+6(2) wa_filedata-dat01+4(2) wa_filedata-dat01+0(4) INTO wa_filedata-dat01.
+
+      PERFORM bdc_dynpro      USING 'SAPMP50A' '1000'.
+      PERFORM bdc_field       USING 'BDC_OKCODE'
+                                    '=INS'.
+      PERFORM bdc_field       USING 'RP50G-PERNR'
+                                    wa_filedata-pernr.
+      PERFORM bdc_field       USING 'RP50G-TIMR6'
+                                    'X'.
+      PERFORM bdc_field       USING 'BDC_CURSOR'
+                                    'RP50G-SUBTY'.
+      PERFORM bdc_field       USING 'RP50G-CHOIC'
+                                     '0591'.
+      PERFORM bdc_field       USING 'RP50G-SUBTY'
+                                    wa_filedata-subty.
+      PERFORM bdc_dynpro      USING 'MP059100' '2000'.
+      PERFORM bdc_field       USING 'BDC_CURSOR'
+                                    'ITAB_NOM-GRADD(01)'.
+      PERFORM bdc_field       USING 'BDC_OKCODE'
+                                    'UPD'.
+      PERFORM bdc_field       USING 'P0591-BEGDA'
+                                    wa_filedata-begda.
+      PERFORM bdc_field       USING 'P0591-ENDDA'
+                                    wa_filedata-endda.
+      PERFORM bdc_field       USING 'ITAB_NOM-NNAME(01)'
+                                    wa_filedata-nam01.
+      PERFORM bdc_field       USING 'ITAB_NOM-NMADD(01)'
+                                    wa_filedata-add01.
+      PERFORM bdc_field       USING 'ITAB_NOM-RELTN(01)'
+                                    wa_filedata-rel01.
+      PERFORM bdc_field       USING 'ITAB_NOM-DATOB(01)'
+                                    wa_filedata-dat01.
+
+*    shp01 =  wa_filedata-shp01.
+*    CONDENSE shp01.
+      CONDENSE wa_filedata-shp01.
+      PERFORM bdc_field       USING 'ITAB_NOM-SHPRC(01)'
+                                   wa_filedata-shp01.
+      PERFORM bdc_field       USING 'ITAB_NOM-GRADD(01)'
+                                    wa_filedata-gra01.
+
+
+      wa_mail-pernr = wa_filedata-pernr.
+      wa_mail_t-pernr = wa_filedata-pernr.
+      wa_mail_t-subty = wa_filedata-subty.
+      wa_mail_t-werks = v_werks.
+      wa_mail-subty = wa_filedata-subty.
+      APPEND wa_mail_t TO it_mail_t.
+      CLEAR wa_email_sent.
+
+      APPEND wa_mail TO it_mail.
+
+
+*    APPEND wa_mail TO it_mail.
+*    CLEAR : wa_mail.
+      CALL TRANSACTION 'PA30' USING it_bdcdata MODE p_mode UPDATE 'E'
+      MESSAGES INTO it_messtab.
+      DELETE it_messtab WHERE msgid = '00' AND msgnr = '344'.
+      PERFORM f_write_message.
+      CLEAR : wa_filedata,wa_mail,v_werks,v_pernr.
+    ENDIF.
+  ENDLOOP.
+
+  LOOP AT it_filedata_up INTO wa_filedata_up.
+    REFRESH: it_bdcdata[],it_messtab[].
+    CONCATENATE wa_filedata_up-begda+6(2) wa_filedata_up-begda+4(2) wa_filedata_up-begda+0(4) INTO wa_filedata_up-begda.
+    CONCATENATE wa_filedata_up-endda+6(2) wa_filedata_up-endda+4(2) wa_filedata_up-endda+0(4) INTO wa_filedata_up-endda.
+    CONCATENATE wa_filedata_up-dat01+6(2) wa_filedata_up-dat01+4(2) wa_filedata_up-dat01+0(4) INTO wa_filedata_up-dat01.
+
+    PERFORM bdc_dynpro      USING 'SAPMP50A' '1000'.
+    PERFORM bdc_field       USING 'BDC_OKCODE'
+                                  '/00'.
+    PERFORM bdc_field       USING 'RP50G-PERNR'
+                                  wa_filedata_up-pernr."'1756'.
+    PERFORM bdc_field       USING 'BDC_CURSOR'
+                                  'RP50G-ENDDA'.
+    PERFORM bdc_field       USING 'RP50G-TIMR6'
+                                  'X'.
+    PERFORM bdc_dynpro      USING 'SAPMP50A' '1000'.
+    PERFORM bdc_field       USING 'BDC_CURSOR'
+                                  'RP50G-PERNR'.
+    PERFORM bdc_field       USING 'BDC_OKCODE'
+                                  '/00'.
+    PERFORM bdc_field       USING 'RP50G-PERNR'
+                                  wa_filedata_up-pernr."'1756'.
+    PERFORM bdc_field       USING 'RP50G-TIMR6'
+                                  'X'.
+    PERFORM bdc_dynpro      USING 'SAPMP50A' '1000'.
+    PERFORM bdc_field       USING 'BDC_CURSOR'
+                                  'RP50G-PERNR'.
+    PERFORM bdc_field       USING 'BDC_OKCODE'
+                                  '/00'.
+    PERFORM bdc_field       USING 'RP50G-PERNR'
+                                  wa_filedata_up-pernr."'1756'.
+    PERFORM bdc_field       USING 'RP50G-TIMR6'
+                                  'X'.
+    PERFORM bdc_dynpro      USING 'SAPMP50A' '1000'.
+    PERFORM bdc_field       USING 'BDC_CURSOR'
+                                  'RP50G-PERNR'.
+    PERFORM bdc_field       USING 'BDC_OKCODE'
+                                  '/00'.
+    PERFORM bdc_field       USING 'RP50G-PERNR'
+                                  wa_filedata_up-pernr."'1756'.
+    PERFORM bdc_field       USING 'RP50G-TIMR6'
+                                  'X'.
+    PERFORM bdc_dynpro      USING 'SAPMP50A' '1000'.
+    PERFORM bdc_field       USING 'BDC_CURSOR'
+                                  'RP50G-PERNR'.
+    PERFORM bdc_field       USING 'BDC_OKCODE'
+                                  '/00'.
+    PERFORM bdc_field       USING 'RP50G-PERNR'
+                                  wa_filedata_up-pernr."'1756'.
+    PERFORM bdc_field       USING 'RP50G-TIMR6'
+                                  'X'.
+    PERFORM bdc_dynpro      USING 'SAPMP50A' '1000'.
+    PERFORM bdc_field       USING 'BDC_CURSOR'
+                                  'RP50G-PERNR'.
+    PERFORM bdc_field       USING 'BDC_OKCODE'
+                                  '/00'.
+    PERFORM bdc_field       USING 'RP50G-PERNR'
+                                  wa_filedata_up-pernr."'1756'.
+    PERFORM bdc_field       USING 'RP50G-TIMR6'
+                                  'X'.
+    PERFORM bdc_dynpro      USING 'SAPMP50A' '1000'.
+    PERFORM bdc_field       USING 'BDC_CURSOR'
+                                  'RP50G-PERNR'.
+    PERFORM bdc_field       USING 'BDC_OKCODE'
+                                  '/00'.
+    PERFORM bdc_field       USING 'RP50G-PERNR'
+                                  wa_filedata_up-pernr."'1756'.
+    PERFORM bdc_field       USING 'RP50G-TIMR6'
+                                  'X'.
+    PERFORM bdc_dynpro      USING 'SAPMP50A' '1000'.
+    PERFORM bdc_field       USING 'BDC_CURSOR'
+                                  'RP50G-PERNR'.
+    PERFORM bdc_field       USING 'BDC_OKCODE'
+                                  '/00'.
+    PERFORM bdc_field       USING 'RP50G-PERNR'
+                                  wa_filedata_up-pernr."'1756'.
+    PERFORM bdc_field       USING 'RP50G-TIMR6'
+                                  'X'.
+    PERFORM bdc_dynpro      USING 'SAPMP50A' '1000'.
+    PERFORM bdc_field       USING 'BDC_CURSOR'
+                                  'RP50G-PERNR'.
+    PERFORM bdc_field       USING 'BDC_OKCODE'
+                                  '/00'.
+    PERFORM bdc_field       USING 'RP50G-PERNR'
+                                  wa_filedata_up-pernr."'1756'.
+    PERFORM bdc_field       USING 'RP50G-TIMR6'
+                                  'X'.
+    PERFORM bdc_dynpro      USING 'SAPMP50A' '1000'.
+    PERFORM bdc_field       USING 'BDC_CURSOR'
+                                  'RP50G-PERNR'.
+    PERFORM bdc_field       USING 'BDC_OKCODE'
+                                  '/00'.
+    PERFORM bdc_field       USING 'RP50G-PERNR'
+                                  wa_filedata_up-pernr."'1756'.
+    PERFORM bdc_field       USING 'RP50G-TIMR6'
+                                  'X'.
+    PERFORM bdc_dynpro      USING 'SAPMP50A' '1000'.
+    PERFORM bdc_field       USING 'BDC_OKCODE'
+                                  '/00'.
+    PERFORM bdc_field       USING 'RP50G-PERNR'
+                                  wa_filedata_up-pernr."'1756'.
+    PERFORM bdc_field       USING 'RP50G-TIMR6'
+                                  'X'.
+    PERFORM bdc_field       USING 'BDC_CURSOR'
+                                  'RP50G-CHOIC'.
+    PERFORM bdc_field       USING 'RP50G-CHOIC'
+                                  '591'.
+    PERFORM bdc_dynpro      USING 'SAPMP50A' '1000'.
+    PERFORM bdc_field       USING 'BDC_OKCODE'
+                                  '/00'.
+    PERFORM bdc_field       USING 'RP50G-PERNR'
+                                  wa_filedata_up-pernr."'1756'.
+    PERFORM bdc_field       USING 'RP50G-TIMR6'
+                                  'X'.
+    PERFORM bdc_field       USING 'BDC_CURSOR'
+                                  'RP50G-SUBTY'.
+    PERFORM bdc_field       USING 'RP50G-CHOIC'
+                                  'Nominations'.
+    PERFORM bdc_field       USING 'RP50G-SUBTY'
+                                  wa_filedata_up-subty."'BNPF'.
+    PERFORM bdc_dynpro      USING 'SAPMP50A' '1000'.
+    PERFORM bdc_field       USING 'BDC_CURSOR'
+                                  'RP50G-PERNR'.
+    PERFORM bdc_field       USING 'BDC_OKCODE'
+                                  '/00'.
+    PERFORM bdc_field       USING 'RP50G-PERNR'
+                                  wa_filedata_up-pernr."'1756'.
+    PERFORM bdc_field       USING 'RP50G-TIMR6'
+                                  'X'.
+    PERFORM bdc_field       USING 'RP50G-CHOIC'
+                                  'Nominations'.
+    PERFORM bdc_field       USING 'RP50G-SUBTY'
+                                  wa_filedata_up-subty."'BNPF'.
+    PERFORM bdc_dynpro      USING 'SAPMP50A' '1000'.
+    PERFORM bdc_field       USING 'BDC_CURSOR'
+                                  'RP50G-PERNR'.
+    PERFORM bdc_field       USING 'BDC_OKCODE'
+                                  '=INS'.
+    PERFORM bdc_field       USING 'RP50G-PERNR'
+                                  wa_filedata_up-pernr."'1756'.
+    PERFORM bdc_field       USING 'RP50G-TIMR6'
+                                  'X'.
+    PERFORM bdc_field       USING 'RP50G-CHOIC'
+                                  '0591'."'Nominations'.
+    PERFORM bdc_field       USING 'RP50G-SUBTY'
+                                  wa_filedata_up-subty."'BNPF'.
+    PERFORM bdc_dynpro      USING 'MP059100' '2000'.
+    PERFORM bdc_field       USING 'BDC_CURSOR'
+                                  'ITAB_NOM-GRADD(01)'.
+    PERFORM bdc_field       USING 'BDC_OKCODE'
+                                  '=UPD'.
+    PERFORM bdc_field       USING 'P0591-BEGDA'
+                                  wa_filedata_up-begda."'29.09.2023'.
+    PERFORM bdc_field       USING 'P0591-ENDDA'
+                                  wa_filedata_up-endda."'31.12.9999'.
+    PERFORM bdc_field       USING 'ITAB_NOM-NNAME(01)'
+                                  wa_filedata_up-nam01."'AADD'.
+    PERFORM bdc_field       USING 'ITAB_NOM-NMADD(01)'
+                                  wa_filedata_up-add01."'SJFJF'.
+    PERFORM bdc_field       USING 'ITAB_NOM-RELTN(01)'
+                                  wa_filedata_up-rel01."'WIFE'.
+    PERFORM bdc_field       USING 'ITAB_NOM-DATOB(01)'
+                                  wa_filedata_up-dat01."'25011991'.
+    PERFORM bdc_field       USING 'ITAB_NOM-SHPRC(01)'
+                                  wa_filedata_up-shp01."'100'.
+    PERFORM bdc_field       USING 'ITAB_NOM-GRADD(01)'
+                                  wa_filedata_up-gra01.
+    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+      EXPORTING
+        input  = wa_filedata_up-pernr
+      IMPORTING
+        output = v_pernr.
+
+    SELECT SINGLE werks INTO v_werks
+      FROM pa0001
+      WHERE pernr = v_pernr
+        AND endda = '99991231'.
+
+    wa_mail-pernr = wa_filedata_up-pernr.
+    wa_mail-subty = wa_filedata_up-subty.
+    wa_mail_t-pernr = wa_filedata_up-pernr.
+    wa_mail_t-subty = wa_filedata_up-subty.
+    wa_mail_t-werks = v_werks.
+    APPEND wa_mail_t TO it_mail_t.
+    CLEAR wa_mail_t.
+
+    APPEND wa_mail TO it_mail.
+
+    CALL TRANSACTION 'PA30' USING it_bdcdata MODE p_mode UPDATE 'E'
+    MESSAGES INTO it_messtab.
+    DELETE it_messtab WHERE msgid = '00' AND msgnr = '344'.
+    PERFORM f_write_message.
+    CLEAR : wa_filedata,wa_mail,v_werks,v_pernr.
+  ENDLOOP.
+
+**
+**  IF it_filedata_err IS NOT INITIAL.
+**    PERFORM build_template_data.
+**    PERFORM convert_to_csv.
+**    PERFORM ftp_file_data.
+**  ENDIF.
+ENDFORM.
+FORM bdc_dynpro  USING   program TYPE any dynpro TYPE any.
+  wa_bdcdata-program  = program.
+  wa_bdcdata-dynpro   = dynpro.
+  wa_bdcdata-dynbegin = c_x.
+  APPEND wa_bdcdata TO it_bdcdata.
+  CLEAR wa_bdcdata.
+ENDFORM.                    " BDC_DYNPRO
+*&---------------------------------------------------------------------*
+*&      Form  BDC_FIELD
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_0380   text
+*      -->P_WA_EDUCATION_ZCERTIFICATES4  text
+*----------------------------------------------------------------------*
+FORM bdc_field  USING  fnam TYPE any fval TYPE any.
+  wa_bdcdata-fnam = fnam .
+  wa_bdcdata-fval = fval.
+  APPEND wa_bdcdata TO it_bdcdata .
+  CLEAR wa_bdcdata.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  F_WRITE_MESSAGE
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM f_write_message .
+  DATA : lv_msg TYPE string.
+  IF wa_filedata IS NOT INITIAL.
+
+    IF     it_messtab[] IS NOT INITIAL.
+      LOOP AT it_messtab.
+        CLEAR lv_msg.
+        CALL FUNCTION 'FORMAT_MESSAGE'
+          EXPORTING
+            id        = it_messtab-msgid
+            lang      = sy-langu
+            no        = it_messtab-msgnr
+            v1        = it_messtab-msgv1
+            v2        = it_messtab-msgv2
+            v3        = it_messtab-msgv3
+            v4        = it_messtab-msgv4
+          IMPORTING
+            msg       = lv_msg
+          EXCEPTIONS
+            not_found = 1
+            OTHERS    = 2.
+*      IF sy-subrc <> 0.
+*        MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+*                WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+*      ENDIF.
+*      WRITE :/ lv_msg.
+        IF it_messtab-msgtyp = c_w.
+          wa_filedata-zindicator = 'S'.
+          wa_mail-msgtyp = wa_filedata-zindicator.
+          wa_mail-msg = 'Employee successfully hired.'.
+        ENDIF.
+        IF it_messtab-msgtyp = c_s .
+          IF it_messtab-msgid = 'PG' AND it_messtab-msgnr = '001'.
+            wa_filedata-zindicator = 'E'.
+          ELSE.
+            wa_filedata-zindicator = it_messtab-msgtyp.
+          ENDIF.
+          wa_mail-msgtyp = wa_filedata-zindicator.
+*        wa_mail-msg = 'Employee successfully hired.'.
+          wa_mail-msg = lv_msg.
+        ENDIF.
+        IF it_messtab-msgtyp = c_e .
+          wa_filedata-zindicator = it_messtab-msgtyp.
+          wa_mail-msgtyp = wa_filedata-zindicator.
+          wa_mail-msg = lv_msg.
+        ENDIF.
+      ENDLOOP.
+
+      SELECT infty subty
+      INTO CORRESPONDING FIELDS OF TABLE it_t591a
+      FROM t591a
+      WHERE infty = '0591'
+      AND   subty = wa_filedata-subty.
+
+      IF it_t591a IS INITIAL.
+        wa_filedata-zindicator = 'E'.
+        wa_mail-msgtyp = wa_filedata-zindicator.
+        wa_mail-msg = 'Invalid subtype'.
+      ENDIF.
+
+
+      IF wa_filedata-pernr EQ ' ' .
+        wa_filedata-zindicator = 'E'.
+        wa_mail-msgtyp = wa_filedata-zindicator.
+        wa_mail-msg = 'Enter personal number'.
+      ENDIF.
+
+      IF wa_filedata-zindicator = c_e  .
+        PERFORM errorlog.
+      ENDIF.
+
+**      IF v_bukrs IS NOT INITIAL.
+**        IF v_bukrs EQ '1000'.
+**          MODIFY it_mail FROM wa_mail TRANSPORTING msgtyp msg WHERE pernr = wa_filedata-pernr AND subty = wa_filedata-subty.
+**        ELSEIF v_bukrs EQ '2000'.
+**          MODIFY it_mail2 FROM wa_mail TRANSPORTING msgtyp msg WHERE pernr = wa_filedata-pernr AND subty = wa_filedata-subty.
+**        ENDIF.
+**      ELSE.
+      MODIFY it_mail FROM wa_mail TRANSPORTING msgtyp msg WHERE pernr = wa_filedata-pernr AND subty = wa_filedata-subty.
+**      ENDIF.
+      CLEAR: wa_mail,v_werks.
+    ELSE.
+      wa_filedata-zindicator = 'E'.
+      wa_mail-msgtyp = wa_filedata-zindicator.
+      wa_mail-msg = 'Invalid Subtype'.
+
+      MODIFY it_mail FROM wa_mail TRANSPORTING msgtyp msg WHERE pernr = wa_filedata-pernr AND subty = wa_filedata-subty.
+      CLEAR : wa_mail,v_werks.
+    ENDIF.
+    wa_filedata-created_by = sy-uname.
+    wa_filedata-created_on = sy-datum.
+    wa_filedata-created_at = sy-uzeit.
+
+*    MODIFY it_mail FROM wa_mail TRANSPORTING msgtyp msg WHERE pernr = wa_filedata-pernr AND subty = wa_filedata-subty.
+*    CLEAR wa_mail.
+    MODIFY it_filedata FROM wa_filedata TRANSPORTING zindicator created_by created_on created_at
+                                  WHERE pernr = wa_filedata-pernr  AND subty = wa_filedata-subty.
+    IF it_filedata IS NOT INITIAL.
+      MODIFY zhr_nomination FROM TABLE it_filedata.
+    ENDIF.
+    CLEAR: wa_mail,v_werks.
+  ELSEIF wa_filedata_up IS NOT INITIAL.
+    IF     it_messtab[] IS NOT INITIAL.
+      LOOP AT it_messtab.
+        CLEAR lv_msg.
+        CALL FUNCTION 'FORMAT_MESSAGE'
+          EXPORTING
+            id        = it_messtab-msgid
+            lang      = sy-langu
+            no        = it_messtab-msgnr
+            v1        = it_messtab-msgv1
+            v2        = it_messtab-msgv2
+            v3        = it_messtab-msgv3
+            v4        = it_messtab-msgv4
+          IMPORTING
+            msg       = lv_msg
+          EXCEPTIONS
+            not_found = 1
+            OTHERS    = 2.
+*      IF sy-subrc <> 0.
+*        MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+*                WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+*      ENDIF.
+*      WRITE :/ lv_msg.
+        IF it_messtab-msgtyp = c_w.
+          wa_filedata_up-zindicator = 'S'.
+          wa_mail-msgtyp = wa_filedata_up-zindicator.
+          wa_mail-msg = 'Employee successfully hired.'.
+        ENDIF.
+        IF it_messtab-msgtyp = c_s .
+          IF it_messtab-msgid = 'PG' AND it_messtab-msgnr = '001'.
+            wa_filedata_up-zindicator = 'E'.
+          ELSE.
+            wa_filedata_up-zindicator = it_messtab-msgtyp.
+          ENDIF.
+          wa_mail-msgtyp = wa_filedata_up-zindicator.
+*        wa_mail-msg = 'Employee successfully hired.'.
+          wa_mail-msg = lv_msg.
+        ENDIF.
+        IF it_messtab-msgtyp = c_e .
+          wa_filedata_up-zindicator = it_messtab-msgtyp.
+          wa_mail-msgtyp = wa_filedata_up-zindicator.
+          wa_mail-msg = lv_msg.
+        ENDIF.
+      ENDLOOP.
+
+      SELECT infty subty
+      INTO CORRESPONDING FIELDS OF TABLE it_t591a
+      FROM t591a
+      WHERE infty = '0591'
+      AND   subty = wa_filedata_up-subty.
+
+      IF it_t591a IS INITIAL.
+        wa_filedata_up-zindicator = 'E'.
+        wa_mail-msgtyp = wa_filedata_up-zindicator.
+        wa_mail-msg = 'Invalid subtype'.
+      ENDIF.
+
+
+      IF wa_filedata_up-pernr EQ ' ' .
+        wa_filedata_up-zindicator = 'E'.
+        wa_mail-msgtyp = wa_filedata_up-zindicator.
+        wa_mail-msg = 'Enter personal number'.
+      ENDIF.
+
+      IF wa_filedata_up-zindicator = c_e  .
+        PERFORM errorlog.
+      ENDIF.
+
+**      IF v_bukrs IS NOT INITIAL.
+**        IF v_bukrs EQ '1000'.
+**          MODIFY it_mail FROM wa_mail TRANSPORTING msgtyp msg WHERE pernr = wa_filedata_up-pernr AND subty = wa_filedata_up-subty.
+**        ELSEIF v_bukrs EQ '2000'.
+**          MODIFY it_mail2 FROM wa_mail TRANSPORTING msgtyp msg WHERE pernr = wa_filedata_up-pernr AND subty = wa_filedata_up-subty.
+**        ENDIF.
+**      ELSE.
+      MODIFY it_mail FROM wa_mail TRANSPORTING msgtyp msg WHERE pernr = wa_filedata_up-pernr AND subty = wa_filedata_up-subty.
+**      ENDIF.
+      CLEAR: wa_mail,v_werks.
+    ELSE.
+      wa_filedata_up-zindicator = 'E'.
+      wa_mail-msgtyp = wa_filedata_up-zindicator.
+      wa_mail-msg = 'Invalid Subtype'.
+
+      MODIFY it_mail FROM wa_mail TRANSPORTING msgtyp msg WHERE pernr = wa_filedata_up-pernr AND subty = wa_filedata_up-subty.
+
+      CLEAR : wa_mail,v_werks.
+    ENDIF.
+    wa_filedata_up-created_by = sy-uname.
+    wa_filedata_up-created_on = sy-datum.
+    wa_filedata_up-created_at = sy-uzeit.
+
+*    MODIFY it_mail FROM wa_mail TRANSPORTING msgtyp msg WHERE pernr = wa_filedata_up-pernr AND subty = wa_filedata_up-subty.
+*    CLEAR wa_mail.
+    MODIFY it_filedata_up FROM wa_filedata_up TRANSPORTING zindicator created_by created_on created_at
+                                  WHERE pernr = wa_filedata_up-pernr  AND subty = wa_filedata_up-subty.
+    IF it_filedata_up IS NOT INITIAL.
+      MODIFY zhr_nomination FROM TABLE it_filedata_up.
+    ENDIF.
+    CLEAR: wa_mail,v_werks.
+  ENDIF.
+*  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  SEND_MAIL
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM send_mail .
+  DATA :
+
+      w_filename(27) TYPE c.
+  DATA:   it_attach TYPE STANDARD TABLE OF solisti1 INITIAL SIZE 0
+                WITH HEADER LINE.
+**  IF it_mail IS NOT INITIAL.
+**    LOOP AT it_tvarvc INTO wa_tvarvc.
+**      CONCATENATE 'Message Type' 'Employee Code' 'Subtype' 'Upload Message'
+**          INTO it_attach SEPARATED BY ','.
+**
+**      lt_objbin = it_attach.
+**      APPEND lt_objbin. CLEAR lt_objbin.
+**      LOOP AT it_mail INTO wa_mail.
+**        CONCATENATE wa_mail-msgtyp wa_mail-pernr wa_mail-subty
+**                 wa_mail-msg
+**            INTO it_attach SEPARATED BY ','.
+**        lt_objbin = it_attach.
+**        APPEND lt_objbin. CLEAR lt_objbin.
+**        CLEAR : wa_mail.
+**      ENDLOOP.
+**
+***  *Convert to correct format
+**      CALL FUNCTION 'SO_RAW_TO_RTF'
+**        TABLES
+**          objcont_old = lt_objbin
+**          objcont_new = lt_objbin.
+**
+**
+**      CONCATENATE 'Please find the attached file for "NOMINATION DATA". ' ' ' INTO lt_objtxt
+**         SEPARATED BY space.
+**      APPEND lt_objtxt.
+**      CLEAR lt_objtxt.
+**
+**      DESCRIBE TABLE lt_objtxt LINES tab_lines.
+**      READ TABLE lt_objtxt INDEX tab_lines.
+**      lt_mailsubject-doc_size = ( tab_lines - 1 ) * 255 + strlen( lt_objtxt ).
+**      w_filename = 'Nomination data log file'.
+**      CLEAR: lt_reclist,
+**         lt_objhead,
+**         lt_objtxt,
+**         lt_objbin,
+**         lt_objpack,lt_objpack[].
+**
+**
+**      CLEAR lt_objpack-transf_bin.
+**      lt_objpack-head_start = 1.
+**      lt_objpack-head_num = 0.
+**      lt_objpack-body_start = 1.
+**      lt_objpack-body_num = tab_lines.
+**      lt_objpack-doc_type = 'RAW'.
+**      APPEND lt_objpack.
+**
+**      DESCRIBE TABLE lt_objbin LINES tab_lines.
+**      lt_objpack-head_start = 1.
+**      lt_objpack-head_num   = 0.
+**      lt_objpack-body_start = 1.
+**      lt_objpack-body_num   = tab_lines.
+**      lt_objpack-transf_bin = 'X'."'C'.
+**      lt_objpack-doc_type   = 'CSV'.
+**      lt_objpack-obj_descr  = w_filename.
+**      lt_objpack-obj_name   = 'DP'.
+**      lt_objpack-doc_size   = tab_lines * 255.
+**      APPEND lt_objpack.
+**
+**      lt_mailrecipients-rec_type  = 'U'.
+**      lt_mailrecipients-receiver = wa_tvarvc-low.
+**      APPEND lt_mailrecipients .
+**      CLEAR lt_mailrecipients .
+**
+***      CONCATENATE 'For the employee code : ' wa_finaldata-pernr 'upload message is :' lv_msg  INTO it_body SEPARATED BY ' '.
+***      APPEND it_body. CLEAR:it_body.
+**      l_sender  = v_emailid.
+**      lt_mailsubject-obj_name = 'ZHR'.
+**      lt_mailsubject-obj_langu = sy-langu.
+**      lt_mailsubject-obj_descr = 'Employee Nomination data Upload '.
+**      CALL FUNCTION 'SO_DOCUMENT_SEND_API1'
+**        EXPORTING
+**          document_data              = lt_mailsubject
+**          put_in_outbox              = 'X'
+**          sender_address             = l_sender
+**          sender_address_type        = 'INT'
+**          commit_work                = 'X'
+***         IP_ENCRYPT                 =
+***         IP_SIGN                    =
+***         IV_VSI_PROFILE             =
+*** IMPORTING
+***         SENT_TO_ALL                =
+***         NEW_OBJECT_ID              =
+***         SENDER_ID                  =
+**        TABLES
+**          packing_list               = lt_objpack
+***         object_header              = lt_objhead
+**          contents_bin               = lt_objbin
+**          contents_txt               = lt_objtxt
+***         CONTENTS_HEX               =
+***         OBJECT_PARA                =
+***         OBJECT_PARB                =
+**          receivers                  = lt_mailrecipients
+***         ET_VSI_ERROR               =
+**        EXCEPTIONS
+**          too_many_receivers         = 1
+**          document_not_sent          = 2
+**          document_type_not_exist    = 3
+**          operation_no_authorization = 4
+**          parameter_error            = 5
+**          x_error                    = 6
+**          enqueue_error              = 7
+**          OTHERS                     = 8.
+**      IF sy-subrc <> 0.
+***          COMMIT WORK.
+***   Push mail out from SAP outbox
+***           MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+***          WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+**      ELSE.
+**        MESSAGE 'Sent Succesfull' TYPE 'S'.
+**
+**      ENDIF.
+**      SUBMIT rsconn01 WITH mode = 'INT' AND RETURN.
+**
+**      CLEAR : wa_tvarvc,lt_mailsubject, wa_mail.
+**      REFRESH : lt_mailrecipients,it_body,lt_objtxt,lt_objbin,it_attach,lt_objpack,lt_mailrecipients.
+**
+**    ENDLOOP.
+**  ENDIF.
+**
+**  IF it_mail2 IS NOT INITIAL.
+**    LOOP AT it_tvarvc2 INTO wa_tvarvc2.
+**      CONCATENATE 'Message Type' 'Employee Code' 'Subtype' 'Upload Message'
+**          INTO it_attach SEPARATED BY ','.
+**
+**      lt_objbin = it_attach.
+**      APPEND lt_objbin. CLEAR lt_objbin.
+**      LOOP AT it_mail2 INTO wa_mail2.
+**        CONCATENATE wa_mail2-msgtyp wa_mail2-pernr wa_mail2-subty
+**                 wa_mail2-msg
+**            INTO it_attach SEPARATED BY ','.
+**        lt_objbin = it_attach.
+**        APPEND lt_objbin. CLEAR lt_objbin.
+**        CLEAR : wa_mail.
+**      ENDLOOP.
+**
+***  *Convert to correct format
+**      CALL FUNCTION 'SO_RAW_TO_RTF'
+**        TABLES
+**          objcont_old = lt_objbin
+**          objcont_new = lt_objbin.
+**
+**
+**      CONCATENATE 'Please find the attached file for "Nomination DATA". ' ' ' INTO lt_objtxt
+**         SEPARATED BY space.
+**      APPEND lt_objtxt.
+**      CLEAR lt_objtxt.
+**
+**      DESCRIBE TABLE lt_objtxt LINES tab_lines.
+**      READ TABLE lt_objtxt INDEX tab_lines.
+**      lt_mailsubject-doc_size = ( tab_lines - 1 ) * 255 + strlen( lt_objtxt ).
+**      w_filename = 'Nomination data log file'.
+**      CLEAR: lt_reclist,
+**         lt_objhead,
+**         lt_objtxt,
+**         lt_objbin,
+**         lt_objpack,lt_objpack[].
+**
+**
+**      CLEAR lt_objpack-transf_bin.
+**      lt_objpack-head_start = 1.
+**      lt_objpack-head_num = 0.
+**      lt_objpack-body_start = 1.
+**      lt_objpack-body_num = tab_lines.
+**      lt_objpack-doc_type = 'RAW'.
+**      APPEND lt_objpack.
+**
+**      DESCRIBE TABLE lt_objbin LINES tab_lines.
+**      lt_objpack-head_start = 1.
+**      lt_objpack-head_num   = 0.
+**      lt_objpack-body_start = 1.
+**      lt_objpack-body_num   = tab_lines.
+**      lt_objpack-transf_bin = 'X'."'C'.
+**      lt_objpack-doc_type   = 'CSV'.
+**      lt_objpack-obj_descr  = w_filename.
+**      lt_objpack-obj_name   = 'DP'.
+**      lt_objpack-doc_size   = tab_lines * 255.
+**      APPEND lt_objpack.
+**
+**      lt_mailrecipients-rec_type  = 'U'.
+**      lt_mailrecipients-receiver = wa_tvarvc2-low.
+**      APPEND lt_mailrecipients .
+**      CLEAR lt_mailrecipients .
+**
+***      CONCATENATE 'For the employee code : ' wa_finaldata-pernr 'upload message is :' lv_msg  INTO it_body SEPARATED BY ' '.
+***      APPEND it_body. CLEAR:it_body.
+**      l_sender  = v_emailid.
+**      lt_mailsubject-obj_name = 'ZHR'.
+**      lt_mailsubject-obj_langu = sy-langu.
+**      lt_mailsubject-obj_descr = 'Employee Nomination data Upload '.
+**      CALL FUNCTION 'SO_DOCUMENT_SEND_API1'
+**        EXPORTING
+**          document_data              = lt_mailsubject
+**          put_in_outbox              = 'X'
+**          sender_address             = l_sender
+**          sender_address_type        = 'INT'
+**          commit_work                = 'X'
+***         IP_ENCRYPT                 =
+***         IP_SIGN                    =
+***         IV_VSI_PROFILE             =
+*** IMPORTING
+***         SENT_TO_ALL                =
+***         NEW_OBJECT_ID              =
+***         SENDER_ID                  =
+**        TABLES
+**          packing_list               = lt_objpack
+***         object_header              = lt_objhead
+**          contents_bin               = lt_objbin
+**          contents_txt               = lt_objtxt
+***         CONTENTS_HEX               =
+***         OBJECT_PARA                =
+***         OBJECT_PARB                =
+**          receivers                  = lt_mailrecipients
+***         ET_VSI_ERROR               =
+**        EXCEPTIONS
+**          too_many_receivers         = 1
+**          document_not_sent          = 2
+**          document_type_not_exist    = 3
+**          operation_no_authorization = 4
+**          parameter_error            = 5
+**          x_error                    = 6
+**          enqueue_error              = 7
+**          OTHERS                     = 8.
+**      IF sy-subrc <> 0.
+***          COMMIT WORK.
+***   Push mail out from SAP outbox
+***           MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+***          WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+**      ELSE.
+**        MESSAGE 'Sent Succesfull' TYPE 'S'.
+**
+**      ENDIF.
+**      SUBMIT rsconn01 WITH mode = 'INT' AND RETURN.
+**
+**      CLEAR : wa_tvarvc2,lt_mailsubject, wa_mail2.
+**      REFRESH : lt_mailrecipients,it_body,lt_objtxt,lt_objbin,it_attach,lt_objpack,lt_mailrecipients.
+**
+**    ENDLOOP.
+**  ENDIF.
+************************************************************************************
+
+  SORT it_mail_t BY werks.
+  IF it_mail IS NOT INITIAL.
+    LOOP AT it_email_sent INTO wa_email_sent.
+      CONCATENATE 'Message Type' 'Employee Code' 'Subtype' 'Upload Message'
+              INTO it_attach SEPARATED BY ','.
+      lt_objbin = it_attach.
+      APPEND lt_objbin. CLEAR lt_objbin.
+
+      LOOP AT it_mail_t INTO wa_mail_t WHERE werks = wa_email_sent-personnel_area..
+        READ TABLE it_mail INTO wa_mail WITH KEY pernr = wa_mail_t-pernr
+                                                 subty = wa_mail_t-subty.
+        IF sy-subrc = 0.
+          CONCATENATE wa_mail-msgtyp wa_mail-pernr wa_mail-subty
+                 wa_mail-msg
+            INTO it_attach SEPARATED BY ','.
+          lt_objbin = it_attach.
+          APPEND lt_objbin. CLEAR lt_objbin.
+        ENDIF.
+      ENDLOOP.
+
+      LOOP AT it_mail_t INTO wa_mail_t WHERE werks IS INITIAL.
+        READ TABLE it_mail INTO wa_mail WITH KEY pernr = wa_mail_t-pernr
+                                                 subty = wa_mail_t-subty.
+        IF sy-subrc = 0.
+          CONCATENATE wa_mail-msgtyp wa_mail-pernr wa_mail-subty
+                 wa_mail-msg
+            INTO it_attach SEPARATED BY ','.
+          lt_objbin = it_attach.
+          APPEND lt_objbin. CLEAR lt_objbin.
+        ENDIF.
+      ENDLOOP.
+
+      DESCRIBE TABLE lt_objbin LINES tab_lines.
+      IF tab_lines = 1.
+        CLEAR: tab_lines,wa_mail,wa_mail_t,it_attach.
+        REFRESH lt_objbin.
+        CONTINUE.
+      ENDIF.
+
+      CALL FUNCTION 'SO_RAW_TO_RTF'
+        TABLES
+          objcont_old = lt_objbin
+          objcont_new = lt_objbin.
+
+      CONCATENATE 'Please find the attached file for "Nominee DATA". ' ' ' INTO lt_objtxt
+         SEPARATED BY space.
+      APPEND lt_objtxt.
+      CLEAR lt_objtxt.
+
+      DESCRIBE TABLE lt_objtxt LINES tab_lines.
+      READ TABLE lt_objtxt INDEX tab_lines.
+      lt_mailsubject-doc_size = ( tab_lines - 1 ) * 255 + strlen( lt_objtxt ).
+      w_filename = 'Nominee data log file'.
+      CLEAR: lt_reclist,
+         lt_objhead,
+         lt_objtxt,
+         lt_objbin,
+         lt_objpack,lt_objpack[].
+
+
+      CLEAR lt_objpack-transf_bin.
+      lt_objpack-head_start = 1.
+      lt_objpack-head_num = 0.
+      lt_objpack-body_start = 1.
+      lt_objpack-body_num = tab_lines.
+      lt_objpack-doc_type = 'RAW'.
+      APPEND lt_objpack.
+
+      DESCRIBE TABLE lt_objbin LINES tab_lines.
+      lt_objpack-head_start = 1.
+      lt_objpack-head_num   = 0.
+      lt_objpack-body_start = 1.
+      lt_objpack-body_num   = tab_lines.
+      lt_objpack-transf_bin = 'X'."'C'.
+      lt_objpack-doc_type   = 'CSV'.
+      lt_objpack-obj_descr  = w_filename.
+      lt_objpack-obj_name   = 'DP'.
+      lt_objpack-doc_size   = tab_lines * 255.
+      APPEND lt_objpack.
+
+      lt_mailrecipients-rec_type  = 'U'.
+      lt_mailrecipients-receiver = wa_email_sent-email_id.
+      APPEND lt_mailrecipients .
+      CLEAR lt_mailrecipients .
+
+*      CONCATENATE 'For the employee code : ' wa_finaldata-pernr 'upload message is :' lv_msg  INTO it_body SEPARATED BY ' '.
+*      APPEND it_body. CLEAR:it_body.
+      l_sender  = v_emailid.
+      lt_mailsubject-obj_name = 'ZHR'.
+      lt_mailsubject-obj_langu = sy-langu.
+      lt_mailsubject-obj_descr = 'Employee Nominee data Upload '.
+      CALL FUNCTION 'SO_DOCUMENT_SEND_API1'
+        EXPORTING
+          document_data              = lt_mailsubject
+          put_in_outbox              = 'X'
+          sender_address             = l_sender
+          sender_address_type        = 'INT'
+          commit_work                = 'X'
+*         IP_ENCRYPT                 =
+*         IP_SIGN                    =
+*         IV_VSI_PROFILE             =
+* IMPORTING
+*         SENT_TO_ALL                =
+*         NEW_OBJECT_ID              =
+*         SENDER_ID                  =
+        TABLES
+          packing_list               = lt_objpack
+*         object_header              = lt_objhead
+          contents_bin               = lt_objbin
+          contents_txt               = lt_objtxt
+*         CONTENTS_HEX               =
+*         OBJECT_PARA                =
+*         OBJECT_PARB                =
+          receivers                  = lt_mailrecipients
+*         ET_VSI_ERROR               =
+        EXCEPTIONS
+          too_many_receivers         = 1
+          document_not_sent          = 2
+          document_type_not_exist    = 3
+          operation_no_authorization = 4
+          parameter_error            = 5
+          x_error                    = 6
+          enqueue_error              = 7
+          OTHERS                     = 8.
+      IF sy-subrc <> 0.
+*          COMMIT WORK.
+*   Push mail out from SAP outbox
+*           MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+*          WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+      ELSE.
+        WAIT UP TO 2 SECONDS.
+**        SUBMIT rsconn01 WITH mode = 'INT' WITH output = 'X' AND RETURN.
+
+        MESSAGE 'Sent Succesfull' TYPE 'S'.
+
+      ENDIF.
+
+      CLEAR : wa_tvarvc,lt_mailsubject, wa_mail.
+      REFRESH : lt_mailrecipients,it_body,lt_objtxt,lt_objbin,it_attach,lt_objpack,lt_mailrecipients.
+    ENDLOOP.
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  MOVEFILE
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM movefile .
+  DATA:  lv_tpath  LIKE sapb-sappfad.
+
+  DATA : lv_lines TYPE char4.
+
+  CONCATENATE  wrk_file2 t_files-appsrv_fname INTO lv_tpath.
+*--DELETE FILE ON THE APPLICATION SERVER AFTER DOWNLOAD
+  CALL FUNCTION 'ARCHIVFILE_SERVER_TO_SERVER'
+    EXPORTING
+      sourcepath       = lv_filename1
+*     sourcepath       = t_files-appsrv_fname
+      targetpath       = lv_tpath
+    EXCEPTIONS
+      error_file       = 1
+      no_authorization = 2
+      OTHERS           = 3.
+  IF sy-subrc <> 0.
+
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+*      WRITE :  50  'NO' COLOR 7.
+  ELSE.
+*      WRITE :  50  'YES' COLOR 5.
+  ENDIF.
+
+  DELETE DATASET lv_filename1.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  BUILD_TEMPLATE_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM build_template_data .
+  LOOP AT it_filedata_err INTO wa_filedata_err.
+    MOVE-CORRESPONDING wa_filedata_err TO wa_dat.
+    APPEND wa_dat TO it_dat.
+  ENDLOOP.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  CONVERT_TO_CSV
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM convert_to_csv .
+  CALL FUNCTION 'SAP_CONVERT_TO_TEX_FORMAT'
+    EXPORTING
+      i_field_seperator    = '|'
+    TABLES
+      i_tab_sap_data       = it_dat
+    CHANGING
+      i_tab_converted_data = it_dat1
+    EXCEPTIONS
+      conversion_failed    = 1
+      OTHERS               = 2.
+  IF sy-subrc <> 0.
+*MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+*WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FTP_FILE_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM ftp_file_data .
+  DATA: w_hdl  TYPE i,
+        c_key  TYPE i VALUE 26101957,
+        l_slen TYPE i.
+*HTTP_SCRAMBLE: used to scramble the password provided in a format recognized by SAP.
+  SET EXTENDED CHECK OFF.
+  l_slen = strlen( l_pwd ).
+  CALL FUNCTION 'HTTP_SCRAMBLE'
+    EXPORTING
+      source      = l_pwd
+      sourcelen   = l_slen
+      key         = c_key
+    IMPORTING
+      destination = l_pwd.
+* To Connect to the Server using FTP
+  CALL FUNCTION 'FTP_CONNECT'
+    EXPORTING
+      user            = l_user
+      password        = l_pwd
+      host            = l_host
+      rfc_destination = l_dest
+    IMPORTING
+      handle          = w_hdl
+    EXCEPTIONS
+      OTHERS          = 1.
+*FTP_R3_TO_SERVER:used to transfer the internal table data as a file to other system in the character mode.
+  CALL FUNCTION 'FTP_R3_TO_SERVER'
+    EXPORTING
+      handle         = w_hdl
+      fname          = wrk_file          "file path of destination system
+*     fname          = 'ftp://astralsftp.astralpipes.com:4443/New%20Folder/SAP/cust.text'          "file path of destination system
+      character_mode = 'X'
+    TABLES
+      text           = it_dat1
+    EXCEPTIONS
+      tcpip_error    = 1
+      command_error  = 2
+      data_error     = 3
+      OTHERS         = 4.
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+    WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4
+    RAISING invalid_output_file.
+  ENDIF.
+*FTP_DISCONNECT: This is used to disconnect the connection between SAP and other system.
+* To disconnect the FTP
+  CALL FUNCTION 'FTP_DISCONNECT'
+    EXPORTING
+      handle = w_hdl.
+*RFC_CONNECTION_CLOSE:This is used to disconnect the RFC connection between SAP and other system.
+  CALL FUNCTION 'RFC_CONNECTION_CLOSE'
+    EXPORTING
+      destination = l_dest
+    EXCEPTIONS
+      OTHERS      = 1.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  ERRORLOG
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM errorlog .
+  SELECT SINGLE low
+         INTO l_user
+         FROM tvarvc
+         WHERE name = c_tvarvc_user.
+
+  SELECT SINGLE low
+         INTO l_pwd
+         FROM tvarvc
+         WHERE name = c_tvarvc_pwd.
+
+
+  SELECT SINGLE low
+         INTO l_host
+         FROM tvarvc
+         WHERE name = c_tvarvc_host.
+
+
+  SELECT SINGLE low
+       INTO l_dest
+       FROM tvarvc
+       WHERE name = c_tvarvc_dest.
+
+
+
+  SELECT SINGLE low
+         INTO ps_path
+         FROM tvarvc
+         WHERE name = c_tvarvc_ps.
+
+  w_date = sy-datum .
+  w_date1 = w_date .
+
+  w_time  = sy-uzeit.
+
+  CONCATENATE w_date+6(2) w_date+4(2) w_date+0(4) INTO w_date1 .
+
+
+*  CONCATENATE 'BIZOM/PrimarySale/new/primarysale_' w_date1 '_' w_time'.csv' INTO
+*                      wrk_file.
+
+  CONCATENATE ps_path 'NOMINATION_' w_date1 '_' w_time'.csv' INTO
+                      wrk_file.
+
+  IF it_filedata_err IS INITIAL.
+    wa_filedata_err-pernr = 'Employee ID'.
+    wa_filedata_err-subty = 'SUBTYPE'.
+    wa_filedata_err-begda = 'STARTDATE'.
+    wa_filedata_err-endda = 'ENDDATE'.
+    wa_filedata_err-nam01 = 'Nomimee''s name'.
+    wa_filedata_err-add01 = 'Nominee''s address'.
+    wa_filedata_err-rel01 = 'RELATIONSHIP'.
+    wa_filedata_err-dat01 = 'DOB'.
+    wa_filedata_err-shp01 = 'Share percentage for the beneficiaries'.
+    wa_filedata_err-gra01 = 'Address of the guardian, if nominee is a minor'.
+*    wa_filedata_err-orgeh = 'ORG UNIT'.
+
+    APPEND wa_filedata_err TO it_filedata_err.
+    CLEAR : wa_filedata_err.
+  ENDIF.
+
+
+  wa_filedata_err-pernr =  wa_filedata-pernr.
+  wa_filedata_err-subty = wa_filedata-subty.
+  wa_filedata_err-begda =  wa_filedata-begda.
+  wa_filedata_err-endda = wa_filedata-endda .
+  wa_filedata_err-nam01 = wa_filedata-nam01.
+  wa_filedata_err-add01 = wa_filedata-add01.
+  wa_filedata_err-rel01 = wa_filedata-rel01.
+  wa_filedata_err-dat01 = wa_filedata-dat01.
+  wa_filedata_err-shp01 = wa_filedata-shp01.
+  wa_filedata_err-gra01 = wa_filedata-gra01.
+*    wa_filedata_err-orgeh = wa_filedata-orgeh.
+
+  APPEND wa_filedata_err TO it_filedata_err.
+  CLEAR : wa_filedata_err.
+ENDFORM.

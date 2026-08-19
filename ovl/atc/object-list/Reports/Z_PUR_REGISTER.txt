@@ -1,0 +1,4076 @@
+*&---------------------------------------------------------------------*
+*& Report  ZMM_PURREG_TEST
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+REPORT zmm_purreg_test.
+**&---------------------------------------------------------------------*
+**& Report  Z_PUR_REGISTER
+**&
+**&---------------------------------------------------------------------*
+**&
+**& Created by : Ravin : DEVK909308, DEVK909484, DEVK909560
+**&---------------------------------------------------------------------*
+*REPORT z_pur_register.
+
+** TABLES DECLARATION
+TABLES : bkpf,
+         rbkp,
+         bseg,
+         bset,
+         makt,
+         mseg,
+         rseg,
+         lfa1,
+         mkpf,
+         j_1iexcdtl,
+         j_1imovend,
+         t025t,
+         t005u.      " TAXES: REGION KEY: TEXTS
+
+TYPE-POOLS : slis.
+
+DATA : BEGIN OF it_bkpf OCCURS 0,
+         bukrs   LIKE bkpf-bukrs,
+         belnr   LIKE bkpf-belnr,
+         gjahr   LIKE bkpf-gjahr,
+         blart   LIKE bkpf-blart, "DOCTYPE
+         bldat   LIKE bkpf-bldat,
+         budat   LIKE bkpf-budat,
+         xblnr   LIKE bkpf-xblnr,
+         waers   LIKE bkpf-waers,
+         kursf   LIKE bkpf-kursf,
+         awkey   LIKE bkpf-awkey,
+         bktxt   LIKE bkpf-bktxt,
+         g_belnr LIKE rseg-belnr, "GR INV NO
+         g_gjahr LIKE rseg-gjahr, "GR INV YEAR
+         cpudt   LIKE bkpf-cpudt, "Added by Raj on 04.12.2024
+         usnam   LIKE bkpf-usnam, "Added by Raj on 04.12.2024
+       END OF it_bkpf.
+
+DATA : it_bkpf1 LIKE it_bkpf OCCURS 0 WITH HEADER LINE.
+
+DATA : BEGIN OF it_rseg OCCURS 0,
+         belnr       LIKE rseg-belnr,
+         gjahr       LIKE rseg-gjahr,
+         buzei       LIKE rseg-buzei,
+         ebeln       LIKE rseg-ebeln,
+         ebelp(6)    TYPE n,  "LIKE RSEG-EBELP,
+         ebelp1      LIKE rseg-ebelp,
+         matnr       LIKE rseg-matnr,
+         bukrs       LIKE rseg-bukrs,
+         wrbtr       LIKE rseg-wrbtr,
+         shkzg       LIKE rseg-shkzg,
+         mwskz       LIKE rseg-mwskz,
+         bklas       LIKE rseg-bklas,
+         bnkan       LIKE rseg-bnkan,
+         kschl       LIKE rseg-kschl, "CONDITION TYPE IN RSEG
+         lfbnr       LIKE rseg-lfbnr, "REFERENCE DOCUMENT
+         lfpos       LIKE rseg-lfpos, "REFERENCE DOCUMENET ITEM
+         werks       LIKE rseg-werks,
+         customs_val LIKE rseg-customs_val,
+         lifnr       LIKE rbkp-lifnr,
+         name1       LIKE lfa1-name1,
+         regio       LIKE lfa1-regio,
+         ort01       LIKE lfa1-ort01,
+         land1       LIKE lfa1-land1,
+         menge       LIKE rseg-menge,
+         meins       LIKE rseg-meins,
+         adrnr       LIKE lfa1-adrnr,
+         stcd3       LIKE lfa1-stcd3,
+         exkbe       LIKE rseg-exkbe,
+         xekbz       LIKE rseg-xekbz,
+*       LAND1  LIKE LFA1-LAND1,          " VENDOR COUNTRY CODE
+         bukrs1      LIKE bkpf-bukrs,
+         belnr1      LIKE bkpf-belnr,
+         gjahr1      LIKE bkpf-gjahr,
+         smbln       LIKE mseg-smbln, "REFERENCE DOCUMENT
+
+         count1(4)   TYPE n,
+         sgtxt       TYPE rbkp-sgtxt, "Added by Raj on 17.07.2023
+         rbmng       TYPE rseg-rbmng, "Added by Raj on 02.07.2024
+       END OF it_rseg.
+
+DATA : BEGIN OF it_j_1iexcdtl OCCURS 0,
+         docno  TYPE j_1idocno,
+         exbas  TYPE j_1iexcbas,
+         rdoc1  TYPE j_1irdoc1,
+         ritem1 TYPE j_1iritem1,
+         rdoc2  TYPE j_1irdoc2,
+       END OF it_j_1iexcdtl.
+
+DATA :BEGIN OF it_chpt OCCURS 0,
+        matnr  LIKE j_1imtchid-matnr,
+        chapid LIKE j_1imtchid-j_1ichid,
+      END OF it_chpt.
+
+DATA :BEGIN OF it_chpt_desc OCCURS 0,
+        chapid      LIKE j_1ichidtx-j_1ichid,
+        chapid_desc LIKE j_1ichidtx-j_1icht1,
+      END OF it_chpt_desc.
+
+DATA : BEGIN OF it_mkpf OCCURS 0,
+         mblnr TYPE mblnr,
+         budat TYPE budat,
+         mjahr TYPE mjahr,
+         awkey LIKE bkpf-awkey,
+       END OF it_mkpf.
+
+DATA : l_lfpos(4) TYPE c.
+
+DATA : BEGIN OF it_bset OCCURS 0,
+         count    TYPE sy-tabix,
+         bukrs    LIKE bset-bukrs,
+         belnr    LIKE bset-belnr,
+         gjahr    LIKE bset-gjahr,
+         txgrp(4) TYPE n, " LIKE BSET-TXGRP, "GR INVOICE ITEM
+         shkzg    LIKE bset-shkzg, "DEBIT/CREDIT INDICATOR
+         mwskz    LIKE bset-mwskz, "TAX CODE
+         hwbas    LIKE bset-hwbas, "TAX BASE AMOUNT IN LOCAL CURRENCY
+         hwste    LIKE bset-hwste, "TAX AMOUNT IN LOCAL CURRENCY
+         fwste    LIKE bset-fwste,
+         ktosl    LIKE bset-ktosl, "TRANSACTION KEY
+         kschl    LIKE bset-kschl, "CONDITION TYPE
+         kbetr    LIKE bset-kbetr, "TAX RATE
+         ebeln    TYPE ebeln,
+         ebelp    TYPE ebelp,
+       END OF it_bset.
+
+DATA : BEGIN OF it_makt OCCURS 0,
+         matnr LIKE makt-matnr,
+         maktx LIKE makt-maktx,
+       END OF it_makt.
+
+DATA : BEGIN OF it_j_1imovend OCCURS 0,
+         lifnr     TYPE lifnr,                "VENDOR
+         j_1ilstno TYPE j_1ilstno,            "LST NO (TIN NO)
+         j_1ipanno TYPE j_1ipanno,            "PAN NO
+         j_1isern  TYPE j_1isern,             "SERVICE TAX REGISTRATION NUMBER
+         j_1icstno TYPE j_1icstno,            "CST NO
+         j_1iexcd  TYPE j_1iexcd,
+         ven_class TYPE j_1igtakld,
+       END OF it_j_1imovend.
+
+DATA : BEGIN OF it_bseg OCCURS 0,
+         bukrs    LIKE bseg-bukrs,
+         belnr    LIKE bseg-belnr,
+         gjahr    LIKE bseg-gjahr,
+         buzid    TYPE buzid,
+         augdt    LIKE bseg-augdt,
+         augbl    LIKE bseg-augbl,
+         shkzg    TYPE shkzg,
+         dmbtr    TYPE dmbtr,
+         wrbtr    TYPE wrbtr,
+         hkont    LIKE bseg-hkont,
+         hwbas    LIKE bseg-hwbas,
+         ebeln    LIKE bseg-ebeln,
+         ebelp    LIKE bseg-ebelp,
+         gsber    LIKE bseg-gsber,
+         bupla    LIKE bseg-bupla,
+         ktosl    LIKE bseg-ktosl,
+         zuonr    LIKE bseg-zuonr,
+         koart    LIKE bseg-koart,
+         skfbt    LIKE bseg-skfbt,
+         projk    LIKE bseg-projk, " Added field PROJK(WBS Element) by Carina Jose on 12.05.2022
+         rebzg    LIKE bseg-rebzg,
+         count    TYPE sy-tabix,
+         belnr1   LIKE bseg-belnr,
+         gjahr1   LIKE bseg-gjahr,
+         prctr    LIKE bseg-prctr,
+         kostl    LIKE bseg-kostl,
+         gst_part LIKE bseg-gst_part,   " Added by Carina Jose on 27.07.2020
+
+*         hsn_sac LIKE bseg-hsn_sac,       "hsn/sac code
+       END OF it_bseg.
+
+DATA : it_bseg1    LIKE it_bseg OCCURS 0 WITH HEADER LINE,
+       it_bseg_gl1 LIKE it_bseg OCCURS 0 WITH HEADER LINE,
+       it_bseg_tcs LIKE it_bseg OCCURS 0 WITH HEADER LINE,
+       it_bsegt    LIKE it_bseg OCCURS 0 WITH HEADER LINE,
+       it_bsett    LIKE it_bset OCCURS 0 WITH HEADER LINE.
+
+DATA : BEGIN OF it_ekbe OCCURS 0,
+*         buzei LIKE ekbe-buzei,
+*         lfbnr LIKE ekbe-lfbnr,
+*         lfpos LIKE rseg-lfpos,
+         belnr     LIKE ekbe-belnr,
+         gjahr(10),
+         awkey(20),
+       END OF it_ekbe.
+
+DATA : BEGIN OF it_bkpf2 OCCURS 0,
+         bukrs LIKE bkpf-bukrs,
+         belnr LIKE bkpf-belnr,
+         gjahr LIKE bkpf-gjahr,
+       END OF it_bkpf2.
+
+DATA : BEGIN OF it_bseg_gl OCCURS 0,
+         bukrs LIKE bseg-bukrs,
+         belnr LIKE bseg-belnr,
+         gjahr LIKE bseg-gjahr,
+         hkont LIKE bseg-hkont,
+         ebeln LIKE bseg-ebeln,
+         ebelp LIKE bseg-ebelp,
+         projk LIKE bseg-projk, " Added field PROJK(WBS Element) by Carina Jose on 12.05.2022
+       END OF it_bseg_gl.
+
+DATA : BEGIN OF it_t025t OCCURS 0,
+         bklas TYPE bklas,
+         bkbez TYPE bkbez,
+       END OF it_t025t.
+
+DATA: BEGIN OF i_t161 OCCURS 20,
+        bstyp LIKE t161-bstyp,
+        bsart LIKE t161-bsart,
+        batxt LIKE t161t-batxt,
+      END OF i_t161.
+
+* REGION DISCRIPTION
+DATA  : BEGIN OF it_t005u OCCURS 0.
+          INCLUDE STRUCTURE t005u.
+        DATA  : END OF it_t005u.
+
+TYPES : BEGIN OF gt_lfa1,
+          lifnr TYPE lifnr,
+          kunnr TYPE kunnr,                       " CUSTOMER NUMBER 1
+*          name1 TYPE name1_gp,                    " NAME
+*          name2 TYPE name1_gp,                    " name2
+*          city  TYPE ort01,  " CITY
+*          regio TYPE regio,  "region
+*          land1 TYPE land1,
+          stcd3 TYPE stcd3,
+        END OF gt_lfa1.
+*******  add unloading point 29/01/2018
+DATA : BEGIN OF it_1mseg OCCURS 0,
+         mblnr LIKE mseg-mblnr,
+         zeile LIKE mseg-zeile,
+         ablad LIKE mseg-ablad,
+       END OF it_1mseg.
+******
+
+DATA : BEGIN OF it_final OCCURS 0,
+         bukrs                 LIKE bkpf-bukrs,
+         belnr                 LIKE bkpf-belnr,
+         gjahr                 LIKE bkpf-gjahr,
+         mwskz                 LIKE bset-mwskz,         "tax code
+         ebeln                 LIKE rseg-ebeln,         "PO
+         ebelp                 LIKE rseg-ebelp,
+         anln1                 LIKE anla-anln1,
+         matnr                 LIKE rseg-matnr,
+         dmbtr                 LIKE bseg-dmbtr,
+         srno                  TYPE i,
+         blart                 LIKE bkpf-blart,         "document type
+         bsart                 LIKE ekko-bsart,         "document type po
+         bsart2(30),
+         "document number (fi)
+         g_belnr               LIKE rseg-belnr,         "document number (miro)
+         postdat               LIKE bkpf-budat,         "posting date
+         xblnr                 LIKE bkpf-xblnr,         "vendor invoice no -reference (invoice number of supplier)
+         bldat                 LIKE bkpf-bldat,         "doc date
+         lifnr                 LIKE lfa1-lifnr,         "vendor code
+         name1                 LIKE lfa1-name1,         "vendor name
+         ven_class             TYPE j_1igtakld,         "vendor (unregistered/registered/regi-composition)
+         ven_type              LIKE  dd07v-ddtext,
+*         str_suppl1      TYPE adrc-str_suppl1,    "address of supplier
+         address(50),
+         glind(01),
+         lref(01),
+         nref(01),
+         stcd3                 TYPE lfa1-stcd3,         "gstin of the supplier
+         regio(02),         "  LIKE lfa1-regio,         "state code
+         regio_desc(15),
+         tran_type(10),                             "local/interstate/import
+         steuc                 TYPE steuc,               "control code
+         maktx                 LIKE makt-maktx,         "goods/services description
+         qty                   TYPE mseg-menge,         "quantity
+         meins                 TYPE rseg-meins,         "uom
+
+         tax_desc              TYPE text1_007s,         "tax code desc ription
+*         tax_per         TYPE konv-kbetr,         "tax percent
+         joigper               TYPE konv-kbetr,
+*         joigamt         TYPE konv-kwert,
+         josgper               TYPE konv-kbetr,
+*         josgamt         TYPE konv-kwert,
+         jocgper               TYPE konv-kbetr,
+*         jocgamt         TYPE konv-kwert,
+         joinper               TYPE konv-kbetr,
+         jocnper               TYPE konv-kbetr,
+         josnper               TYPE konv-kbetr,
+         hkont                 LIKE bseg-hkont,         "GL A/C
+         hkont1                LIKE bseg-hkont,         "GL A/C
+         hkont2                LIKE bseg-hkont,         "GL A/C
+         gl_desc               LIKE skat-txt50,         "gl description
+         gl_desc1              LIKE skat-txt50,         "gl description
+         "AMOUNT
+         wrbtr                 LIKE bseg-wrbtr,         "DOCUMENT CURRENCY AMOUNT
+         disc                  TYPE kwert,              "discount
+         bascus                TYPE wrbtr,              "basic value
+
+         bas_adisc             TYPE wrbtr,              "basic value after discount
+         frgt                  LIKE bseg-wrbtr,         "freight
+         frgt1                 LIKE bseg-wrbtr,         "freight
+         allfrgt               LIKE bseg-wrbtr,         "allfreight :01.08.17
+*         frgt            LIKE bseg-wrbtr,         "freight
+*         frgt1            LIKE bseg-wrbtr,         "freight
+         pckn                  LIKE bseg-wrbtr,         "PACKING
+         misc                  LIKE bseg-wrbtr,         "MISC.CHGS.
+         imp_freight_val       TYPE wertv9, "rseg-wrbtr,          " IMPORT FREIGHT VALUE
+         jofv                  TYPE wrbtr,
+         jofp                  TYPE wrbtr,
+         hecvd                 TYPE wrbtr,              "HECESS ON CVD
+
+         ecustom               TYPE wrbtr,              "CUSTOMS ECESS
+         hecustom              TYPE wrbtr,              "CUSTOMS HECESS
+*         disc            TYPE kwert,              "discount
+
+*         jins            TYPE wrbtr,              "insurance
+*         othrs(12),                              "others
+         taxable_val           TYPE kwert,              "taxable value
+         joigamt               TYPE konv-kwert,         "igst - amount
+         jocgamt               TYPE konv-kwert,         "cgst - amount
+         josgamt               TYPE konv-kwert,         "sgst - amount
+         rjoigamt              TYPE konv-kwert,         "igst - amount
+         rjocgamt              TYPE konv-kwert,         "cgst - amount
+         rjosgamt              TYPE konv-kwert,         "sgst - amount
+         jcfa                  TYPE wrbtr,
+         jfr1                  TYPE wrbtr,
+         jfr2                  TYPE wrbtr,
+         lnd_cst               TYPE kwert,               " LANDING COST
+         gsber                 LIKE bseg-gsber,         "business place
+         bupla                 LIKE bseg-bupla,         "Actual business place
+         rate                  TYPE kwert,              "billvalue
+         diff                  TYPE wrbtr,
+         zshp                  TYPE wrbtr,
+         zshpinr               TYPE wrbtr,
+         jofvinr               TYPE wrbtr,
+         zterinr               TYPE wrbtr,
+         bcd                   TYPE wrbtr,
+         prctr                 LIKE bseg-prctr,         "profitcentre
+         kostl                 LIKE bseg-kostl,         "costcentre
+*extra fields for calc:
+         "COMPANY CODE
+*         belnr           LIKE bkpf-belnr,         "DOCUMENT NO
+         waers                 LIKE bkpf-waers,         "CURRENCY
+         kursf                 LIKE bkpf-kursf,         "EXCHANGE RATE
+         "FISCAL YEAR
+*         lifnr           LIKE lfa1-lifnr,         "VENDOR
+*         name1           LIKE lfa1-name1,         "VENDOR NAME
+*         xblnr           LIKE bkpf-xblnr,         "VENDOR INVOICE NO
+*         g_belnr         LIKE rseg-belnr,         "MIRO INVOICE NO
+         buzei                 LIKE rseg-buzei,         "MIRO INVOICE ITEM
+         lfbnr                 LIKE rseg-lfbnr,         "GRR NO
+         smbln                 LIKE mseg-smbln,         "reverse NO 102
+         budat                 TYPE budat,              "GRR DATE
+         bklas                 LIKE rseg-bklas,         "VALUATION CLASS
+         bkbez                 TYPE bkbez,              "VALUATION CLASS DESCRIPTION
+         bnkan                 LIKE rseg-bnkan,         "UNPLANNED COST IN DOC CURR
+         bnkanloc              LIKE rseg-bnkan,         "UNPLANNED COST IN LOCAL CURR
+         exbas                 TYPE j_1iexcbas,         "ASSESSIBLE VALUE
+*         mwskz           LIKE bset-mwskz,         "TAX CODE
+         "MATERIAL
+*         maktx           LIKE makt-maktx,         "MATERIAL DESCRIPTION
+         "PO ITEM
+*         bsart           LIKE ekko-bsart,         " DOCUMENT TYPE PO
+*         frgt            LIKE bseg-wrbtr,         "Freight
+*         frgt1           LIKE bseg-wrbtr,         "Freight without base "ADDED 18.02.2009
+         vatbas                TYPE hwbas,              "TAX BASE AMOUNT IN DOCUMENT CURRENCY FOR VAT
+         vatbas1               TYPE hwbas,              "ADDITIONAL TAX BASE AMOUNT IN DOCUMENT CURRENCY FOR VAT
+         serbas                TYPE hwbas,              "TAX BASE AMOUNT IN DOCUMENT CURRENCY FOR SERVICE TAX
+         bed                   TYPE kwert,              "BED
+         bedrate               TYPE kwert,              "BED RATE
+         addbed                TYPE kwert,                          "ADDL BED
+         ecs                   TYPE kwert,              "ECESS SETOFF
+         ebed                  TYPE kwert,              "ECESS ON BED
+         rmded                 TYPE kwert,
+         1rmded                TYPE kwert,              "RM DEDUCTABLE
+         rmdedrate             TYPE kwert,              "VAT RATE (RM DEDUCTIBLE)
+         rmded1                TYPE kwert,              "ADDITIONAL VAT
+         1rmded1               TYPE kwert,              "ADDITIONAL VAT
+         rmdedrate1            TYPE kwert,              "ADDITIONAL VAT RATE (RM DEDUCTIBLE)
+         rmnon                 TYPE kwert,              "RM NON-DEDUCTABLE
+         cgded                 TYPE kwert,              "CG DEDUCTABLE
+         cgdedrate             TYPE kwert,              "ADD.VAT RATE (CG DEDUCTIBLE)                          "LINE ADD 03.03.2009
+         cgnon                 TYPE kwert,              "CG NON-DEDUCTABLE
+         cst                   TYPE kwert,              "CST
+         cstrate               TYPE kwert,              "CST RATE
+         sertax                TYPE kwert,              "SERVICE TAX
+         esertax               TYPE kwert,              "ECESS ON SERVICE TAX
+         shcess                TYPE kwert,              "SHCESS
+         shrate                TYPE kwert,              "SHCESS RATE
+         acd                   TYPE wrbtr,              "ADDITIONAL CUSTOMS DUTY
+*         bascus          TYPE wrbtr,              "BASIC CUSTOMS
+         cvd                   TYPE wrbtr,              "CVD
+         ecvd                  TYPE wrbtr,              "ECESS ON CVD
+         wct                   TYPE dmbtr,              "W.C.T
+         tds                   TYPE dmbtr,              "T.D.S
+         esic                  TYPE dmbtr,              "E.S.I.C
+         gross                 TYPE wertv9, "kwert,              "GROSS TOTAL
+         j_1ilstno             TYPE j_1ilstno,          "LST NO (TIN NO)
+         j_1ipanno             TYPE j_1ipanno,          "PAN NO
+         j_1isern              TYPE j_1isern,           "SERVICE TAX REGISTRATION NUMBER
+*         disc            TYPE kwert,              "DISCOUNT
+         hcess                 TYPE kwert,              "SHCESS ON BED
+*         tax_desc        TYPE text1_007s,         "TAX CODE DESC
+*         gsber           LIKE bseg-gsber,         " BUSINESS AREA
+         cstno                 TYPE j_1icstno,          " CST NO
+*         regio           LIKE lfa1-regio,         " REGION
+         ort01                 LIKE lfa1-ort01,         " CITY
+         chapid                LIKE j_1imtchid-j_1ichid,    " CHAPTER ID
+         chapid_desc           LIKE j_1ichidtx-j_1icht1, " CHAPTER ID DESC
+*         gl_desc         LIKE skat-txt50,           " G/L ACCOUNT DESCRIPTION
+         eccno                 LIKE j_1imovend-j_1iexcd,   " ECC NO
+*         regio_desc      LIKE t005u-bezei,
+         werks                 LIKE  rseg-werks,
+         plantnm(35),
+*         qty             TYPE mseg-menge,          " QUANTITY
+         bed_n                 TYPE kwert,               " BED NON DEDUCTABLE
+         ces_n                 TYPE kwert,               " CESSS NON DEDUCTABLE
+         hcess_n               TYPE kwert,               " H CESSS NON DEDUCTABLE
+         aed_n                 TYPE kwert,               " AED NON DEDUCTABLE
+         land1                 TYPE lfa1-land1,          " VENDOR COUNTRY CODE
+         matkl                 TYPE mara-matkl,          " MATERIAL GROUP
+         mtart                 TYPE mara-mtart,          " MATERIAL TYPE
+*         meins           TYPE rseg-meins,          " BASE UNIT
+         ekgrp                 TYPE ekko-ekgrp,          " PRCHASE GROUP
+         name2                 TYPE t001w-name1,         " PLANT NAME
+*         rate            TYPE kwert,               " RATE
+         wgbez                 TYPE t023t-wgbez,         " MATERIAL GROUP TEXT
+         zter                  TYPE wrbtr,
+*         zterinr         TYPE wrbtr,
+*         jfr2inr         TYPE wrbtr,
+*         zshpinr         TYPE wrbtr,
+         jins                  TYPE wrbtr,
+         jins1                 TYPE wrbtr,
+         jldc                  TYPE wrbtr,
+         sbc                   TYPE wrbtr,
+         mtbez                 TYPE mtbez,
+         str_suppl1            TYPE adrc-str_suppl1,
+         str_suppl2            TYPE adrc-str_suppl2,
+         str_suppl3            TYPE adrc-str_suppl3,
+*         address(200),     "TYPE ADRC-str_suppl,
+**  *****Added by Ravin: 14.07.17 for GST Condition/Amt
+         joinamt               TYPE konv-kwert,
+         jocnamt               TYPE konv-kwert,
+         josnamt               TYPE konv-kwert,
+*         steuc           TYPE marc-steuc,
+*         stcd3           TYPE lfa1-stcd3,
+*         kunnr           TYPE lfa1-kunnr,
+**         costcent TYPE bseg-hsn_sac,
+         bktxt                 TYPE bkpf-bktxt,
+         zuonr                 TYPE bseg-zuonr,
+         sgstn(25),
+         flag(01),
+         augdt                 TYPE bseg-augdt,
+         augbl                 TYPE bseg-augbl,
+         ablad                 TYPE mseg-ablad,
+         adrnr                 LIKE lfa1-adrnr, " added on 27.07.2020 by Carina
+         tcsamt                TYPE bseg-dmbtr, " added for TCS amt. by Carina Jose on 28.11.2020
+*        " Added by Carina Jose on 11.01.2021
+         lifnr1                LIKE lfa1-lifnr,
+         gstvend_land1         TYPE lfa1-land1,
+         gstvend_name1         LIKE lfa1-name1,
+         gstvend_ort01         LIKE lfa1-ort01,
+         gstvend_regio         LIKE lfa1-regio,
+         gstvend_adrnr         LIKE lfa1-adrnr,
+         gstvend_stcd3         TYPE lfa1-stcd3,
+         gstvend_regiodesc(15),
+
+* End of changes by Carina Jose on 11.01.2021
+         projk                 TYPE string, " Added by Carina Jose on 12.05.2022
+*         ebeln type ekko-ebeln,"Added By Raj on 17.07.2023
+         sgtxt                 TYPE rseg-sgtxt, "Added By Raj on 17.07.2023
+         cpudt                 TYPE bkpf-cpudt, "Added by Raj on 04.12.2024
+         usnam                 TYPE bkpf-usnam, "Added by Raj on 04.12.2024
+       END OF it_final.
+***** " Added by Carina Jose on 11.01.2021
+DATA : BEGIN OF it_j_1imovend_gstvend OCCURS 0,
+         lifnr     TYPE lifnr,                "VENDOR
+         j_1ilstno TYPE j_1ilstno,            "LST NO (TIN NO)
+         j_1ipanno TYPE j_1ipanno,            "PAN NO
+         j_1isern  TYPE j_1isern,             "SERVICE TAX REGISTRATION NUMBER
+         j_1icstno TYPE j_1icstno,            "CST NO
+         j_1iexcd  TYPE j_1iexcd,
+         ven_class TYPE j_1igtakld,
+       END OF it_j_1imovend_gstvend.
+* End of changes by Carina Jose on 11.01.2021
+DATA : t_mara         TYPE STANDARD TABLE OF mara WITH HEADER LINE,
+       t_t023t        TYPE STANDARD TABLE OF t023t WITH HEADER LINE,
+       t_listheader   TYPE slis_t_listheader WITH HEADER LINE,
+       t_fieldcatalog TYPE slis_t_fieldcat_alv WITH HEADER LINE,
+       t_event        TYPE slis_t_event        WITH HEADER LINE,
+       fs_layout      TYPE slis_layout_alv,
+       t_fieldcat     TYPE slis_t_fieldcat_alv WITH HEADER LINE,
+       gt_sort        TYPE slis_t_sortinfo_alv WITH HEADER LINE.
+
+DATA : BEGIN OF it_bset1 OCCURS 0,
+         bukrs LIKE bset-bukrs,
+         belnr LIKE bset-belnr,
+         gjahr LIKE bset-gjahr,
+       END OF it_bset1.
+
+DATA : BEGIN OF it_rseg1 OCCURS 0,
+         ebeln  LIKE rseg-ebeln,
+         ebelp  LIKE rseg-ebelp,
+         belnr  LIKE rseg-belnr,
+         gjahr  LIKE rseg-gjahr,
+         buzei  LIKE rseg-buzei,
+         matnr  LIKE rseg-matnr,
+         bukrs  LIKE rseg-bukrs,
+         wrbtr  LIKE rseg-wrbtr,
+         shkzg  LIKE rseg-shkzg,
+         mwskz  LIKE rseg-mwskz,
+         kschl  LIKE rseg-kschl, "CONDITION TYPE IN RSEG
+         lfpos  LIKE rseg-lfpos, "REFERENCE DOCUMENET ITEM
+         lifnr  LIKE rbkp-lifnr,
+         name1  LIKE lfa1-name1,
+         bukrs1 LIKE bkpf-bukrs,
+         belnr1 LIKE bkpf-belnr,
+         gjahr1 LIKE bkpf-gjahr,
+       END OF it_rseg1.
+
+DATA: i TYPE sy-tabix.
+
+DATA : BEGIN OF r_rseg OCCURS 0,
+         belnr LIKE rseg-belnr,
+         gjahr LIKE rseg-gjahr,
+       END OF r_rseg.
+
+DATA : BEGIN OF it_ekkn OCCURS 0,
+         ebeln      LIKE ekkn-ebeln,
+         ebelp      LIKE ekkn-ebelp,
+         sakto      LIKE ekkn-sakto,
+         anln1      LIKE ekkn-anln1,
+         ps_psp_pnr LIKE ekkn-ps_psp_pnr,
+       END OF it_ekkn.
+
+DATA: BEGIN OF it_mseg OCCURS 0,
+        mblnr TYPE mseg-mblnr,
+        mjahr TYPE mseg-mjahr,
+        bwart TYPE mseg-bwart,
+        lfbnr TYPE mseg-lfbnr,
+        smbln TYPE mseg-smbln,
+        awkey TYPE bkpf-awkey,
+      END OF it_mseg.
+
+*DATA : IT_MSEG LIKE TABLE OF ST_MSEG WITH HEADER LINE.
+TYPES: BEGIN OF t_marc,
+         matnr TYPE matnr,
+         werks TYPE werks_d,         "~~Plant
+         steuc TYPE steuc, "~~Control code for consumption taxes in foreign trade
+       END OF t_marc.
+
+DATA : wa_marc TYPE t_marc,
+       it_marc TYPE TABLE OF t_marc.
+
+* GL ACCOUNT DESCRIPTION
+DATA : BEGIN OF it_gldesc OCCURS 0.
+         INCLUDE STRUCTURE skat.
+       DATA :END OF it_gldesc.
+
+DATA : BEGIN OF it_gldesc1 OCCURS 0.
+         INCLUDE STRUCTURE skat.
+       DATA :END OF it_gldesc1.
+
+DATA: it_gstn TYPE STANDARD TABLE OF zsd_gstn,
+      wa_gstn TYPE zsd_gstn.
+
+DATA : it_ekko  TYPE STANDARD TABLE OF ekko WITH HEADER LINE,
+       it_konv  TYPE STANDARD TABLE OF konv WITH HEADER LINE,
+       it_t001w TYPE STANDARD TABLE OF t001w WITH HEADER LINE,
+       it_adrc  TYPE STANDARD TABLE OF adrc WITH HEADER LINE.
+
+DATA : wa_final LIKE LINE OF it_final,
+       it_lfa1  TYPE gt_lfa1 OCCURS 0 WITH HEADER LINE,
+       wa_lfa1  TYPE gt_lfa1.
+
+DATA : it_rseg_cn LIKE TABLE OF it_rseg,
+       wa_rseg_cn LIKE LINE OF it_rseg.
+
+DATA : it_final1 LIKE TABLE OF it_final WITH HEADER LINE,
+       wa_final1 LIKE LINE OF it_final.
+
+DATA : it_final2 LIKE TABLE OF it_final WITH HEADER LINE,
+       wa_final2 LIKE LINE OF it_final.
+
+DATA : it_final3 LIKE TABLE OF it_final WITH HEADER LINE,
+       wa_final3 LIKE LINE OF it_final.
+
+DATA : it_final_tmp LIKE TABLE OF it_final,
+       wa_final_tmp LIKE LINE OF it_final.
+
+DATA :it_1final LIKE it_final OCCURS 0 WITH HEADER LINE,
+      wa_1final LIKE LINE OF it_final.
+
+DATA : wa_final1tmp LIKE LINE OF it_final1.
+DATA: lt_t134t    TYPE STANDARD TABLE OF t134t,
+      lwa_t134t   TYPE t134t,
+      lt_t161t    TYPE STANDARD TABLE OF t161t, " WITH HEADER LINE,
+      lw_t161t    TYPE t161t,
+      it_ztaxcode TYPE STANDARD TABLE OF ztaxcode,
+      wa_ztaxcode TYPE ztaxcode.
+
+
+DATA: it_data LIKE TABLE OF it_final,
+      wa_data LIKE LINE OF it_final.
+DATA: gv_dmbtr           TYPE wrbtr,
+      gv_wrbtr           TYPE wrbtr,
+      gv_pckn            TYPE wrbtr,
+      gv_misc            TYPE wrbtr,
+      gv_bnkan           TYPE wrbtr,
+      gv_exbas           TYPE wrbtr,
+      gv_vatbas          TYPE wrbtr,
+      gv_serbas          TYPE wrbtr,
+      gv_bed             TYPE wrbtr,
+      gv_addbed          TYPE wrbtr,
+      gv_ecs             TYPE wrbtr,
+      gv_hcess           TYPE wrbtr,
+      gv_ebed            TYPE wrbtr,
+      gv_rmded           TYPE wrbtr,
+      gv_rmded1          TYPE wrbtr,
+      gv_rmnon           TYPE wrbtr,
+      gv_cgded           TYPE wrbtr,
+      gv_cgnon           TYPE wrbtr,
+      gv_cst             TYPE wrbtr,
+      gv_sertax          TYPE wrbtr,
+      gv_esertax         TYPE wrbtr,
+      gv_shcess          TYPE wrbtr,
+      gv_acd             TYPE wrbtr,
+      gv_bascus          TYPE wrbtr,
+      gv_cvd             TYPE wrbtr,
+      gv_ecvd            TYPE wrbtr,
+      gv_hecvd           TYPE wrbtr,
+      gv_ecustom         TYPE wrbtr,
+      gv_hecustom        TYPE wrbtr,
+      gv_disc            TYPE wrbtr,
+      gv_imp_freight_val TYPE wrbtr,
+      gv_wct             TYPE wrbtr,
+      gv_tds             TYPE wrbtr,
+      gv_esic            TYPE wrbtr,
+      gv_jcfa            TYPE wrbtr,
+      gv_jfr1            TYPE wrbtr,
+      gv_jfr2            TYPE wrbtr,
+      gv_jofv            TYPE wrbtr,
+      gv_frgt1           TYPE wrbtr,
+      gv_allfrgt         TYPE wrbtr, "01.08.17
+      gv_bcd             TYPE wrbtr, "01.08.17
+      gv_bas_adisc       TYPE wrbtr, "03.08.17
+      gv_taxable_val     TYPE wrbtr, "03.08.17
+      gv_joigamt         TYPE wrbtr, "03.08.17
+      gv_josgamt         TYPE wrbtr, "03.08.17
+      gv_jocgamt         TYPE wrbtr, "03.08.17
+      gv_rjoigamt        TYPE wrbtr, "03.08.17
+      gv_rjosgamt        TYPE wrbtr, "03.08.17
+      gv_rjocgamt        TYPE wrbtr,
+      gv_gross           TYPE wrbtr, "03.08.17
+      gv_qty             TYPE wrbtr,
+      gv_frgt            TYPE wrbtr,
+      gv_pnr             TYPE ekkn-ps_psp_pnr,
+      gv_pnr1            TYPE char200,
+      gv_tax(02),
+      gv_rmdedrate       TYPE kwert,
+      gv_rmdedrate1      TYPE kwert,
+      gv_taxdesc(45).
+
+DATA : wa_rseg1 LIKE LINE OF it_rseg,
+       wa_rseg2 LIKE LINE OF it_rseg,
+       wa_rseg3 LIKE LINE OF it_rseg.
+
+************ Added changes by Carina Jose on 03.11.2020
+TYPES : BEGIN OF ty_eslh,
+          packno TYPE eslh-packno,
+          ebeln  TYPE eslh-ebeln,
+          ebelp  TYPE eslh-ebelp,
+        END OF ty_eslh.
+TYPES : BEGIN OF ty_esll,
+          packno  TYPE esll-packno,
+          introw  TYPE esll-introw,
+          extrow  TYPE esll-extrow,
+          ktext1  TYPE esll-ktext1,
+          matkl   TYPE esll-matkl,
+          package TYPE esll-package,
+        END OF ty_esll.
+
+
+DATA : it_eslh TYPE STANDARD TABLE OF ty_eslh,
+       wa_eslh TYPE ty_eslh,
+       it_esll TYPE STANDARD TABLE OF ty_esll,
+       wa_esll TYPE ty_esll.
+************ End of changes by Carina Jose on 03.11.2020
+
+****** Added changes by Carina Jose on 28.11.2020
+DATA : v_tcs TYPE bseg-hkont.
+CONSTANTS:
+ c_tvarvc_name TYPE rvari_vnam VALUE 'ZFI_TCS_GLACC'.
+
+CONSTANTS:
+  c_tvarvc_blart TYPE rvari_vnam VALUE 'ZMM_BLART',
+  c_tvarvc_tcode TYPE rvari_vnam VALUE 'ZMM_PUR_TCODE'.
+
+****** End of changes by Carina Jose on 28.11.2020
+
+*************************Begin of changes Added by Raj on 20.06.2024******************************************
+DATA : gv_blart TYPE bkpf-blart.
+DATA : gv_blarts TYPE bkpf-tcode.
+RANGES : r_blart FOR gv_blart.
+RANGES : r_blarts FOR gv_blarts.
+************************End of changes Added by Raj on 20.06.2024*********************************************
+
+
+
+*&---------------------------------------------------------------------*
+*& SELECTION-SCREEN
+*&---------------------------------------------------------------------*
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-001.
+SELECT-OPTIONS : s_bukrs FOR bkpf-bukrs OBLIGATORY NO INTERVALS NO-EXTENSION,
+                 s_belnr FOR bkpf-belnr,
+                 s_gjahr FOR bkpf-gjahr NO-DISPLAY,
+                 s_budat FOR bkpf-budat OBLIGATORY,
+                 s_blart FOR bkpf-blart ,
+                 s_mwskz FOR bset-mwskz,
+                 s_gsber FOR bseg-gsber,
+                 s_werks FOR rseg-werks,
+                 p_lifnr FOR rbkp-lifnr.
+SELECTION-SCREEN END OF BLOCK b1.
+
+**--------------------------------------------------**
+SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE text-002.
+PARAMETERS : chk1 AS CHECKBOX.
+PARAMETERS : chk2 AS CHECKBOX .
+*PARAMETERS : chk3 AS CHECKBOX.
+PARAMETERS : r1 TYPE c RADIOBUTTON GROUP gp1 DEFAULT 'X',
+             r2 TYPE c RADIOBUTTON GROUP gp1,
+             r3 TYPE c RADIOBUTTON GROUP gp1.
+
+PARAMETERS : rad AS CHECKBOX."Added by Raj on 29.06.2024
+
+SELECTION-SCREEN END OF BLOCK b2.
+SELECTION-SCREEN COMMENT /1(70) xsrm1.
+SELECTION-SCREEN COMMENT /1(70) xsrm2.
+**--------------------------------------------------**
+*&---------------------------------------------------------------------*
+*& START-OF-SELECTION
+*&---------------------------------------------------------------------*
+AT SELECTION-SCREEN OUTPUT.
+*xsrm1 = 'Note: Doc.type RE,RN,SK,KG for required report,'.
+*xsrm2 = 'Otherwise will display for given Doc. Type.'.
+START-OF-SELECTION.
+
+
+************************Begin of changes Added by Raj on 20.06.2024********************
+  SELECT sign,opti,low,high FROM tvarvc INTO TABLE @DATA(it_tvarv)  WHERE name = @c_tvarvc_blart .
+  LOOP AT it_tvarv INTO DATA(wa_tvarv).
+    r_blart-sign = 'I'.
+    r_blart-option = 'EQ'.
+    r_blart-low = wa_tvarv-low.
+    APPEND  r_blart." to r_blart.
+    CLEAR : r_blart.
+  ENDLOOP.
+
+  SELECT sign,opti,low,high FROM tvarvc INTO TABLE @DATA(it_tvarvs)  WHERE name = @c_tvarvc_tcode .
+  LOOP AT it_tvarvs INTO DATA(wa_tvarvs).
+    r_blarts-sign = 'I'.
+    r_blarts-option = 'EQ'.
+    r_blarts-low = wa_tvarvs-low.
+    APPEND  r_blarts." to r_blart.
+    CLEAR : r_blarts.
+  ENDLOOP.
+***********************End of changes Added by Raj on 20.06.2024***********************
+
+*&---------------------------------------------------------------------*
+*& SUBROUTINE TO PROCESS REPORT DATA.
+*&---------------------------------------------------------------------*
+
+  PERFORM process_data.
+  IF r1 IS NOT INITIAL.
+  ELSEIF r2 IS  NOT INITIAL.
+    PERFORM fill_summary_data.
+    REFRESH it_final1[].
+    it_final1[] = it_data[].
+  ENDIF.
+  PERFORM fill_listheader.
+  PERFORM fill_fieldcatalog.
+  PERFORM fill_layout.
+  IF r3 = 'X'.
+    IF sy-uname ='APLIT01'.
+      PERFORM background_job.
+    ELSEIF sy-uname = 'BASIS'.
+      PERFORM background_job.
+    ELSEIF sy-uname = 'SAP_ABAP'.
+      PERFORM background_job.
+    ELSE.
+      MESSAGE: 'YOU ARE NOT AUTHORIZED FOR BACKGROUND' TYPE 'E'.
+    ENDIF.
+  ELSE.
+    PERFORM fill_displaygrid.
+  ENDIF.
+*&---------------------------------------------------------------------*
+*&      Form  PROCESS_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM process_data .
+*if chk3 is not INITIAL.
+*  if s_blart is not INITIAL and ( s_blart-low = 'KG' OR s_blart-low = 'RE' OR s_blart-low = 'RN' OR s_blart-low = 'SK') .
+**GET DATA FROM BKPF TABLE
+*  SELECT bukrs
+*         belnr
+*         gjahr
+*         blart
+*         bldat
+*         budat
+*         xblnr
+*         waers
+*         kursf
+*         awkey
+*         bktxt FROM bkpf
+*         INTO CORRESPONDING FIELDS OF TABLE it_bkpf
+*         WHERE bukrs IN s_bukrs AND
+*               belnr IN s_belnr AND
+*               gjahr IN s_gjahr AND
+*               budat IN s_budat AND
+**               blart IN ('RE', 'RN' , 'SK', 'KG') AND
+*               blart IN s_blart AND
+*               tcode IN ('J_1IG_INV' ,'MIR7', 'MIRO','MR8M').
+*     endif.
+*  else.
+
+*  SELECT bukrs
+*       belnr
+*       gjahr
+*       blart
+*       bldat
+*       budat
+*       xblnr
+*       waers
+*       kursf
+*       awkey
+*       bktxt FROM bkpf
+*       INTO CORRESPONDING FIELDS OF TABLE it_bkpf
+*       WHERE bukrs IN s_bukrs AND
+*             belnr IN s_belnr AND
+*             gjahr IN s_gjahr AND
+*             budat IN s_budat AND
+*             blart IN ('RE', 'RN' , 'SK', 'KG') AND
+**               blart IN s_blart AND
+**               blart IN s_blart AND
+*             tcode IN ('J_1IG_INV' ,'MIR7', 'MIRO','MR8M')."Commented by Raj 29.06.2024
+
+  IF rad = 'X'.
+    SELECT bukrs
+         belnr
+         gjahr
+         blart
+         bldat
+         budat
+         xblnr
+         waers
+         kursf
+         awkey
+         bktxt
+         cpudt
+         usnam FROM bkpf
+         INTO CORRESPONDING FIELDS OF TABLE it_bkpf
+         WHERE bukrs IN s_bukrs AND
+               belnr IN s_belnr AND
+               gjahr IN s_gjahr AND
+               budat IN s_budat AND
+*               blart IN r_blart AND
+                blart  = 'RK' AND
+*               blart IN s_blart AND
+*               blart IN s_blart AND
+               tcode IN ('J_1IG_INV' ,'MIR7', 'MIRO','MR8M'). "Added by Raj on 20.06.2024
+  ELSE.
+    SELECT bukrs
+         belnr
+         gjahr
+         blart
+         bldat
+         budat
+         xblnr
+         waers
+         kursf
+         awkey
+         bktxt
+         cpudt
+         usnam  FROM bkpf
+         INTO CORRESPONDING FIELDS OF TABLE it_bkpf
+         WHERE bukrs IN s_bukrs AND
+               belnr IN s_belnr AND
+               gjahr IN s_gjahr AND
+               budat IN s_budat AND
+*               blart IN ('RE', 'RN' , 'SK', 'KG','RM') AND  "RM Doc type and FBVB are added 13.08.2024
+       blart IN r_blart AND
+*               blart IN s_blart AND
+*               blart IN s_blart AND
+*               tcode IN ('J_1IG_INV' ,'MIR7', 'MIRO','MR8M','FBVB').
+      tcode IN r_blarts.
+
+  ENDIF.
+
+*  endif.
+  IF it_bkpf[] IS INITIAL.
+    MESSAGE 'Data are not Found or Document type mendtory' TYPE 'E'.
+  ENDIF.
+
+
+
+*GET MIRO INVOICE NO & ITEM FROM IT_BKPF[]
+  IF it_bkpf[] IS NOT INITIAL.
+    LOOP AT it_bkpf.
+      it_bkpf-g_belnr = it_bkpf-awkey+0(10).
+      it_bkpf-g_gjahr = it_bkpf-awkey+10(4).
+      IF sy-subrc EQ 0.
+        MODIFY it_bkpf TRANSPORTING g_belnr g_gjahr.
+      ENDIF.
+    ENDLOOP.
+  ENDIF.
+
+*GET MIRO INVOICE ITEM DETAILS,VENDOR AND VENDOR NAME
+  IF NOT it_bkpf[] IS INITIAL.
+
+    SELECT a~belnr a~gjahr a~buzei a~ebeln a~ebelp a~ebelp a~matnr a~bukrs a~wrbtr a~shkzg a~mwskz
+           a~bklas a~bnkan a~kschl a~lfbnr a~lfpos a~werks a~customs_val "a~sgtxt                         "SGTXT has been added by Raj on 17.07.2023
+           b~lifnr
+           c~name1 c~regio c~ort01 c~land1 a~menge a~meins c~adrnr c~stcd3 a~exkbe a~xekbz a~rbmng
+          INTO CORRESPONDING FIELDS OF TABLE  it_rseg
+          FROM rseg AS a INNER JOIN rbkp AS b ON a~belnr = b~belnr
+                         INNER JOIN lfa1 AS c ON b~lifnr = c~lifnr
+    FOR ALL ENTRIES IN it_bkpf
+        WHERE a~belnr = it_bkpf-g_belnr
+        AND a~gjahr = it_bkpf-g_gjahr
+        AND a~werks IN s_werks
+        AND a~bukrs IN s_bukrs
+*        AND b~gjahr IN s_gjahr
+        AND b~budat IN s_budat
+        AND c~lifnr IN p_lifnr.
+***********************************Added by Raj on 17.07.2023*************
+    DATA : lv_year  TYPE char4.
+    lv_year = s_budat-low+0(4).
+    TYPES : BEGIN OF ty_rbkpp,
+              belnr TYPE rbkp-belnr,
+              gjahr TYPE rbkp-gjahr,
+              sgtxt TYPE rbkp-sgtxt,
+            END OF  ty_rbkpp.
+    DATA : it_rbkpp TYPE STANDARD TABLE OF ty_rbkpp,
+           wa_rbkpp TYPE ty_rbkpp.
+
+    IF it_rseg[] IS NOT INITIAL.
+      SELECT belnr gjahr sgtxt FROM rbkp INTO TABLE it_rbkpp FOR ALL ENTRIES IN it_rseg WHERE belnr = it_rseg-belnr AND gjahr = lv_year.
+    ENDIF.
+************************************Added by Raj on 17.07.2023*************
+    IF it_rseg[] IS NOT INITIAL.
+      "State
+      SELECT * FROM t005u
+              INTO TABLE it_t005u
+      FOR ALL ENTRIES IN it_rseg
+      WHERE spras = sy-langu
+      AND   land1 = it_rseg-land1
+      AND   bland = it_rseg-regio.
+      "Material
+      SELECT * FROM mara INTO TABLE t_mara
+                       FOR ALL ENTRIES IN it_rseg
+                       WHERE matnr = it_rseg-matnr.
+      "Material Desc
+      IF t_mara[] IS NOT INITIAL.
+        SELECT * FROM t023t INTO TABLE t_t023t
+                 FOR ALL ENTRIES IN t_mara
+                 WHERE matkl = t_mara-matkl
+                 AND   spras = 'E'.
+      ENDIF.
+
+      SELECT * FROM ekko INTO TABLE it_ekko
+                              FOR ALL ENTRIES IN it_rseg
+                              WHERE ebeln = it_rseg-ebeln.
+*************************************************
+
+*********************** Added changes by Carina Jose for service item description on 03.11.2020
+      IF it_rseg[] IS NOT INITIAL.
+        SELECT packno ebeln ebelp
+          INTO CORRESPONDING FIELDS OF TABLE it_eslh
+          FROM eslh
+          FOR ALL ENTRIES IN it_rseg
+          WHERE ebeln = it_rseg-ebeln
+          AND   ebelp = it_rseg-ebelp1
+          AND   bstyp EQ 'F'.
+
+        IF  it_eslh IS NOT INITIAL.
+          SELECT packno introw extrow package ktext1 matkl
+            INTO CORRESPONDING FIELDS OF TABLE it_esll
+            FROM esll
+            FOR ALL ENTRIES IN it_eslh
+            WHERE packno = it_eslh-packno
+            AND   package NE 'X'.
+        ENDIF.
+      ENDIF.
+*********************** End of changes by Carina Jose on 03.11.2020
+
+      SELECT ebeln ebelp sakto anln1 ps_psp_pnr FROM ekkn INTO TABLE it_ekkn
+         FOR ALL ENTRIES IN it_rseg
+          WHERE ebeln = it_rseg-ebeln.
+
+      SELECT belnr gjahr FROM ekbe INTO TABLE it_ekbe
+        FOR ALL ENTRIES IN it_rseg
+         WHERE ebeln = it_rseg-ebeln AND
+               bewtp = 'E'.
+      LOOP AT it_ekbe.
+        CONCATENATE it_ekbe-belnr it_ekbe-gjahr INTO it_ekbe-awkey.
+        MODIFY it_ekbe TRANSPORTING awkey.
+      ENDLOOP.
+      IF it_ekbe[] IS NOT INITIAL.
+
+        SELECT bukrs belnr gjahr  FROM bkpf INTO TABLE it_bkpf2
+          FOR ALL ENTRIES IN it_ekbe
+          WHERE  bukrs IN s_bukrs AND
+          awtyp = 'MKPF' AND
+          awkey = it_ekbe-awkey
+          .
+
+*        SELECT bukrs belnr gjahr FROM acctit INTO TABLE it_bkpf2
+*          FOR ALL ENTRIES IN it_ekbe
+*          WHERE awref = it_ekbe-belnr AND
+*                aworg = it_ekbe-gjahr.
+
+
+        IF it_bkpf2[] IS NOT INITIAL.
+          SELECT bukrs belnr gjahr hkont ebeln ebelp projk FROM bseg INTO TABLE it_bseg_gl " Added field PROJK(WBS Element) by Carina Jose on 12.05.2022
+             FOR ALL ENTRIES IN it_bkpf2
+             WHERE belnr = it_bkpf2-belnr AND
+                   bukrs = it_bkpf2-bukrs AND
+                   gjahr = it_bkpf2-gjahr AND
+                   buzid = 'M'.
+        ENDIF.
+
+      ENDIF.
+************************
+      IF it_ekko[] IS NOT INITIAL.
+        SELECT * FROM konv INTO TABLE it_konv
+                                FOR ALL ENTRIES IN it_ekko
+                                WHERE knumv = it_ekko-knumv AND kschl IN ('R003','SKTO','R001','R002','R005','R006') .
+      ENDIF.
+      SELECT * FROM t001w INTO TABLE it_t001w
+                          FOR ALL ENTRIES IN it_rseg
+                          WHERE werks = it_rseg-werks.
+
+      SELECT * FROM adrc INTO TABLE it_adrc
+                          FOR ALL ENTRIES IN it_rseg
+                          WHERE addrnumber = it_rseg-adrnr.
+    ENDIF.
+  ENDIF.
+
+********* Added changes by Carina Jose on 02.11.2020
+  SELECT    bukrs
+        belnr
+        gjahr
+        buzid
+        augdt
+        augbl
+        shkzg
+        dmbtr
+        wrbtr
+        hkont
+        fwbas
+        ebeln
+        ebelp
+        gsber
+        bupla
+        kostl
+        zuonr
+        koart
+        skfbt
+        projk " Added field PROJK(WBS Element) by Carina Jose on 12.05.2022
+          FROM bseg
+              INTO TABLE it_bseg_gl1
+              FOR ALL ENTRIES IN it_bkpf
+              WHERE bukrs = it_bkpf-bukrs AND
+                    belnr = it_bkpf-belnr AND
+                    gjahr = it_bkpf-gjahr AND
+                    gsber IN s_gsber AND
+                    buzid = 'M'.
+******** End of changes by Carina Jose on 02.11.2020
+
+****** Added changes by Carina Jose on 28.11.2020
+  SELECT SINGLE low
+    INTO v_tcs
+    FROM tvarvc
+    WHERE name = c_tvarvc_name .
+
+
+  SELECT    bukrs
+            belnr
+            gjahr
+            buzid
+            augdt
+            augbl
+            shkzg
+            dmbtr
+            wrbtr
+            hkont
+            fwbas
+            ebeln
+            ebelp
+            gsber
+            bupla
+            kostl
+            zuonr
+            koart
+            skfbt
+              FROM bseg
+                  INTO TABLE it_bseg_tcs
+                  FOR ALL ENTRIES IN it_bkpf
+                  WHERE bukrs = it_bkpf-bukrs AND
+                        belnr = it_bkpf-belnr AND
+                        gjahr = it_bkpf-gjahr AND
+                        gsber IN s_gsber AND
+                        hkont  = v_tcs.
+****** End of changes by Carina Jose on 28.11.2020
+
+  IF NOT it_rseg[] IS INITIAL.
+    SELECT mblnr mjahr bwart lfbnr smbln
+      INTO CORRESPONDING FIELDS OF TABLE it_mseg
+      FROM mseg FOR ALL ENTRIES IN it_rseg
+      WHERE  mblnr = it_rseg-lfbnr AND bwart = '101'."Goods Receipt
+
+*        * FIND GRR DATE
+
+    SELECT mblnr budat mjahr
+            FROM mkpf
+            INTO TABLE it_mkpf
+            FOR ALL ENTRIES IN it_rseg
+            WHERE mblnr EQ it_rseg-lfbnr.
+
+    LOOP AT it_mseg.
+      CONCATENATE it_mseg-mblnr it_mseg-mjahr INTO it_mseg-awkey.
+      MODIFY it_mseg TRANSPORTING awkey. "Reference Key
+    ENDLOOP.
+
+    IF NOT it_mseg[] IS  INITIAL.   "Next Iteration of BKPF
+      SELECT  bukrs belnr gjahr blart bldat budat xblnr waers kursf awkey
+         FROM bkpf
+      INTO CORRESPONDING FIELDS OF TABLE it_bkpf1
+      FOR ALL ENTRIES IN it_mseg
+      WHERE bukrs IN s_bukrs AND
+            awtyp = 'MKPF' AND
+            awkey = it_mseg-awkey.
+    ENDIF.
+
+    LOOP AT it_bkpf1.
+      it_bkpf1-g_belnr = it_bkpf1-awkey(10).
+      it_bkpf1-g_gjahr = it_bkpf1-awkey+10(4).
+      MODIFY it_bkpf1 TRANSPORTING g_belnr g_gjahr.
+    ENDLOOP.
+
+    IF it_rseg[] IS NOT INITIAL."Excise Tables Iteration
+
+      DATA : it_rsegt  LIKE it_rseg OCCURS 0.
+*****add unloading point logic
+      SELECT mblnr zeile ablad
+             FROM  mseg
+             INTO TABLE it_1mseg
+             FOR ALL ENTRIES IN it_rseg
+             WHERE mblnr = it_rseg-lfbnr
+             AND   zeile = it_rseg-lfpos.
+****end unloading point logic
+      SELECT docno exbas rdoc1 ritem1 rdoc2
+              FROM j_1iexcdtl
+              INTO TABLE it_j_1iexcdtl
+              FOR ALL ENTRIES IN it_rseg
+              WHERE rdoc1  EQ it_rseg-ebeln
+              AND   ritem1 EQ it_rseg-ebelp
+              AND   rdoc2  EQ it_rseg-lfbnr.
+
+      SELECT matnr
+       j_1ichid
+       FROM j_1imtchid
+       INTO TABLE it_chpt
+       FOR ALL ENTRIES IN it_rseg
+       WHERE matnr = it_rseg-matnr.
+
+      IF it_chpt[] IS NOT INITIAL.
+        SELECT j_1ichid
+               j_1icht1
+               FROM j_1ichidtx
+               INTO TABLE it_chpt_desc
+               FOR ALL ENTRIES IN it_chpt
+               WHERE j_1ichid = it_chpt-chapid
+               AND   langu = 'EN'.
+      ENDIF.
+      SORT it_rseg BY bklas.
+      it_rsegt[] = it_rseg[].
+
+      DELETE ADJACENT DUPLICATES FROM it_rsegt COMPARING bklas.
+
+      IF it_rsegt[] IS NOT INITIAL.
+        SELECT bklas bkbez
+                FROM t025t
+                INTO TABLE it_t025t
+                FOR ALL ENTRIES IN it_rsegt
+                WHERE spras EQ sy-langu
+                AND   bklas EQ it_rsegt-bklas.
+
+        CLEAR it_rsegt[].
+        SORT it_rseg BY lifnr.
+        it_rsegt[] = it_rseg[].
+        DELETE ADJACENT DUPLICATES FROM it_rsegt COMPARING lifnr.
+
+        IF it_rsegt[] IS NOT INITIAL.
+          SELECT lifnr j_1ilstno j_1ipanno j_1isern j_1icstno j_1iexcd ven_class
+                  FROM j_1imovend
+                  INTO TABLE it_j_1imovend
+                  FOR ALL ENTRIES IN it_rsegt
+                  WHERE lifnr EQ it_rsegt-lifnr.
+        ENDIF.
+      ENDIF.
+
+    ENDIF.
+    CLEAR it_rsegt[].
+    IF NOT it_rseg[] IS INITIAL.
+      SORT it_rseg BY matnr.
+      it_rsegt[] = it_rseg[].
+      DELETE ADJACENT DUPLICATES FROM it_rsegt COMPARING matnr.
+      IF it_rsegt[] IS NOT INITIAL.
+        SELECT matnr
+               maktx FROM makt
+               INTO TABLE it_makt
+               FOR ALL ENTRIES IN it_rsegt
+               WHERE matnr = it_rsegt-matnr AND
+                     spras = 'EN'.
+
+      ENDIF.
+*GET TAXES FROM BSET TABLE
+      IF NOT it_bkpf[] IS INITIAL.
+        SELECT bukrs
+               belnr
+               gjahr
+               txgrp
+               shkzg
+               mwskz
+               hwbas
+               hwste
+               ktosl
+               kschl
+               kbetr FROM bset
+               INTO CORRESPONDING FIELDS OF TABLE it_bset
+               FOR ALL ENTRIES IN it_bkpf
+               WHERE bukrs = it_bkpf-bukrs AND
+                     belnr = it_bkpf-belnr AND
+                     gjahr = it_bkpf-gjahr AND
+                     mwskz IN s_mwskz.
+      ENDIF.
+      SORT it_rseg BY belnr gjahr.
+
+      LOOP AT it_rseg.
+        READ TABLE it_mseg WITH KEY lfbnr = it_rseg-lfbnr.
+        IF  ( sy-subrc = 0 AND  it_mseg-bwart = '105'  ).
+          it_rseg-lfbnr = it_mseg-mblnr.
+        ENDIF.
+        READ TABLE it_mseg WITH KEY lfbnr = it_rseg-lfbnr.
+        IF  ( sy-subrc = 0 AND  it_mseg-bwart = '102'  ).
+          it_rseg-smbln = it_mseg-smbln.
+          MODIFY it_rseg TRANSPORTING lfbnr smbln.
+        ENDIF.
+        READ TABLE r_rseg WITH KEY belnr = it_rseg-belnr
+                                   gjahr = it_bseg-gjahr.
+        IF sy-subrc NE 0.
+          r_rseg-belnr = it_rseg-belnr.
+          r_rseg-gjahr = it_rseg-gjahr.
+          APPEND r_rseg.
+          CLEAR  r_rseg.
+        ENDIF.
+      ENDLOOP.
+      DELETE ADJACENT DUPLICATES FROM r_rseg COMPARING belnr gjahr.
+      SORT r_rseg BY belnr gjahr.
+      SORT it_rseg BY belnr gjahr buzei.
+
+
+      SORT it_rseg BY belnr buzei.
+      LOOP AT r_rseg.
+        i = 1.
+        LOOP AT it_rseg WHERE belnr = r_rseg-belnr
+                          AND gjahr = r_rseg-gjahr.
+          it_rseg-count1 = i.
+          i = i + 1.
+          MODIFY it_rseg.
+        ENDLOOP.
+        CLEAR : i.
+      ENDLOOP.
+
+* *MOVE ACCOUNTING DOCUMENT NUMBER,COMPANY CODE AND FISCAL YEAR TO IT_RSEG[] TABLE
+      SORT it_rseg BY belnr buzei.
+      LOOP AT it_rseg.
+        IF it_rseg-shkzg = 'H'.
+          it_rseg-wrbtr = it_rseg-wrbtr * ( -1 ).
+          MODIFY it_rseg TRANSPORTING wrbtr.
+        ENDIF.
+
+        READ TABLE it_bkpf WITH KEY g_belnr = it_rseg-belnr
+                                    g_gjahr = it_rseg-gjahr.
+        IF sy-subrc EQ 0.
+          it_rseg-bukrs1 = it_bkpf-bukrs.
+          it_rseg-belnr1 = it_bkpf-belnr.
+          it_rseg-gjahr1 = it_bkpf-gjahr.
+          MODIFY it_rseg TRANSPORTING bukrs1 belnr1 gjahr1.
+        ENDIF.
+        IF it_rseg-lfpos = 0.
+          READ TABLE it_bset WITH KEY belnr = it_rseg-belnr1
+                                      bukrs = it_rseg-bukrs1
+                                      gjahr = it_rseg-gjahr1.
+          IF sy-subrc EQ 0.
+            l_lfpos = it_rseg-buzei+2(4).
+            it_rseg-lfpos = l_lfpos.
+            MODIFY it_rseg TRANSPORTING lfpos.
+          ENDIF.
+        ENDIF.
+      ENDLOOP.
+    ENDIF.
+*GET G/L ACCOUNT FROM BSEG
+    IF NOT it_bkpf[] IS INITIAL.
+      SELECT bukrs
+          belnr
+          gjahr
+          buzid
+          augdt
+          augbl
+          shkzg
+          dmbtr
+          wrbtr
+          hkont
+          fwbas
+          ebeln
+          ebelp
+          gsber
+          bupla
+          ktosl
+          rebzg
+          prctr
+          kostl
+          zuonr
+          koart
+          skfbt
+          gst_part
+                FROM bseg
+                INTO CORRESPONDING FIELDS OF TABLE it_bseg
+                FOR ALL ENTRIES IN it_bkpf
+                WHERE bukrs = it_bkpf-bukrs AND
+                      belnr = it_bkpf-belnr AND
+                      gjahr = it_bkpf-gjahr AND
+                      gsber IN s_gsber.
+      IF NOT it_bkpf1[] IS INITIAL.
+* FIND GL ACCOUNT FOR GR NO
+        SELECT    bukrs
+                  belnr
+                  gjahr
+                  buzid
+                  augdt
+                  augbl
+                  shkzg
+                  dmbtr
+                  wrbtr
+                  hkont
+                  fwbas
+                  ebeln
+                  ebelp
+                  gsber
+                  bupla
+                  kostl
+                  zuonr
+                  koart
+                  skfbt
+                    FROM bseg
+                        INTO TABLE it_bseg1
+                        FOR ALL ENTRIES IN it_bkpf1
+                        WHERE bukrs = it_bkpf1-bukrs AND
+                              belnr = it_bkpf1-belnr AND
+                              gjahr = it_bkpf1-gjahr AND
+                              gsber IN s_gsber AND
+                              buzid IN ('F','M').
+      ENDIF.
+      IF it_bseg1[] IS NOT INITIAL.
+        LOOP AT it_bseg1.
+          LOOP AT it_bkpf1 WHERE belnr = it_bseg1-belnr AND
+                                 gjahr = it_bseg1-gjahr.
+            it_bseg1-belnr1 = it_bkpf1-awkey(10).
+            it_bseg1-gjahr1 = it_bkpf1-awkey+10(4).
+            MODIFY it_bseg1 TRANSPORTING belnr1 gjahr1.
+          ENDLOOP.
+        ENDLOOP.
+      ENDIF.
+      IF it_bseg1 IS NOT INITIAL.
+        SELECT *
+                FROM skat
+                INTO TABLE it_gldesc
+                FOR ALL ENTRIES IN it_bseg1
+                WHERE saknr = it_bseg1-hkont
+                AND   ktopl = 'ASTL'                          "'1000'
+                AND   spras = sy-langu.
+      ENDIF.
+      SELECT *
+              FROM skat
+              APPENDING TABLE it_gldesc
+              FOR ALL ENTRIES IN it_bseg
+              WHERE saknr = it_bseg-hkont
+              AND   ktopl = 'ASTL'                          "'1000'
+              AND   spras = sy-langu.
+
+    ENDIF.
+    SELECT * FROM skat
+          INTO TABLE it_gldesc1
+          FOR ALL ENTRIES IN it_bseg_gl
+          WHERE saknr = it_bseg_gl-hkont
+               AND   ktopl = 'ASTL'                          "'1000'
+               AND   spras = sy-langu.
+    it_bsegt[] = it_bseg[].
+    DELETE ADJACENT DUPLICATES FROM it_bsegt COMPARING belnr gjahr.
+
+    CLEAR i.
+    LOOP AT it_bsegt.
+      i = 1.
+      LOOP AT it_bseg WHERE belnr = it_bsegt-belnr
+                      AND   gjahr = it_bsegt-gjahr.
+        it_bseg-count = i.
+        i = i + 1.
+        MODIFY it_bseg.
+      ENDLOOP.
+      CLEAR i.
+    ENDLOOP.
+
+    LOOP AT it_rseg.
+      READ TABLE it_bset WITH KEY bukrs = it_rseg-bukrs1
+                                  belnr = it_rseg-belnr1
+                                  gjahr = it_rseg-gjahr1
+                                  txgrp = it_rseg-count1.
+      IF sy-subrc = 0.
+        it_bset-ebeln = it_rseg-ebeln.
+        it_bset-ebelp = it_rseg-ebelp.
+        MODIFY it_bset TRANSPORTING ebeln ebelp WHERE bukrs = it_rseg-bukrs1
+                                                AND   belnr = it_rseg-belnr1
+                                                AND   gjahr = it_rseg-gjahr1
+                                                AND   txgrp = it_rseg-count1.
+      ENDIF.
+    ENDLOOP.
+
+    SORT it_bset BY ebeln ebelp belnr.
+    it_bsett[] = it_bset[].
+    DELETE ADJACENT DUPLICATES FROM it_bsett COMPARING ebeln ebelp belnr."comment by parth 19.12.2023
+    CLEAR i.
+    i = 1.
+    LOOP AT it_bsett.
+      LOOP AT it_bset WHERE ebeln = it_bsett-ebeln
+                      AND   ebelp = it_bsett-ebelp
+                      AND   belnr = it_bsett-belnr.
+        it_bset-count = i.
+        MODIFY it_bset.
+      ENDLOOP.
+      i = i + 1.
+    ENDLOOP.
+
+    SORT it_bset BY belnr ebeln ebelp txgrp.
+
+    IF NOT it_bset[] IS INITIAL.
+      LOOP AT it_bset.
+
+        IF it_bset-shkzg = 'H'.
+          it_bset-hwste = it_bset-hwste * ( -1 ).
+          MODIFY it_bset TRANSPORTING hwste.
+        ENDIF.
+
+        ON CHANGE OF it_bset-ebeln OR it_bset-ebelp OR it_bset-belnr OR it_bset-txgrp.
+          CLEAR : it_rseg.
+          LOOP AT it_rseg WHERE bukrs1 = it_bset-bukrs
+                          AND   belnr1 = it_bset-belnr
+                          AND   gjahr1 = it_bset-gjahr
+                          AND   ebeln  = it_bset-ebeln
+                          AND   ebelp  = it_bset-ebelp
+                          AND   count1 = it_bset-txgrp .
+
+            CASE it_rseg-kschl.
+              WHEN 'JADC' OR 'JSAD' OR 'ZADC'.
+                it_final-acd = it_final-acd + it_rseg-wrbtr.
+
+              WHEN 'JCDB' OR 'JEDB' OR 'JSED' OR 'JSWS' OR 'ZCDB' OR 'ZSWS'. ": 05.08.17
+                IF it_rseg-mwskz = '3C' OR it_rseg-mwskz = '3E' OR it_rseg-mwskz = '3F' OR it_rseg-mwskz = '3G' OR it_rseg-mwskz = '3M'  .
+*                  it_final-bascus = it_final-bascus + it_rseg-customs_val.
+                  it_final-dmbtr = it_final-dmbtr + it_rseg-customs_val.
+                  it_final-bcd = it_final-bcd + it_rseg-wrbtr.
+                ELSE.
+*                  it_final-bascus = it_final-bascus + it_rseg-wrbtr.
+                  it_final-dmbtr = it_final-dmbtr + it_rseg-wrbtr.
+                ENDIF.
+
+              WHEN 'ZCDB'.  ": 03.08.17 Import Case
+*                it_final-bascus = it_final-bascus + it_bset-hwbas.
+*                it_final-bcd = it_final-bcd + it_rseg-wrbtr.
+
+              WHEN 'JCV1' OR 'ZCV1'.
+                it_final-cvd = it_rseg-wrbtr.
+
+              WHEN 'JECV'.
+                it_final-ecvd = it_rseg-wrbtr.
+
+              WHEN 'J1CV'.
+                it_final-hecvd = it_rseg-wrbtr.
+
+              WHEN 'JEDB' OR 'ZEDB'.
+                it_final-ecustom = it_rseg-wrbtr.
+
+              WHEN 'JSDB' OR 'JSED' OR 'ZSED'.
+                it_final-hecustom = it_rseg-wrbtr.
+
+              WHEN 'FRB4' OR 'FRB3' OR 'FRC4' OR 'FRC5'.
+                it_final-frgt = it_final-frgt + it_rseg-wrbtr.
+                IF it_rseg-mwskz <> '00' AND it_rseg-mwskz <> 'V0'.
+*                  it_final-dmbtr = it_final-dmbtr + it_rseg-wrbtr. "comment by parth as per changes 09-10-2017
+                ENDIF.
+              WHEN 'FRC1' OR 'FRB2' OR 'FRC2' OR 'FRB1'.
+                it_final-frgt1 = it_final-frgt1 + it_rseg-wrbtr.
+                IF it_rseg-mwskz <> '00' AND it_rseg-mwskz <> 'V0'.
+*                  it_final-dmbtr = it_final-dmbtr + it_rseg-wrbtr. "comment by parth as per changes 09-10-2017
+                ENDIF.
+              WHEN 'P&F2' OR 'P&F1' OR 'P&F3' .
+                it_final-pckn = it_final-pckn +  it_rseg-wrbtr.
+                IF it_rseg-mwskz <> '00' AND it_rseg-mwskz <> 'V0'.
+*                  it_final-dmbtr = it_final-dmbtr + it_rseg-wrbtr. "comment by parth as per changes 09-10-2017
+                ENDIF.
+
+              WHEN 'ZMIN'.
+                it_final-misc = it_rseg-wrbtr.
+*
+              WHEN 'JFR1'.
+                it_final-imp_freight_val = it_final-imp_freight_val + it_rseg-wrbtr.
+*                it_final-dmbtr = it_final-dmbtr + it_rseg-wrbtr. "comment by parth as per changes 09-10-2017
+*
+              WHEN 'ZOFV' OR 'JOFP' OR 'JOFV'.
+                it_final-jofv = it_final-jofv + it_rseg-wrbtr.
+
+              WHEN 'ZOFP'.
+                it_final-jofp = it_final-jofp + it_bset-hwste.
+
+              WHEN 'ZINS' OR 'JINS'.
+                it_final-jins = it_final-jins + it_rseg-wrbtr."it_bset-hwste.
+
+              WHEN 'ZINC' OR 'ZIN2'.
+                it_final-jins1 = it_final-jins1 + it_rseg-wrbtr."it_bset-hwste.
+
+              WHEN 'JLDC'.
+                it_final-jldc = it_final-jldc + it_bset-hwste.
+
+              WHEN 'JCFA'.
+                it_final-jcfa = it_final-jcfa + it_bset-hwste."HWSTE
+                IF it_final-jcfa IS INITIAL.
+                  it_final-jcfa = it_final-jcfa + it_rseg-wrbtr.
+                ENDIF.
+
+              WHEN 'JFR1' OR 'ZFR1'.
+                it_final-jfr1 = it_final-jfr1 + it_bset-hwste."HWSTE.
+                it_final-dmbtr = it_final-dmbtr + it_rseg-wrbtr."HWSTE.
+
+              WHEN 'JFR2'.
+                it_final-dmbtr = it_final-dmbtr + it_rseg-wrbtr. "comment by parth as per changes 09-10-2017
+                IF it_final-dmbtr IS INITIAL.
+                  it_final-jfr2 = it_final-jfr2 + it_bset-hwste."HWSTE.
+                ENDIF.
+*                IF it_final-jfr2 IS INITIAL.
+*                  it_final-jfr2 = it_final-jfr2 + it_rseg-wrbtr.
+*                ENDIF.
+
+
+              WHEN 'ZSHP'.
+                it_final-zshp = it_final-zshp + it_rseg-wrbtr.
+
+              WHEN 'ZTER'.
+                it_final-zter = it_final-zter + it_rseg-wrbtr.
+
+            ENDCASE.
+
+          ENDLOOP.
+        ENDON.
+        CLEAR : it_rseg.
+
+        READ TABLE it_rseg WITH KEY bukrs1 = it_bset-bukrs
+                                    belnr1 = it_bset-belnr
+                                    gjahr1 = it_bset-gjahr
+                                    count1 = it_bset-txgrp.
+        IF sy-subrc EQ 0.
+          CASE it_bset-kschl.
+***********************B E D--------------------------------------------
+            WHEN 'JMOP' OR 'JMIP'.
+              it_final-bed     = it_final-bed + it_bset-hwste.
+              it_final-bedrate = it_bset-kbetr / 10.
+
+            WHEN 'JAOP' OR 'JAIP'.                                             "LINE CHG 22.02.2009 ADDED COND JAOP
+              it_final-addbed = it_final-addbed + it_bset-hwste.
+
+            WHEN 'JEC1' OR 'JEC2'.
+              it_final-ecs = it_final-ecs + it_bset-hwste.
+
+            WHEN 'JSEP' OR 'JSEI'.
+              it_final-hcess = it_final-hcess + it_bset-hwste.
+**********************VAT--------------------------------------------
+            WHEN 'JVRD' OR 'JVCD' OR 'JVRN' OR 'JVCN'.
+              it_final-rmded     = it_final-rmded + it_bset-hwste.
+              it_final-rmdedrate = it_bset-kbetr / 10.
+
+              IF NOT it_final-rmdedrate = 0.
+                it_final-vatbas    = it_bset-hwbas.
+              ENDIF.
+
+            WHEN 'ZVT1'.
+              it_final-1rmded     = it_final-1rmded + it_bset-hwste.
+              it_final-rmded  =    it_final-rmded + it_final-1rmded.
+
+            WHEN 'ZVRD' OR 'ZVCD' OR 'ZVRN' OR 'ZVCN'  .
+              it_final-rmded1     = it_final-rmded1 + it_bset-hwste.
+              it_final-rmdedrate1 = it_bset-kbetr / 10.
+
+              IF NOT it_final-rmdedrate1 = 0.
+                it_final-vatbas1    = it_bset-hwbas.
+              ENDIF.
+
+            WHEN 'ZVT2'.
+              it_final-1rmded1     = it_final-1rmded1 + it_bset-hwste.
+              it_final-rmded1 = it_final-rmded1 + it_final-1rmded1.
+***********************B E D--------------------------------------------
+            WHEN 'JVCS'.
+              it_final-cst     = it_final-cst + it_bset-hwste.
+              it_final-cstrate = it_bset-kbetr / 10.
+              IF NOT it_final-cstrate = 0.
+                it_final-vatbas    = it_bset-hwbas.
+              ENDIF.
+***********************SERVICE TAX--------------------------------------------
+            WHEN 'JSVD' OR 'ZSC1'  .                                             "'JSTX'.
+              it_final-sertax = it_final-sertax + it_bset-hwste.
+              IF NOT it_final-sertax = 0.
+                it_final-serbas    = it_bset-hwbas.
+              ENDIF.
+
+            WHEN 'JEC3' OR 'ZSC2'.                                      "'JEC5'.
+              it_final-esertax = it_final-esertax + it_bset-hwste.
+*            IT_FINAL-HRATE = IT_BSET-KBETR / 10.
+
+            WHEN 'JSE1' OR 'ZSC3'.                                      "'JEC6'.
+              it_final-shcess = it_final-shcess + it_bset-hwste.
+              it_final-shrate = it_bset-kbetr / 10.
+
+            WHEN 'R001' OR 'R002' OR 'R005' OR 'R006'  OR 'R003'.                                      "'JEC6'.
+*              it_final-disc = it_final-disc + it_bset-hwste.
+
+            WHEN 'JSB1' OR 'JCB2' OR 'JSB4'.
+              it_final-sbc = it_final-sbc + it_bset-hwste.
+***********************SERVICE TAX--------------------------------------------
+**********************GST****************************************************
+            WHEN 'JOIG' OR 'JOIN' OR 'JIIG' OR 'JIIN'.
+              it_final-joigamt = it_final-joigamt + it_bset-hwste.
+              it_final-joigper = it_bset-kbetr / 10.
+
+            WHEN 'JOCG' OR 'JOCN' OR 'JICG' OR 'JICN'. "OR 'JICR'.
+              it_final-jocgamt = it_final-jocgamt + it_bset-hwste.
+              it_final-jocgper = it_bset-kbetr / 10.
+
+            WHEN 'JOSG' OR 'JOSN' OR 'JISG' OR 'JISN'. "OR 'JISR'.
+              it_final-josgamt = it_final-josgamt + it_bset-hwste.
+              it_final-josgper = it_bset-kbetr / 10.
+**********************GST:03.08.17*******************************************
+            WHEN 'JIMD'. " IMPORT Case -only IGST
+              it_final-joigamt = it_final-joigamt + it_bset-hwste.
+              it_final-joigper = it_bset-kbetr / 10.
+
+*            WHEN 'JIIG'. "OR 'JIIR'.
+*              it_final-rjoigamt = it_final-rjoigamt + it_bset-hwste.
+*              it_final-joigper = it_bset-kbetr / 10.
+*
+*            WHEN 'JICR'.
+*              it_final-rjocgamt = it_final-rjocgamt + it_bset-hwste.
+*              it_final-joigper = it_bset-kbetr / 10.
+
+*            WHEN 'JISR'.
+*              it_final-rjosgamt = it_final-rjosgamt + it_bset-hwste.
+*              it_final-joigper = it_bset-kbetr / 10.
+**********************GST****************************************************
+*            WHEN 'JOIN'.
+*              it_final-joinamt = it_final-joinamt + it_bset-hwste.
+*              it_final-joinper = it_bset-kbetr / 10.
+*
+*            WHEN 'JOCN'.
+*              it_final-jocnamt = it_final-jocnamt + it_bset-hwste.
+*              it_final-jocnper = it_bset-kbetr / 10.
+*
+*            WHEN 'JOSN'.
+*              it_final-josnamt = it_final-josnamt + it_bset-hwste.
+*              it_final-josnper = it_bset-kbetr / 10.
+
+          ENDCASE.
+
+          MOVE it_rseg-bukrs1 TO it_final-bukrs.
+          MOVE it_rseg-belnr1 TO it_final-belnr.
+          MOVE it_rseg-gjahr1 TO it_final-gjahr.
+          MOVE it_rseg-ebeln  TO it_final-ebeln.
+          MOVE it_rseg-ebelp  TO it_final-ebelp.
+
+          IF it_rbkpp IS NOT INITIAL.
+            READ TABLE it_rbkpp INTO wa_rbkpp WITH KEY belnr = it_rseg-belnr gjahr = lv_year.
+            MOVE wa_rbkpp-sgtxt  TO it_final-sgtxt."Added By Raj on 17.07.2023
+          ENDIF.
+          MOVE it_rseg-stcd3  TO it_final-stcd3. " commneted on 27.07.2020
+
+          READ TABLE it_ekko WITH KEY ebeln = it_rseg-ebeln.
+          IF sy-subrc = 0.
+            MOVE it_ekko-ekgrp  TO it_final-ekgrp.         " PRCHASE GROUP
+          ENDIF.
+          ON CHANGE OF it_bset-ebeln OR it_bset-ebelp .
+            IF it_final-disc IS INITIAL.
+*              READ TABLE it_konv WITH KEY knumv = it_ekko-knumv kposn = it_rseg-ebelp kschl = 'R001'.
+*              IF it_konv-waers <> 'INR'.
+*                it_final-disc = it_final-disc + ( it_konv-kwert * it_konv-kkurs ).
+*              ELSE.
+*                it_final-disc = it_final-disc + it_konv-kwert.
+*              ENDIF.
+*              CLEAR it_konv-kwert.
+*              READ TABLE it_konv WITH KEY knumv = it_ekko-knumv kposn = it_rseg-ebelp kschl = 'R002'.
+*              IF it_konv-waers <> 'INR'.
+*                it_final-disc = it_final-disc + ( it_konv-kwert * it_konv-kkurs ).
+*              ELSE.
+*                it_final-disc = it_final-disc + it_konv-kwert.
+*              ENDIF.
+*              CLEAR it_konv-kwert.
+*              READ TABLE it_konv WITH KEY knumv = it_ekko-knumv kposn = it_rseg-ebelp kschl = 'R003'.
+*              IF it_konv-waers <> 'INR'.
+*                it_final-disc = it_final-disc + ( it_konv-kwert * it_konv-kkurs ).
+*              ELSE.
+*                it_final-disc = it_final-disc + it_konv-kwert.
+*              ENDIF.
+*              CLEAR it_konv-kwert.
+*              READ TABLE it_konv WITH KEY knumv = it_ekko-knumv kposn = it_rseg-ebelp kschl = 'R005'.
+*              IF it_konv-waers <> 'INR'.
+*                it_final-disc = it_final-disc + ( it_konv-kwert * it_konv-kkurs ).
+*              ELSE.
+*                it_final-disc = it_final-disc + it_konv-kwert.
+*              ENDIF.
+*              CLEAR it_konv-kwert.
+*              READ TABLE it_konv WITH KEY knumv = it_ekko-knumv kposn = it_rseg-ebelp kschl = 'R006'.
+*              IF it_konv-waers <> 'INR'.
+*                it_final-disc = it_final-disc + ( it_konv-kwert * it_konv-kkurs ).
+*              ELSE.
+*                it_final-disc = it_final-disc + it_konv-kwert.
+*              ENDIF.
+*              CLEAR it_konv-kwert.
+            ENDIF.
+          ENDON.
+          MOVE it_ekko-bsart  TO it_final-bsart.
+          IF it_final-bsart IS NOT INITIAL.
+            SELECT * "BSTYP BSART BATXT
+              FROM t161t
+              INTO TABLE lt_t161t
+              WHERE spras = sy-langu
+                AND bstyp = 'F'
+                AND bsart = it_final-bsart.
+
+            LOOP AT lt_t161t INTO lw_t161t.
+              MOVE lw_t161t-batxt TO it_final-bsart2.
+              CLEAR: lw_t161t.
+            ENDLOOP.
+            CONCATENATE it_final-bsart it_final-bsart2 INTO it_final-bsart2 SEPARATED BY '-'.
+          ENDIF.
+
+          MOVE it_rseg-lfbnr  TO it_final-lfbnr.
+          MOVE it_rseg-smbln TO it_final-smbln.
+          MOVE it_rseg-bnkan  TO it_final-bnkan.
+          MOVE it_rseg-bklas  TO it_final-bklas.
+          MOVE it_rseg-werks  TO it_final-werks.
+          READ TABLE it_t001w WITH KEY werks = it_rseg-werks.
+          IF sy-subrc = 0.
+            MOVE it_t001w-name1  TO it_final-name2.
+          ENDIF.
+*****************      add  unloading point
+          READ TABLE it_1mseg WITH KEY mblnr = it_rseg-lfbnr
+                                       zeile = it_rseg-lfpos.
+          IF sy-subrc = 0.
+            MOVE it_1mseg-ablad TO it_final-ablad.
+          ENDIF.
+**************
+*****          Added changes by Carina Jose on 27.07.2020
+          READ TABLE it_bseg WITH KEY bukrs = it_rseg-bukrs1
+                                                   belnr = it_rseg-belnr1
+                                                   gjahr = it_rseg-gjahr1
+                                                   koart = 'K' .
+          IF sy-subrc = 0.
+            it_final-lifnr1 = it_bseg-gst_part.
+*            IF it_final-lifnr IS INITIAL.
+            MOVE it_rseg-lifnr  TO it_final-lifnr.
+*            ENDIF.
+          ENDIF.
+          SELECT SINGLE land1 name1 ort01 regio adrnr stcd3 FROM lfa1 INTO (it_final-land1,it_final-name1,it_final-ort01,it_final-regio,it_final-adrnr,it_final-stcd3) WHERE lifnr = it_final-lifnr.
+          SELECT SINGLE bezei FROM t005u INTO it_final-regio_desc WHERE spras = sy-langu
+                                                                  AND   bland = it_final-regio
+                                                                  AND   land1 = it_final-land1.
+
+          SELECT lifnr j_1ilstno j_1ipanno j_1isern j_1icstno j_1iexcd ven_class
+                  FROM j_1imovend
+                  INTO TABLE it_j_1imovend
+                  WHERE lifnr = it_final-lifnr.
+*****          End of changes by carina Jose on 27.07.2020
+
+***** Added changes by Carina Jose on 12.01.2021
+          SELECT SINGLE land1 name1 ort01 regio adrnr stcd3 FROM lfa1 INTO (it_final-gstvend_land1,it_final-gstvend_name1,it_final-gstvend_ort01,it_final-gstvend_regio,it_final-gstvend_adrnr,it_final-gstvend_stcd3) WHERE lifnr = it_final-lifnr1.
+          SELECT SINGLE bezei FROM t005u INTO it_final-gstvend_regiodesc WHERE spras = sy-langu
+                                                                  AND   bland = it_final-gstvend_regio
+                                                                  AND   land1 = it_final-gstvend_land1.
+
+          SELECT lifnr j_1ilstno j_1ipanno j_1isern j_1icstno j_1iexcd ven_class
+                  FROM j_1imovend
+                  INTO TABLE it_j_1imovend_gstvend
+                  WHERE lifnr = it_final-lifnr1.
+***** End of changes by Carina Jose on 12.01.2021
+
+*          READ TABLE it_adrc WITH KEY addrnumber = it_rseg-adrnr. " commented on 27.07.2020 by Carina
+          READ TABLE it_adrc WITH KEY addrnumber = it_final-adrnr.   " Updated by  Carina on 27.07.2020
+          IF sy-subrc = 0.
+            MOVE it_adrc-str_suppl1 TO it_final-str_suppl1.
+            MOVE it_adrc-str_suppl2 TO it_final-str_suppl2.
+            MOVE it_adrc-str_suppl3 TO it_final-str_suppl3.
+            CONCATENATE it_final-str_suppl1 it_final-str_suppl2 it_final-str_suppl3 INTO it_final-address.
+          ENDIF.
+          it_final-qty = it_rseg-menge.
+          MOVE it_rseg-meins  TO it_final-meins.
+**** commented on 27.07.2020
+*          MOVE it_rseg-lifnr  TO it_final-lifnr.
+*          MOVE it_rseg-name1  TO it_final-name1.
+***** commented on 27.07.2020
+          MOVE it_rseg-matnr  TO it_final-matnr.
+          MOVE it_rseg-exkbe  TO it_final-lref.
+          MOVE it_rseg-xekbz  TO it_final-nref.
+          READ TABLE t_mara WITH KEY matnr = it_rseg-matnr.
+          IF sy-subrc = 0.
+            MOVE t_mara-matkl  TO it_final-matkl.
+            READ TABLE t_t023t WITH KEY matkl = t_mara-matkl.
+            IF sy-subrc = 0.
+              MOVE t_t023t-wgbez  TO it_final-wgbez.
+            ENDIF.
+            MOVE t_mara-mtart  TO it_final-mtart.
+          ENDIF.
+          MOVE it_rseg-mwskz  TO it_final-mwskz.
+*          MOVE it_rseg-regio  TO it_final-regio. " commented on 27.07.2020 by Carina
+*          MOVE it_rseg-ort01  TO it_final-ort01. " commented on 27.07.2020 by Carina
+
+          SELECT SINGLE text1
+          FROM t007s
+          INTO it_final-tax_desc
+          WHERE spras = sy-langu
+          AND   mwskz = it_rseg-mwskz
+          AND   kalsm = 'TAXINN'.                             "'TAXIN2'.
+
+          MOVE it_rseg-belnr  TO it_final-g_belnr.
+          MOVE it_rseg-buzei  TO it_final-buzei.
+
+          IF it_rseg-kschl = ' '.
+            MOVE it_rseg-wrbtr  TO it_final-dmbtr.
+          ENDIF.
+
+          IF it_rseg-kschl = 'ZTER'.
+            MOVE it_rseg-wrbtr  TO it_final-dmbtr.
+          ENDIF.
+
+*          IF it_rseg-kschl = 'FRC1'.
+*            MOVE it_rseg-wrbtr  TO it_final-dmbtr.
+*          ENDIF.
+
+*          IF it_rseg-kschl = 'FRA1'.
+*            MOVE it_rseg-wrbtr  TO it_final-dmbtr.
+*          ENDIF.
+
+          IF it_rseg-kschl = 'ZSHP'.
+            MOVE it_rseg-wrbtr  TO it_final-dmbtr.
+          ENDIF.
+
+          IF it_rseg-kschl = 'JCFA' AND it_final-mwskz <> '00' .
+            MOVE it_rseg-wrbtr  TO it_final-dmbtr.
+          ENDIF.
+
+          READ TABLE it_t025t WITH KEY bklas = it_rseg-bklas.
+          IF sy-subrc = 0.
+            MOVE it_t025t-bkbez TO it_final-bkbez.
+          ENDIF.
+
+          SELECT SINGLE budat
+          FROM mkpf
+          INTO it_final-budat
+          WHERE mblnr = it_rseg-lfbnr.
+
+*************************************
+          READ TABLE it_j_1iexcdtl WITH KEY rdoc1  = it_rseg-ebeln
+                                            ritem1 = it_rseg-ebelp
+                                            rdoc2  = it_rseg-lfbnr.
+          IF sy-subrc = 0.
+            MOVE it_j_1iexcdtl-exbas TO it_final-exbas.
+          ENDIF.
+
+******* Added by Carina Jose on 03.11.2020
+          IF it_final-bsart EQ 'SERV'.
+*        READ TABLE it_eslh INTO wa_eslh WITH KEY ebeln = it_rseg-ebeln
+*                                                 ebelp = it_rseg-ebelp.
+            LOOP AT it_eslh INTO wa_eslh WHERE ebeln = it_rseg-ebeln
+                                                     AND  ebelp = it_rseg-ebelp..
+              READ TABLE it_esll INTO wa_esll WITH KEY packno = wa_eslh-packno
+                                                     extrow = it_rseg-ebelp.
+              IF  sy-subrc = 0.
+                MOVE wa_esll-ktext1 TO it_final-maktx.
+              ENDIF.
+            ENDLOOP.
+
+          ENDIF.
+          CLEAR : wa_eslh, wa_esll.
+******* End of changes by Carina Jose on 03.11.2020
+
+          READ TABLE it_makt WITH KEY matnr = it_rseg-matnr.
+          IF sy-subrc EQ 0.
+            MOVE it_makt-maktx TO it_final-maktx.
+          ENDIF.
+*          READ TABLE it_j_1imovend WITH KEY lifnr = it_rseg-lifnr. "commented on 27.07.2020
+          READ TABLE it_j_1imovend WITH KEY lifnr = it_final-lifnr. "added on 27.07.2020
+          IF sy-subrc = 0.
+            MOVE it_j_1imovend-j_1ilstno TO it_final-j_1ilstno.
+            MOVE it_j_1imovend-j_1ipanno TO it_final-j_1ipanno.
+            MOVE it_j_1imovend-j_1isern  TO it_final-j_1isern.
+            MOVE it_j_1imovend-j_1icstno  TO it_final-cstno.
+            MOVE it_j_1imovend-j_1iexcd  TO it_final-eccno.
+            IF it_j_1imovend-ven_class = ' ' OR it_j_1imovend-ven_class <> ' '.
+              DATA: lv_dom  LIKE  dd07v-domvalue_l,
+                    lv_text LIKE  dd07v-ddtext.
+              MOVE  it_j_1imovend-ven_class TO lv_dom.
+              CLEAR: lv_text.
+              CALL FUNCTION 'DOMAIN_VALUE_GET'
+                EXPORTING
+                  i_domname  = 'J_1IGTAXKD'
+                  i_domvalue = lv_dom
+                IMPORTING
+                  e_ddtext   = lv_text
+                EXCEPTIONS
+                  not_exist  = 1
+                  OTHERS     = 2.
+              IF sy-subrc <> 0.
+* Implement suitable error handling here
+              ELSE.
+                MOVE lv_text TO it_final-ven_type.
+                CLEAR: lv_dom,lv_text.
+              ENDIF.
+            ENDIF.
+*            MOVE it_j_1imovend-ven_class  TO it_final-ven_class.
+          ENDIF.
+          READ TABLE it_chpt WITH KEY matnr = it_rseg-matnr.
+          IF sy-subrc = 0.
+            MOVE it_chpt-chapid TO it_final-chapid.
+          ENDIF.
+
+          READ TABLE it_chpt_desc WITH KEY chapid = it_final-chapid.
+          IF sy-subrc = 0.
+            MOVE it_chpt_desc-chapid_desc TO it_final-chapid_desc.
+          ENDIF.
+          READ TABLE it_bkpf WITH KEY bukrs = it_rseg-bukrs1
+                                      belnr = it_rseg-belnr1
+                                      gjahr = it_rseg-gjahr1.
+          IF sy-subrc EQ 0.
+            MOVE it_bkpf-bldat TO it_final-bldat.
+            MOVE it_bkpf-budat TO it_final-postdat.
+            MOVE it_bkpf-xblnr TO it_final-xblnr.
+            MOVE it_bkpf-blart TO it_final-blart.
+            MOVE it_bkpf-waers TO it_final-waers.
+            MOVE it_bkpf-kursf TO it_final-kursf.
+            MOVE it_bkpf-bktxt TO it_final-bktxt.
+            MOVE it_bkpf-cpudt TO it_final-cpudt."Added by Raj on 04.12.2024
+            MOVE it_bkpf-usnam TO it_final-usnam."Added by Raj on 04.12.2024
+
+          ENDIF.
+
+          IF it_final-waers = 'JPY'.
+            it_final-dmbtr = it_final-dmbtr / 10.
+            it_final-wrbtr = it_final-dmbtr.
+            it_final-wrbtr = ( it_final-wrbtr ) * it_final-kursf / 100.
+            it_final-bnkan = it_final-bnkan / 10.
+            it_final-bnkanloc = ( it_final-bnkan ) * it_final-kursf / 100.
+          ELSE.
+            it_final-wrbtr = it_final-dmbtr * it_final-kursf.
+
+            IF it_final-qty IS NOT INITIAL.
+              it_final-rate = it_final-wrbtr / it_final-qty.
+            ENDIF.
+
+            it_final-bnkanloc = ( it_final-bnkan ) * it_final-kursf.
+          ENDIF.
+
+          it_final-jfr2       = it_final-jfr2     * it_final-kursf.
+          it_final-dmbtr       = it_final-dmbtr     * it_final-kursf.
+
+          IF chk2 = 'X' .
+
+            AT NEW belnr.
+              it_final-acd        = it_final-acd                  *  it_final-kursf.
+              it_final-bascus     = it_final-bascus               * it_final-kursf.
+              it_final-cvd        = it_final-cvd                  * it_final-kursf.
+              it_final-ecvd       = it_final-ecvd                 * it_final-kursf.
+              it_final-hecvd      = it_final-hecvd                * it_final-kursf.
+              it_final-ecustom    = it_final-ecustom              * it_final-kursf.
+              it_final-hecustom   = it_final-hecustom             * it_final-kursf.
+              it_final-frgt       = it_final-frgt                 * it_final-kursf.
+              it_final-frgt1      = it_final-frgt1                * it_final-kursf.
+
+              it_final-pckn       = it_final-pckn                 * it_final-kursf.
+              it_final-misc       = it_final-misc                 * it_final-kursf.
+              it_final-imp_freight_val = it_final-imp_freight_val * it_final-kursf.
+              it_final-jofv       = it_final-jofv                 * it_final-kursf.
+              it_final-allfrgt    =  it_final-frgt + it_final-frgt1 + it_final-imp_freight_val + it_final-jofv. "01.08.17
+              it_final-jofp       = it_final-jofp                 * it_final-kursf.
+              it_final-jins       = it_final-jins                 * it_final-kursf.
+              it_final-jins1      = it_final-jins1                * it_final-kursf.
+              it_final-jldc       = it_final-jldc                 * it_final-kursf.
+              it_final-jcfa       = it_final-jcfa                 * it_final-kursf.
+              it_final-jfr1       = it_final-jfr1                 * it_final-kursf.
+              it_final-jfr2       = it_final-jfr2                 * it_final-kursf.
+              it_final-zshp       = it_final-zshp                 * it_final-kursf.
+              it_final-zter       = it_final-zter                 * it_final-kursf.
+              it_final-bed        = it_final-bed                  * it_final-kursf.
+              it_final-addbed     = it_final-addbed               * it_final-kursf.
+              it_final-ecs        = it_final-ecs                  * it_final-kursf.
+              it_final-hcess      = it_final-hcess                * it_final-kursf.
+              it_final-rmded      = it_final-rmded                * it_final-kursf.
+              it_final-1rmded     = it_final-1rmded               * it_final-kursf.
+              it_final-rmded      = it_final-rmded                * it_final-kursf.
+              it_final-rmded1     = it_final-rmded1               * it_final-kursf.
+              it_final-1rmded1    = it_final-1rmded1              * it_final-kursf.
+              it_final-rmded1     = it_final-rmded1               * it_final-kursf.
+              it_final-cst        = it_final-cst                  * it_final-kursf.
+              it_final-sertax     = it_final-sertax               * it_final-kursf.
+              it_final-esertax    = it_final-esertax              * it_final-kursf.
+              it_final-shcess     = it_final-shcess               * it_final-kursf.
+              it_final-disc       = it_final-disc                 * it_final-kursf.
+              it_final-bas_adisc  = it_final-bascus               - it_final-disc . "01.08.17
+              it_final-joigamt    = it_final-joigamt              * it_final-kursf.
+              it_final-jocgamt    = it_final-jocgamt              * it_final-kursf.
+              it_final-josgamt    = it_final-josgamt              * it_final-kursf.
+              it_final-rjoigamt    = it_final-rjoigamt            * it_final-kursf.
+              it_final-rjocgamt    = it_final-rjocgamt            * it_final-kursf.
+              it_final-rjosgamt    = it_final-rjosgamt            * it_final-kursf.
+            ENDAT.
+          ENDIF.
+
+          READ TABLE it_bseg WITH KEY bukrs = it_rseg-bukrs1
+                                      belnr = it_rseg-belnr1
+                                      gjahr = it_rseg-gjahr1
+                                      ebeln = it_rseg-ebeln
+                                      ebelp = it_rseg-ebelp.
+
+          IF sy-subrc EQ 0.
+            it_final-gsber = it_bseg-gsber.
+            it_final-bupla = it_bseg-bupla.
+            it_final-prctr = it_bseg-prctr.
+            it_final-kostl = it_bseg-kostl.
+          ENDIF.
+
+
+          READ TABLE it_bseg WITH KEY bukrs = it_rseg-bukrs1
+                                      belnr = it_rseg-belnr1
+                                      gjahr = it_rseg-gjahr1.
+          IF sy-subrc EQ 0.
+            it_final-smbln = it_bseg-rebzg.
+          ENDIF.
+
+
+
+          READ TABLE it_bseg WITH KEY bukrs = it_rseg-bukrs1
+                                      belnr = it_rseg-belnr1
+                                      ktosl = 'DIF'.
+          IF sy-subrc EQ 0.
+            it_final-diff = it_bseg-wrbtr.
+          ENDIF.
+
+          READ TABLE it_bseg1 WITH KEY bukrs = it_rseg-bukrs1
+                                        belnr1 = it_rseg-lfbnr
+                                        gjahr = it_rseg-gjahr
+                                        ebeln = it_rseg-ebeln
+                                        ebelp = it_rseg-ebelp
+                                        buzid = 'M'.
+
+          IF sy-subrc EQ 0.
+            it_final-hkont = it_bseg1-hkont.
+
+          ENDIF.
+          IF it_final-hkont IS INITIAL.
+            READ TABLE it_bseg1 WITH KEY bukrs = it_rseg-bukrs1
+*                                        belnr1 = it_rseg-lfbnr
+                                        gjahr = it_rseg-gjahr
+                                        ebeln = it_rseg-ebeln
+                                        ebelp = it_rseg-ebelp
+                                        buzid = 'F'.
+
+            IF sy-subrc EQ 0.
+              it_final-hkont = it_bseg1-hkont.
+            ENDIF.
+          ENDIF.
+          IF it_final-hkont IS INITIAL.
+            READ TABLE it_bseg WITH KEY bukrs = it_rseg-bukrs1
+                                     belnr = it_rseg-belnr1
+                                    gjahr = it_rseg-gjahr1
+                                    ebeln = it_rseg-ebeln
+                                    ebelp = it_rseg-ebelp.
+
+            IF sy-subrc EQ 0.
+              it_final-hkont = it_bseg-hkont.
+            ENDIF.
+          ENDIF.
+
+          READ TABLE it_gldesc WITH KEY saknr = it_final-hkont.
+
+          IF sy-subrc EQ 0.
+            it_final-gl_desc = it_gldesc-txt50.
+          ENDIF.
+
+*********          for fright gl
+          READ TABLE it_bseg1 WITH KEY bukrs = it_rseg-bukrs1
+                                       belnr1 = it_rseg-lfbnr
+                                       gjahr = it_rseg-gjahr
+                                       ebeln = it_rseg-ebeln
+                                       ebelp = it_rseg-ebelp
+                                       buzid = 'F'.
+
+          IF sy-subrc EQ 0.
+            it_final-hkont1 = it_bseg1-hkont.
+          ENDIF.
+*****************
+****************      for other gl
+*          READ TABLE it_ekkn with key ebeln = it_rseg-ebeln
+*                                      ebelp = it_rseg-ebelp.
+*          IF sy-subrc EQ 0.
+*            it_final-hkont2 = it_ekkn-SAKTO.
+*          ENDIF.
+
+          READ TABLE it_bseg_gl WITH KEY ebeln = it_rseg-ebeln
+                                         ebelp = it_rseg-ebelp
+                                         gjahr = it_rseg-gjahr.
+          IF sy-subrc EQ 0.
+            it_final-hkont2 = it_bseg_gl-hkont.
+            "Added on 12.05.2022
+            CALL FUNCTION 'CONVERSION_EXIT_ABPSP_OUTPUT'
+              EXPORTING
+                input  = it_bseg_gl-projk
+              IMPORTING
+                output = it_final-projk.
+          ENDIF.
+
+********** Added changes by Carina Jose on 02.11.2020
+          IF it_final-hkont2 IS INITIAL.
+            READ TABLE it_bseg_gl1 WITH KEY bukrs = it_bkpf-bukrs
+                                            belnr = it_bkpf-belnr
+                                gjahr = it_bkpf-gjahr.
+            IF sy-subrc EQ 0.
+              it_final-hkont2 = it_bseg_gl1-hkont.
+
+              "Added on 12.05.2022
+              CALL FUNCTION 'CONVERSION_EXIT_ABPSP_OUTPUT'
+                EXPORTING
+                  input  = it_bseg_gl1-projk
+                IMPORTING
+                  output = it_final-projk.
+
+            ENDIF.
+          ENDIF.
+********** End of changes on  02.11.2020
+
+*************** Added changes for TCS AMT. by Carina Jose on 28.11.2020
+          READ TABLE it_bseg_tcs WITH KEY bukrs = it_bkpf-bukrs
+                                          belnr = it_bkpf-belnr
+                                          gjahr = it_bkpf-gjahr.
+          IF sy-subrc EQ 0.
+            it_final-tcsamt = it_bseg_tcs-dmbtr.
+          ENDIF.
+*************** End of changes by Carina Jose on 28.11.2020
+
+
+          READ TABLE it_gldesc1 WITH KEY saknr = it_final-hkont2.
+
+          IF sy-subrc EQ 0.
+            it_final-gl_desc1 = it_gldesc1-txt50.
+          ENDIF.
+
+***********
+          READ TABLE it_bseg WITH KEY bukrs = it_rseg-bukrs1
+                                      belnr = it_rseg-belnr1
+                                      gjahr = it_rseg-gjahr1
+                                      koart = 'K'.
+          IF sy-subrc = 0.
+            it_final-zuonr = it_bseg-zuonr.
+            it_final-augdt = it_bseg-augdt.
+            it_final-augbl = it_bseg-augbl.
+*            IF
+*             it_final-dmbtr IS INITIAL AND it_final-hkont <> '0015060001' AND it_final-mwskz <> '00' AND it_final-mwskz <> 'V0' AND
+*             it_final-mwskz <> '3C' AND   it_final-mwskz <> '3E' AND it_final-mwskz <> '3F' AND it_final-mwskz <> '3G'   .
+*              it_final-dmbtr = it_bseg-skfbt.
+*              it_final-flag  = 'X'.
+**
+*              IF it_final-wrbtr IS INITIAL AND it_final-hkont <> '0015060001'AND it_final-mwskz <> 'V0' AND
+*               it_final-dmbtr IS INITIAL AND it_rseg-mwskz <> '3C' AND it_final-mwskz <> '3E' AND it_final-mwskz <> '3F' AND it_final-mwskz <> '3G'.
+*                it_final-wrbtr = it_bseg-skfbt.
+*              ENDIF.
+*            ENDIF.
+          ENDIF.
+*********************
+
+*Commented on 27.07.2020
+
+*          READ TABLE it_t005u WITH KEY bland = it_rseg-regio
+*                                       land1 = it_rseg-land1.
+*          IF sy-subrc EQ 0.
+*            it_final-regio_desc = it_t005u-bezei.
+*
+*          ENDIF.
+* End of comment on 27.07.2020
+        ELSE.
+          MOVE it_bset-bukrs TO it_bset1-bukrs.
+          MOVE it_bset-belnr TO it_bset1-belnr.
+          MOVE it_bset-gjahr TO it_bset1-gjahr.
+          APPEND it_bset1.
+        ENDIF.
+        it_final-land1 = it_rseg-land1.
+
+
+        AT END OF txgrp.
+          IF chk2 <> 'X' .
+            it_final-gross = it_final-wrbtr
+                           + it_final-bnkan
+                           + it_final-bed
+                           + it_final-addbed
+                           + it_final-ecs
+                           + it_final-hcess
+                           + it_final-ebed
+                           + it_final-rmded
+                           + it_final-rmded1
+                           + it_final-rmnon
+                           + it_final-cgded
+                           + it_final-cgnon
+                           + it_final-cst
+                           + it_final-sertax
+                           + it_final-esertax
+                           + it_final-shcess
+                           + it_final-acd
+                           + it_final-bascus
+                           + it_final-cvd
+                           + it_final-ecvd
+                           + it_final-hecvd
+                           + it_final-ecustom
+                           + it_final-hecustom
+                           + it_final-imp_freight_val
+                          - it_final-disc
+                           + it_final-bed_n
+                           + it_final-ces_n
+                           + it_final-hcess_n
+                           + it_final-aed_n
+*                           + it_final-frgt
+*                           + it_final-frgt1  " Freigh w/tax
+*                           + it_final-jcfa
+                           + it_final-jfr1
+                           + it_final-jfr2
+*                        + it_final-jfr2inr
+                           + it_final-jins1
+                           + it_final-jofv
+                           + it_final-jofvinr
+*                           + it_final-zshpinr
+*                           + it_final-zterinr
+                           + it_final-pckn
+                           + it_final-sbc
+                           + it_final-joigamt
+                           + it_final-jocgamt
+                           + it_final-josgamt
+                           + it_final-bcd.
+*                           + it_final-diff.
+
+            IF it_final-gross GT 0.
+              IF it_final-qty <> 0.
+                it_final-lnd_cst = it_final-gross / it_final-qty .
+              ENDIF.
+            ENDIF.
+          ELSE.
+            it_final-gross = it_final-wrbtr
+                           + it_final-bnkan
+                           + it_final-bed
+                           + it_final-addbed
+                           + it_final-ecs
+                           + it_final-hcess
+                           + it_final-ebed
+                           + it_final-rmded
+                           + it_final-rmded1
+                           + it_final-rmnon
+                           + it_final-cgded
+                           + it_final-cgnon
+                           + it_final-cst
+                           + it_final-sertax
+                           + it_final-esertax
+                           + it_final-shcess
+                           + it_final-acd
+                           + it_final-bascus
+                           + it_final-cvd
+                           + it_final-ecvd
+                           + it_final-hecvd
+                           + it_final-ecustom
+                           + it_final-hecustom
+                           + it_final-imp_freight_val
+                       - it_final-disc
+                           + it_final-bed_n
+                           + it_final-ces_n
+                           + it_final-hcess_n
+                           + it_final-aed_n
+*                       + it_final-frgt  " Already added to vbase (re calc vbase) freight w/o tax
+*                           + it_final-frgt1  " Freigh w/tax
+*                           + it_final-jcfa
+                           + it_final-jfr1
+                           + it_final-jfr2
+*                        + it_final-jfr2inr
+                           + it_final-jins1
+*                           + it_final-jofv
+                       + it_final-jofvinr
+*                           + it_final-zshp
+*                           + it_final-zter
+                           + it_final-sbc
+                           + it_final-pckn
+                           + it_final-joigamt
+                           + it_final-jocgamt
+                           + it_final-josgamt
+                           + it_final-bcd.
+*                           + it_final-diff.
+*                           + it_final-joinamt
+*                           + it_final-jocnamt
+*                           + it_final-josnamt.
+
+            IF it_final-gross GT 0.
+              IF it_final-qty <> 0.
+                it_final-lnd_cst = it_final-gross / it_final-qty .
+              ENDIF.
+            ENDIF.
+
+          ENDIF.
+          APPEND it_final.
+
+          CLEAR it_final.
+          CLEAR : it_bset,
+          it_rseg,
+          it_bseg,
+*          it_bseg1,
+          it_t025t,
+          it_mkpf,
+          it_j_1iexcdtl,
+          it_makt,
+          it_j_1imovend,
+          it_bkpf.
+        ENDAT.
+
+        CLEAR : it_bset.
+      ENDLOOP.
+    ENDIF.
+    it_1final[] = it_final[].
+    LOOP AT it_final.
+      READ TABLE it_1final WITH KEY smbln = it_final-belnr.
+      IF sy-subrc EQ 0.
+        it_final-smbln = it_1final-belnr.
+      ENDIF.
+      MODIFY it_final.
+    ENDLOOP.
+    DELETE it_final[] WHERE belnr IS INITIAL.
+
+    it_final_tmp[] = it_final[].
+
+    CLEAR : wa_final, wa_final1, wa_final1tmp.
+    LOOP AT it_final INTO wa_final.      "WHERE DMBTR NE 0.
+      CLEAR : wa_final_tmp, wa_final1.
+      READ TABLE it_final1 WITH KEY belnr = wa_final-belnr
+                                    ebeln = wa_final-ebeln
+                                    ebelp = wa_final-ebelp
+                                    buzei = wa_final-buzei INTO wa_final1tmp.
+      IF NOT sy-subrc = 0.
+        MOVE-CORRESPONDING wa_final TO wa_final1.
+        CLEAR : wa_final1-dmbtr,
+                wa_final1-wrbtr,
+                wa_final1-frgt,
+                wa_final1-frgt1,
+                wa_final1-allfrgt,
+                wa_final1-pckn,
+                wa_final1-misc,
+                wa_final1-bnkan,
+                wa_final1-exbas,
+                wa_final1-vatbas,
+                wa_final1-serbas,
+                wa_final1-bed,
+                wa_final1-addbed,
+                wa_final1-ecs,
+                wa_final1-hcess,
+                wa_final1-ebed,
+                wa_final1-rmded,
+                wa_final1-rmded1,
+                wa_final1-rmnon,
+                wa_final1-cgded,
+                wa_final1-cgnon,
+                wa_final1-cst,
+                wa_final1-sertax,
+                wa_final1-esertax,
+                wa_final1-shcess,
+                wa_final1-acd,
+                wa_final1-bascus,
+                wa_final1-cvd,
+                wa_final1-ecvd,
+                wa_final1-hecvd,
+                wa_final1-ecustom,
+                wa_final1-hecustom,
+                wa_final1-imp_freight_val,
+                wa_final1-disc,
+                it_final-bas_adisc,
+                wa_final1-wct,
+                wa_final1-tds,
+                wa_final1-esic,
+                wa_final1-gross,
+                wa_final1-jcfa,
+                wa_final1-jfr1,
+                wa_final1-jfr2,
+                wa_final1-steuc,
+                wa_final1-joigamt,
+                wa_final1-rjoigamt,
+                wa_final1-jocgamt,
+                wa_final1-rjocgamt,
+                wa_final1-josgamt,
+                wa_final1-rjosgamt,
+                wa_final1-joinamt,
+                wa_final1-jocnamt,
+                wa_final1-josnamt,
+                wa_final1-bcd.
+*                wa_final1-diff.
+        .
+
+        LOOP AT it_final_tmp INTO wa_final_tmp WHERE belnr = wa_final-belnr
+                                                AND ebeln = wa_final-ebeln
+                                                AND ebelp = wa_final-ebelp
+                                                AND  buzei = wa_final-buzei.
+***
+*J     WA_FINAL1-FRGT     = WA_FINAL1-FRGT   + WA_FINAL_TMP-FRGT.
+          CLEAR : wa_rseg1, wa_rseg2, wa_rseg3 .
+          READ TABLE it_rseg WITH KEY belnr1 = wa_final_tmp-belnr
+                                      buzei = wa_final_tmp-buzei
+                                      ebeln = wa_final_tmp-ebeln
+                                      ebelp = wa_final_tmp-ebelp
+                                      kschl = 'FRA1' INTO wa_rseg1.
+*        READ TABLE it_rseg WITH KEY belnr1 = wa_final_tmp-belnr buzei = wa_final_tmp-buzei ebeln = wa_final_tmp-ebeln ebelp = wa_final_tmp-ebelp kschl = 'FRB1' INTO wa_rseg2.
+*        READ TABLE it_rseg WITH KEY belnr1 = wa_final_tmp-belnr buzei = wa_final_tmp-buzei ebeln = wa_final_tmp-ebeln ebelp = wa_final_tmp-ebelp kschl = 'FRC1' INTO wa_rseg3.
+          IF sy-subrc = 0.
+            wa_final1-frgt     = wa_final1-frgt   + wa_rseg1-wrbtr + wa_rseg2-wrbtr + wa_rseg3-wrbtr .
+          ENDIF.
+          CLEAR : wa_rseg1, wa_rseg2, wa_rseg3.
+***
+
+          wa_final1-dmbtr    = wa_final1-dmbtr  + wa_final_tmp-dmbtr.
+          wa_final1-wrbtr    = wa_final1-wrbtr  + wa_final_tmp-wrbtr.
+          wa_final1-pckn     = wa_final1-pckn   + wa_final_tmp-pckn.
+          wa_final1-misc     = wa_final1-misc   + wa_final_tmp-misc.
+          wa_final1-bnkan    = wa_final1-bnkan  + wa_final_tmp-bnkan.
+          wa_final1-exbas    = wa_final1-exbas  + wa_final_tmp-exbas.             "
+          wa_final1-vatbas   = wa_final1-vatbas + wa_final_tmp-vatbas.            "
+          wa_final1-serbas   = wa_final1-serbas + wa_final_tmp-serbas.            "
+          wa_final1-bcd   = wa_final1-bcd + wa_final_tmp-bcd.            "
+
+          wa_final1-bed      = wa_final1-bed    + wa_final_tmp-bed.
+          wa_final1-addbed   = wa_final1-addbed + wa_final_tmp-addbed.
+          wa_final1-ecs      = wa_final1-ecs    + wa_final_tmp-ecs.
+          wa_final1-hcess    = wa_final1-hcess  + wa_final_tmp-hcess.             "
+
+          wa_final1-ebed     = wa_final1-ebed   + wa_final_tmp-ebed.
+          wa_final1-rmded    = wa_final1-rmded  + wa_final_tmp-rmded.
+          wa_final1-rmded1    = wa_final1-rmded1  + wa_final_tmp-rmded1.
+          wa_final1-rmnon    = wa_final1-rmnon  + wa_final_tmp-rmnon.
+          wa_final1-cgded    = wa_final1-cgded  + wa_final_tmp-cgded.
+          wa_final1-cgnon    = wa_final1-cgnon  + wa_final_tmp-cgnon.
+          wa_final1-cst      = wa_final1-cst    + wa_final_tmp-cst .
+          wa_final1-sertax   = wa_final1-sertax   + wa_final_tmp-sertax.
+          wa_final1-esertax  = wa_final1-esertax  + wa_final_tmp-esertax.
+          wa_final1-shcess   = wa_final1-shcess   + wa_final_tmp-shcess.
+          wa_final1-acd      = wa_final1-acd      + wa_final_tmp-acd.
+          wa_final1-bascus   = wa_final1-wrbtr    + wa_final1-bascus  + wa_final_tmp-bascus."01.08.17
+          wa_final1-cvd      = wa_final1-cvd      + wa_final_tmp-cvd.
+          wa_final1-ecvd     = wa_final1-ecvd     + wa_final_tmp-ecvd.
+          wa_final1-hecvd    = wa_final1-hecvd    + wa_final_tmp-hecvd.
+          wa_final1-ecustom  = wa_final1-ecustom  + wa_final_tmp-ecustom.
+          wa_final1-hecustom = wa_final1-hecustom + wa_final_tmp-hecustom.
+          wa_final1-disc     = wa_final1-disc     + wa_final_tmp-disc.
+          wa_final1-imp_freight_val = wa_final1-imp_freight_val + wa_final_tmp-imp_freight_val.
+          wa_final1-wct      = wa_final1-wct    + wa_final_tmp-wct.               "
+          wa_final1-tds      = wa_final1-tds    + wa_final_tmp-tds.               "
+          wa_final1-esic     = wa_final1-esic   + wa_final_tmp-esic.              "
+          wa_final1-jcfa     = wa_final1-jcfa   + wa_final_tmp-jcfa.
+          wa_final1-jfr1     = wa_final1-jfr1   + wa_final_tmp-jfr1.
+          wa_final1-jfr2     = wa_final1-jfr2   + wa_final_tmp-jfr2.
+          wa_final1-frgt     = wa_final1-frgt   + wa_final_tmp-frgt.
+          wa_final1-frgt1    =  wa_final1-frgt1 + wa_final_tmp-frgt1.
+*          IF wa_final_tmp-mwskz <> '51' AND  wa_final_tmp-mwskz <> '63'.
+          wa_final1-allfrgt  = wa_final1-frgt + wa_final1-frgt1 + wa_final1-imp_freight_val  + wa_final1-pckn. "01.08.17
+*          ENDIF.
+          "+ wa_final1-jcfa
+          wa_final1-bas_adisc =  wa_final1-bascus - wa_final1-disc. "01.08.17
+          wa_final1-taxable_val = wa_final1-jfr2 + wa_final1-jins1 + wa_final1-jins  + wa_final1-bas_adisc."01.08.17
+          IF  wa_final_tmp-flag IS INITIAL.
+            wa_final1-taxable_val = wa_final1-taxable_val + wa_final1-allfrgt."01.08.17
+          ENDIF.
+          wa_final1-joigamt  = wa_final1-joigamt + wa_final_tmp-joigamt.
+          wa_final1-jocgamt  = wa_final1-jocgamt + wa_final_tmp-jocgamt.
+          wa_final1-josgamt  = wa_final1-josgamt + wa_final_tmp-josgamt.
+
+          wa_final1-rjoigamt  = wa_final1-rjoigamt + wa_final_tmp-rjoigamt.
+          wa_final1-rjocgamt  = wa_final1-rjocgamt + wa_final_tmp-rjocgamt.
+          wa_final1-rjosgamt  = wa_final1-rjosgamt + wa_final_tmp-rjosgamt.
+*          wa_final1-joinamt  = wa_final1-joinamt + wa_final_tmp-joinamt.
+*          wa_final1-jocnamt  = wa_final1-jocnamt + wa_final_tmp-jocnamt.
+*          wa_final1-josnamt  = wa_final1-josnamt + wa_final_tmp-josnamt.
+
+          READ TABLE it_rseg WITH KEY belnr1 = wa_final_tmp-belnr
+                                      buzei = wa_final_tmp-buzei
+                                      ebeln = wa_final_tmp-ebeln
+                                      ebelp = wa_final_tmp-ebelp
+                                      kschl = 'FRA1' INTO wa_rseg1.
+          IF sy-subrc = 0.
+            wa_final1-gross    = wa_final1-gross  + wa_final_tmp-gross + wa_final1-frgt.
+          ELSE.
+            wa_final1-gross    = wa_final1-gross  + wa_final_tmp-gross." + wa_final_tmp-frgt.
+
+
+
+            IF wa_final1-mwskz = '3C' OR wa_final1-mwskz = '3E'
+            OR wa_final1-mwskz = '3F' OR wa_final1-mwskz = '3G'.
+*             OR  wa_final1-mwskz = '63' OR wa_final1-mwskz = '51'. "04.08.17
+              MOVE wa_final1-bascus TO wa_final1-wrbtr.
+*             ELSEIF wa_final1-mwskz = '63' OR wa_final1-mwskz = '51'.
+*               MOVE wa_final1-allfrgt to wa_final1-wrbtr.
+              CLEAR : wa_final1-gross.
+              wa_final1-gross = wa_final1-gross + wa_final1-joigamt + wa_final1-rjoigamt + wa_final1-bcd.
+              IF wa_final1-buzei = '00001'.
+                wa_final1-gross =  wa_final1-gross + wa_final1-diff.
+              ENDIF.
+            ELSE.
+              CLEAR : wa_final1-gross.
+              wa_final1-gross = wa_final1-taxable_val + wa_final1-joigamt + wa_final1-jocgamt + wa_final1-josgamt.
+              IF wa_final1-buzei = '00001'.
+                wa_final1-gross =  wa_final1-gross + wa_final1-diff.
+              ENDIF.
+            ENDIF.
+
+          ENDIF.
+
+
+          IF wa_final1-joigamt IS NOT INITIAL OR wa_final1-joigamt <> 0.
+            wa_final1-tran_type = 'INTERSTATE'.
+          ELSEIF   wa_final1-jocgamt IS NOT INITIAL AND wa_final1-josgamt IS NOT INITIAL.
+            wa_final1-tran_type = 'LOCAL'.
+          ELSE.
+            wa_final1-tran_type = ' '.
+          ENDIF.
+
+
+        ENDLOOP.
+
+*********************************Added by Mayank on 29-08-2023***********************************************
+
+        SELECT SINGLE anln1 FROM ekkn INTO wa_final1-anln1 WHERE ebeln = wa_final1-ebeln AND ebelp = wa_final1-ebelp.
+
+        IF wa_final1-anln1 IS INITIAL.
+
+          CALL FUNCTION 'CONVERSION_EXIT_ABPSP_INPUT'
+            EXPORTING
+              input     = wa_final1-projk
+            IMPORTING
+              output    = gv_pnr
+            EXCEPTIONS
+              not_found = 1
+              OTHERS    = 2.
+          IF sy-subrc <> 0.
+*           Implement suitable error handling here
+          ENDIF.
+
+
+          IF gv_pnr IS NOT INITIAL. "Added by raj on 19.09.2023
+            SELECT SINGLE anln1 FROM anla INTO wa_final1-anln1 WHERE posnr = gv_pnr.
+          ENDIF."Added by raj on 19.09.2023
+
+        ENDIF.
+
+        SHIFT wa_final1-anln1 LEFT DELETING LEADING '0'.
+
+*********************************Till Here by Mayank on 29-08-2023*******************************************
+
+********************************Begin of Changes and Added by Raj on 11.09.2023******************************
+
+        IF wa_final1-projk IS INITIAL.
+          SELECT SINGLE ps_psp_pnr  FROM ekkn INTO wa_final1-projk  WHERE  ebeln = wa_final1-ebeln AND ebelp = wa_final1-ebelp.
+          CALL FUNCTION 'CONVERSION_EXIT_ABPSP_OUTPUT'
+            EXPORTING
+              input     = wa_final1-projk
+            IMPORTING
+              output    = gv_pnr1
+            EXCEPTIONS
+              not_found = 1.
+
+          IF sy-subrc <> 0.
+*           Implement suitable error handling here
+          ENDIF.
+        ENDIF.
+
+*        IF gv_pnr1 IS NOT INITIAL.
+*          wa_final1-projk = gv_pnr1.
+*        ENDIF.
+
+*       IF wa_final1-projk = '00000000'.
+*          wa_final1-projk = '  '.
+*        ENDIF.
+
+        IF wa_final1-projk IS NOT INITIAL AND wa_final1-anln1 IS INITIAL.
+          SELECT SINGLE anln1 FROM anla INTO wa_final1-anln1 WHERE posnr = wa_final1-projk.
+          SHIFT wa_final1-anln1 LEFT DELETING LEADING '0'.
+        ENDIF.
+
+        IF gv_pnr1 IS NOT INITIAL.
+          wa_final1-projk = gv_pnr1.
+        ENDIF.
+
+        IF wa_final1-projk = '00000000'.
+          wa_final1-projk = '  '.
+        ENDIF.
+
+
+*
+*        IF wa_final1-projk IS NOT INITIAL.
+*          CALL FUNCTION 'CONVERSION_EXIT_ABPSP_INPUT'
+*            EXPORTING
+*              input     = wa_final1-projk
+*            IMPORTING
+*              output    = gv_pnr
+*            EXCEPTIONS
+*              not_found = 1
+*              OTHERS    = 2.
+*          IF sy-subrc <> 0.
+**           Implement suitable error handling here
+*          ENDIF.
+*
+*          wa_final1-projk = gv_pnr.
+*        ENDIF.
+
+*******************************End of changes nad Added by Raj on 11.09.2023*********************************
+        APPEND wa_final1 TO it_final1.
+        CLEAR : wa_final1, gv_pnr,gv_pnr1.
+      ENDIF.
+
+    ENDLOOP.
+
+*** RE CALC OF VAT BASE VALUE.
+    CLEAR : wa_final1.
+    LOOP AT it_final1 INTO wa_final1.
+      IF wa_final1-rmded <> 0.
+        wa_final1-vatbas = wa_final1-wrbtr + wa_final1-bed + wa_final1-addbed + wa_final1-ecs + wa_final1-hcess + wa_final1-frgt +
+                           wa_final1-bed_n + wa_final1-ces_n + wa_final1-hcess_n + wa_final1-aed_n.
+
+      ELSEIF wa_final1-rmded1 IS NOT INITIAL OR wa_final1-1rmded1 IS NOT INITIAL.
+
+        wa_final1-vatbas = wa_final1-wrbtr + wa_final1-bed + wa_final1-addbed + wa_final1-ecs + wa_final1-hcess + wa_final1-frgt +
+                           wa_final1-bed_n + wa_final1-ces_n + wa_final1-hcess_n + wa_final1-aed_n + wa_final1-sertax + wa_final1-esertax +
+                           wa_final1-shcess.
+      ELSE.
+        wa_final1-vatbas = wa_final1-wrbtr + wa_final1-bed + wa_final1-addbed + wa_final1-ecs + wa_final1-hcess +
+                           wa_final1-bed_n + wa_final1-ces_n + wa_final1-hcess_n + wa_final1-aed_n.
+      ENDIF.
+
+      wa_final1-dmbtr = wa_final1-dmbtr + wa_final1-allfrgt.
+      wa_final1-wrbtr = wa_final1-wrbtr + wa_final1-allfrgt.
+      wa_final1-bas_adisc = wa_final1-bas_adisc + wa_final1-allfrgt.
+      CLEAR : wa_final1-allfrgt.
+      MODIFY it_final1 FROM wa_final1 TRANSPORTING vatbas gross bed dmbtr wrbtr bas_adisc allfrgt.
+      CLEAR: wa_final1-vatbas.
+    ENDLOOP.
+
+    SORT it_final1 BY bukrs belnr gjahr g_belnr buzei.
+
+    IF NOT chk1 = 'X'.
+      DELETE it_final1 WHERE belnr+0(1) = '9'.
+    ENDIF.
+
+    SORT it_final1 BY bukrs belnr gjahr g_belnr buzei.
+    SORT it_final BY bukrs belnr gjahr g_belnr buzei.
+
+    DELETE it_final WHERE belnr EQ space.
+    DELETE it_final WHERE gsber NOT IN s_gsber.
+******************* CODE FOR DETAILS REPORT
+    it_final2[] = it_final1[].
+**    it_final3[] = it_final1[].
+*
+***************
+*    SORT it_final1 BY bukrs belnr gjahr ebelp ebeln matnr allfrgt.
+**   SORT it_final1 BY bukrs belnr gjahr matnr.
+*    DATA : gv_hkont TYPE hkont.
+*    RANGES : s_hkont FOR gv_hkont.
+*
+*    s_hkont-sign = 'I'.
+*    s_hkont-option = 'EQ'.
+*    s_hkont-low = '0015060006'.
+*    APPEND s_hkont.
+*    s_hkont-low = '0015060010'.
+*    APPEND s_hkont.
+*
+**    DELETE it_final2 WHERE ( hkont NE '0015060006' ) and ( mwskz NE '63' AND  mwskz NE '51' ).
+    DELETE it_final2 WHERE lfbnr IS INITIAL.
+*
+**    LOOP AT IT_FINAL1 INTO WA_FINAL1 WHERE hkont = '0015060006' AND ( MWSKZ NE '63' AND  MWSKZ NE '51').
+**      MOVE-CORRESPONDING WA_FINAL1 TO WA_FINAL2.
+**       APPEND WA_FINAL2 TO IT_FINAL2.
+**    ENDLOOP.
+*
+**    DELETE it_final3 WHERE hkont NE '0015060010'.
+*
+**    LOOP AT IT_FINAL1 INTO WA_FINAL1 WHERE hkont = '0015060010' AND ( MWSKZ NE '63' AND  MWSKZ NE '51').
+**      MOVE-CORRESPONDING WA_FINAL1 TO WA_FINAL3.
+**       APPEND WA_FINAL3 TO IT_FINAL3.
+**    ENDLOOP.
+
+*    new logic add for tax code
+    LOOP AT  it_final1 INTO wa_final1.
+      READ TABLE it_final2 INTO wa_final2 WITH KEY belnr = wa_final1-belnr ebeln = wa_final1-ebeln ebelp = wa_final1-ebelp
+                                                   matnr = wa_final1-matnr mwskz = wa_final1-mwskz.
+      IF sy-subrc = 0.
+        IF wa_final1-mwskz NE wa_final2-mwskz.
+          wa_final1-mwskz = wa_final2-mwskz.
+          wa_final1-tax_desc = wa_final2-tax_desc.
+        ENDIF.
+
+        AUTHORITY-CHECK OBJECT 'K_PCAR_REP'
+*         ID 'CO_ACTION' FIELD '*'
+*         ID 'KSTAR' FIELD '*'
+        ID 'PRCTR' FIELD  wa_final1-prctr.
+*         ID 'ACTVT' FIELD '03'.
+        IF sy-subrc <> 0.
+          MESSAGE e018(zfi) WITH wa_final1-prctr 'Not Authorised for this profit center'.
+        ENDIF.
+
+
+        MODIFY it_final1 FROM wa_final1 TRANSPORTING mwskz tax_desc.
+        CLEAR:wa_final1,wa_final2.
+      ENDIF.
+    ENDLOOP.
+*   end new logic
+*
+*
+*    LOOP AT  it_final1 INTO wa_final1.
+*
+*
+*      READ TABLE it_final2 INTO wa_final2 WITH KEY belnr = wa_final1-belnr ebeln = wa_final1-ebeln ebelp = wa_final1-ebelp matnr = wa_final1-matnr." nref = wa_final1-lref .
+**      LOOP AT it_final2 INTO wa_final2 WHERE belnr = wa_final1-belnr AND ebeln = wa_final1-ebeln AND ebelp = wa_final1-ebelp AND matnr = wa_final1-matnr AND allfrgt NE '0.00'.
+*      IF sy-subrc = 0.
+**         if  wa_final1-hkont = wa_final2-hkont.
+*
+*
+**
+**         endif.
+*        IF wa_final2-allfrgt IS NOT INITIAL.
+*          wa_final1-allfrgt = wa_final2-allfrgt.
+*
+*
+*          wa_final1-glind = 'X'.
+**          wa_final1-nref  = ' '.
+*          wa_final1-taxable_val =  wa_final1-taxable_val + wa_final1-allfrgt.
+*          wa_final1-joigamt  = wa_final1-joigamt + wa_final2-joigamt.
+*          wa_final1-jocgamt  = wa_final1-jocgamt + wa_final2-jocgamt.
+*          wa_final1-josgamt  = wa_final1-josgamt + wa_final2-josgamt.
+*
+*          IF wa_final1-mwskz = '3C' OR wa_final1-mwskz = '3E'
+*             OR wa_final1-mwskz = '3F' OR wa_final1-mwskz = '3G'.
+**
+*            CLEAR : wa_final1-gross.
+*            wa_final1-gross = wa_final1-gross + wa_final1-joigamt + wa_final1-rjoigamt + wa_final1-bcd.
+*            IF wa_final1-buzei = '00001'.
+*              wa_final1-gross =  wa_final1-gross + wa_final1-diff.
+*            ENDIF.
+*          ELSE.
+*            CLEAR : wa_final1-gross.
+*            wa_final1-gross = wa_final1-taxable_val + wa_final1-joigamt + wa_final1-jocgamt + wa_final1-josgamt.
+*            IF wa_final1-buzei = '00001'.
+*              wa_final1-gross =  wa_final1-gross + wa_final1-diff.
+*            ENDIF.
+*          ENDIF.
+*
+*          MODIFY it_final1 FROM wa_final1 TRANSPORTING allfrgt taxable_val gross joigamt jocgamt josgamt glind nref.
+*          CLEAR:wa_final1,wa_final2.
+*        ENDIF.
+**        else.
+**          w
+**          MODIFY it_final1 FROM wa_final1 TRANSPORTING allfrgt taxable_val gross joigamt jocgamt josgamt glind nref.
+**          CLEAR:wa_final1,wa_final2.
+*      ENDIF.
+*
+**      READ TABLE it_final3 INTO wa_final3 WITH KEY belnr = wa_final1-belnr ebeln = wa_final1-ebeln ebelp = wa_final1-ebelp matnr = wa_final1-matnr.
+**      IF sy-subrc = 0.
+***        if  wa_final1-hkont = wa_final3-hkont.
+***             wa_final1-glind = 'X'.
+***         endif.
+**        wa_final1-allfrgt = wa_final3-allfrgt.
+**        wa_final1-taxable_val =  wa_final1-taxable_val + wa_final1-allfrgt.
+**        wa_final1-joigamt  = wa_final1-joigamt + wa_final3-joigamt.
+**        wa_final1-jocgamt  = wa_final1-jocgamt + wa_final3-jocgamt.
+**        wa_final1-josgamt  = wa_final1-josgamt + wa_final3-josgamt.
+**
+**        IF wa_final1-mwskz = '3C' OR wa_final1-mwskz = '3E'
+**           OR wa_final1-mwskz = '3F' OR wa_final1-mwskz = '3G'.
+***
+**          CLEAR : wa_final1-gross.
+**          wa_final1-gross = wa_final1-gross + wa_final1-joigamt + wa_final1-rjoigamt + wa_final1-bcd.
+**        ELSE.
+**          CLEAR : wa_final1-gross.
+**          wa_final1-gross = wa_final1-taxable_val + wa_final1-joigamt + wa_final1-jocgamt + wa_final1-josgamt.
+**        ENDIF.
+**
+**        MODIFY it_final1 FROM wa_final1 TRANSPORTING allfrgt taxable_val gross joigamt jocgamt josgamt glind .
+**        CLEAR:wa_final1,wa_final3.
+**      ENDIF.
+*
+**  ENDLOOP.
+*
+*    ENDLOOP.
+*
+**    DELETE it_final1 WHERE ( hkont =  '0015060006') and ( mwskz NE '63' AND  mwskz NE '51').
+**    DELETE it_final1 WHERE ( hkont =  '0015060010') and ( mwskz NE '63' AND  mwskz NE '51').
+**     delete it_final1 where glind = 'X'.
+**    DELETE ADJACENT DUPLICATES FROM it_final1 COMPARING bukrs belnr gjahr matnr.
+*    DELETE ADJACENT DUPLICATES FROM it_final1 COMPARING bukrs belnr gjahr ebeln ebelp matnr.
+**    DELETE it_final1 WHERE GLIND = ' ' AND LREF = 'X'.
+**************** END CODE
+
+
+    SORT it_bset1 BY bukrs belnr gjahr.
+
+    DELETE ADJACENT DUPLICATES FROM it_bset1 COMPARING bukrs belnr gjahr.
+    SORT it_final BY bukrs belnr gjahr g_belnr buzei.
+  ENDIF.
+******************************Begin of changes Added by Raj on 02.07.2024*************************
+
+  IF rad = 'X'.
+    LOOP AT it_final1 INTO DATA(wa_finals).
+      READ TABLE it_rseg INTO DATA(wa_rseg) WITH KEY belnr = wa_finals-g_belnr gjahr = wa_finals-gjahr.
+      READ TABLE it_bkpf INTO DATA(wa_bkpf) WITH KEY g_belnr = wa_finals-g_belnr g_gjahr = wa_finals-gjahr blart = 'RK'.
+      IF sy-subrc = 0.
+        IF wa_bkpf-blart = 'RK'.
+          wa_finals-qty = wa_rseg-rbmng - wa_rseg-menge.
+        ENDIF.
+        MODIFY it_final1 FROM wa_finals TRANSPORTING qty.
+        CLEAR : wa_finals.
+      ENDIF.
+      CLEAR : wa_finals,wa_rseg,wa_bkpf.
+    ENDLOOP.
+
+    DATA(it_bkpfs) = it_bkpf[].
+
+    DELETE it_bkpfs WHERE blart NE 'RK'.
+
+    IF it_bkpfs IS NOT INITIAL.
+      SELECT bukrs,belnr,gjahr,dmbtr INTO TABLE @DATA(it_bsegs)
+         FROM bseg FOR ALL ENTRIES IN @it_bkpfs WHERE belnr = @it_bkpfs-belnr AND gjahr = @it_bkpfs-gjahr AND ktosl = 'RKA'.
+
+      SELECT bukrs,belnr,gjahr,dmbtr INTO TABLE @DATA(it_bsegst)
+ FROM bseg FOR ALL ENTRIES IN @it_bkpfs WHERE belnr = @it_bkpfs-belnr AND gjahr = @it_bkpfs-gjahr AND ktosl = 'JIS'.
+
+      SELECT bukrs,belnr,gjahr,dmbtr INTO TABLE @DATA(it_bsegct)
+FROM bseg FOR ALL ENTRIES IN @it_bkpfs WHERE belnr = @it_bkpfs-belnr AND gjahr = @it_bkpfs-gjahr AND ktosl = 'JIC'.
+    ENDIF.
+
+    LOOP AT it_final1 INTO wa_finals.
+      READ TABLE it_bkpfs INTO DATA(wa_bkpfs) WITH KEY g_belnr = wa_finals-g_belnr g_gjahr =  wa_finals-gjahr blart = 'RK' bukrs = wa_finals-bukrs.
+      READ TABLE it_bsegs INTO DATA(wa_bsegs) WITH KEY belnr = wa_bkpfs-belnr gjahr =  wa_bkpfs-gjahr bukrs = wa_bkpfs-bukrs.
+      wa_finals-dmbtr  = wa_bsegs-dmbtr.
+      wa_finals-wrbtr = wa_bsegs-dmbtr.
+      wa_finals-bas_adisc = wa_bsegs-dmbtr.
+      wa_finals-taxable_val = wa_bsegs-dmbtr.
+
+      MODIFY it_final1 FROM wa_finals TRANSPORTING dmbtr wrbtr bas_adisc taxable_val.
+      CLEAR : wa_finals,wa_bkpfs,wa_bsegs.
+    ENDLOOP.
+
+
+
+    LOOP AT it_final1 INTO wa_finals.
+      READ TABLE it_bkpfs INTO wa_bkpfs WITH KEY g_belnr = wa_finals-g_belnr g_gjahr =  wa_finals-gjahr blart = 'RK' bukrs = wa_finals-bukrs.
+      READ TABLE it_bsegst INTO DATA(wa_bsegst) WITH KEY belnr = wa_bkpfs-belnr gjahr =  wa_bkpfs-gjahr bukrs = wa_bkpfs-bukrs.
+      wa_finals-josgamt = wa_bsegst-dmbtr.
+      MODIFY it_final1 FROM wa_finals TRANSPORTING josgamt.
+      CLEAR : wa_finals,wa_bkpfs,wa_bsegst.
+    ENDLOOP.
+
+    LOOP AT it_final1 INTO wa_finals.
+      READ TABLE it_bkpfs INTO wa_bkpfs WITH KEY g_belnr = wa_finals-g_belnr g_gjahr =  wa_finals-gjahr blart = 'RK' bukrs = wa_finals-bukrs.
+      READ TABLE it_bsegct INTO DATA(wa_bsegct) WITH KEY belnr = wa_bkpfs-belnr gjahr =  wa_bkpfs-gjahr bukrs = wa_bkpfs-bukrs.
+      wa_finals-jocgamt = wa_bsegct-dmbtr.
+      wa_finals-gross = wa_finals-jocgamt + wa_finals-josgamt +  wa_finals-dmbtr.
+*      wa_finals-SMBLN = '   '.
+      wa_finals-qty = wa_finals-qty * ( -1 ).
+      wa_finals-wrbtr = wa_finals-wrbtr * ( -1 ).
+      wa_finals-dmbtr = wa_finals-dmbtr * ( -1 ).
+      wa_finals-bas_adisc =  wa_finals-bas_adisc * ( -1 ).
+      wa_finals-taxable_val =  wa_finals-taxable_val * ( -1 ).
+      wa_finals-gross = wa_finals-gross * ( -1 ).
+
+      wa_finals-joigamt  = wa_finals-joigamt * ( -1 ).
+      wa_finals-rjoigamt = wa_finals-rjoigamt * ( -1 ).
+      wa_finals-joigamt = wa_finals-joigamt * ( -1 ).
+      wa_finals-jocgamt = wa_finals-jocgamt * ( -1 ).
+      wa_finals-josgamt = wa_finals-josgamt * ( -1 ).
+      wa_finals-rjosgamt = wa_finals-rjosgamt * ( -1 ).
+
+
+
+      MODIFY it_final1 FROM wa_finals TRANSPORTING jocgamt gross smbln qty wrbtr dmbtr bas_adisc taxable_val joigamt  rjoigamt joigamt  jocgamt  josgamt  rjosgamt.
+      CLEAR : wa_finals,wa_bkpfs,wa_bsegct.
+    ENDLOOP.
+  ENDIF.
+*****************************End of changes Added by Raj on 02.07.2024*************************
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FILL_SUMMARY_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM fill_summary_data .
+  SORT it_final1 BY bukrs belnr gjahr mwskz.
+  LOOP AT it_final1 INTO wa_final.
+    wa_data             =  wa_final.
+    gv_dmbtr            =  gv_dmbtr            +    wa_data-dmbtr.
+    gv_wrbtr            =  gv_wrbtr            +    wa_data-wrbtr .
+    gv_pckn             =  gv_pckn             +    wa_data-pckn.
+    gv_misc             =  gv_misc             +    wa_data-misc .
+    gv_bnkan            =  gv_bnkan            +    wa_data-bnkan .
+    gv_exbas            =  gv_exbas            +    wa_data-exbas.                "
+    gv_vatbas           =  gv_vatbas           +    wa_data-vatbas.             "
+    gv_serbas           =  gv_serbas           +    wa_data-serbas.               "
+    gv_frgt             =  gv_frgt             +    wa_data-frgt.
+    gv_frgt1            =  gv_frgt1            +    wa_data-frgt1.
+    gv_bed              =  gv_bed              +    wa_data-bed .
+    gv_addbed           =  gv_addbed           +    wa_data-addbed.
+    gv_ecs              =  gv_ecs              +    wa_data-ecs .
+    gv_hcess            =  gv_hcess            +    wa_data-hcess .               "
+    gv_ebed             =  gv_ebed             +    wa_data-ebed .
+    gv_rmded            =  gv_rmded            +    wa_data-rmded .
+    gv_rmded1           =  gv_rmded1           +    wa_data-rmded1 .
+    gv_rmnon            =  gv_rmnon            +    wa_data-rmnon .
+    gv_cgded            =  gv_cgded            +    wa_data-cgded.
+    gv_cgnon            =  gv_cgnon            +    wa_data-cgnon .
+    gv_cst              =  gv_cst              +    wa_data-cst    .
+    gv_sertax           =  gv_sertax           +    wa_data-sertax .
+    gv_esertax          =  gv_esertax          +    wa_data-esertax.
+    gv_shcess           =  gv_shcess           +    wa_data-shcess .
+    gv_acd              =  gv_acd              +    wa_data-acd   .
+    gv_bascus           =  gv_bascus           +    wa_data-bascus .
+    gv_cvd              =  gv_cvd              +    wa_data-cvd .
+    gv_ecvd             =  gv_ecvd             +    wa_data-ecvd.
+    gv_hecvd            =  gv_hecvd            +    wa_data-hecvd.
+    gv_ecustom          =  gv_ecustom          +    wa_data-ecustom .
+    gv_hecustom         =  gv_hecustom         +    wa_data-hecustom .
+    gv_disc             =  gv_disc             +    wa_data-disc .
+    gv_imp_freight_val  =  gv_imp_freight_val  +    wa_data-imp_freight_val .
+    gv_wct              =  gv_wct              +    wa_data-wct  .                  "
+    gv_tds              =  gv_tds              +    wa_data-tds .                 "
+    gv_esic             =  gv_esic             +    wa_data-esic.                  "
+    gv_jcfa             =  gv_jcfa             +    wa_data-jcfa.
+    gv_jfr1             =  gv_jfr1             +    wa_data-jfr1.
+    gv_jfr2             =  gv_jfr2             +    wa_data-jfr2.
+    gv_jofv             =  gv_jofv             +    wa_data-jofv.
+    gv_gross            =  gv_gross            +    wa_data-gross.
+    gv_qty              =  gv_qty              +    wa_data-qty.
+    gv_bas_adisc        =  gv_bas_adisc        +    wa_data-bas_adisc.
+    gv_taxable_val      =  gv_taxable_val      +    wa_data-taxable_val.
+    gv_joigamt          =  gv_joigamt          +    wa_data-joigamt.
+    gv_josgamt          =  gv_josgamt          +    wa_data-josgamt.
+    gv_jocgamt          =  gv_jocgamt          +    wa_data-jocgamt.
+    gv_rjoigamt         =  gv_rjoigamt         +    wa_data-rjoigamt.
+    gv_rjosgamt         =  gv_rjosgamt         +    wa_data-rjosgamt.
+    gv_rjocgamt         =  gv_rjocgamt         +    wa_data-rjocgamt.
+    gv_allfrgt          =  gv_allfrgt           + wa_data-allfrgt.  "01.08.17
+    gv_bcd          =  gv_bcd           + wa_data-bcd.  "01.08.17
+
+*    IF wa_data-buzei = '00001'.
+    gv_tax  = wa_data-mwskz.
+    gv_taxdesc = wa_data-tax_desc.
+    gv_rmdedrate = wa_data-rmdedrate."vat rate
+    gv_rmdedrate1 = wa_data-rmdedrate1.
+*    ENDIF.
+*    AT END OF belnr. "comment 19.12.2023
+    AT END OF mwskz.
+      wa_data-dmbtr             =  gv_dmbtr.
+      wa_data-wrbtr             =  gv_wrbtr .
+      wa_data-pckn              =  gv_pckn .
+      wa_data-misc              =  gv_misc.
+      wa_data-bnkan             =  gv_bnkan .
+      wa_data-exbas             =  gv_exbas.
+      wa_data-vatbas            =  gv_vatbas.
+      wa_data-serbas            =  gv_serbas.
+      wa_data-bed               =  gv_bed .
+      wa_data-addbed            =  gv_addbed.
+      wa_data-ecs               =  gv_ecs.
+      wa_data-hcess             =  gv_hcess.
+      wa_data-ebed              =  gv_ebed .
+      wa_data-rmded             =  gv_rmded .
+      wa_data-rmded1            =  gv_rmded1.
+      wa_data-rmnon             =  gv_rmnon.
+      wa_data-cgded             =  gv_cgded.
+      wa_data-cgnon             =  gv_cgnon.
+      wa_data-cst               =  gv_cst  .
+      wa_data-sertax            =  gv_sertax .
+      wa_data-esertax           =  gv_esertax.
+      wa_data-shcess            =  gv_shcess.
+      wa_data-acd               =  gv_acd .
+      wa_data-bascus            =  gv_bascus.
+      wa_data-cvd               =  gv_cvd .
+      wa_data-ecvd              =  gv_ecvd.
+      wa_data-hecvd             =  gv_hecvd .
+      wa_data-ecustom           =  gv_ecustom.
+      wa_data-hecustom          =  gv_hecustom.
+      wa_data-disc              =  gv_disc.
+      wa_data-imp_freight_val   =  gv_imp_freight_val.
+      wa_data-wct               =  gv_wct.
+      wa_data-tds               =  gv_tds.
+      wa_data-esic              =  gv_esic .
+      wa_data-jcfa              =  gv_jcfa.
+      wa_data-jfr1              =  gv_jfr1.
+      wa_data-jfr2              =  gv_jfr2.
+      wa_data-frgt              =  gv_frgt1 .
+      wa_data-gross             =  gv_gross .
+      wa_data-frgt              =  gv_frgt.
+      wa_data-frgt1             =  gv_frgt1.
+      wa_data-jofv              =  gv_jofv.
+      wa_data-qty               =  gv_qty.
+      wa_data-mwskz             =  gv_tax.
+      wa_data-tax_desc          =  gv_taxdesc.
+      wa_data-rmdedrate         =  gv_rmdedrate.
+      wa_data-rmdedrate1        =  gv_rmdedrate1.
+      wa_data-allfrgt           =  gv_allfrgt. "01.08.17
+      wa_data-bas_adisc         =  gv_bas_adisc.
+      wa_data-taxable_val       =  gv_taxable_val.
+      wa_data-joigamt           =  gv_joigamt.
+      wa_data-josgamt           =  gv_josgamt.
+      wa_data-jocgamt           =  gv_jocgamt.
+      wa_data-rjoigamt          =  gv_rjoigamt.
+      wa_data-rjosgamt          =  gv_rjosgamt.
+      wa_data-rjocgamt          =  gv_rjocgamt.
+      wa_data-bcd          =  gv_bcd.
+
+      APPEND wa_data TO it_data.
+      CLEAR wa_data.
+      CLEAR: gv_dmbtr ,gv_wrbtr,gv_pckn,gv_misc,gv_bnkan,gv_exbas,gv_vatbas,gv_serbas,gv_bed,gv_addbed,gv_ecs,gv_hcess,gv_ebed,gv_rmded,gv_tax,gv_taxdesc,
+             gv_rmnon, gv_cgded,gv_cgnon,gv_cst,gv_sertax,gv_esertax,gv_shcess,gv_acd,gv_bascus,gv_cvd,gv_ecvd,gv_hecvd,gv_ecustom,gv_hecustom,gv_allfrgt,
+             gv_hecustom,gv_disc,gv_imp_freight_val,gv_wct,gv_tds,gv_esic,gv_jcfa,gv_jfr1,gv_jfr2,gv_frgt1,gv_gross,gv_frgt,gv_frgt1,gv_rmded1,gv_jofv,gv_qty,
+             gv_allfrgt,gv_bas_adisc,gv_taxable_val,gv_joigamt,gv_josgamt,gv_jocgamt,gv_rjocgamt,gv_rjosgamt,gv_rjoigamt,gv_allfrgt,gv_bcd.
+    ENDAT.
+  ENDLOOP.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FILL_LISTHEADER
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM fill_listheader .
+  DATA : frmdt(10) TYPE c,
+         todt(10)  TYPE c,
+         v_str     TYPE string.
+
+
+  t_listheader-typ = 'H'.
+  t_listheader-key = ' '.
+  t_listheader-info = 'PURCHASE REGISTER(POST GST)'.
+  APPEND t_listheader.
+
+  IF s_budat-low NE '00000000' AND  s_budat-high NE '00000000'      .
+    WRITE s_budat-low  TO frmdt USING EDIT MASK '__.__.____'.
+    WRITE s_budat-high TO todt  USING EDIT MASK '__.__.____'.
+    CONCATENATE 'FROM'
+                 frmdt
+                 'TO'
+                 todt
+           INTO v_str SEPARATED BY space.
+  ELSEIF s_budat-low NE '00000000' AND  s_budat-high EQ '00000000'      .
+    WRITE s_budat-low  TO frmdt USING EDIT MASK '__.__.____'.
+    CONCATENATE 'ON'
+                 frmdt
+           INTO v_str SEPARATED BY space.
+  ELSEIF s_budat-low EQ '00000000' AND  s_budat-high NE '00000000'      .
+    WRITE s_budat-high  TO todt USING EDIT MASK '__.__.____'.
+    CONCATENATE 'ON'
+                 todt
+           INTO v_str SEPARATED BY space.
+  ENDIF.
+  t_listheader-typ = 'S'.
+  t_listheader-key = ' '.
+  t_listheader-info = v_str.
+  APPEND t_listheader.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  BACKGROUND_JOB
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM background_job .
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FILL_FIELDCATALOG
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM fill_fieldcatalog .
+
+  t_fieldcatalog-fieldname = 'SRNO'.
+  t_fieldcatalog-seltext_l = 'SRNO'.
+  t_fieldcatalog-outputlen = '3'.
+  t_fieldcatalog-key = 'X'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'WERKS'.
+  t_fieldcatalog-seltext_l = 'PLANT'.
+*   t_fieldcatalog-outputlen = '3'.
+  t_fieldcatalog-key = 'X'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+
+  t_fieldcatalog-fieldname = 'SGSTN'.
+  t_fieldcatalog-seltext_l = 'Recipient Gstn'.
+*   t_fieldcatalog-outputlen = '3'.
+  t_fieldcatalog-key = 'X'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'NAME2'.
+  t_fieldcatalog-seltext_l = 'PLANT NAME'.
+*   t_fieldcatalog-outputlen = '3'.
+  t_fieldcatalog-key = 'X'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  IF rad NE 'X'.                             "Added by Raj on 22.07.2024
+    t_fieldcatalog-fieldname = 'SMBLN'.
+    t_fieldcatalog-seltext_l = 'CANCEL INV NO'.
+    t_fieldcatalog-outputlen = '10'.
+    APPEND t_fieldcatalog.
+    CLEAR t_fieldcatalog.
+  ENDIF.
+
+
+  IF rad = 'X'.
+    t_fieldcatalog-fieldname = 'SMBLN'.               "Added by Raj on 22.07.2024
+    t_fieldcatalog-seltext_l = 'RK Ref.FI NO'.
+    t_fieldcatalog-outputlen = '10'.
+    APPEND t_fieldcatalog.
+    CLEAR t_fieldcatalog.
+  ENDIF.
+  t_fieldcatalog-fieldname = 'BLART'.
+  t_fieldcatalog-seltext_l = 'DOC TYPE'.
+  t_fieldcatalog-outputlen = '10'.
+  t_fieldcatalog-key = 'X'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'BSART2'.
+  t_fieldcatalog-seltext_l = 'DOC TYPE DESC.'.
+*  t_fieldcatalog-outputlen = '15'.
+  t_fieldcatalog-key = 'X'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'BELNR'.
+  t_fieldcatalog-seltext_l = 'DOC NO(FI)'.
+  t_fieldcatalog-key = 'X'.
+  t_fieldcatalog-outputlen = '10'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+
+  t_fieldcatalog-fieldname = 'G_BELNR'.
+  t_fieldcatalog-seltext_l = 'DOC NO(MIRO)'.
+  t_fieldcatalog-key = 'X'.
+  t_fieldcatalog-outputlen = '10'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'LFBNR'.
+  t_fieldcatalog-seltext_l = 'DOC NO(MIGO)'.
+  t_fieldcatalog-key = 'X'.
+  t_fieldcatalog-outputlen = '10'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+
+  t_fieldcatalog-fieldname = 'POSTDAT'.
+  t_fieldcatalog-seltext_l = 'POSTING DATE'.
+  t_fieldcatalog-outputlen = '10'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+
+  t_fieldcatalog-fieldname = 'XBLNR'.
+  t_fieldcatalog-seltext_l = 'Reference (Sup.Inv.)'.
+  t_fieldcatalog-outputlen = '10'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+
+    t_fieldcatalog-fieldname = 'CPUDT'.                 "Added by Raj on 04.12.2024
+  t_fieldcatalog-seltext_l = 'Entry Date'.
+  t_fieldcatalog-outputlen = '10'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+
+
+    t_fieldcatalog-fieldname = 'USNAM'.
+  t_fieldcatalog-seltext_l = 'User name'.     "Added by Raj on 04.12.2024
+  t_fieldcatalog-outputlen = '10'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+
+
+
+
+
+  t_fieldcatalog-fieldname = 'BLDAT'.
+  t_fieldcatalog-seltext_l = 'INVOICE DATE'.
+  t_fieldcatalog-outputlen = '10'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'LIFNR'.
+  t_fieldcatalog-seltext_l = 'VENDOR CODE'.
+  t_fieldcatalog-outputlen = '10'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+***** Added by Carina Jose on 11.01.2021
+  t_fieldcatalog-fieldname = 'LIFNR1'.
+  t_fieldcatalog-seltext_l = 'GST VENDOR PARTNER'.
+  t_fieldcatalog-outputlen = '10'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+
+  t_fieldcatalog-fieldname = 'GSTVEND_NAME1'.
+  t_fieldcatalog-seltext_l = 'GST VENDOR PARTNER VENDOR NAME'.
+  t_fieldcatalog-outputlen = '15'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+
+  t_fieldcatalog-fieldname = 'GSTVEND_STCD3'.
+  t_fieldcatalog-seltext_l = 'GST VENDOR PARTNER GSTN'.
+  t_fieldcatalog-outputlen = '18'.
+*  t_fieldcatalog-no_zero = 'X'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+
+***** End of changes by Carina Jose on 11.01.2021
+  t_fieldcatalog-fieldname = 'NAME1'.
+  t_fieldcatalog-seltext_l = 'VENDOR NAME'.
+  t_fieldcatalog-outputlen = '15'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'VEN_TYPE'.
+  t_fieldcatalog-seltext_l = 'VENDOR TYPE'.
+*  t_fieldcatalog-outputlen = '02'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'REGIO'.
+  t_fieldcatalog-seltext_l = 'STATE CODE'.
+  t_fieldcatalog-outputlen = '10'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'REGIO_DESC'.
+  t_fieldcatalog-seltext_l = 'VENDOR STATE DESC'.
+  t_fieldcatalog-outputlen = '15'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'QTY'.
+  t_fieldcatalog-seltext_l = 'QUANTITY'.
+  t_fieldcatalog-outputlen = '10'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'MEINS'.
+  t_fieldcatalog-seltext_l = 'UOM'.
+  t_fieldcatalog-outputlen = '10'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+
+  t_fieldcatalog-fieldname = 'DMBTR'.
+  t_fieldcatalog-seltext_l = 'DOC CURRENCY AMOUNT'.
+  t_fieldcatalog-outputlen = '15'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'WRBTR'.
+  t_fieldcatalog-seltext_l = 'BASIC VALUE(LOCAMT)'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'DISC'.
+  t_fieldcatalog-seltext_l = 'DISCOUNT'.
+*  t_fieldcatalog-outputlen = '8'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'BAS_ADISC'.
+  t_fieldcatalog-seltext_l = 'BASIC AFTER DISC.'.
+*  t_fieldcatalog-outputlen = '18'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'ALLFRGT'. "01.08.17
+  t_fieldcatalog-seltext_l = 'TOTAL FREIGHT COST '.
+*  t_fieldcatalog-outputlen = '12'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'JINS'.
+  t_fieldcatalog-seltext_l = 'IMPORT INSURANCE'.
+  t_fieldcatalog-outputlen = '12'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'JINS1'.
+  t_fieldcatalog-seltext_l = 'LOCAL INSURANCE'.
+  t_fieldcatalog-outputlen = '12'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'JFR2'.
+  t_fieldcatalog-seltext_l = 'OTHERS'."'WHARFAGE , MISC.'.
+*  t_fieldcatalog-outputlen = '15'.
+  t_fieldcatalog-do_sum = 'X'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'TAXABLE_VAL'.
+  t_fieldcatalog-seltext_l = 'TAXABLE VALUE'.
+  t_fieldcatalog-outputlen = '15'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'JOIGPER'.
+  t_fieldcatalog-seltext_l = 'IGST%'.
+  t_fieldcatalog-outputlen = '7'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'JOIGAMT'.
+  t_fieldcatalog-seltext_l = 'IGST - Amount'.
+*  t_fieldcatalog-outputlen = '15'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'RJOIGAMT'.
+  t_fieldcatalog-seltext_l = 'RCM-IGST-AMT'.
+*  t_fieldcatalog-outputlen = '15'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+
+  t_fieldcatalog-fieldname = 'JOCGPER'.
+  t_fieldcatalog-seltext_l = 'CGST%'.
+  t_fieldcatalog-outputlen = '7'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+
+  t_fieldcatalog-fieldname = 'JOCGAMT'.
+  t_fieldcatalog-seltext_l = 'CGST - Amount'.
+*  t_fieldcatalog-outputlen = '15'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'RJOCGAMT'.
+  t_fieldcatalog-seltext_l = 'RCM-CGST-AMT'.
+*  t_fieldcatalog-outputlen = '15'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'JOSGPER'.
+  t_fieldcatalog-seltext_l = 'SGST%'.
+  t_fieldcatalog-outputlen = '7'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+
+  t_fieldcatalog-fieldname = 'JOSGAMT'.
+  t_fieldcatalog-seltext_l = 'SGST - Amount'.
+*  t_fieldcatalog-outputlen = '15'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'RJOSGAMT'.
+  t_fieldcatalog-seltext_l = 'RCM-SGST-AMT'.
+*  t_fieldcatalog-outputlen = '15'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+
+  t_fieldcatalog-fieldname = 'BCD'.
+  t_fieldcatalog-seltext_l = 'BCD'.
+  APPEND  t_fieldcatalog.
+  CLEAR  t_fieldcatalog.
+
+
+  t_fieldcatalog-fieldname = 'GROSS'.
+  t_fieldcatalog-seltext_l = 'BILL VALUE(TOTAL GROSS)'.
+  t_fieldcatalog-outputlen = '15'.
+  t_fieldcatalog-do_sum = 'X'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+
+  t_fieldcatalog-fieldname = 'DIFF'.
+  t_fieldcatalog-seltext_l = 'ROUND OFF'.
+  APPEND  t_fieldcatalog.
+  CLEAR  t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'MWSKZ'.
+  t_fieldcatalog-seltext_l = 'TAX CODE'.
+  t_fieldcatalog-outputlen = '10'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'TAX_DESC'.
+  t_fieldcatalog-seltext_l = 'TAX CODE DESCRIPTION'.
+  t_fieldcatalog-outputlen = '7'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+
+
+
+
+  t_fieldcatalog-fieldname = 'STCD3'.
+  t_fieldcatalog-seltext_l = 'SUPPLIER GSTN'.
+  t_fieldcatalog-outputlen = '18'.
+*  t_fieldcatalog-no_zero = 'X'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'HKONT'.
+  t_fieldcatalog-seltext_l = 'GL A/C'.
+  t_fieldcatalog-outputlen = '10'.
+  t_fieldcatalog-no_zero = 'X'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'GL_DESC'.
+  t_fieldcatalog-seltext_l = 'GL A/C DESC'.
+  t_fieldcatalog-outputlen = '20'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'HKONT2'.
+  t_fieldcatalog-seltext_l = 'GL A/C'.
+  t_fieldcatalog-outputlen = '10'.
+  t_fieldcatalog-no_zero = 'X'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'GL_DESC1'.
+  t_fieldcatalog-seltext_l = 'GL A/C DESC'.
+  t_fieldcatalog-outputlen = '20'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+
+  t_fieldcatalog-fieldname = 'PROJK'.
+  t_fieldcatalog-seltext_l = 'WBS Element'.
+  t_fieldcatalog-outputlen = '20'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+***************** Added changes by Carina Jose on 28.11.2020
+  t_fieldcatalog-fieldname = 'TCSAMT'.
+  t_fieldcatalog-seltext_l = 'TCS AMT'.
+  t_fieldcatalog-outputlen = '20'.
+  t_fieldcatalog-no_zero = 'X'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+***************** End of changes by Carina Jose on 28.11.2020
+
+  t_fieldcatalog-fieldname = 'MTART'.
+  t_fieldcatalog-seltext_l = 'MATERIAL TYPE'.
+*  t_fieldcatalog-outputlen = '10'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'MTBEZ'.
+  t_fieldcatalog-seltext_l = 'MATERIAL DESC.'.
+*  t_fieldcatalog-outputlen = '10'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'STEUC'.
+  t_fieldcatalog-seltext_l = 'CONTROL CODE'.
+  t_fieldcatalog-outputlen = '18'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'MAKTX'.
+  t_fieldcatalog-seltext_l = 'Goods/Services Description'.
+  t_fieldcatalog-outputlen = '20'.
+*  t_fieldcatalog-no_zero = 'X'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'BUPLA'."GSBER
+  t_fieldcatalog-seltext_l = 'BUSINESS PLACE'.
+*  t_fieldcatalog-outputlen = '12'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+************* Add 29/04/2019
+  t_fieldcatalog-fieldname = 'BKLAS'.
+  t_fieldcatalog-seltext_l = 'VALUATION CLASS'.
+  t_fieldcatalog-outputlen = '10'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'BKBEZ'.
+  t_fieldcatalog-seltext_l = 'VAL CLASS DESP'.
+  t_fieldcatalog-outputlen = '10'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+*  t_fieldcatalog-fieldname = 'MTBEZ'.
+*  t_fieldcatalog-seltext_l = 'MATERIAL TYPE DESCRIPTION'.
+*  APPEND  t_fieldcatalog.
+*  CLEAR  t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'MATKL'.
+  t_fieldcatalog-seltext_l = 'MATERIAL GROUP'.
+  APPEND  t_fieldcatalog.
+  CLEAR  t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'MATNR'.
+  t_fieldcatalog-seltext_l = 'MATERIAL'.
+  t_fieldcatalog-outputlen = '18'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+********* end 29/04/2019
+
+  t_fieldcatalog-fieldname = 'PRCTR'.
+  t_fieldcatalog-seltext_l = 'PROFIT CENTRE'.
+  t_fieldcatalog-outputlen = '15'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'KOSTL'.
+  t_fieldcatalog-seltext_l = 'COST CENTRE'.
+  t_fieldcatalog-outputlen = '15'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+
+  t_fieldcatalog-fieldname = 'ZUONR'.
+  t_fieldcatalog-seltext_l = 'Assignment Fields'.
+  t_fieldcatalog-outputlen = '18'.
+*  t_fieldcatalog-no_zero = 'X'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'BKTXT'.
+  t_fieldcatalog-seltext_l = 'Doc. Header Text'.
+  t_fieldcatalog-outputlen = '18'.
+*  t_fieldcatalog-no_zero = 'X'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+
+
+
+
+  t_fieldcatalog-fieldname = 'TRAN_TYPE'.
+  t_fieldcatalog-seltext_l = 'Local/Interstate/Import'.
+*  t_fieldcatalog-outputlen = '10'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'ABLAD'.
+  t_fieldcatalog-seltext_l = 'UNLOADING POINT'.
+*  t_fieldcatalog-outputlen = '10'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+
+
+
+
+
+
+
+
+
+
+
+
+*  t_fieldcatalog-fieldname = 'JOINPER'.
+*  t_fieldcatalog-seltext_l = 'JOIN%'.
+*  t_fieldcatalog-outputlen = '7'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+*
+*  t_fieldcatalog-fieldname = 'JOCNPER'.
+*  t_fieldcatalog-seltext_l = 'JOCN%'.
+*  t_fieldcatalog-outputlen = '7'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+*
+*  t_fieldcatalog-fieldname = 'JOSNPER'.
+*  t_fieldcatalog-seltext_l = 'JOSN%'.
+*  t_fieldcatalog-outputlen = '7'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+
+
+
+*  t_fieldcatalog-fieldname = 'FRGT'.
+*  t_fieldcatalog-seltext_l = 'FREIGHT COST '.
+*  t_fieldcatalog-outputlen = '12'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+*
+*  t_fieldcatalog-fieldname = 'FRGT1'.
+*  t_fieldcatalog-seltext_l = 'FREIGHT W/O TAX '.
+*  t_fieldcatalog-outputlen = '12'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+
+
+
+*  t_fieldcatalog-fieldname = 'PCKN'.
+*  t_fieldcatalog-seltext_l = 'PACKING COST '.
+*  t_fieldcatalog-outputlen = '12'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+
+*  t_fieldcatalog-fieldname = 'MISC'.
+*  t_fieldcatalog-seltext_l = 'MISC.CHG.'.
+*  t_fieldcatalog-outputlen = '12'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+*
+*  t_fieldcatalog-fieldname = 'IMP_FREIGHT_VAL'.
+*  t_fieldcatalog-seltext_l = 'IMPORT FREIGHT'.
+*  t_fieldcatalog-outputlen = '12'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+*
+*  t_fieldcatalog-fieldname = 'JOFV'.
+*  t_fieldcatalog-seltext_l = 'OCEAN/AIRFREIGHT-VAL'.
+*  t_fieldcatalog-outputlen = '12'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+*
+*  t_fieldcatalog-fieldname = 'JOFP'.
+*  t_fieldcatalog-seltext_l = 'OCEAN/AIRFREIGHT-%'.
+*  t_fieldcatalog-outputlen = '12'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+*
+
+*
+*  t_fieldcatalog-fieldname = 'JLDC'.
+*  t_fieldcatalog-seltext_l = 'CUSTOMS LANDING CHAR'.
+*  t_fieldcatalog-outputlen = '12'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+
+*  t_fieldcatalog-fieldname = 'EXBAS'.
+*  t_fieldcatalog-seltext_l = 'ASSESSABLE VALUE'.
+*  t_fieldcatalog-outputlen = '10'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+*
+*  t_fieldcatalog-fieldname = 'VATBAS'.
+*  t_fieldcatalog-seltext_l = 'VAT/CST TAX BASE'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+*
+*  t_fieldcatalog-fieldname = 'SERBAS'.
+*  t_fieldcatalog-seltext_l = 'SERVICE TAX BASE'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+*
+*  t_fieldcatalog-fieldname = 'SBC'.
+*  t_fieldcatalog-seltext_l = 'SBC TAX'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+*
+*t_fieldcatalog-fieldname = 'BED'.
+*  t_fieldcatalog-seltext_l = 'BASIC EXCISE DUTY'.
+*  t_fieldcatalog-outputlen = '15'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+*
+*   t_fieldcatalog-fieldname = 'BEDRATE'.
+*  t_fieldcatalog-seltext_l = 'BED RATE'.
+*  t_fieldcatalog-outputlen = '8'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+*
+*  t_fieldcatalog-fieldname = 'ECS'.
+*  t_fieldcatalog-seltext_l = 'ECESS ON BED'.
+*  t_fieldcatalog-outputlen = '15'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+*
+*  t_fieldcatalog-fieldname = 'HCESS'.
+*  t_fieldcatalog-seltext_l = 'HECESS ON BED'.
+*  t_fieldcatalog-outputlen = '15'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+*
+*  t_fieldcatalog-fieldname = 'RMDED'.
+*  t_fieldcatalog-seltext_l = 'VAT DEDUCTABLE'.
+*  t_fieldcatalog-outputlen = '15'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+*
+*  t_fieldcatalog-fieldname = 'RMDEDRATE'.
+*  t_fieldcatalog-seltext_l = 'VAT RATE'.
+*  t_fieldcatalog-outputlen = '15'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+*
+*  t_fieldcatalog-fieldname = 'RMDED1'.
+*  t_fieldcatalog-seltext_l = 'ADD.VAT DEDUCTABLE'.
+*  t_fieldcatalog-outputlen = '15'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+*
+*  t_fieldcatalog-fieldname = 'RMDEDRATE1'.
+*  t_fieldcatalog-seltext_l = 'ADD.VAT RATE'.
+*  t_fieldcatalog-outputlen = '15'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+*
+*  t_fieldcatalog-fieldname = 'CST'.
+*  t_fieldcatalog-seltext_l = 'CST'.
+*  t_fieldcatalog-outputlen = '15'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+*
+*  t_fieldcatalog-fieldname = 'CSTRATE'.
+*  t_fieldcatalog-seltext_l = 'CST RATE'.
+*  t_fieldcatalog-outputlen = '8'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+*
+*  t_fieldcatalog-fieldname = 'SERTAX'.
+*  t_fieldcatalog-seltext_l = 'SERVICE TAX'.
+*  t_fieldcatalog-outputlen = '15'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+*
+*  t_fieldcatalog-fieldname = 'ESERTAX'.
+*  t_fieldcatalog-seltext_l = 'ECESS ON SER TAX'.
+*  t_fieldcatalog-outputlen = '15'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+*
+*  t_fieldcatalog-fieldname = 'SHCESS'.
+*  t_fieldcatalog-seltext_l = 'SEC HIGHER EDUCESS'.
+*  t_fieldcatalog-outputlen = '15'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+*
+*   t_fieldcatalog-fieldname = 'ACD'.
+*  t_fieldcatalog-seltext_l = 'ADDITIONAL CUSTOMS DUTY'.
+*  t_fieldcatalog-outputlen = '15'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+*
+
+*  t_fieldcatalog-fieldname = 'BASCUS'.
+*  t_fieldcatalog-seltext_l = 'BASIC CUSTOMS'.
+*  t_fieldcatalog-outputlen = '15'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+*
+*  t_fieldcatalog-fieldname = 'CVD'.
+*  t_fieldcatalog-seltext_l = 'CVD'.
+*  t_fieldcatalog-outputlen = '15'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+*
+*  t_fieldcatalog-fieldname = 'ECVD'.
+*  t_fieldcatalog-seltext_l = 'ECESS ON CVD'.
+*  t_fieldcatalog-outputlen = '15'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+*
+*  t_fieldcatalog-fieldname = 'HECVD'.
+*  t_fieldcatalog-seltext_l = 'HECESS ON CVD'.
+*  t_fieldcatalog-outputlen = '15'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+*
+*  t_fieldcatalog-fieldname = 'ECUSTOM'.
+*  t_fieldcatalog-seltext_l = 'CUSTOMS ECESS'.
+*  t_fieldcatalog-outputlen = '15'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+*
+*  t_fieldcatalog-fieldname = 'HECUSTOM'.
+*  t_fieldcatalog-seltext_l = 'CUSTOMS HECESS'.
+*  t_fieldcatalog-outputlen = '15'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+
+*  t_fieldcatalog-fieldname = 'DISC'.
+*  t_fieldcatalog-seltext_l = 'DISCOUNT'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+
+
+
+
+
+*   t_fieldcatalog-fieldname = 'JCFA'.
+*  t_fieldcatalog-seltext_l = 'CLEARING CHARG'.
+*  t_fieldcatalog-outputlen = '15'.
+*  t_fieldcatalog-do_sum = 'X'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+*
+*  t_fieldcatalog-fieldname = 'JFR1'.
+*  t_fieldcatalog-seltext_l = 'LOCAL FREIGHT'.
+*  t_fieldcatalog-outputlen = '15'.
+*  t_fieldcatalog-do_sum = 'X'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+*
+
+
+
+*
+
+
+
+  t_fieldcatalog-fieldname = 'ADDRESS'. "'ADDRESS'
+  t_fieldcatalog-seltext_l = 'SUPPLIER ADDRESS'.
+  t_fieldcatalog-outputlen = '40'.
+*  t_fieldcatalog-no_zero = 'X'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+*   t_fieldcatalog-fieldname = 'MATNR'.
+*  t_fieldcatalog-seltext_l = 'Material Number'.
+*  t_fieldcatalog-outputlen = '20'.
+**  t_fieldcatalog-no_zero = 'X'.
+*  APPEND t_fieldcatalog.
+*  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'AUGBL'.
+  t_fieldcatalog-seltext_l = 'Clearing Document Number'.
+  t_fieldcatalog-outputlen = '10'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'AUGDT'.
+  t_fieldcatalog-seltext_l = 'Clearing Document Date'.
+  t_fieldcatalog-outputlen = '10'.
+*  t_fieldcatalog-no_zero = 'X'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'EBELN'.
+  t_fieldcatalog-seltext_l = 'PO Number'.
+  t_fieldcatalog-outputlen = '10'.
+*  t_fieldcatalog-no_zero = 'X'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'SGTXT'.
+  t_fieldcatalog-seltext_l = 'TEXT'.
+  t_fieldcatalog-outputlen = '10'.
+*  t_fieldcatalog-no_zero = 'X'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+  t_fieldcatalog-fieldname = 'ANLN1'.
+  t_fieldcatalog-seltext_l = 'Asset Code'.
+  t_fieldcatalog-outputlen = '12'.
+*  t_fieldcatalog-no_zero = 'X'.
+  APPEND t_fieldcatalog.
+  CLEAR t_fieldcatalog.
+
+
+
+  gt_sort-fieldname         = 'SRNO'.
+  gt_sort-spos = '1'.
+  gt_sort-group = '*'.
+*  gt_sort-subtot            = 'X'.
+  gt_sort-up              = 'X'.
+  APPEND gt_sort TO gt_sort.
+
+  gt_sort-fieldname         = 'LIFNR'.
+  gt_sort-spos = '2'.
+  gt_sort-group = '*'.
+  gt_sort-subtot            = 'X'.
+  gt_sort-up              = 'X'.
+  APPEND gt_sort TO gt_sort.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FILL_LAYOUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM fill_layout .
+
+  t_event-name = slis_ev_top_of_page.
+  t_event-form = 'TOP_OF_PAGE'.
+  APPEND t_event.
+  fs_layout-colwidth_optimize = 'X'.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FILL_DISPLAYGRID
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM fill_displaygrid .
+  DATA : lv_srno  TYPE sy-tabix.
+
+  IF it_final1[] IS NOT INITIAL.
+    SELECT * FROM t134t
+             INTO TABLE lt_t134t
+             FOR ALL ENTRIES IN it_final1
+             WHERE spras = sy-langu
+               AND mtart = it_final1-mtart.
+
+    SELECT lifnr kunnr stcd3
+      FROM lfa1
+      INTO TABLE it_lfa1
+      FOR ALL ENTRIES IN it_final1
+      WHERE lifnr = it_final1-lifnr."lfbnr.
+
+****Added for Control code: 14.07.17
+    SELECT matnr werks steuc
+         FROM marc
+         INTO TABLE it_marc
+         FOR ALL ENTRIES IN it_final1
+         WHERE werks EQ it_final1-werks AND
+               matnr EQ it_final1-matnr.
+    SELECT *
+      FROM ztaxcode
+        INTO TABLE it_ztaxcode
+        FOR ALL ENTRIES IN it_final1
+         WHERE  zmwskz = it_final1-mwskz.
+
+    SELECT * FROM zsd_gstn INTO TABLE it_gstn.
+
+  ENDIF.
+  LOOP AT it_final1 INTO wa_final1.
+    CLEAR : lwa_t134t.
+    READ TABLE lt_t134t INTO lwa_t134t WITH KEY mtart = wa_final1-mtart.
+    IF sy-subrc EQ 0.
+      wa_final1-mtbez = lwa_t134t-mtbez.
+      MODIFY it_final1 FROM wa_final1 TRANSPORTING mtbez.
+    ENDIF.
+    CLEAR: wa_marc.
+
+    SORT it_marc[] BY matnr.
+    READ TABLE it_marc  INTO wa_marc WITH KEY matnr = wa_final1-matnr
+                                              werks = wa_final1-werks.
+    IF sy-subrc = 0.
+      wa_final1-steuc = wa_marc-steuc.
+      MODIFY  it_final1 FROM wa_final1 TRANSPORTING steuc.
+    ENDIF.
+
+    CLEAR wa_lfa1.
+    READ TABLE it_lfa1 INTO wa_lfa1 WITH KEY lifnr = wa_final1-lifnr.
+    IF sy-subrc EQ 0.
+      wa_final1-stcd3 = wa_lfa1-stcd3.
+      wa_final1-regio = wa_final1-stcd3.
+      MODIFY  it_final1 FROM wa_final1 TRANSPORTING stcd3 regio.
+    ENDIF.
+    READ TABLE it_ztaxcode INTO wa_ztaxcode WITH KEY zmwskz = wa_final1-mwskz.
+    IF sy-subrc EQ 0.
+      wa_final1-rjocgamt = wa_final1-jocgamt.
+      wa_final1-rjoigamt = wa_final1-joigamt.
+      wa_final1-rjosgamt = wa_final1-josgamt.
+      wa_final1-jocgamt = 0.
+      wa_final1-joigamt = 0.
+      wa_final1-josgamt = 0.
+      wa_final1-gross = wa_final1-taxable_val.
+      MODIFY  it_final1 FROM wa_final1 TRANSPORTING jocgamt joigamt josgamt rjocgamt rjoigamt rjosgamt gross.
+    ENDIF.
+
+    READ TABLE it_gstn INTO wa_gstn WITH KEY werks = wa_final1-werks.
+    IF sy-subrc = 0.
+      wa_final1-sgstn = wa_gstn-gstn_no.
+      MODIFY it_final1 FROM wa_final1 TRANSPORTING sgstn.
+    ENDIF.
+
+    lv_srno = sy-tabix.
+    wa_final1-srno = lv_srno.
+    MODIFY it_final1 FROM wa_final1 TRANSPORTING srno.
+    CLEAR : wa_final1.
+  ENDLOOP.
+
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      i_callback_program     = sy-repid
+      i_callback_top_of_page = 'TOP_OF_PAGE'
+      is_layout              = fs_layout
+      it_fieldcat            = t_fieldcatalog[]
+      it_sort                = gt_sort[]
+      it_events              = t_event[]
+      i_save                 = 'A'
+    TABLES
+      t_outtab               = it_final1
+    EXCEPTIONS
+      program_error          = 1
+      OTHERS                 = 2.
+  IF sy-subrc <> 0.
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      FORM  TOP_OF_PAGE
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+
+FORM top_of_page.
+  CALL FUNCTION 'REUSE_ALV_COMMENTARY_WRITE'
+    EXPORTING
+      it_list_commentary = t_listheader[].
+
+ENDFORM. "TOP_OF_PAGE

@@ -1,0 +1,3019 @@
+*&---------------------------------------------------------------------*
+*& Modulpool  ZMM_HU_LOAD_UNLOAD
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+PROGRAM zmm_hu_load_unload.
+
+INCLUDE zmm_hu_load_unload_top                  .    " global Data
+INCLUDE zmm_hu_load_unload_status_8o01.
+INCLUDE zmm_hu_load_unload_status_8o02.
+INCLUDE zmm_hu_load_unload_status_8o04.
+INCLUDE zmm_hu_load_unload_status_8o05.
+INCLUDE zmm_hu_load_unload_status_8110.
+INCLUDE zmm_hu_load_unload_status_8112.
+INCLUDE zmm_hu_load_unload_status_8113.
+INCLUDE zmm_hu_load_unload_status_8114.
+
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_8000  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE user_command_8000 INPUT.
+  CASE sy-ucomm.
+    WHEN 'LOAD1'.
+     CALL SCREEN 8001.
+  ENDCASE.
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  STATUS_8000  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE status_8000 OUTPUT.
+  SET PF-STATUS 'ZMM_8000'.
+  LOOP AT SCREEN.
+  IF screen-name = 'UNLOAD'.
+   screen-invisible = '1'.
+  MODIFY SCREEN.
+  EXIT.
+  ENDIF.
+  ENDLOOP.
+  lwr_status-sign = 'I'.
+  lwr_status-option = 'EQ'.
+  lwr_status-low = '0010'.
+  APPEND lwr_status TO lr_status.
+  lwr_status-low = '0050'.
+  APPEND lwr_status TO lr_status.
+  lwr_status-low = '0060'.
+  APPEND lwr_status TO lr_status.
+*  SET TITLEBAR 'xxx'.
+ENDMODULE.
+
+*&---------------------------------------------------------------------*
+*&  Include           ZMM_HU_LOAD_UNLOAD_STATUS_8110
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Module  STATUS_8110  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE status_8110 OUTPUT.
+  SET PF-STATUS 'ZMM_8110'.
+*  SET TITLEBAR 'xxx'.
+  fill8110 = cnt110.
+ENDMODULE.
+
+*    gv_cnt = gv_cnt + 1.
+
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_8110  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE user_command_8110 INPUT.
+  DATA: lv_cntxx TYPE i,
+        lv_date  TYPE datum,
+        loadno   TYPE zmm_load_sloc-load_no,
+        lt_loadx TYPE TABLE OF ty_load.
+  CLEAR: lv_date, lv_cntxx.
+  CASE sy-ucomm.
+    WHEN 'BACK'.
+      CALL SCREEN 8001.
+    WHEN 'SELECT'.
+      FREE: lt_loadx[],lt_8005,lw_8005.
+      lt_loadx[] = lt_load[].
+      DELETE lt_loadx WHERE cnt = abap_false.
+      DESCRIBE TABLE lt_loadx LINES lv_cntxx.
+      IF lv_cntxx = '1'.
+        LOOP AT lt_load INTO lw_load WHERE cnt = 'X'.
+          loadno = lw_load-load_no.
+          EXIT.
+        ENDLOOP.
+        lv_date = sy-datum - 5.
+        SELECT load_no load_item su_no load_status
+         FROM zmm_load_sloc
+         INTO CORRESPONDING FIELDS OF TABLE lt_sloc8110
+         WHERE load_no    =  loadno
+          AND  entry_date GE lv_date
+          AND  load_status = 'I'
+          and del_ind = ''.
+        CLEAR: lv_date.
+        LOOP AT lt_sloc8110 INTO lw_sloc8110.
+          lw_8005-lenum = lw_sloc8110-su_no .
+          CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+            EXPORTING
+              input  = lw_8005-lenum
+            IMPORTING
+              output = lw_8005-lenum.
+          APPEND lw_8005 TO lt_8005.
+          CLEAR: lw_8005, lw_sloc8110.
+        ENDLOOP.
+        DESCRIBE TABLE lt_8005 LINES cnt113.
+        cnt5 = cnt113.
+        load_no = loadno.
+        CALL SCREEN 8005.
+      ENDIF.
+    WHEN 'NEXTV'.
+      fill8110 = fill8110 + 5.
+*      line8110 = line8110 + 1.
+      line8110 = line8110 + lines8110.
+      limit8110 = fill8110 - lines8110.
+      IF line8110 > limit8110.
+        line8110 = limit8110.
+      ENDIF.
+    WHEN 'PREVV'.
+      line8110 = line8110 - lines8110. "1.
+      IF line8110 < 0.
+        line8110 = 0.
+      ENDIF.
+    WHEN OTHERS.
+  ENDCASE.
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  TRANSP_ITAB_OUT_8110  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE transp_itab_out_8110 OUTPUT.
+  DATA: lw_8110d TYPE ty_load.
+  idx8110 = sy-stepl + line8110.
+  READ TABLE lt_load INTO lw_8110d INDEX idx8110.
+  IF sy-subrc = 0.
+    lw_load = lt_load[ idx8110 ].
+  ENDIF.
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  TRANSP_ITAB_IN_8110  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE transp_itab_in_8110 INPUT.
+  lines8110 = sy-loopc.
+  idx8110 = sy-stepl + line8110.
+  MODIFY lt_load FROM lw_load INDEX idx8110.
+ENDMODULE.
+
+*&---------------------------------------------------------------------*
+*&  Include           ZMM_HU_LOAD_UNLOAD_STATUS_8112
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_8112  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE user_command_8112 INPUT.
+CASE sy-ucomm.
+*    WHEN 'BACK'.
+*      IF driver1 IS NOT INITIAL.
+*        drivesl = abap_true.
+*      ENDIF.
+*      CALL SCREEN 8111.
+    WHEN 'POST'.
+*      IF load_no1 IS NOT INITIAL AND
+*         driver1  IS NOT INITIAL AND
+*         vehicle1 IS NOT INITIAL.
+*
+*        lw_8112-load_no   = load_no1.
+*        lw_8112-driver    = driver1.
+*        lw_8112-vehicle   = vehicle1.
+*        lw_8112-mandt     = sy-mandt.
+*        lw_8112-load_for  = 'S'.
+*        APPEND lw_8112 TO lt_8112.
+*        CLEAR: load_nosl1.
+*        IF lt_8112[] IS NOT INITIAL .
+*          drivesl = abap_true.
+*          MODIFY zmm_load_trn FROM TABLE lt_8112.
+*          COMMIT WORK AND WAIT.
+*        DO.
+*         SELECT SINGLE load_no FROM zmm_load_trn INTO load_nosl1
+*             WHERE load_no  = load_no1.
+**             AND   load_status = 'W'.
+*         IF sy-subrc = 0.
+*         CLEAR: load_nosl1.
+*           EXIT.
+*         ENDIF.
+*        ENDDO.
+*        ENDIF.
+*        FREE: lw_8112, driver1, vehicle, lt_8112.
+*          CALL SCREEN 8113.
+*      ENDIF.
+*      CLEAR: lw_8112, driver1, vehicle.
+    WHEN 'DELETE'.
+*      FREE: lt_8112[].
+*      SELECT mandt load_no load_for driver vehicle
+*        FROM zmm_load_trn
+*        INTO TABLE lt_8112
+*        WHERE load_no  = load_no
+*        AND   load_for = 'S'.
+*      IF lt_8112[] IS NOT INITIAL.
+*       LOOP AT lt_8112 INTO lw_8112.
+*        lw_8112-lvorm = 'X'.
+*        MODIFY lt_8112 FROM lw_8112.
+*        CLEAR: lw_8112.
+*       ENDLOOP.
+*       drivesl = abap_false.
+*       MODIFY zmm_load_trn FROM TABLE lt_8112.
+*       COMMIT WORK AND WAIT.
+*      ENDIF.
+*      FREE: lt_8112[].
+  ENDCASE.
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  STATUS_8112  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE status_8112 OUTPUT.
+  SET PF-STATUS 'ZMM_8112'.
+*  SET TITLEBAR 'xxx'.
+ENDMODULE.
+
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_8112  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE user_command_8212 INPUT.
+*CASE sy-ucomm.
+*    WHEN 'BACK'.
+*      IF drivervx IS NOT INITIAL.
+*        drivevn = abap_true.
+*      ENDIF.
+*      CALL SCREEN 8211.
+*    WHEN 'POST'.
+*      IF load8212 IS NOT INITIAL AND
+*         drivervx  IS NOT INITIAL AND
+*         vehiclevx IS NOT INITIAL.
+*
+*        lw_8212-load_no   = load8213.
+*        lw_8212-driver    = drivervx.
+*        lw_8212-vehicle   = vehiclevx.
+*        lw_8212-mandt     = sy-mandt.
+*        lw_8212-load_for  = 'V'.
+*        APPEND lw_8212 TO lt_8212.
+*        IF lt_8212[] IS NOT INITIAL .
+*          MODIFY zmm_load_trn FROM TABLE lt_8212.
+*          COMMIT WORK AND WAIT.
+*        DO.
+*        CLEAR: load_nosl1.
+*         SELECT SINGLE load_no FROM zmm_load_trn INTO load_nosl1
+*             WHERE load_no  = load8213.
+**             AND   load_status = 'W'.
+*         IF sy-subrc = 0.
+*           EXIT.
+*         ENDIF.
+*        ENDDO.
+*        FREE: load_nosl1, lw_8212, drivervx, vehiclevx, lt_8212[].
+*        ENDIF.
+*         drivevn = abap_true.
+*          CALL SCREEN 8213.
+*      ENDIF.
+*      CLEAR: lw_8212, drivervx, vehiclevx.
+*    WHEN 'DELETE'.
+*      FREE: lt_8212[].
+*      SELECT mandt load_no load_for driver vehicle
+*        FROM zmm_load_trn
+*        INTO TABLE lt_8212
+*        WHERE load_no  = load_no
+*        AND   load_for = 'V'.
+*      IF lt_8212[] IS NOT INITIAL.
+*       LOOP AT lt_8212 INTO lw_8212.
+*        lw_8212-lvorm = 'X'.
+*        MODIFY lt_8212 FROM lw_8212.
+*        CLEAR: lw_8212.
+*       ENDLOOP.
+*       MODIFY zmm_load_trn FROM TABLE lt_8212.
+*       COMMIT WORK AND WAIT.
+*       drivevn = abap_false.
+*      ENDIF.
+*      FREE: lt_8212[].
+*  ENDCASE.
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  STATUS_8112  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE status_8212 OUTPUT.
+*  SET PF-STATUS 'ZMM_8112'.
+**  SET TITLEBAR 'xxx'.
+ENDMODULE.
+
+
+*&---------------------------------------------------------------------*
+*&  Include           ZMM_HU_LOAD_UNLOAD_TOP
+*&---------------------------------------------------------------------*
+*PROGRAM zmm_hu_load_unload.
+TYPES: BEGIN OF ty_batch,
+         batch_no TYPE lips-charg,
+         qty      TYPE lips-lfimg,
+         uom      TYPE lips-meins,
+         val1     TYPE i,
+       END OF ty_batch.
+TYPES: BEGIN OF ty_load,
+         load_no     TYPE zload_no,
+         su_no       TYPE lenum,
+         entry_date  TYPE datum,
+         load_status TYPE zload_status,
+         cnt         TYPE c,
+       END OF ty_load.
+TYPES: BEGIN OF ty_save,
+         load_no   TYPE zload_no,
+         load_item TYPE posnr,
+         obd_no    TYPE vbeln_vl,
+         obd_item  TYPE posnr,
+         cnt       TYPE c,
+       END OF ty_save.
+TYPES: BEGIN OF ty_obd,
+         vbeln TYPE lips-vbeln,
+         posnr TYPE lips-posnr,
+         matnr TYPE lips-matnr,
+         lgort TYPE lips-lgort,
+         charg TYPE lips-charg,
+         lfimg TYPE lips-lfimg,
+         meins TYPE lips-meins,
+         uepos TYPE uepos,
+         lgpla TYPE lips-lgpla,
+         uecha TYPE lips-uecha,
+         uepvw TYPE uepvw,
+       END OF ty_obd.
+TYPES : BEGIN OF ty_suno,
+          charg TYPE charg_d,
+          lenum TYPE lqua-lenum,
+          qty   TYPE lqua_verme,
+        END OF ty_suno.
+TYPES : BEGIN OF ty_lqua,
+          matnr TYPE matnr,
+          werks TYPE lqua-werks,
+          charg TYPE lqua-charg,
+          lenum TYPE lqua-lenum,
+          verme TYPE lqua-verme,
+          lgpla TYPE lqua-lgpla,
+          lgort TYPE lqua-lgort,
+        END OF ty_lqua.
+TYPES : BEGIN OF ty_sloc,
+          obd_no       TYPE vbeln_vl,
+          obd_lineitem TYPE  posnr,
+          obd_headitem TYPE  posnr,
+          matnr        TYPE matnr,
+          charg        TYPE charg_d,
+          lenum        TYPE lqua-lenum,
+          qty          TYPE lqua_verme,
+          su_qty       TYPE  lqua_verme,
+          cnt22        TYPE c,
+        END OF ty_sloc.
+*Storage location data
+DATA:  lt_8002      TYPE TABLE OF ty_batch,
+       lw_8002      TYPE ty_batch,
+       lt_lips      TYPE TABLE OF ty_obd,
+       lt_lips_tmp  TYPE TABLE OF ty_obd,
+       lw_lips      TYPE ty_obd,
+       lw_lips_tmp  TYPE ty_obd,
+       lw_lips_tmp1 TYPE ty_obd,
+       lt_lqua      TYPE TABLE OF ty_lqua,
+       lw_lqua      TYPE ty_lqua,
+       lt_8004      TYPE STANDARD TABLE OF ty_suno,
+       lw_8004      TYPE ty_suno,
+       lt_8005      TYPE TABLE OF ty_sloc,
+       lw_8005      TYPE ty_sloc,
+       lt_8005x     TYPE TABLE OF ty_sloc,
+       lw_8005x     TYPE ty_sloc,
+       lt_sloc      TYPE TABLE OF ty_sloc,
+       lw_sloc      TYPE ty_sloc,
+*       lt_8113     TYPE TABLE OF ty_pallet,
+*       lt_8114     TYPE TABLE OF ty_pallet,
+*       lw_8113     TYPE ty_pallet,
+*       lw_8114     TYPE ty_pallet,
+       lt_sloc8004  TYPE TABLE OF zmm_load_sloc,
+       lw_sloc8004  TYPE zmm_load_sloc,
+       lt_sloc8005  TYPE TABLE OF zmm_load_sloc,
+       lw_sloc8005  TYPE zmm_load_sloc,
+       lt_sloc8110  TYPE TABLE OF zmm_load_sloc,
+       lw_sloc8110  TYPE zmm_load_sloc,
+       lt_sloc8114  TYPE TABLE OF zmm_load_sloc,
+       lw_sloc8114  TYPE zmm_load_sloc,
+       lt_zmm_load  TYPE TABLE OF ty_save,
+       lw_zmm_load  TYPE ty_save,
+       obd_no       TYPE lips-vbeln,
+       lin_item     TYPE lips-posnr,
+       lgort        TYPE lgort_d,
+       exidv7001    TYPE vekp-exidv,
+       exidv8002    TYPE vekp-exidv,
+       exidv8005    TYPE vekp-exidv,
+       exidv8113    TYPE vekp-exidv,
+       exidv8114    TYPE vekp-exidv,
+       po8202       TYPE ebeln,
+       lv_exidv     TYPE vekp-exidv,
+       load_no      TYPE zmm_load_sloc-load_no,
+       load_nosl1   TYPE zload_no,
+       load_nosl2   TYPE zload_no,
+       load_novd1   TYPE zload_no,
+       load_novd2   TYPE zload_no,
+       load_no1     TYPE zload_no,
+       lgort8113    TYPE lgort_d,
+       driver       TYPE /dsd/rp_driver1_name,
+       vehicle      TYPE /dsd/rp_truck,
+       driver1      TYPE /dsd/rp_driver1_name,
+       vehicle1     TYPE /dsd/rp_truck,
+       cnt          TYPE c LENGTH 3 VALUE '0',
+       su_cnt       TYPE c LENGTH 3 VALUE '0',
+       val1         TYPE c,
+       save_flag    TYPE c,
+       gv_cnt       TYPE i,
+       lt_load      TYPE TABLE OF ty_load,
+       lw_load      TYPE ty_load,
+       su_no        TYPE lqua-lenum,
+       gw_lenum     TYPE lqua-lenum,
+       lv_matnr     type matnr,
+       lv_msg(100)   TYPE c,
+       ls_num(20)   TYPE c,
+       drivesl      TYPE char1.
+
+DATA: fcode     TYPE TABLE OF sy-ucomm,
+      fill802   TYPE i,
+      idx802    TYPE i,
+      line802   TYPE i,
+      lines802  TYPE i,
+      limit802  TYPE i,
+      fill804   TYPE i,
+      idx804    TYPE i,
+      line804   TYPE i,
+      lines804  TYPE i,
+      limit804  TYPE i,
+      c802      TYPE i,
+      fill805   TYPE i,
+      idx805    TYPE i,
+      line805   TYPE i,
+      lines805  TYPE i,
+      limit805  TYPE i,
+      c805      TYPE i,
+      cnt5      TYPE c LENGTH 3,
+      fill8110  TYPE i,
+      idx8110   TYPE i,
+      line8110  TYPE i,
+      lines8110 TYPE i,
+      limit8110 TYPE i,
+      c110      TYPE i,
+      cnt110    TYPE c LENGTH 3,
+
+      fill8113  TYPE i,
+      fill8114  TYPE i,
+      idx8113   TYPE i,
+      idx8114   TYPE i,
+      line8113  TYPE i,
+      line8114  TYPE i,
+      lines8113 TYPE i,
+      lines8114 TYPE i,
+      limit8113 TYPE i,
+      limit8114 TYPE i,
+      c112      TYPE i,
+      c113      TYPE i,
+      cnt113    TYPE c LENGTH 3,
+      cnt114    TYPE c LENGTH 3.
+
+DATA: lt_hus       TYPE hum_exidv_t,
+      if_exidv     TYPE exidv,
+      ls_object    TYPE hum_object,
+      lt_messages  TYPE huitem_messages_t,
+      lw_messages  TYPE huitem_messages,
+      lv_flag,
+      lv_mess      TYPE string,
+      lv_mess1(50).
+
+TYPES: BEGIN OF ty_vekpx,
+         venum    TYPE vekp-venum,
+         exidv    TYPE vekp-exidv,
+         exida    TYPE vekp-exida,
+         brgew    TYPE vekp-brgew,
+         ntgew    TYPE vekp-ntgew,
+         magew    TYPE vekp-magew,
+         tarag    TYPE vekp-tarag,
+         gewei    TYPE vekp-gewei,
+         vhilm    TYPE vekp-vhilm,
+         gewto    TYPE vekp-gewto,
+         volto    TYPE vekp-volto,
+         meins    TYPE vekp-meins,
+         inhalt   TYPE vekp-inhalt,
+         vhart    TYPE vekp-vhart,
+         kalsm    TYPE vekp-kalsm,
+         magrv    TYPE vekp-magrv,
+         vpobj    TYPE vekp-vpobj,
+         uevel    TYPE vekp-uevel,
+         status   TYPE vekp-status,
+         vpobjkey TYPE vekp-vpobjkey,
+       END OF ty_vekpx,
+       BEGIN OF ty_vepo,
+         venum     TYPE vepo-venum,
+         vepos     TYPE vepo-vepos,
+         velin     TYPE vepo-velin,
+         vbeln     TYPE vepo-vbeln,
+         posnr     TYPE vepo-posnr,
+         vbtyp     TYPE vepo-vbtyp,
+         unvel     TYPE vepo-unvel,
+         vemng     TYPE vepo-vemng,
+         vemng_flo TYPE vepo-vemng_flo,
+         vemeh     TYPE vepo-vemeh,
+         altme     TYPE vepo-altme,
+         veanz     TYPE vepo-veanz,
+         kzbei     TYPE vepo-kzbei,
+         matnr     TYPE vepo-matnr,
+         charg     TYPE vepo-charg,
+         werks     TYPE vepo-werks,
+         lgort     TYPE vepo-lgort,
+         bestq     TYPE vepo-bestq,
+         wdatu     TYPE vepo-wdatu,
+         sobkz     TYPE vepo-sobkz,
+         sonum     TYPE vepo-sonum,
+       END OF ty_vepo.
+
+
+DATA: exidv     TYPE vekp-exidv,
+      venum     TYPE vekp-venum,
+      lgortt    TYPE lgort_d,
+      lgortf    TYPE lgort_d,
+      lt_vekpvb TYPE TABLE OF ty_vekpx,
+      lw_vekpvb TYPE ty_vekpx,
+      lt_vepo   TYPE TABLE OF ty_vepo,
+      lw_vepo   TYPE ty_vepo,
+      lf_msgv   TYPE symsgv.
+
+DATA: ls_vekpvb1  TYPE vekpvb,
+      lt_vekpvb1  TYPE TABLE OF vekpvb,
+      venumvb     TYPE vekp-venum,
+      exidvvb     TYPE vekp-exidv,
+      exidv1vb    TYPE char10,
+      inhaltvb    TYPE char20,
+      inhalt1vb   TYPE char20,
+      huheadervb  TYPE bapihuheader,
+      lt_retvb    TYPE TABLE OF bapiret2,
+      huheadervb1 TYPE bapihuheader,
+      lt_retvb1   TYPE TABLE OF bapiret2,
+      huheadervb2 TYPE bapihuheader,
+      lt_retvb2   TYPE TABLE OF bapiret2,
+      huheadervb3 TYPE bapihuheader,
+      lt_retvb3   TYPE TABLE OF bapiret2,
+      msgvb       TYPE string,
+      gw_return   TYPE bapiret2.
+TYPES: BEGIN OF ty_val800,
+         matnr     TYPE matnr,
+         vemng(10),
+         venum     TYPE venum,
+         vepos     TYPE vepos,
+         exidv     TYPE exidv,
+         vbeln     TYPE vbeln,
+         posnr     TYPE posnr,
+       END OF ty_val800.
+DATA: lt_val800   TYPE TABLE OF ty_val800,
+      lw_val800   TYPE ty_val800,
+*      lt_fin800   TYPE TABLE OF zv_vekp_vepo,
+*      lw_fin800   TYPE zv_vekp_vepo,
+      ls_vepo800  TYPE vepovb,
+      lv_exidv800 TYPE exidv,
+      cnt800      TYPE i,
+      idx801800   TYPE i,
+      line801800  TYPE i,
+      lines801800 TYPE i,
+      fill801800  TYPE i,
+      limit801800 TYPE i,
+      lt_venum800 TYPE hum_venum_t,
+      lw_venum800 TYPE hum_venum.
+
+DATA: lt_item       TYPE vsep_t_vepo,
+      lw_item       TYPE vepovb,
+      it_hus        TYPE hum_exidv_t,
+      lv_hukey      TYPE bapihukey-hu_exid,
+      if_venum      TYPE venum,
+      if_exidvbv    TYPE exidv,
+      lt_messagesvb TYPE huitem_messages_t,
+      lw_messagesvb TYPE huitem_messages,
+      ls_objectvb   TYPE hum_object,
+      lv_msg700     TYPE char20,
+      lv_msg801     TYPE char20.
+
+TYPES:
+  BEGIN OF gty_mseg,
+    mblnr      TYPE mblnr,
+    mjahr      TYPE mjahr,
+    zeile      TYPE mblpo,
+    matnr      TYPE matnr,
+    werks      TYPE werks_d,
+    charg      TYPE charg_d,
+    lifnr      TYPE elifn,
+    vfdat      TYPE vfdat,
+    hsdat      TYPE hsdat,
+    budat_mkpf TYPE budat,
+    lichn      TYPE lichn,
+  END OF gty_mseg,
+
+  BEGIN OF gty_mkpf,
+    mblnr TYPE mkpf-mblnr,
+    mjahr TYPE mkpf-mjahr,
+    budat TYPE mkpf-budat,
+  END OF gty_mkpf,
+
+  BEGIN OF gty_humseg,
+    venum TYPE venum,
+    vepos TYPE vepos,
+    mblpo TYPE mblpo,
+    mblnr TYPE mblnr,
+    mjahr TYPE mjahr,
+  END OF gty_humseg,
+
+  BEGIN OF gty_makt,
+    matnr TYPE matnr,
+    spras TYPE spras,
+    maktx TYPE maktx,
+  END OF gty_makt,
+
+  BEGIN OF gty_vevw,
+    handle TYPE vevw-handle,
+    object TYPE vevw-object,
+    objkey TYPE vevw-objkey,
+  END OF gty_vevw,
+
+  BEGIN OF gty_vekp,
+    venum  TYPE venum,
+    exidv  TYPE exidv,
+    inhalt TYPE inhalt,
+    handle TYPE guid_vekp,
+    flag   TYPE char1,
+  END OF gty_vekp,
+
+  BEGIN OF gty_vepo,
+    venum TYPE venum,
+    vepos TYPE vepos,
+    vemng TYPE vemng,
+    vemeh TYPE vemeh,
+    matnr TYPE matnr,
+    charg TYPE charg_d,
+    werks TYPE werks_d,
+    bestq TYPE bestq,
+    qplos TYPE qplos,
+  END OF gty_vepo,
+
+  BEGIN OF gty_lfa1,
+    lifnr TYPE lifnr,
+    name1 TYPE name1_gp,
+  END OF gty_lfa1,
+
+  BEGIN OF gty_qplos,
+    sign   TYPE c LENGTH 1,
+    option TYPE c LENGTH 2,
+    low    TYPE qals-prueflos,
+    high   TYPE qals-prueflos,
+  END OF gty_qplos,
+
+  BEGIN OF gty_mblnr,
+    sign   TYPE c LENGTH 1,
+    option TYPE c LENGTH 2,
+    low    TYPE mseg-mblnr,
+    high   TYPE mseg-mblnr,
+  END OF gty_mblnr,
+
+  BEGIN OF gty_mch1,
+    matnr TYPE matnr,
+    charg TYPE charg_d,
+    vfdat TYPE vfdat,
+    hsdat TYPE hsdat,
+  END OF gty_mch1,
+
+  BEGIN OF gty_qals,
+    prueflos TYPE qplos,
+    matnr    TYPE matnr,
+    charg    TYPE charg_d,
+    mjahr    TYPE mjahr,
+    mblnr    TYPE mblnr,
+    zeile    TYPE mblpo,
+  END OF gty_qals.
+
+DATA: exidv9100   TYPE exidv,
+      inhalt9100  TYPE inhalt,
+      gt_vekp     TYPE STANDARD TABLE OF gty_vekp,
+      gt_vekp_t   TYPE STANDARD TABLE OF gty_vekp,
+      gw_vekp     TYPE gty_vekp,
+      gt_vepo     TYPE STANDARD TABLE OF gty_vepo,
+      gt_vepo_t   TYPE STANDARD TABLE OF gty_vepo,
+      gw_vepo     TYPE gty_vepo,
+      gt_vevw     TYPE STANDARD TABLE OF gty_vevw,
+      gt_vevw_t   TYPE STANDARD TABLE OF gty_vevw,
+      gw_vevw     TYPE gty_vevw,
+      gt_lfa1     TYPE STANDARD TABLE OF gty_lfa1,
+      gt_qals     TYPE STANDARD TABLE OF gty_qals,
+      gt_qals_t   TYPE STANDARD TABLE OF gty_qals,
+      gt_mkpf     TYPE STANDARD TABLE OF gty_mkpf,
+      gt_mkpf_t   TYPE STANDARD TABLE OF gty_mkpf,
+      gt_mseg     TYPE STANDARD TABLE OF gty_mseg,
+      gt_mseg_t   TYPE STANDARD TABLE OF gty_mseg,
+      gt_mch1     TYPE STANDARD TABLE OF gty_mch1,
+      gt_makt     TYPE STANDARD TABLE OF gty_makt,
+      gw_mseg     TYPE gty_mseg,
+      gt_humseg   TYPE STANDARD TABLE OF gty_humseg,
+      gt_humseg_t TYPE STANDARD TABLE OF gty_humseg,
+      gv_mblnr    TYPE mblnr,
+      gv_qplos    TYPE qplos,
+      gt_mblnr    TYPE STANDARD TABLE OF gty_mblnr,
+      gt_qplos    TYPE STANDARD TABLE OF gty_qplos,
+      gw_mblnr    TYPE gty_mblnr,
+      gw_qplos    TYPE gty_qplos,
+      gv_idx9200  TYPE sy-tabix,
+      gv_index    TYPE sy-tabix.
+*      gw_zmm_hu_display_st TYPE zmm_hu_display_st.
+
+DATA: gw_batchattributes TYPE  bapibatchatt,
+      gw_batchstatus     TYPE  bapibatchstatus,
+      gt_return          TYPE STANDARD TABLE OF bapiret2.
+*      gt_9200            TYPE STANDARD TABLE OF zmm_hu_display_st.
+
+FIELD-SYMBOLS: <gfs_vekp>   TYPE gty_vekp,
+               <gfs_vepo>   TYPE gty_vepo,
+               <gfs_lfa1>   TYPE gty_lfa1,
+*               <gfs_9200>   TYPE zmm_hu_display_st,
+               <gfs_humseg> TYPE gty_humseg,
+               <gfs_makt>   TYPE gty_makt,
+               <gfs_mch1>   TYPE gty_mch1,
+               <gfs_qals>   TYPE gty_qals,
+               <gfs_mseg>   TYPE gty_mseg,
+               <gfs_mkpf>   TYPE gty_mkpf.
+
+TYPES: BEGIN OF ty_unload,
+         unload_no     TYPE  zload_no,
+         unload_item   TYPE posnr,
+         exidv         TYPE exidv,
+         venum         TYPE venum,
+         vepos         TYPE vepos,
+         unload_date   TYPE datum,
+         unload_status TYPE zload_status,
+         rsa_inb_stat  TYPE zrsa_imb_stat,
+         cnt           TYPE c,
+       END OF ty_unload,
+       BEGIN OF ty_upallet,
+         unload_no TYPE zmm_load_sloc-load_no,
+         exidv     TYPE vekp-exidv,
+         val1      TYPE i,
+         val       TYPE c,
+         cnt       TYPE c,
+       END OF ty_upallet.
+
+DATA:
+  fault          TYPE REF TO cx_ai_system_fault,
+  app_fault      TYPE REF TO cx_ai_application_fault,
+  p_w_proxy_err  TYPE string,
+  p_w_prx_err1   TYPE string,
+  fault1         TYPE REF TO cx_ai_system_fault,
+  app_fault1     TYPE REF TO cx_ai_application_fault,
+  p_w_proxy_err1 TYPE string,
+  p_w_prx_err11  TYPE string.
+
+DATA: lr_status  TYPE RANGE OF vekp-status,
+      lwr_status LIKE LINE OF lr_status.
+
+DATA: barcode_scan(29)  TYPE c,
+      barcode_scan1(29) TYPE c.
+
+TYPES : BEGIN OF ty_free_qty,
+          matnr    TYPE matnr,
+          charg    TYPE charg_d,
+          vbeln    TYPE lips-vbeln,
+          posnr    TYPE posnr,
+          del_item TYPE posnr,
+          free_qty TYPE lips-lfimg,
+        END OF ty_free_qty.
+DATA: it_free_qty TYPE STANDARD TABLE OF ty_free_qty,
+      wa_free_qty TYPE ty_free_qty.
+
+DATA lv_total_qty TYPE menge_d.
+DATA lv_total_qty_ltot TYPE menge_d.
+DATA lv_total_qty_tot TYPE menge_d.
+DATA gv_obd_no TYPE lips-vbeln.
+DATA total_del_qty TYPE menge_d.
+data p_status TYPE C.
+
+      DATA:  lt_messtab TYPE STANDARD TABLE OF bdcmsgcoll,
+             lw_messtab TYPE bdcmsgcoll.
+
+      DATA: it_bdcdata TYPE TABLE OF bdcdata,                   "bdc internal table declaration.
+      wa_bdcdata TYPE bdcdata.                            "bdc internal table declaration.
+
+
+
+*&---------------------------------------------------------------------*
+*&  Include           ZMM_HU_LOAD_UNLOAD_STATUS_8112
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_8112  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE user_command_8112 INPUT.
+CASE sy-ucomm.
+*    WHEN 'BACK'.
+*      IF driver1 IS NOT INITIAL.
+*        drivesl = abap_true.
+*      ENDIF.
+*      CALL SCREEN 8111.
+    WHEN 'POST'.
+*      IF load_no1 IS NOT INITIAL AND
+*         driver1  IS NOT INITIAL AND
+*         vehicle1 IS NOT INITIAL.
+*
+*        lw_8112-load_no   = load_no1.
+*        lw_8112-driver    = driver1.
+*        lw_8112-vehicle   = vehicle1.
+*        lw_8112-mandt     = sy-mandt.
+*        lw_8112-load_for  = 'S'.
+*        APPEND lw_8112 TO lt_8112.
+*        CLEAR: load_nosl1.
+*        IF lt_8112[] IS NOT INITIAL .
+*          drivesl = abap_true.
+*          MODIFY zmm_load_trn FROM TABLE lt_8112.
+*          COMMIT WORK AND WAIT.
+*        DO.
+*         SELECT SINGLE load_no FROM zmm_load_trn INTO load_nosl1
+*             WHERE load_no  = load_no1.
+**             AND   load_status = 'W'.
+*         IF sy-subrc = 0.
+*         CLEAR: load_nosl1.
+*           EXIT.
+*         ENDIF.
+*        ENDDO.
+*        ENDIF.
+*        FREE: lw_8112, driver1, vehicle, lt_8112.
+*          CALL SCREEN 8113.
+*      ENDIF.
+*      CLEAR: lw_8112, driver1, vehicle.
+    WHEN 'DELETE'.
+*      FREE: lt_8112[].
+*      SELECT mandt load_no load_for driver vehicle
+*        FROM zmm_load_trn
+*        INTO TABLE lt_8112
+*        WHERE load_no  = load_no
+*        AND   load_for = 'S'.
+*      IF lt_8112[] IS NOT INITIAL.
+*       LOOP AT lt_8112 INTO lw_8112.
+*        lw_8112-lvorm = 'X'.
+*        MODIFY lt_8112 FROM lw_8112.
+*        CLEAR: lw_8112.
+*       ENDLOOP.
+*       drivesl = abap_false.
+*       MODIFY zmm_load_trn FROM TABLE lt_8112.
+*       COMMIT WORK AND WAIT.
+*      ENDIF.
+*      FREE: lt_8112[].
+  ENDCASE.
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  STATUS_8112  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE status_8112 OUTPUT.
+  SET PF-STATUS 'ZMM_8112'.
+*  SET TITLEBAR 'xxx'.
+ENDMODULE.
+
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_8112  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE user_command_8212 INPUT.
+*CASE sy-ucomm.
+*    WHEN 'BACK'.
+*      IF drivervx IS NOT INITIAL.
+*        drivevn = abap_true.
+*      ENDIF.
+*      CALL SCREEN 8211.
+*    WHEN 'POST'.
+*      IF load8212 IS NOT INITIAL AND
+*         drivervx  IS NOT INITIAL AND
+*         vehiclevx IS NOT INITIAL.
+*
+*        lw_8212-load_no   = load8213.
+*        lw_8212-driver    = drivervx.
+*        lw_8212-vehicle   = vehiclevx.
+*        lw_8212-mandt     = sy-mandt.
+*        lw_8212-load_for  = 'V'.
+*        APPEND lw_8212 TO lt_8212.
+*        IF lt_8212[] IS NOT INITIAL .
+*          MODIFY zmm_load_trn FROM TABLE lt_8212.
+*          COMMIT WORK AND WAIT.
+*        DO.
+*        CLEAR: load_nosl1.
+*         SELECT SINGLE load_no FROM zmm_load_trn INTO load_nosl1
+*             WHERE load_no  = load8213.
+**             AND   load_status = 'W'.
+*         IF sy-subrc = 0.
+*           EXIT.
+*         ENDIF.
+*        ENDDO.
+*        FREE: load_nosl1, lw_8212, drivervx, vehiclevx, lt_8212[].
+*        ENDIF.
+*         drivevn = abap_true.
+*          CALL SCREEN 8213.
+*      ENDIF.
+*      CLEAR: lw_8212, drivervx, vehiclevx.
+*    WHEN 'DELETE'.
+*      FREE: lt_8212[].
+*      SELECT mandt load_no load_for driver vehicle
+*        FROM zmm_load_trn
+*        INTO TABLE lt_8212
+*        WHERE load_no  = load_no
+*        AND   load_for = 'V'.
+*      IF lt_8212[] IS NOT INITIAL.
+*       LOOP AT lt_8212 INTO lw_8212.
+*        lw_8212-lvorm = 'X'.
+*        MODIFY lt_8212 FROM lw_8212.
+*        CLEAR: lw_8212.
+*       ENDLOOP.
+*       MODIFY zmm_load_trn FROM TABLE lt_8212.
+*       COMMIT WORK AND WAIT.
+*       drivevn = abap_false.
+*      ENDIF.
+*      FREE: lt_8212[].
+*  ENDCASE.
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  STATUS_8112  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE status_8212 OUTPUT.
+*  SET PF-STATUS 'ZMM_8112'.
+**  SET TITLEBAR 'xxx'.
+ENDMODULE.
+
+
+*&---------------------------------------------------------------------*
+*&  Include           ZMM_HU_LOAD_UNLOAD_STATUS_8113
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_8113  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE user_command_8113 INPUT.
+
+*DATA:  lt_valid8113 TYPE TABLE OF ty_validx,
+*       lw_valid8113 TYPE ty_validx,
+*       lv_cnt8113  TYPE i.
+*       ls_vekp8113 TYPE zv_vekp_vepo,
+*       lt_vekp8113 TYPE TABLE OF zv_vekp_vepo.
+DATA: lt_sloc1    TYPE TABLE OF zmm_load_sloc,
+      lw_sloc1    TYPE zmm_load_sloc.
+*      lt_8113x    TYPE TABLE OF ty_pallet,
+*      lw_8113x    TYPE ty_pallet.
+*DATA:  lw_check8113  TYPE zv_vekp_vepo,
+*       ls_vekp8113x  TYPE zv_vekp_vepo,
+DATA:  lw_mchb8113    TYPE mchb,
+       lv_exidv8113  TYPE exidv.
+CASE sy-ucomm.
+  WHEN 'ENTER'.
+*  IF exidv8113 IS NOT INITIAL.
+*    CLEAR: lv_exidv8113.
+*     CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+*       EXPORTING
+*         input  = exidv8113
+*       IMPORTING
+*         output = exidv8113.
+**     SELECT SINGLE *
+**        FROM zv_vekp_vepo
+**         INTO CORRESPONDING FIELDS OF lw_check8113
+**         WHERE exidv = exidv8113
+**         AND   status NOT IN lr_status.
+*   ENDIF.
+*        IF lw_check8113 IS NOT INITIAL.
+*        SELECT SINGLE * FROM mchb
+*          INTO CORRESPONDING FIELDS OF lw_mchb8113
+*          WHERE matnr = lw_check8113-matnr
+*          AND   werks = lw_check8113-werks
+*          AND   lgort = lw_check8113-lgort
+*          AND   charg = lw_check8113-charg.
+*      ENDIF.
+*      IF lw_mchb8113 IS NOT INITIAL.
+*       IF lw_check8113-bestq IS INITIAL.
+*         IF lw_mchb8113-clabs IS NOT INITIAL.
+*          lv_exidv8113 = lw_check8113-exidv.
+*       ENDIF.
+*       ENDIF.
+*       IF lw_check8113-bestq = 'Q'.
+*       IF lw_mchb8113-cinsm IS NOT INITIAL.
+*          lv_exidv8113 = lw_check8113-exidv.
+*      ENDIF.
+*       ENDIF.
+*      ENDIF.
+*   IF lv_exidv8113 IS NOT INITIAL.
+*   READ TABLE lt_8113 INTO lw_8113 WITH KEY
+*          exidv = lv_exidv8113.
+*   IF sy-subrc <> 0.
+*   lw_8113-exidv = lv_exidv8113.
+*   lw_8214-load_no = load_no1.
+*     APPEND lw_8113 TO lt_8113.
+*     APPEND lw_8113 TO lt_8113x.
+*     cnt113 = cnt113 + 1.
+*   ENDIF.
+*   ENDIF.
+*   CLEAR: lw_8113, lv_exidv, exidv8113.
+  WHEN 'SAVE'."'POST'.
+*    BREAK-POINT.
+*DATA: cnt13  TYPE i.
+**  IF lt_8113x[] IS NOT INITIAL.
+**    SELECT exidv venum vepos matnr charg werks lgort
+**      INTO CORRESPONDING FIELDS OF TABLE lt_vekp8113
+**      FROM zv_vekp_vepo
+**      FOR ALL ENTRIES IN lt_8113x
+**      WHERE exidv = lt_8113x-exidv.
+**  ENDIF.
+*  FREE: val1, cnt13.
+**  cnt13 = c113.
+*  FREE: lt_8113x[].
+*   lt_8113x[] = lt_8113[].
+*   DELETE lt_8113x WHERE cnt = ''.
+*  LOOP AT lt_sloc8113 INTO lw_sloc8113.
+**   READ TABLE lt_8113 INTO lw_8113
+**         WITH KEY exidv   = lw_sloc8113-exidv.
+*  IF sy-subrc = 0.
+*    lw_sloc8113-lvorm = lw_8113-cnt.
+*  ENDIF.
+*  lw_sloc8113-load_status = 'I'.
+*    MODIFY lt_sloc8113 FROM lw_sloc8113 TRANSPORTING
+*    lvorm ztps load_status.
+*    cnt13 = lw_sloc8113-load_item.
+*  CLEAR: lw_sloc8113, lw_8113.
+*  ENDLOOP.
+**  LOOP AT lt_vekp8113 INTO ls_vekp8113.
+**     READ TABLE lt_sloc8113 INTO lw_sloc8113
+**     WITH KEY exidv = ls_vekp8113-exidv.
+*  IF sy-subrc <> 0.
+**   READ TABLE lt_8113 INTO lw_8113
+**         WITH KEY exidv   = ls_vekp8113-exidv.
+*    IF sy-subrc = 0.
+*   cnt13 = cnt13 + 1.
+*     lw_sloc8113-mandt = sy-mandt.
+*     lw_sloc8113-load_no = load_no1.
+*     lw_sloc8113-load_item = cnt13.
+**     lw_sloc8113-exidv = ls_vekp8113-exidv.
+**     lw_sloc8113-load_date = sy-datum.
+**     lw_sloc8113-lgort = ls_vekp8113-lgort.
+*     lw_sloc8113-umlgo = lgort8113.
+*     lw_sloc8113-load_status = 'I'.
+*     lw_sloc8113-lvorm = lw_8113-cnt.
+*     APPEND lw_sloc8113 TO lt_sloc8113.
+*    ENDIF.
+*    ENDIF.
+*    CLEAR: lw_8113, lw_sloc8113.
+**  ENDLOOP.
+*   FREE: lt_sloc1[].
+*   lt_sloc1[] = lt_sloc8113[].
+*  DELETE lt_8113 WHERE cnt = 'X'.
+*  DELETE lt_sloc8113 WHERE lvorm = 'X'.
+*  lt_sloc8114[] = lt_sloc8113[].
+*  DESCRIBE TABLE lt_sloc8113 LINES cnt114.
+*
+*  lt_8114[] = lt_8113[].
+*  FREE: lt_8113[], lt_sloc8113[].
+*  IF lt_sloc1[] IS NOT INITIAL.
+*   MODIFY zmm_load_sloc FROM TABLE lt_sloc1.
+*   COMMIT WORK AND WAIT.
+*   WAIT UP TO 2 SECONDS.
+*  ENDIF.
+
+  CALL SCREEN 8114.
+  WHEN 'NEXTV'.
+*      line8113 = line8113 + 1.
+      line8113 = line8113 + lines8113.
+      limit8113 = fill8113 - lines8113.
+      IF line8113 > limit8113.
+        line8113 = limit8113.
+      ENDIF.
+    WHEN 'PREVV'.
+      line8113 = line8113 - lines8113. "1.
+      IF line8113 < 0.
+        line8113 = 0.
+      ENDIF.
+    WHEN 'BACK'.
+*    FREE: lt_valid8113[],lw_valid8113,lv_cnt8113,lt_sloc1[],lw_sloc1,
+*    lt_8113x[],lw_8113x,
+**       ls_vekp8113x,lw_mchb8113,
+*       cnt114,
+*       exidv8113, lv_exidv,fill8113, cnt113,idx8113, lw_8113,
+*       lines8113, lt_8113[],cnt113, lt_8113x,
+*       val1, lt_sloc8113, lw_sloc8113, load_no1.
+     CALL SCREEN 8000.
+ENDCASE.
+ENDMODULE.
+
+*&---------------------------------------------------------------------*
+*&      Module  STATUS_8113  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE status_8113 OUTPUT.
+  SET PF-STATUS 'ZMM_8113'.
+*  SET TITLEBAR 'xxx'.
+  fill8113 = cnt113.
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  TRANSP_ITAB_OUT_8113  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE transp_itab_out_8113 OUTPUT.
+* DATA: lw_8113d TYPE ty_pallet.
+* idx8113 = sy-stepl + line8113.
+* READ TABLE lt_8113 INTO lw_8113d INDEX idx8113.
+*IF sy-subrc = 0.
+*lw_8113 = lt_8113[ idx8113 ].
+*ENDIF.
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  TRANSP_ITAB_IN_8113  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE transp_itab_in_8113 INPUT.
+*  lines8113 = sy-loopc.
+*  idx8113 = sy-stepl + line8113.
+*  lw_8113-load_no = load_no1.
+*  MODIFY lt_8113 FROM lw_8113 INDEX idx8113.
+*  CLEAR: lw_8113.
+ENDMODULE.
+
+*&---------------------------------------------------------------------*
+*&      Module  STATUS_8113  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE status_8213 OUTPUT.
+*  SET PF-STATUS 'ZMM_8213'.
+**  SET TITLEBAR 'xxx'.
+*  fill8213 = cnt213.
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_8113  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE user_command_8213 INPUT.
+
+*DATA:  lt_valid8213 TYPE TABLE OF ty_validx,
+*       lw_valid8213 TYPE ty_validx,
+*       lv_cnt8213  TYPE i.
+*       ls_vekp8213 TYPE zv_vekp_vepo,
+*       lt_vekp8213 TYPE TABLE OF zv_vekp_vepo.
+*DATA: lt_slocy    TYPE TABLE OF zmm_load_vend.
+*DATA:  lw_check8213  TYPE zv_vekp_vepo,
+*       ls_vekp8213x  TYPE zv_vekp_vepo,
+*DATA:  lw_mchb8213   TYPE mchb,
+*       lv_exidv8213  TYPE exidv.
+*CLEAR: val1.
+*CASE sy-ucomm.
+* WHEN 'ENTER'.
+*  IF exidv8213 IS NOT INITIAL.
+*    CLEAR: lv_exidv8213.
+*     CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+*       EXPORTING
+*         input  = exidv8213
+*       IMPORTING
+*         output = exidv8213.
+**         SELECT SINGLE *
+**         FROM zv_vekp_vepo
+**         INTO CORRESPONDING FIELDS OF lw_check8213
+**         WHERE exidv = exidv8213.
+*   ENDIF.
+*        IF lw_check8213 IS NOT INITIAL.
+*        SELECT SINGLE * FROM mchb
+*          INTO CORRESPONDING FIELDS OF lw_mchb8213
+*          WHERE matnr = lw_check8213-matnr
+*          AND   werks = lw_check8213-werks
+*          AND   lgort = lw_check8213-lgort
+*          AND   charg = lw_check8213-charg.
+*      ENDIF.
+*      IF lw_mchb8213 IS NOT INITIAL.
+*       IF lw_check8213-bestq IS INITIAL.
+*         IF lw_mchb8213-clabs IS NOT INITIAL.
+*          lv_exidv8213 = lw_check8213-exidv.
+*       ENDIF.
+*       ENDIF.
+*       IF lw_check8213-bestq = 'Q'.
+*       IF lw_mchb8213-cinsm IS NOT INITIAL.
+*          lv_exidv8213 = lw_check8213-exidv.
+*      ENDIF.
+*       ENDIF.
+*      ENDIF.
+*   IF lv_exidv8213 IS NOT INITIAL.
+*   READ TABLE lt_8213 INTO lw_8213 WITH KEY
+*          exidv = lv_exidv8213.
+*   IF sy-subrc <> 0.
+*   lw_8213-exidv = lv_exidv8213.
+*   lw_8213-load_no = load_no1.
+*   IF lw_8213-load_no IS INITIAL.
+*     lw_8213-load_no = load8212.
+*   ENDIF.
+*   IF lw_8213-load_no IS INITIAL.
+*     lw_8213-load_no = load8213.
+*   ENDIF.
+*     APPEND lw_8213 TO lt_8213.
+*     APPEND lw_8213 TO lt_8213x.
+*     cnt213 = cnt213 + 1.
+*   ENDIF.
+*   ENDIF.
+*   CLEAR: lw_8213, lv_exidv8213, exidv8213.
+*  WHEN 'SAVE'."'POST'.
+*  DATA: load213 TYPE zload_no,
+*        cnt23 TYPE i.
+*  CLEAR: cnt23, load213.
+*    IF lt_8213[] IS NOT INITIAL.
+**    SELECT exidv venum vepos matnr charg werks lgort
+**      INTO CORRESPONDING FIELDS OF TABLE lt_vekp8213
+**      FROM zv_vekp_vepo
+**      FOR ALL ENTRIES IN lt_8213
+**      WHERE exidv = lt_8213-exidv.
+*  ENDIF.
+**  FREE: val1, cnt23.
+**  cnt13 = c113.
+*  FREE: lt_8213x[].
+*   lt_8213x[] = lt_8213[].
+*   DELETE lt_8213x WHERE cnt = ''.
+*  LOOP AT lt_sloc8213 INTO lw_sloc8213.
+*   READ TABLE lt_8213 INTO lw_8213
+*         WITH KEY exidv   = lw_sloc8213-exidv.
+*  IF sy-subrc = 0.
+*    lw_sloc8213-lvorm = lw_8213-cnt.
+*
+**  IF lw_sloc8213-lvorm = ''.
+**   lw_sloc8213-ztps = lw_sloc8213-load_status = 'W'.
+**  ELSE.
+*  lw_sloc8213-load_status = 'I'.
+**  ENDIF.
+*    load213 = lw_sloc8213-load_no.
+*    MODIFY lt_sloc8213 FROM lw_sloc8213 TRANSPORTING
+*    lvorm ztps load_status.
+*  ENDIF.
+*    cnt23 = lw_sloc8213-load_item.
+*  CLEAR: lw_sloc8213, lw_8213.
+*  ENDLOOP.
+*  LOOP AT lt_vekp8213 INTO ls_vekp8213.
+*   READ TABLE lt_sloc8213 INTO lw_sloc8213 WITH KEY
+*   exidv = ls_vekp8213-exidv.
+*  IF sy-subrc <> 0.
+*    READ TABLE lt_8213 INTO lw_8213
+*         WITH KEY exidv   = ls_vekp8213-exidv.
+*    IF sy-subrc = 0.
+*     cnt23 = cnt23 + 1.
+*     lw_sloc8213-mandt = sy-mandt.
+*     lw_sloc8213-load_no = load213.
+*     lw_sloc8213-load_item = cnt23.
+*     lw_sloc8213-exidv = ls_vekp8213-exidv.
+*     lw_sloc8213-load_date = sy-datum.
+*     lw_sloc8213-lgort = ls_vekp8213-lgort.
+*     lw_sloc8213-load_status = 'I'.
+*     lw_sloc8213-lvorm = lw_8213-cnt.
+*     IF lw_sloc8213-ebeln IS INITIAL.
+*    SELECT SINGLE ebeln lifnr FROM zmm_load_vend
+*      INTO (po8202,lifnr)
+*      WHERE load_no = lw_sloc8213-load_no
+*      AND   load_status = 'I'.
+*    ENDIF.
+*    lw_sloc8213-ebeln = po8202.
+*    lw_sloc8213-lifnr = lifnr.
+*     APPEND lw_sloc8213 TO lt_sloc8213.
+*   ENDIF.
+*   ENDIF.
+*     CLEAR: ls_vekp8213, lw_8213, lw_sloc8213.
+*
+*  ENDLOOP.
+*  IF lt_sloc8213[] IS NOT INITIAL.
+*   MODIFY zmm_load_vend FROM TABLE lt_sloc8213.
+*   COMMIT WORK AND WAIT.
+*  ENDIF.
+*  lt_8214[] = lt_8213[].
+*  lt_sloc8214[] = lt_sloc8213[].
+*  DELETE lt_sloc8214 WHERE lvorm = 'X'.
+*  DELETE lt_8214 WHERE cnt = 'X'.
+*  load214 = load213.
+*  DESCRIBE TABLE lt_8214 LINES c214.
+*  CALL SCREEN 8214.
+*  WHEN 'NEXTV'.
+**      line8113 = line8113 + 1.
+*      line8213 = line8213 + lines8213.
+*      limit8213 = fill8213 - lines8213.
+*      IF line8213 > limit8213.
+*        line8213 = limit8213.
+*      ENDIF.
+*    WHEN 'PREVV'.
+*      line8213 = line8213 - lines8213. "1.
+*      IF line8213 < 0.
+*        line8213 = 0.
+*      ENDIF.
+*   WHEN 'BACK'.
+*    FREE: lt_valid8213[],lw_valid8213,lv_cnt8213,ls_vekp8213,
+*       lt_vekp8213[],lt_sloc1[],lw_sloc1,lt_8213x[],lw_8213x,
+*       lw_check8213,ls_vekp8213x,lw_mchb8213,
+*       exidv8213, fill8213, cnt213,idx8213, lw_8213,
+*       lines8213, lt_8213[],cnt23, lt_vekp8213, lt_8213x,
+*       val1, lt_sloc8213, lw_sloc8213, ls_vekp8213.
+*     CALL SCREEN 8000.
+*ENDCASE.
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  TRANSP_ITAB_OUT_8213  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE transp_itab_out_8213 OUTPUT.
+* DATA: lw_8213d TYPE ty_pallet.
+* idx8213 = sy-stepl + line8213.
+* READ TABLE lt_8213 INTO lw_8213d INDEX idx8213.
+*IF sy-subrc = 0.
+*lw_8213 = lt_8213[ idx8213 ].
+*ENDIF.
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  TRANSP_ITAB_IN_8213  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE transp_itab_in_8213 INPUT.
+*  lines8213 = sy-loopc.
+*  idx8213 = sy-stepl + line8213.
+*  lw_8213-load_no = load8213.
+*  MODIFY lt_8213 FROM lw_8213 INDEX idx8213.
+*  CLEAR: lw_8213.
+ENDMODULE.
+
+
+*&---------------------------------------------------------------------*
+*&  Include           ZMM_HU_LOAD_UNLOAD_STATUS_8114
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Module  STATUS_8114  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE status_8114 OUTPUT.
+  SET PF-STATUS 'ZMM_8113'.
+*  SET TITLEBAR 'xxx'.
+  fill8114 = cnt114.
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  TRANSP_ITAB_OUT_8114  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE transp_itab_out_8114 OUTPUT.
+*  DATA: lw_8114d TYPE ty_pallet.
+*
+*  idx8114 = sy-stepl + line8114.
+*  READ TABLE lt_8114 INTO lw_8114d INDEX idx8114.
+*  IF sy-subrc = 0.
+*    lw_8114 = lt_8114[ idx8114 ].
+*  ENDIF.
+*  idx8113 = sy-stepl + line8113.
+*  READ TABLE lt_8113 INTO lw_8114d INDEX idx8113.
+*  IF sy-subrc = 0.
+*    lw_8113 = lt_8113[ idx8113 ].
+*  ENDIF.
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  TRANSP_ITAB_IN_8114  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE transp_itab_in_8114 INPUT.
+*  lines8114 = sy-loopc.
+*  idx8114 = sy-stepl + line8114.
+*  MODIFY lt_8114 FROM lw_8114 INDEX idx8114.
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_8114  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE                   user_command_8114 INPUT.
+*  TYPES: BEGIN OF ty_exidv14,
+*           exidv TYPE exidv,
+*         END OF ty_exidv14.
+*  DATA:  lt_valid8114 TYPE TABLE OF ty_validx,
+*         lw_valid8114 TYPE ty_validx,
+*         lv_cnt8114   TYPE i.
+**         ls_vekp8114  TYPE zv_vekp_vepo,
+**         lt_vekp8114  TYPE TABLE OF zv_vekp_vepo.
+*  DATA: lt_exidv14    TYPE TABLE OF ty_exidv14,
+*        lw_exidv14    TYPE ty_exidv14,
+*        lw1_vekpvb114 TYPE vekpvb,
+*        lt1_vekpvb114 TYPE TABLE OF vekpvb,
+*        lt2_vekpvb114 TYPE TABLE OF vekpvb,
+*        lv_lgort,
+*        lt_slocy1     TYPE TABLE OF zmm_load_sloc,
+*        lw_slocy1     TYPE zmm_load_sloc.
+*  DATA: lw_check8114 TYPE zv_vekp_vepo,
+*        ls_vekp8114x TYPE zv_vekp_vepo,
+*DATA:   lw_mchb8114  TYPE mchb,
+*        cnt14        TYPE i,
+*        lt_8114x     TYPE TABLE OF ty_pallet.
+*  FREE: lt_slocy1[], lw_slocy1.
+*  DATA: lt_sloc1 TYPE TABLE OF zmm_load_sloc,
+*        lw_sloc1 TYPE zmm_load_sloc.
+*  FREE: lt_exidv14,lw_exidv14,lw1_vekpvb114,
+*        lt1_vekpvb114,lt2_vekpvb114, lv_lgort.
+  CASE sy-ucomm.
+    WHEN 'ENTER'.
+*      IF exidv8114 IS NOT INITIAL.
+*        CLEAR: lv_exidv.
+*        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+*          EXPORTING
+*            input  = exidv8114
+*          IMPORTING
+*            output = exidv8114.
+*        SELECT SINGLE exidv FROM zv_vekp_vepo INTO lv_exidv
+*         WHERE exidv = exidv8114.
+*        SELECT SINGLE *
+*        FROM zv_vekp_vepo
+*        INTO CORRESPONDING FIELDS OF lw_check8114
+*        WHERE exidv = exidv8114
+*        AND   status NOT IN lr_status.
+*      ENDIF.
+*      IF lw_check8114 IS NOT INITIAL.
+*        SELECT SINGLE * FROM mchb
+*          INTO CORRESPONDING FIELDS OF lw_mchb8114
+*          WHERE matnr = lw_check8114-matnr
+*          AND   werks = lw_check8114-werks
+*          AND   lgort = lw_check8114-lgort
+*          AND   charg = lw_check8114-charg.
+*      ENDIF.
+*      IF lw_mchb8114 IS NOT INITIAL.
+*        IF lw_check8114-bestq IS INITIAL.
+*          IF lw_mchb8114-clabs IS NOT INITIAL.
+*            lv_exidv = lw_check8114-exidv.
+*          ENDIF.
+*        ENDIF.
+*        IF lw_check8114-bestq = 'Q'.
+*          IF lw_mchb8114-cinsm IS NOT INITIAL.
+*            lv_exidv = lw_check8114-exidv.
+*          ENDIF.
+*        ENDIF.
+*      ENDIF.
+*      IF lv_exidv IS NOT INITIAL.
+*        READ TABLE lt_8114 INTO lw_8114 WITH KEY
+*        exidv = lv_exidv.
+*        IF sy-subrc <> 0.
+*          lw_8114-exidv = lv_exidv.
+*          APPEND lw_8114 TO lt_8114.
+*          APPEND lw_8114 TO lt_8114x.
+*          cnt114 = cnt114 + 1.
+*        ENDIF.
+*      ENDIF.
+**      ENDIF.
+*      CLEAR: lw_8114, lv_exidv, exidv8114.
+    WHEN 'POST'.
+*      IF lt_8114x[] IS NOT INITIAL.
+*        SELECT exidv venum vepos matnr charg werks lgort
+*       INTO CORRESPONDING FIELDS OF TABLE lt_vekp8114
+*       FROM zv_vekp_vepo
+*       FOR ALL ENTRIES IN lt_8114x
+*       WHERE exidv = lt_8114x-exidv.
+*      ENDIF.
+*      FREE: lt_8114x[].
+*      lt_8114x[] = lt_8114[].
+*      DELETE lt_8114x WHERE cnt = ''.
+*      LOOP AT lt_sloc8114 INTO lw_sloc8114.
+*        READ TABLE lt_8114x INTO lw_8114
+*              WITH KEY exidv   = lw_sloc8114-exidv.
+*        IF sy-subrc = 0.
+*          lw_sloc8114-lvorm = lw_8114-cnt.
+*        ELSE.
+*          lw_sloc8114-rsa_inb_stat = 'S'.
+*          lw_sloc8114-ztps = lw_sloc8114-load_status = 'W'.
+*        ENDIF.
+*        MODIFY lt_sloc8114 FROM lw_sloc8114 TRANSPORTING
+*        lvorm ztps load_status rsa_inb_stat.
+*        cnt14 = lw_sloc8114-load_item.
+*        CLEAR: lw_sloc8114, lw_8114.
+*      ENDLOOP.
+*      LOOP AT lt_vekp8114 INTO ls_vekp8114.
+
+*        READ TABLE lt_8114 INTO lw_8114
+*             WITH KEY exidv   = ls_vekp8114-exidv.
+*        IF sy-subrc = 0.
+*          cnt14 = cnt14 + 1.
+*          lw_sloc8114-mandt = sy-mandt.
+*          lw_sloc8114-load_no = load_no1.
+*          lw_sloc8114-load_item = cnt14.
+*          lw_sloc8114-exidv = ls_vekp8114-exidv.
+*          lw_sloc8114-load_date = sy-datum.
+*          lw_sloc8114-lgort = ls_vekp8114-lgort.
+*          lw_sloc8114-umlgo = lgort8113.
+*          lw_sloc8114-lvorm = lw_8114-cnt.
+*          IF lw_sloc8114-lvorm IS INITIAL.
+*            lw_sloc8114-ztps = lw_sloc8114-load_status = 'W'.
+*            lw_sloc8114-rsa_inb_stat = 'S'.
+*          ENDIF.
+*          APPEND lw_sloc8114 TO lt_sloc8114.
+*          CLEAR: ls_vekp8114, lw_8114, lw_sloc8114.
+*        ENDIF.
+*      ENDLOOP.
+*      IF lt_sloc8114[] IS NOT INITIAL.
+*        SELECT * FROM vekp
+*       INTO CORRESPONDING FIELDS OF TABLE lt1_vekpvb114
+*        FOR ALL ENTRIES IN lt_sloc8114
+*        WHERE exidv = lt_sloc8114-exidv.
+*        IF lt1_vekpvb114[] IS NOT INITIAL.
+*          SELECT * FROM vekp
+*          INTO CORRESPONDING FIELDS OF TABLE lt2_vekpvb114
+*          FOR ALL ENTRIES IN lt1_vekpvb114
+*          WHERE uevel = lt1_vekpvb114-venum.
+*        ENDIF.
+*      ENDIF.
+*      APPEND LINES OF lt2_vekpvb114 TO lt1_vekpvb114.
+*      SORT lt1_vekpvb114 BY exidv venum.
+*
+*      LOOP AT lt1_vekpvb114 INTO lw1_vekpvb114.
+*        lw1_vekpvb114-inhalt = lgort8113.
+*        PERFORM update_header3 USING lw1_vekpvb114.
+*        CLEAR:lw1_vekpvb114.
+*      ENDLOOP.
+**      lt_slocy1[] = lt_sloc8114[].
+*      IF lt_sloc8114[] IS NOT INITIAL.
+*  *** Fetch Expiry Details
+
+*        UNASSIGN : "<lfs_ldt_inbound_del>,
+        "<lfs_zv_vekp_vepo1>,
+*                   <lfs_likp_lips2>,
+        "<lfs_mch1_11>.
+*        DATA : lv_flg2 TYPE c.
+*        DATA(lt_load2) = lt_sloc8114.
+*        DELETE lt_load2 WHERE lvorm = abap_true.
+*        SELECT exidv,
+*               vepos,
+*               vbeln,
+*               posnr,
+*               vemng,
+*               vemeh,
+*               vhilm,
+*               matnr,
+*               charg,
+*               bestq,
+*               qplos FROM zv_vekp_vepo
+*                     INTO TABLE @DATA(lt_zv_vekp_vepo1)
+*                     FOR ALL ENTRIES IN @lt_load2
+*                      WHERE exidv = @lt_load2-exidv
+*                      AND status <> '0060'.
+
+*        IF sy-subrc = 0.
+*          SORT lt_zv_vekp_vepo1 BY vbeln posnr.
+*
+*          SELECT matnr,
+*                 charg,
+*                 vfdat,
+*                 hsdat FROM mch1
+*                       INTO TABLE @DATA(lt_mch1_2)
+*                       FOR ALL ENTRIES IN @lt_zv_vekp_vepo1
+*                       WHERE matnr = @lt_zv_vekp_vepo1-matnr
+*                       AND charg = @lt_zv_vekp_vepo1-charg.
+*
+*          SELECT vbeln_i,
+*                  posnr_i,
+*                  matnr_i,
+*                  lfimg_i,
+*                  meins_i FROM wb2_v_likp_lips2
+*                          INTO TABLE @DATA(lt_likp_lips2_1)
+*                          FOR ALL ENTRIES IN @lt_zv_vekp_vepo1
+*                          WHERE vbeln_i = @lt_zv_vekp_vepo1-vbeln
+*                          AND posnr_i   = @lt_zv_vekp_vepo1-posnr.
+
+*        ENDIF.
+*        SELECT load_no,
+*               load_for,
+*               driver,
+*               vehicle,
+*               lvorm FROM zmm_load_trn
+*                     INTO TABLE @DATA(lt_zmm_load_trn1)
+*                     FOR ALL ENTRIES IN @lt_load2
+*                     WHERE load_no = @lt_load2-load_no
+*                     AND   load_for = 'S'
+*                     AND   lvorm = ' '.
+
+*      ENDIF.
+
+*      LOOP AT lt_load2 ASSIGNING FIELD-SYMBOL(<lfs_load1>).
+*        IF <lfs_load1> IS ASSIGNED.
+*          IF lv_flg2 = ''.
+*            APPEND INITIAL LINE TO  ldt_inbound_del ASSIGNING FIELD-SYMBOL(<lfs_ldt_inbound_del1>).
+*            IF <lfs_ldt_inbound_del1> IS ASSIGNED.
+*
+*              <lfs_ldt_inbound_del1>-header-material_arrive             = '02'.
+*
+*              <lfs_ldt_inbound_del1>-header-load_number                 = <lfs_load1>-load_no.
+**                <lfs_ldt_inbound_del1>-header-load_number              = <lfs_port>-load_no.
+*              <lfs_ldt_inbound_del1>-header-expected_delivery_date   = <lfs_load1>-load_date.
+*              <lfs_ldt_inbound_del1>-header-container_number         = 'XXXXXX'.
+*              <lfs_ldt_inbound_del1>-header-storage_location         = <lfs_load1>-umlgo.
+*              <lfs_ldt_inbound_del1>-header-load_status              = <lfs_load1>-rsa_inb_stat.
+*              ASSIGN  lt_zmm_load_trn1[ load_no = <lfs_load1>-load_no ] TO <ls_load_trn>.
+*              IF <ls_load_trn> IS ASSIGNED.
+*                <lfs_ldt_inbound_del1>-header-driver_name                 = <ls_load_trn>-driver.
+*                <lfs_ldt_inbound_del1>-header-driver_number               = 'XXXXXXXX'.
+*                <lfs_ldt_inbound_del1>-header-truck_number                = <ls_load_trn>-vehicle.
+*              ENDIF.
+*            ENDIF.
+*            lv_flg2 = abap_true.
+*          ENDIF.
+*          IF <lfs_ldt_inbound_del1> IS ASSIGNED.
+*            APPEND INITIAL LINE TO <lfs_ldt_inbound_del1>-line_item ASSIGNING FIELD-SYMBOL(<lfs_lnitms1>).
+*            IF <lfs_lnitms1> IS ASSIGNED.
+*              <lfs_lnitms1>-load_item_number             = <lfs_load1>-load_item.
+*            BREAK-POINT.
+*              LOOP AT lt_zv_vekp_vepo1 ASSIGNING FIELD-SYMBOL(<lfs_zv_vekp_vepo11>) WHERE exidv = <lfs_load1>-exidv.
+*                IF <lfs_zv_vekp_vepo11> IS ASSIGNED.
+*                  APPEND INITIAL LINE TO <lfs_lnitms1>-pallet_line_items
+*                  ASSIGNING FIELD-SYMBOL(<lfs_pline1>).
+*                  IF <lfs_pline1> IS ASSIGNED.
+*                    <lfs_pline1>-material_number                  = <lfs_zv_vekp_vepo11>-matnr.
+*                    IF <lfs_zv_vekp_vepo11>-matnr IS NOT INITIAL.
+*                      SELECT SINGLE mtart FROM mara INTO <lfs_pline1>-material_type
+*                                                    WHERE matnr = <lfs_zv_vekp_vepo11>-matnr.
+*                    ENDIF.
+*                    <lfs_pline1>-batch                            = <lfs_zv_vekp_vepo11>-charg.
+*                    <lfs_lnitms1>-pallet_id                        = <lfs_zv_vekp_vepo11>-exidv.
+*                    <lfs_pline1>-pallet_line_item                 = <lfs_zv_vekp_vepo11>-vepos.
+*                    <lfs_pline1>-pallet_qty                       = <lfs_zv_vekp_vepo11>-vemng.
+*                    <lfs_pline1>-pallet_uo_m                      = <lfs_zv_vekp_vepo11>-vemeh.
+*                    <lfs_pline1>-insp_lot_arnum                   = <lfs_zv_vekp_vepo11>-qplos.
+*                    <lfs_pline1>-quality_status                   = <lfs_zv_vekp_vepo11>-bestq.
+*                    <lfs_pline1>-packing_material                 = <lfs_zv_vekp_vepo11>-vhilm.
+*                    <lfs_pline1>-vendor_code                      = 'XXXXXXXXX'.
+*
+**              ASSIGN lt_likp_lips2_1[ vbeln_i = <lfs_zv_vekp_vepo1>-vbeln
+**                         posnr_i = <lfs_zv_vekp_vepo1>-posnr ] TO <lfs_likp_lips2>.
+**              IF <lfs_likp_lips2> IS ASSIGNED.
+**                <lfs_lnitms1>-quantity                     = <lfs_likp_lips2>-lfimg_i.
+**                <lfs_lnitms1>-uom                          = <lfs_likp_lips2>-meins_i.
+**
+**              ENDIF.
+*                  ENDIF.
+*
+*                ENDIF.
+*              ENDLOOP.
+*              ASSIGN lt_mch1_2[ matnr = <lfs_zv_vekp_vepo11>-matnr
+*                                charg = <lfs_zv_vekp_vepo11>-charg ] TO FIELD-SYMBOL(<lfs_mch1_11>).
+*              IF <lfs_mch1_11> IS ASSIGNED.
+*                <lfs_pline1>-expiry_date             = <lfs_mch1_11>-vfdat.
+*                <lfs_pline1>-date_of_manufactured    = <lfs_mch1_11>-hsdat.
+*              ENDIF.
+*            ENDIF.
+*          ENDIF.
+*        ENDIF.
+*      ENDLOOP.
+*
+*      IF ldt_inbound_del IS NOT INITIAL.
+*        lmt_inbound_del-mt_inbound_delivery-records = ldt_inbound_del.
+*
+*        TRY .
+*            CREATE OBJECT lo_inbound_del.
+*            CALL METHOD lo_inbound_del->si_inbound_delivery_out
+*              EXPORTING
+*                output = lmt_inbound_del.
+*            COMMIT WORK AND WAIT.
+*          CATCH cx_ai_system_fault INTO fault.
+*            p_w_proxy_err = fault->get_text( ).
+*          CATCH cx_ai_application_fault INTO app_fault.
+*            p_w_prx_err1 = app_fault->get_text( ).
+*        ENDTRY.
+*        COMMIT WORK AND WAIT.
+*        IF sy-subrc = 0.
+          MODIFY zmm_load_sloc FROM TABLE lt_sloc8114.
+          COMMIT WORK AND WAIT.
+*        ENDIF.
+*      ENDIF.
+
+
+*
+*      FREE: lt_sloc8113[], lw_sloc8113, exidv8114,
+*      lw_valid8114, lt_valid8114[],lt_8114[], lw_8114, val1, lv_cnt8114,
+*      load_nosl1, lt2_vekpvb114, lt1_vekpvb114, lv_lgort, lt_exidv14,
+*      fault1,app_fault1,p_w_proxy_err1,p_w_prx_err11.
+      CALL SCREEN 8000.
+    WHEN 'NEXTV'.
+*      line8113 = line8113 + 1.
+      line8114 = line8114 + lines8114.
+      limit8114 = fill8114 - lines8114.
+      IF line8114 > limit8114.
+        line8114 = limit8114.
+      ENDIF.
+    WHEN 'PREVV'.
+      line8114 = line8114 - lines8114. "1.
+      IF line8114 < 0.
+        line8114 = 0.
+      ENDIF.
+    WHEN 'BACK'.
+*      FREE: lt_valid8114,lw_valid8114,lv_cnt8114,ls_vekp8114,
+*            lt_vekp8114,lt_exidv14,lw_exidv14,lw1_vekpvb114,
+*            lt1_vekpvb114,lt2_vekpvb114,lv_lgort,lt_slocy1,
+*            lw_slocy1,lw_check8114,ls_vekp8114x,lw_mchb8114,
+*           cnt14,lt_8114x, lt_slocy1[], lw_slocy1.
+*      FREE: lt_sloc8113[], lw_sloc8113, exidv8114,
+*         lw_valid8114, lt_valid8114[],lt_8114[], lw_8114, val1, lv_cnt8114,
+*         load_nosl1, lt2_vekpvb114, lt1_vekpvb114, lv_lgort, lt_exidv14,
+*         lo_inbound_del1,ldt_inbound_del1,lmt_inbound_del1,
+*         fault1,app_fault1,p_w_proxy_err1,p_w_prx_err11.
+      CALL SCREEN 8000.
+  ENDCASE.
+ENDMODULE.
+
+*&---------------------------------------------------------------------*
+*&  Include           ZMM_HU_LOAD_UNLOAD_STATUS_8O01
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Module  STATUS_8001  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE status_8001 OUTPUT.
+*APPEND 'BACK' TO fcode.
+*  SET PF-STATUS 'ZHU_8001'.
+
+*  SET PF-STATUS 'ZHU_8001' EXCLUDING fcode.
+
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_8001  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE user_command_8001 INPUT.
+  DATA: lv_datum TYPE datum.
+  lv_datum = sy-datum - 5.
+  CASE sy-ucomm.
+    WHEN 'PREV'.
+      LEAVE TO SCREEN 8000.
+*      CALL SCREEN 8000.
+    WHEN 'SNLOAD'.
+      CALL SCREEN 8002.
+    WHEN 'SOLOAD'.
+*      CLEAR: lt_load.
+      SELECT load_no SU_NO entry_date load_status
+        FROM zmm_load_sloc
+        INTO TABLE lt_load
+        WHERE entry_date GE lv_datum
+        AND   load_status = 'I'
+        AND   del_ind = space.
+      SORT lt_load BY load_no .
+      DELETE ADJACENT DUPLICATES FROM lt_load COMPARING load_no.
+      SORT lt_load BY load_no DESCENDING.
+      DESCRIBE TABLE lt_load LINES cnt110.
+      CALL SCREEN 8110.
+  ENDCASE.
+ENDMODULE.
+
+
+*&---------------------------------------------------------------------*
+*&  Include           ZMM_HU_LOAD_UNLOAD_STATUS_8O02
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Module  STATUS_8002  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE status_8002 OUTPUT.
+  SET PF-STATUS 'ZMM_8002'.
+  fill802 = cnt.
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_8002  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE user_command_8002 INPUT.
+  DATA: lv_num     TYPE i,
+        lv_cnt     TYPE i,
+        lv_venum   TYPE vepo-venum,
+        lw_mchb    TYPE mchb,
+        lv_lgort02 TYPE lgort_d.
+
+  FREE : lv_num,lv_cnt.
+  CASE sy-ucomm.
+    WHEN 'BACK'.
+      CLEAR: cnt, lgort, lt_8002[], lw_8002, exidv8002, lw_lips-matnr.
+      FREE: obd_no,lin_item,lt_8002[].
+      LEAVE TO SCREEN 0.
+*      CALL SCREEN 8001.
+    WHEN 'ENTER'.
+      FREE : lt_8002[], lw_8002, cnt,lv_total_qty.
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+        EXPORTING
+          input  = obd_no
+        IMPORTING
+          output = obd_no.
+      SELECT COUNT(*) FROM vbuk WHERE vbeln =  obd_no
+                                  AND lvstk = 'C'.
+      IF sy-subrc = 0.
+        MESSAGE 'Delivery already processed/Inprocess.' TYPE 'E'.
+        EXIT.
+      ENDIF.
+
+      SELECT COUNT(*) FROM zmm_load_sloc WHERE obd_no = obd_no
+                                         AND obd_headitem = lin_item
+                                         AND load_status IN ( 'I' , 'W' ).
+      IF sy-subrc = 0.
+        MESSAGE 'Delivery already processed/Inprocess.' TYPE 'E'.
+      ENDIF.
+
+      SELECT vbeln posnr matnr lgort charg
+        lfimg meins  uepos lgpla uecha uepvw FROM lips
+        INTO TABLE lt_lips_tmp "lt_lips
+        WHERE vbeln = obd_no.
+
+      lt_lips = lt_lips_tmp.
+      DELETE lt_lips WHERE uecha <> lin_item.
+
+      READ TABLE lt_lips INTO lw_lips INDEX 1.
+      LOOP AT lt_lips INTO lw_lips.
+        lw_8002-batch_no = lw_lips-charg.
+        lw_8002-qty      = lw_lips-lfimg.
+        lw_8002-uom      = lw_lips-meins.
+        " total_del_qty = total_del_qty + lw_lips-lfimg.
+        READ TABLE lt_lips_tmp INTO lw_lips_tmp WITH KEY
+                                      uepos = lin_item
+                                      uepvw = 'B'.
+        IF sy-subrc = 0.
+          READ TABLE lt_lips_tmp INTO lw_lips_tmp1 WITH KEY
+                                  uecha = lw_lips_tmp-posnr.
+          IF sy-subrc = 0.
+*            lw_8002-qty = lw_8002-qty + lw_lips_tmp1-lfimg.
+*            wa_free_qty-charg = lw_lips-charg.
+*            wa_free_qty-matnr = lw_lips-matnr.
+*            wa_free_qty-vbeln = lw_lips-vbeln.
+*            wa_free_qty-posnr = lw_lips_tmp1-posnr.
+*            wa_free_qty-free_qty = lw_lips_tmp1-lfimg.
+*            wa_free_qty-del_item = lw_lips-posnr.
+*            APPEND wa_free_qty TO it_free_qty.
+*            CLEAR: wa_free_qty.
+          ENDIF.
+        ENDIF.
+        APPEND lw_8002 TO lt_8002.
+
+        cnt = cnt + 1.
+*        lv_total_qty = lv_total_qty + lw_lips-lfimg.             "changes done on 13.04,2019
+      ENDLOOP.
+      IF it_free_qty IS NOT INITIAL.
+        p_status = 'X'.
+      ELSE.
+        p_status = ' '.
+      ENDIF.
+    WHEN 'NEXTV'.
+*      line802 = line802 + 1.
+      line802 = line802 + lines802.
+      limit802 = fill802 - lines802.
+      IF line802 > limit802.
+        line802 = limit802.
+      ENDIF.
+    WHEN 'PREVV'.
+      line802 = line802 - lines802. "1.
+      IF line802 < 0.
+        line802 = 0.
+      ENDIF.
+    WHEN 'NEXT'.
+
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+        EXPORTING
+          input  = obd_no
+        IMPORTING
+          output = obd_no.
+      SELECT SINGLE vbeln FROM lips INTO @DATA(v_vbeln)
+          WHERE vbeln = @obd_no
+         AND posnr = @lin_item .
+      IF sy-subrc = 0.
+        CALL SCREEN 8004.
+      ELSE.
+        MESSAGE 'Enter Correct Delivery No Details' TYPE 'E'.
+      ENDIF.
+
+  ENDCASE.
+ENDMODULE.
+
+*&---------------------------------------------------------------------*
+*&      Module  TRANSP_ITAB_OUT_8002  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE transp_itab_out_8002 OUTPUT.
+  DATA: lw_8002d TYPE ty_batch.
+  idx802 = sy-stepl + line802.
+  READ TABLE lt_8002 INTO lw_8002d INDEX idx802.
+  IF sy-subrc = 0.
+    lw_8002 = lt_8002[ idx802 ].
+  ENDIF.
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  TRANSP_ITAB_IN_8002  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE transp_itab_in_8002 INPUT.
+  lines802 = sy-loopc.
+  idx802 = sy-stepl + line802.
+  MODIFY lt_8002 FROM lw_8002 INDEX idx802.
+ENDMODULE.
+
+
+*&---------------------------------------------------------------------*
+*&  Include           ZMM_HU_LOAD_UNLOAD_STATUS_8O04
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_8004  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE user_command_8004 INPUT.
+  TYPES:BEGIN OF tt_lqua,
+          matnr TYPE matnr,
+          charg TYPE charg_d,
+          lgtyp TYPE lgtyp,
+          lgpla TYPE lgpla,
+          verme TYPE lqua_verme,
+          lenum TYPE lenum,
+          lgort TYPE lgort_d,
+        END OF tt_lqua.
+  DATA: it_lqua         TYPE STANDARD TABLE OF tt_lqua,
+        wa_lqua_tmp     TYPE tt_lqua,
+*        lw_sloc8004_tmp TYPE zmm_load_sloc,
+        wa_lqua         TYPE tt_lqua.
+  DATA: no        TYPE posnr_vl,
+        amt       TYPE mensh,
+        totbal    TYPE lips-lfimg,
+        su_totbal TYPE lips-lfimg,
+        lv_mat    TYPE matnr.
+  CASE sy-ucomm.
+    WHEN 'NEXTV'.
+      line804 = line804 + lines804.
+      limit804 = fill804 - lines804.
+      IF line804 > limit804.
+        line804 = limit804.
+      ENDIF.
+    WHEN 'PREVV'.
+      line804 = line804 - lines804. "1.
+      IF line804 < 0.
+        line804 = 0.
+      ENDIF.
+    WHEN 'BACK'.
+      CLEAR: su_cnt,lw_lips-matnr,lw_8004,wa_lqua,lw_lips.
+      FREE: lt_8004,it_lqua,barcode_scan.
+      FREE: obd_no,lin_item,lt_8002,lw_8002,gw_lenum,lt_8004,lw_8004,su_cnt,barcode_scan,cnt,barcode_scan.
+      LEAVE TO SCREEN 8000.
+    WHEN 'ENTER'.
+      FREE: amt,wa_lqua,gw_lenum, lv_total_qty,lv_matnr.
+*      clear : wa_lqua_tmp, lw_8004,lw_8002.
+      SPLIT barcode_scan AT space INTO lv_mat gw_lenum.
+      READ TABLE lt_8004 INTO lw_8004 WITH KEY lenum = gw_lenum.
+      IF sy-subrc NE 0.
+        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+          EXPORTING
+            input  = lv_mat
+          IMPORTING
+            output = lv_mat.
+
+        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+          EXPORTING
+            input  = gw_lenum
+          IMPORTING
+            output = gw_lenum.
+
+        SELECT SINGLE lenum  FROM lein
+                         INTO @DATA(v_lein)
+                   WHERE lenum = @gw_lenum.
+        IF sy-subrc <> 0.
+*          SET CURSOR FIELD 'BARCODE_SCAN'.
+*          CLEAR: barcode_scan.
+          MESSAGE 'Storage Unit Doesnot exist' TYPE 'I'.
+          RETURN.
+        ENDIF.
+
+        SELECT COUNT(*) FROM lqua WHERE matnr =  lv_mat
+                                    AND lenum = gw_lenum.
+        IF sy-subrc = 0 AND  lt_8002 IS NOT INITIAL.
+
+          SELECT COUNT(*) FROM lqua FOR ALL ENTRIES IN lt_8002
+                                    WHERE charg = lt_8002-batch_no
+                                      AND lenum = gw_lenum.
+          IF sy-subrc NE 0.
+*            SET CURSOR FIELD 'BARCODE_SCAN'.
+*            CLEAR: barcode_scan.
+            MESSAGE 'Wrong Batch Selected.' TYPE 'I'.
+*            RETURN.
+          ELSE.
+            SELECT matnr charg lgtyp lgpla verme lenum lgort FROM lqua
+               APPENDING TABLE  it_lqua WHERE lenum = gw_lenum.
+            IF sy-subrc = 0.
+              SORT it_lqua BY charg matnr lenum ASCENDING.
+              DELETE ADJACENT DUPLICATES FROM it_lqua COMPARING charg matnr lenum .
+
+              READ TABLE it_lqua INTO wa_lqua_tmp
+              WITH KEY lenum = gw_lenum.
+
+              DELETE lt_8004 WHERE lenum = ' '.
+*              CLEAR: lw_8002.
+*              LOOP AT it_lqua INTO wa_lqua WHERE charg = wa_lqua_tmp-charg.
+*              LOOP AT lt_8002 INTO lw_8002 WHERE batch_no = wa_lqua_tmp-charg.
+*                amt = amt + lw_8002-qty.
+*                CLEAR: wa_free_qty.
+*              ENDLOOP.
+*              CLEAR : lw_8004,lv_total_qty,lw_8002.
+*              LOOP AT lt_8004 INTO lw_8004 WHERE charg = wa_lqua_tmp-charg.
+*                lv_total_qty  = lv_total_qty + lw_8004-qty.
+*              ENDLOOP.
+
+                LOOP AT it_lqua INTO wa_lqua WHERE charg = wa_lqua_tmp-charg.
+                READ TABLE lt_lips INTO lw_lips WITH KEY  matnr = wa_lqua-matnr
+                                                          charg = wa_lqua-charg.
+                IF sy-subrc = 0.
+*                  lv_total_qty  = lw_lips-lfimg.
+                  amt = amt + wa_lqua-verme.
+                ENDIF.
+                CLEAR: wa_free_qty.
+              ENDLOOP.
+              CLEAR : lw_8004,lv_total_qty,lw_8002.
+              LOOP AT lt_8002 INTO lw_8002 WHERE batch_no = wa_lqua-charg.
+                lv_total_qty  = lv_total_qty + lw_8002-qty.
+              ENDLOOP.
+
+              SORT lt_8002 BY batch_no ASCENDING.
+
+*              lv_total_qty = lv_total_qty + wa_lqua_tmp-verme.
+
+*              IF lv_total_qty LE amt."lw_8002-qty. " changes done on 13.04.2019.
+                IF amt LE lv_total_qty ."lw_8002-qty. " changes done on 13.04.2019.
+                CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+                  EXPORTING
+                    input  = gw_lenum
+                  IMPORTING
+                    output = gw_lenum.
+                lw_8004-charg = wa_lqua-charg.
+                lw_8004-lenum = gw_lenum.
+                lw_8004-qty   = wa_lqua-verme.
+                APPEND lw_8004 TO lt_8004.
+                CLEAR : lw_8004, gw_lenum,amt.
+                su_cnt = su_cnt + 1.
+              ELSE.
+                DELETE it_lqua WHERE lenum =  gw_lenum.
+                FREE: gw_lenum.
+*                SET CURSOR FIELD 'BARCODE_SCAN'.
+*                CLEAR: barcode_scan.
+                CONCATENATE 'Quantity exceeded for batch '  wa_lqua-charg INTO lv_msg SEPARATED BY space.
+                MESSAGE lv_msg TYPE 'I'.
+              ENDIF.
+            ENDIF.
+          ENDIF.
+        ELSE.
+          FREE:gw_lenum.
+*          SET CURSOR FIELD 'BARCODE_SCAN'.
+          MESSAGE 'Wrong Material Selected.' TYPE 'I'.
+        ENDIF.
+      ELSE.
+*        SET CURSOR FIELD 'BARCODE_SCAN'.
+*        CLEAR: barcode_scan.
+        MESSAGE 'SU no. already selected.' TYPE 'I'.
+      ENDIF.
+      FREE: barcode_scan.
+    WHEN 'SAVE'.
+     FREE: lv_num, no, lw_lips, lt_lips[],it_free_qty.
+      CALL FUNCTION 'NUMBER_GET_NEXT'
+        EXPORTING
+          nr_range_nr             = '01'
+          object                  = 'ZMM_LOAD'
+*         QUANTITY                = '1'
+*         SUBOBJECT               = ' '
+*         TOYEAR                  = '0000'
+*         IGNORE_BUFFER           = ' '
+        IMPORTING
+          number                  = lv_num
+        EXCEPTIONS
+          interval_not_found      = 1
+          number_range_not_intern = 2
+          object_not_found        = 3
+          quantity_is_0           = 4
+          quantity_is_not_1       = 5
+          interval_overflow       = 6
+          buffer_overflow         = 7
+          OTHERS                  = 8.
+      IF lv_num IS NOT INITIAL.
+        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+          EXPORTING
+            input  = obd_no
+          IMPORTING
+            output = obd_no.
+
+        SELECT vbeln posnr matnr lgort charg
+          lfimg meins uepos lgpla  uecha uepvw FROM lips
+          INTO TABLE lt_lips
+          WHERE vbeln = obd_no.
+*          and uecha =  lin_item.
+
+        lt_lips_tmp =  lt_lips.
+
+        DELETE lt_lips WHERE uecha <> lin_item.
+*
+*        LOOP AT lt_lips INTO lw_lips.
+*          READ TABLE lt_lips_tmp INTO lw_lips_tmp WITH KEY
+*                                        uepos = lin_item
+*                                        uepvw = 'B'.
+*          IF sy-subrc = 0.
+*            READ TABLE lt_lips_tmp INTO lw_lips_tmp1 WITH KEY
+*                                    uecha = lw_lips_tmp-posnr.
+*            IF sy-subrc = 0.
+*              wa_free_qty-charg = lw_lips-charg.
+*              wa_free_qty-matnr = lw_lips-matnr.
+*              wa_free_qty-vbeln = lw_lips-vbeln.
+*              wa_free_qty-posnr = lw_lips_tmp1-posnr.
+*              wa_free_qty-free_qty = lw_lips_tmp1-lfimg.
+*              wa_free_qty-del_item = lw_lips-posnr.
+*              APPEND wa_free_qty TO it_free_qty.
+*              CLEAR: wa_free_qty,lw_lips.
+*            ENDIF.
+*          ENDIF.
+*        ENDLOOP.
+
+        IF lt_8004 IS NOT INITIAL.
+          SELECT matnr werks charg lenum verme lgpla lgort
+                FROM lqua INTO TABLE lt_lqua
+                FOR ALL ENTRIES IN lt_8004  " add perfromance issue 04.09.2023
+                WHERE charg = lt_8004-charg. " add perfromance issue 04.09.2023
+
+        ENDIF.
+        IF sy-subrc = 0 .
+          SORT lt_lqua ASCENDING.
+          LOOP AT lt_8004 INTO lw_8004.
+            CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+              EXPORTING
+                input  = lw_8004-lenum
+              IMPORTING
+                output = lw_8004-lenum.
+            READ TABLE lt_lqua INTO lw_lqua
+            WITH KEY lenum = lw_8004-lenum.
+
+            READ TABLE lt_lips INTO lw_lips
+            WITH KEY charg = lw_lqua-charg.
+            no = no + 1.
+            lw_sloc8004-load_no       = lv_num.
+            lw_sloc8004-load_item     = no.
+            lw_sloc8004-su_no         = lw_8004-lenum.
+            lw_sloc8004-obd_no        = obd_no.
+            lw_sloc8004-obd_lineitem  = lw_lips-posnr.
+            lw_sloc8004-obd_headitem  = lin_item.
+            lw_sloc8004-entry_date    = sy-datum.
+            lw_sloc8004-storage_loc   = lw_lqua-lgort.
+            lw_sloc8004-matnr         = lw_lips-matnr.
+            lw_sloc8004-batch_no      = lw_lqua-charg.
+            lw_sloc8004-quantity      = lw_lips-lfimg.
+            lw_sloc8004-uom           = lw_lips-meins.
+            lw_sloc8004-bin_loc       = lw_lqua-lgpla.
+            lw_sloc8004-load_status   = 'I'.
+            lw_sloc8004-plant         = lw_lqua-werks.
+            lw_sloc8004-su_qty        = lw_lqua-verme.
+            APPEND lw_sloc8004 TO lt_sloc8004.
+
+*            CLEAR: wa_free_qty.
+*            READ TABLE lt_sloc8004 WITH KEY obd_no = obd_no
+*                                              matnr = lw_lips-matnr
+*                                              batch_no = lw_lqua-charg TRANSPORTING NO FIELDS.
+*            IF sy-subrc <> 0.
+*              READ TABLE it_free_qty INTO wa_free_qty WITH KEY
+*                                                       vbeln = obd_no
+*                                                       matnr = lw_lips-matnr
+*                                                       charg = lw_lqua-charg.
+**                                                     del_item = lw_lips-posnr.
+*              IF sy-subrc = 0.
+*              lw_sloc8004-quantity = wa_free_qty-free_qty.
+*               lw_sloc8004-su_qty = wa_free_qty-free_qty.
+*              lw_sloc8004-obd_lineitem = wa_free_qty-posnr.
+*              APPEND lw_sloc8004 TO lt_sloc8004.
+*              ENDIF.
+*            ENDIF.
+*            CLEAR: lw_sloc8004,lw_8004,lw_lqua.
+          ENDLOOP.
+*
+          IF it_free_qty IS NOT INITIAL.
+            READ TABLE it_free_qty INTO wa_free_qty WITH KEY
+                                                      vbeln = obd_no
+                                                      matnr = lw_lips-matnr
+                                                      charg = lw_lqua-charg.
+            IF sy-subrc = 0.
+
+              READ TABLE  lt_sloc8004 INTO  lw_sloc8004
+                                          TRANSPORTING NO FIELDS WITH KEY obd_no = obd_no
+                                                                      su_no = lw_8004-lenum
+                                                                      matnr = lw_lips-matnr
+                                                                      batch_no = lw_lqua-charg.
+
+              IF sy-subrc = 0.
+                lw_sloc8004-su_qty =  lw_sloc8004-su_qty - wa_free_qty-free_qty.
+
+                MODIFY lt_sloc8004 FROM lw_sloc8004 TRANSPORTING su_qty WHERE  obd_no = obd_no
+                                                                      AND matnr = lw_lips-matnr
+                                                                      AND batch_no = lw_lqua-charg.
+                lw_sloc8004-quantity =  wa_free_qty-free_qty.
+                lw_sloc8004-load_item = lw_sloc8004-load_item + 1.
+                lw_sloc8004-quantity = wa_free_qty-free_qty.
+                lw_sloc8004-su_qty = wa_free_qty-free_qty.
+                lw_sloc8004-obd_lineitem = wa_free_qty-posnr.
+                APPEND lw_sloc8004 TO lt_sloc8004.
+
+              ENDIF.
+            ENDIF.
+          ENDIF.
+          CLEAR: lw_sloc8004,lw_8004,lw_lqua.
+
+          MODIFY zmm_load_sloc FROM TABLE lt_sloc8004.
+          COMMIT WORK AND WAIT.
+*          CLEAR:lt_sloc8004.
+          IF sy-subrc = 0.
+            ls_num = lv_num.
+            load_no = ls_num.
+            CONDENSE ls_num.
+            CONCATENATE 'Load No.' ls_num  'is generated.' INTO lv_msg SEPARATED BY space.
+            MESSAGE lv_msg TYPE 'S'.
+          ENDIF.
+          CALL SCREEN 8005.
+        ENDIF.
+      ENDIF.
+  ENDCASE.
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  STATUS_8004  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE status_8004 OUTPUT.
+  SET PF-STATUS 'ZMM_8004'.
+*  fill804 = cnt.
+  fill804 = su_cnt.
+*  SET TITLEBAR 'xxx'.
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  TRANSP_ITAB_OUT_8004  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE transp_itab_out_8004 OUTPUT.
+  DATA: lw_8004d TYPE ty_suno.
+  idx804 = sy-stepl + line804.
+  READ TABLE lt_8004 INTO lw_8004d INDEX idx804.
+  IF sy-subrc = 0.
+    lw_8004 = lt_8004[ idx804 ].
+  ENDIF.
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  TRANSP_ITAB_IN_8004  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE transp_itab_in_8004 INPUT.
+  lines804 = sy-loopc.
+  idx804 = sy-stepl + line804.
+*  MODIFY lt_8004 FROM lw_8004 INDEX idx804.
+*   CLEAR: lw_8004.
+ENDMODULE.
+
+
+*&---------------------------------------------------------------------*
+*&  Include           ZMM_HU_LOAD_UNLOAD_STATUS_8O05
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_8005  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE user_command_8005 INPUT.
+  DATA: lv_total_qty1 TYPE menge_d,
+        lt_8005x_tmp  TYPE TABLE OF ty_sloc,
+        lw_8005x_tmp  TYPE ty_sloc,
+        lw_lqua_tmp1  TYPE lqua.
+
+  CASE sy-ucomm.
+    WHEN 'BACK'.
+      FREE: lt_8005,cnt5,load_no.
+      CLEAR: lw_lips-matnr,wa_lqua.
+      "FREE: lt_8004,it_lqua.
+      FREE: obd_no,lin_item,gw_lenum,barcode_scan,cnt,barcode_scan1,cnt5.
+      CLEAR : lw_lips,lw_sloc8005.
+      LEAVE TO SCREEN 8000.
+*      CALL SCREEN 8000.
+
+    WHEN 'NEXTV'.
+      line805 = line805 + lines805.
+      limit805 = fill805 - lines805.
+      IF line805 > limit805.
+        line805 = limit805.
+      ENDIF.
+    WHEN 'PREVV'.
+      line805 = line805 - lines805. "1.
+      IF line805 < 0.
+        line805 = 0.
+      ENDIF.
+    WHEN 'ENTER'.
+
+      IF load_no IS NOT INITIAL AND su_no IS INITIAL.
+        FREE : lw_8005, cnt5,lv_total_qty1,lt_8005,lv_total_qty,lt_sloc.
+        SELECT obd_no obd_lineitem  obd_headitem  matnr batch_no
+           su_no quantity  su_qty FROM zmm_load_sloc
+          INTO TABLE lt_sloc
+          WHERE load_no = load_no
+          AND   del_ind = space.
+        IF sy-subrc = 0 AND lt_sloc IS NOT INITIAL.
+
+          SELECT vbeln posnr matnr lgort charg
+          lfimg meins  uepos lgpla uecha uepvw FROM lips
+          INTO TABLE lt_lips
+            FOR ALL ENTRIES IN lt_sloc
+          WHERE vbeln = lt_sloc-obd_no.
+*          and uecha = obd_lineitem-posnr.
+          IF sy-subrc = 0.
+
+          ENDIF.
+
+          LOOP AT lt_sloc INTO lw_sloc.
+            lw_8005-lenum = lw_sloc-lenum.
+            lw_8005-su_qty = lw_sloc-su_qty.
+            lw_8005-charg  = lw_sloc-charg.
+            lw_8005-matnr  = lw_sloc-matnr.
+
+            CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+              EXPORTING
+                input  = lw_8005-lenum
+              IMPORTING
+                output = lw_8005-lenum.
+            APPEND lw_8005 TO lt_8005.
+            CLEAR: lw_8005,lw_sloc.
+            cnt5 = cnt5 + 1.
+          ENDLOOP.
+
+          lt_8005x_tmp =  lt_8005x.
+          SORT lt_8005x_tmp BY lenum.
+          DELETE ADJACENT DUPLICATES FROM lt_8005x_tmp COMPARING lenum.
+
+          LOOP AT lt_8005x_tmp INTO lw_8005x_tmp.
+            READ TABLE lt_8005 WITH KEY lenum = lw_8005x_tmp-lenum TRANSPORTING NO FIELDS.
+            IF sy-subrc <> 0.
+
+              CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+                EXPORTING
+                  input  = lw_8005x_tmp-lenum
+                IMPORTING
+                  output = lw_8005x_tmp-lenum.
+
+              APPEND lw_8005x_tmp TO lt_8005.
+              cnt5 = cnt5 + 1.
+            ENDIF.
+          ENDLOOP.
+        ENDIF.
+      ENDIF.
+      IF barcode_scan1 IS NOT INITIAL.
+        FREE: amt,su_no, lv_total_qty,lw_lips,wa_lqua.
+        SPLIT barcode_scan1 AT space INTO lv_mat su_no.
+
+        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+          EXPORTING
+            input  = lv_mat
+          IMPORTING
+            output = lv_mat.
+
+        IF lv_mat IS INITIAL.
+*          SET CURSOR FIELD 'BARCODE_SCAN1'.
+*          CLEAR: barcode_scan1.
+          MESSAGE 'Material is blank' TYPE 'E'.
+        ENDIF.
+        READ TABLE lt_8005 INTO lw_8005 WITH KEY lenum = su_no.
+        IF sy-subrc NE 0.
+          CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+            EXPORTING
+              input  = su_no
+            IMPORTING
+              output = su_no.
+
+          SELECT SINGLE lenum  FROM lein
+                           INTO @DATA(v_lein1)
+                     WHERE lenum = @su_no.
+          IF sy-subrc <> 0.
+*            SET CURSOR FIELD 'BARCODE_SCAN1'.
+*            CLEAR: barcode_scan1.
+            MESSAGE 'Storage Unit Doesnot exist' TYPE 'E'.
+          ENDIF.
+          CLEAR : lw_lqua_tmp1.
+          SELECT SINGLE * FROM lqua INTO lw_lqua_tmp1 WHERE matnr = lv_mat
+                                       AND lenum = su_no.
+          IF sy-subrc = 0.
+            SELECT COUNT(*) FROM lqua "FOR ALL ENTRIES IN lt_8005
+            WHERE charg = lw_lqua_tmp1-charg " lt_8005-charg
+            AND lenum = su_no.
+            IF sy-subrc NE 0.
+              SET CURSOR FIELD 'BARCODE_SCAN1'.
+              CLEAR: barcode_scan1.
+              MESSAGE 'Wrong Batch Selected.' TYPE 'E'.
+            ELSE.
+              SELECT matnr charg lgtyp lgpla verme lenum lgort FROM lqua
+              APPENDING TABLE it_lqua WHERE lenum = su_no.
+              IF sy-subrc = 0.
+                SORT it_lqua BY charg matnr lenum ASCENDING.
+                DELETE ADJACENT DUPLICATES FROM it_lqua COMPARING charg matnr lenum .
+
+                CLEAR: wa_lqua_tmp.
+                READ TABLE it_lqua INTO wa_lqua_tmp
+                WITH KEY lenum = su_no.
+
+*                LOOP AT it_lqua INTO wa_lqua WHERE charg = wa_lqua_tmp-charg.
+                LOOP AT lt_lips INTO lw_lips  WHERE matnr =  lv_mat "wa_lqua-matnr
+                                              AND   charg = wa_lqua_tmp-charg.
+                  amt =  amt + lw_lips-lfimg.
+                ENDLOOP.
+                CLEAR: lv_total_qty1,lv_total_qty.
+                LOOP AT lt_sloc INTO lw_sloc WHERE matnr =  lv_mat
+                                                 AND charg = wa_lqua_tmp-charg
+                                                 AND obd_lineitem = lw_lips-posnr.
+                  lv_total_qty1 =  lv_total_qty1 + lw_sloc-su_qty.
+
+                  obd_no = lw_sloc-obd_no.
+                ENDLOOP.
+
+                CLEAR: wa_lqua.
+                LOOP AT it_lqua INTO wa_lqua WHERE matnr =  lv_mat
+                                             AND charg = wa_lqua_tmp-charg.
+                  READ TABLE lt_sloc INTO lw_sloc WITH KEY lenum = wa_lqua-lenum
+                                                           matnr =  lv_mat
+                                                           charg = wa_lqua_tmp-charg.
+                  IF sy-subrc <> 0.
+                    lv_total_qty =  lv_total_qty + wa_lqua-verme.
+                  ENDIF.
+                ENDLOOP.
+
+                lv_total_qty1 = lv_total_qty1 + lv_total_qty.
+
+                gv_obd_no = obd_no.
+
+                CLEAR : lw_8005,wa_lqua.
+*                SORT lt_8002 BY batch_no ASCENDING.
+*                READ TABLE lt_8002 INTO lw_8002
+*                WITH KEY batch_no = wa_lqua-charg BINARY SEARCH.
+                IF lv_total_qty1 LE amt  ."lw_8002-qty. " changes done on 13.04.2019.
+                  CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+                    EXPORTING
+                      input  = su_no
+                    IMPORTING
+                      output = su_no.
+                  lw_8005-charg = wa_lqua_tmp-charg ."wa_lqua-charg.
+                  lw_8005-lenum = su_no.
+                  lw_8005-matnr  = lv_mat.
+                  lw_8005-qty   = wa_lqua_tmp-verme ."wa_lqua-verme.
+                  APPEND lw_8005 TO lt_8005.
+                  APPEND lw_8005 TO lt_8005x.
+
+                  CLEAR : lw_8005, su_no.
+                  cnt5 = cnt5 + 1.
+                ELSE.
+                  DELETE lt_8005x WHERE lenum =  su_no.
+                  DELETE it_lqua WHERE lenum =  su_no.
+                  FREE: su_no.
+*                    SET CURSOR FIELD 'BARCODE_SCAN1'.
+*                    CLEAR: barcode_scan1.
+                  CONCATENATE 'Quantity exceeded for batch '  wa_lqua_tmp-charg INTO lv_msg SEPARATED BY space.
+                  MESSAGE lv_msg TYPE 'I'.
+                ENDIF.
+              ENDIF.
+            ENDIF.
+          ELSE.
+            FREE:su_no.
+*              SET CURSOR FIELD 'BARCODE_SCAN1'.
+*              CLEAR: barcode_scan1.
+            MESSAGE 'Wrong Material Selected.' TYPE 'I'.
+          ENDIF.
+        ELSE.
+*          SET CURSOR FIELD 'BARCODE_SCAN1'.
+*          CLEAR: barcode_scan1.
+          MESSAGE 'SU no. already selected.' TYPE 'I'.
+        ENDIF.
+      ENDIF.
+      FREE: barcode_scan1.
+    WHEN 'SAVE'.
+      CLEAR: lt_sloc8005.
+      IF lt_8005x[] IS NOT INITIAL.
+        FREE:no,lw_zmm_load.
+        SELECT load_no load_item obd_no obd_headitem FROM zmm_load_sloc
+        INTO TABLE lt_zmm_load
+        WHERE load_no = load_no.
+        DESCRIBE TABLE lt_zmm_load LINES no.
+
+        READ TABLE lt_zmm_load INTO lw_zmm_load INDEX 1.
+        IF sy-subrc = 0.
+          IF lin_item = '000000' AND lw_zmm_load-obd_item IS NOT INITIAL.
+            lin_item = lw_zmm_load-obd_item.
+          ENDIF.
+          SELECT vbeln posnr matnr lgort charg
+          lfimg meins uepos lgpla uecha uepvw FROM lips
+          INTO CORRESPONDING FIELDS OF TABLE lt_lips
+          WHERE vbeln = lw_zmm_load-obd_no
+          AND uecha = lw_zmm_load-obd_item.
+
+          IF lt_8005 IS NOT INITIAL.
+            SELECT matnr werks charg lenum verme lgpla lgort
+             FROM lqua INTO TABLE lt_lqua
+             FOR ALL ENTRIES IN lt_8005
+              WHERE "werks = lt_8005-werks
+                matnr  = lt_8005-matnr.
+          ENDIF.
+          IF sy-subrc = 0 .
+*           READ TABLE lt_lips INTO lw_lips INDEX 1.
+            LOOP AT lt_8005x INTO lw_8005x.
+              CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+                EXPORTING
+                  input  = lw_8005x-lenum
+                IMPORTING
+                  output = lw_8005x-lenum.
+              CLEAR : lw_lqua.
+              READ TABLE lt_lqua INTO lw_lqua
+              WITH KEY lenum = lw_8005x-lenum.
+              IF sy-subrc = 0.
+                READ TABLE lt_lips INTO lw_lips WITH KEY matnr = lw_lqua-matnr
+                                                         charg = lw_lqua-charg
+                                                         lgort = lw_lqua-lgort.
+                IF sy-subrc = 0.
+
+                  IF gv_obd_no IS INITIAL.
+                    gv_obd_no = lw_lips-vbeln.
+                    lin_item = lw_lips-uecha.
+                  ENDIF.
+                ENDIF.
+              ENDIF.
+              no = no + 1.
+              lw_sloc8005-load_no       = load_no.
+              lw_sloc8005-load_item     = no.
+              lw_sloc8005-su_no         = lw_8005x-lenum.
+              lw_sloc8005-obd_no        = gv_obd_no."obd_no.
+              lw_sloc8005-obd_lineitem  = lw_lips-posnr.
+              lw_sloc8005-obd_headitem  = lin_item.
+              lw_sloc8005-entry_date    = sy-datum.
+              lw_sloc8005-storage_loc   = lw_lqua-lgort.
+              lw_sloc8005-matnr         = lw_lips-matnr.
+              lw_sloc8005-batch_no      = lw_lqua-charg.
+              lw_sloc8005-quantity      = lw_lips-lfimg.
+              lw_sloc8005-uom           = lw_lips-meins.
+              lw_sloc8005-bin_loc       = lw_lqua-lgpla.
+              lw_sloc8005-load_status   = 'I'.
+              lw_sloc8005-plant         = lw_lqua-werks.
+              lw_sloc8005-su_qty        = lw_lqua-verme.
+              APPEND lw_sloc8005 TO lt_sloc8005.
+
+*              CLEAR: wa_free_qty.
+*              READ TABLE it_free_qty INTO wa_free_qty WITH KEY
+*                                                     vbeln = gv_obd_no
+*                                                     matnr = lw_lips-matnr
+*                                                     charg = lw_lips-charg.
+**                                                     del_item = lw_lips-posnr.
+*              IF sy-subrc = 0.
+*                lw_sloc8005-quantity = wa_free_qty-free_qty.
+*                lw_sloc8005-obd_lineitem = wa_free_qty-posnr.
+*                APPEND lw_sloc8005 TO lt_sloc8005.
+*              ENDIF.
+              CLEAR: lw_sloc8005,lw_8005,lw_lqua,obd_no.
+            ENDLOOP.
+
+            MODIFY zmm_load_sloc FROM TABLE lt_sloc8005.
+            COMMIT WORK AND WAIT.
+*            CLEAR:lt_sloc8005.
+            MESSAGE 'Data Saved Sucessfully' TYPE 'S'.
+          ENDIF.
+        ENDIF.
+        FREE: lt_8005x[].
+      ENDIF.
+    WHEN 'DELETE'.
+      IF lt_8005[] IS NOT INITIAL.
+        LOOP AT lt_8005 INTO lw_8005 WHERE cnt22 = 'X'.
+          CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+            EXPORTING
+              input  = lw_8005-lenum
+            IMPORTING
+              output = lw_8005-lenum.
+
+          UPDATE zmm_load_sloc SET del_ind = 'X'
+                             WHERE load_no = load_no
+                               AND su_no   = lw_8005-lenum.
+          COMMIT WORK AND WAIT.
+        ENDLOOP.
+        DELETE lt_8005 WHERE cnt22 = abap_true.
+        DESCRIBE TABLE lt_8005 LINES cnt5.
+      ENDIF.
+    WHEN 'POST'.
+
+      IF lt_8005x[] IS INITIAL.
+        PERFORM create_tu.
+
+        FREE: obd_no,lin_item,lt_8002,lw_8002,gw_lenum,lt_8004,lw_8004,su_cnt,barcode_scan,cnt,lw_lips-matnr,
+        lt_8005,lw_8005,lv_total_qty_ltot.
+        CLEAR: su_cnt,lw_lips-matnr,lw_8004,wa_lqua,lw_lips, barcode_scan1, barcode_scan.
+        FREE: lt_8004,it_lqua,lt_lips.
+        LEAVE TO SCREEN 8000.
+      ELSE.
+        MESSAGE 'Please save added SU number.' TYPE 'I'.
+      ENDIF.
+*      ELSE.
+*        MESSAGE 'Total Quantity does not match with SU quantity.' TYPE 'I'.
+*      ENDIF.
+  ENDCASE.
+ENDMODULE.
+
+*&---------------------------------------------------------------------*
+*&      Module  STATUS_8005  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE status_8005 OUTPUT.
+  SET PF-STATUS 'ZMM_8005'.
+*  SET TITLEBAR 'xxx'.
+  fill805 = cnt5.
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  TRANSP_ITAB_OUT  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE transp_itab_out_8005 OUTPUT.
+*  DATA: lw_8005d TYPE ty_pallety.
+  idx805 = sy-stepl + line805.
+  READ TABLE lt_8005 INTO lw_8005 INDEX idx805.
+  IF sy-subrc = 0.
+    lw_8005 = lt_8005[ idx805 ].
+  ENDIF.
+ENDMODULE.
+MODULE transp_itab_in_8005 INPUT.
+  lines805 = sy-loopc.
+  idx805 = sy-stepl + line805.
+  MODIFY lt_8005 FROM lw_8005 INDEX idx805.
+  CLEAR: lw_8005.
+ENDMODULE.
+
+FORM create_tu.
+  TABLES: ltak.
+  TYPES: BEGIN OF ty_pick,
+           werks TYPE werks_d,
+           lgort TYPE lgort_d,
+           lgnum TYPE lgnum,
+           lgtyp TYPE lgtyp,
+           lgber TYPE lgber,
+         END OF ty_pick,
+
+         BEGIN OF ty_lein,
+           lenum TYPE  lenum,
+           lgnum TYPE  lgnum,
+           letyp TYPE lvs_letyp,
+           lgtyp TYPE lgtyp,
+           lgpla TYPE lgpla,
+         END OF ty_lein.
+
+  DATA lw_qty TYPE zmm_load_sloc.
+  DATA: it_load_sloc      TYPE STANDARD TABLE OF zmm_load_sloc,
+        wa_load_sloc      TYPE zmm_load_sloc,
+        it_load_slocx     TYPE STANDARD TABLE OF zmm_load_sloc,
+        it_load_slocx_tmp TYPE STANDARD TABLE OF zmm_load_sloc,
+        wa_load_slocx     TYPE zmm_load_sloc,
+        it_picklist       TYPE STANDARD TABLE OF ty_pick,
+        wa_picklist       TYPE ty_pick,
+        it_lein           TYPE STANDARD TABLE OF ty_lein,
+        wa_lein           TYPE ty_lein.
+
+  DATA: it_delit     TYPE l03b_delit_t,
+        wa_delit     LIKE LINE OF it_delit,
+        it_ltak      TYPE STANDARD TABLE OF ltak_vb,
+        it_wmgrp_msg TYPE STANDARD TABLE OF wmgrp_msg,
+        it_ltap      TYPE STANDARD TABLE OF  ltap_vb , "ltap_conf,
+        it_ltap_temp TYPE STANDARD TABLE OF  ltap_vb , "ltap_conf,
+        wa_ltap_temp TYPE ltap_vb,
+        lw_ltap1_tmp TYPE  ltap_vb,
+        lv_flag      TYPE c,
+        wa_ltap      LIKE LINE OF it_ltap.
+
+
+  DATA :gv_text TYPE char100,
+        v_tanum TYPE char10.
+  FIELD-SYMBOLS: <lfs_load_sloc>  LIKE LINE OF it_load_sloc,
+                 <lfs_load_slocx> LIKE LINE OF it_load_slocx.
+
+  DATA: lv_tanum TYPE ltak-tanum,
+        lv_teilk TYPE t340d-teilv,
+        flag     TYPE c,
+        lv_tabix TYPE i,
+        row      TYPE i,
+        lv_vbeln TYPE vbeln,
+        lv_msg   TYPE string.
+  CONSTANTS load_status TYPE c VALUE 'W'.
+  DATA :it_ltap_conf  TYPE STANDARD TABLE OF ltap_conf,
+        lw_ltap1_tmp1 TYPE ltap_conf.
+  DATA su_qty TYPE menge_d.
+  DATA total_del_qty TYPE lips-lfimg.
+
+  gv_text = 'TO created and confirmed with no'.
+
+  CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+    EXPORTING
+      input  = load_no
+    IMPORTING
+      output = load_no.
+
+  CLEAR:it_load_sloc, it_picklist.
+
+  IF load_no IS NOT INITIAL.
+
+    SELECT * FROM zmm_load_sloc INTO TABLE it_load_sloc
+    WHERE load_no = load_no
+    AND   load_status IN ('I', 'W')
+    AND to_no       = ' '
+    AND del_ind     = ' '.
+
+  ENDIF.
+
+  CLEAR lw_qty.
+  READ TABLE it_load_sloc INTO lw_qty INDEX 1.
+
+  IF sy-subrc = 0 AND it_load_sloc IS NOT INITIAL.
+    SELECT werks lgort lgnum lgtyp lgber FROM zwm_picklist
+                                         INTO TABLE it_picklist
+                                         FOR ALL ENTRIES IN it_load_sloc
+                                         WHERE werks = it_load_sloc-plant.
+
+    IF it_load_sloc IS NOT INITIAL.
+      SELECT lenum lgnum letyp lgtyp lgpla FROM lein
+                                     INTO TABLE it_lein
+                                     FOR ALL ENTRIES IN it_load_sloc
+                                     WHERE lenum = it_load_sloc-su_no.
+
+      it_load_slocx = it_load_sloc.
+      DELETE ADJACENT DUPLICATES FROM it_load_sloc COMPARING load_no.
+    ENDIF.
+
+
+    SORT: it_load_sloc BY load_no,
+          it_load_slocx BY load_no.
+
+    CLEAR: lv_vbeln.
+    LOOP AT it_load_slocx  ASSIGNING <lfs_load_slocx>.
+      IF sy-tabix = 1.
+        lv_vbeln = <lfs_load_slocx>-obd_no.
+      ENDIF.
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+        EXPORTING
+          input  = <lfs_load_slocx>-su_no
+        IMPORTING
+          output = <lfs_load_slocx>-su_no.
+
+      su_qty = su_qty + <lfs_load_slocx>-su_qty.
+
+      READ TABLE it_picklist INTO wa_picklist
+      WITH KEY werks = <lfs_load_slocx>-plant.
+
+
+      READ TABLE it_lein INTO wa_lein
+      WITH KEY lenum = <lfs_load_slocx>-su_no.
+      IF sy-subrc = 0.
+        wa_ltap-letyp  =  wa_lein-letyp.
+        wa_ltap-lgnum  =  wa_lein-lgnum.
+        wa_ltap-vlber  =  wa_picklist-lgber.
+        wa_ltap-posnr = <lfs_load_slocx>-obd_lineitem.
+      ENDIF.
+      wa_delit-posnr = <lfs_load_slocx>-obd_lineitem.
+      wa_delit-anfme = <lfs_load_slocx>-su_qty.
+      wa_delit-altme = <lfs_load_slocx>-uom.
+      wa_delit-charg = <lfs_load_slocx>-batch_no.
+
+      wa_delit-letyp  =  wa_lein-letyp.
+      wa_delit-vltyp =  wa_lein-lgtyp.
+      wa_delit-vlpla = <lfs_load_slocx>-bin_loc.
+      wa_delit-vlber  = wa_picklist-lgber.
+*      wa_delit-vlenr = <lfs_load_slocx>-su_no.
+      UNPACK <lfs_load_slocx>-su_no TO wa_delit-vlenr.
+      APPEND wa_delit TO it_delit.
+      row = row + 1.
+      wa_ltap-tapos = row.
+      wa_ltap-altme = <lfs_load_slocx>-uom.
+      wa_ltap-charg = <lfs_load_slocx>-batch_no.
+
+      wa_ltap-vltyp =  wa_lein-lgtyp.
+      wa_ltap-letyp = wa_lein-letyp.
+      wa_ltap-vlpla = <lfs_load_slocx>-bin_loc.
+
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+        EXPORTING
+          input  = <lfs_load_slocx>-su_no
+        IMPORTING
+          output = <lfs_load_slocx>-su_no.
+      wa_ltap-matnr  = <lfs_load_slocx>-matnr.
+      wa_ltap-sonum = <lfs_load_slocx>-su_no.
+      wa_ltap-nista = <lfs_load_slocx>-su_qty.
+      APPEND wa_ltap TO it_ltap.
+
+    ENDLOOP.
+
+    CLEAR it_load_slocx_tmp.
+    it_load_slocx_tmp = it_load_slocx.
+    SORT it_load_slocx_tmp BY matnr batch_no.
+    IF p_status = ' '.
+      DELETE ADJACENT DUPLICATES FROM it_load_slocx_tmp COMPARING matnr batch_no.
+    ENDIF.
+    LOOP AT it_load_slocx_tmp ASSIGNING FIELD-SYMBOL(<fs_ltap_temp>).
+
+      IF <fs_ltap_temp> IS ASSIGNED.
+        total_del_qty = total_del_qty + <fs_ltap_temp>-quantity.
+      ENDIF.
+
+    ENDLOOP.
+    CLEAR: lv_flag.
+
+    CLEAR :lv_total_qty_ltot.
+    SELECT vbeln posnr lfimg uecha FROM lips INTO CORRESPONDING FIELDS OF TABLE lt_lips
+      WHERE  vbeln = lv_vbeln
+      AND uecha =  lw_qty-obd_headitem.
+    IF sy-subrc = 0.
+      LOOP AT lt_lips INTO lw_lips WHERE uecha = lw_qty-obd_headitem.
+        lv_total_qty_ltot  = lv_total_qty_ltot + lw_lips-lfimg.
+      ENDLOOP.
+    ENDIF.
+
+    IF su_qty NE lv_total_qty_ltot. "total_del_qty.
+      lv_flag  = 'X'.
+      UPDATE zmm_load_sloc SET
+      err_msg   = 'Del Qty didnt Match with total SU Qty.'
+      load_status    = 'I'
+      WHERE load_no = load_no.
+      COMMIT WORK AND WAIT.
+*      SET CURSOR FIELD 'BARCODE_SCAN1'.
+*      CLEAR: barcode_scan1.
+      MESSAGE 'Delivery quantity not equal to box qty.' TYPE 'E'.
+    ENDIF.
+    IF it_ltap IS NOT INITIAL AND lv_flag IS INITIAL.
+      CALL FUNCTION 'L_TO_CREATE_DN'
+        EXPORTING
+          i_lgnum                    = wa_picklist-lgnum
+          i_vbeln                    = lv_vbeln "<lfs_load_slocx>-obd_no
+          i_commit_work              = 'X'
+          i_bname                    = sy-uname
+          i_solex                    = total_del_qty
+          it_delit                   = it_delit
+        IMPORTING
+          e_tanum                    = lv_tanum
+          e_teilk                    = lv_teilk
+        TABLES
+          t_ltak                     = it_ltak
+          t_ltap_vb                  = it_ltap
+          t_wmgrp_msg                = it_wmgrp_msg
+        EXCEPTIONS
+          foreign_lock               = 1
+          dn_completed               = 2
+          partial_delivery_forbidden = 3
+          xfeld_wrong                = 4
+          ldest_wrong                = 5
+          drukz_wrong                = 6
+          dn_wrong                   = 7
+          squit_forbidden            = 8
+          no_to_created              = 9
+          teilk_wrong                = 10
+          update_without_commit      = 11
+          no_authority               = 12
+          no_picking_allowed         = 13
+          dn_hu_not_choosable        = 14
+          input_error                = 15
+          OTHERS                     = 16.
+      IF sy-subrc = 0.
+        flag = 'X'.
+        CLEAR: wa_ltap.
+      ELSE.
+        CLEAR: lv_msg.
+        CALL FUNCTION 'FORMAT_MESSAGE'
+          EXPORTING
+            id        = sy-msgid
+            lang      = '-D'
+            no        = sy-msgno
+            v1        = sy-msgv1
+            v2        = sy-msgv2
+            v3        = sy-msgv3
+            v4        = sy-msgv4
+          IMPORTING
+            msg       = lv_msg
+          EXCEPTIONS
+            not_found = 1
+            OTHERS    = 2.
+        CLEAR flag.
+
+        UPDATE zmm_load_sloc SET
+          err_msg        = lv_msg
+          to_create_date = sy-datum
+          load_status    = 'I'
+          WHERE load_no = load_no.
+*        SET CURSOR FIELD 'BARCODE_SCAN1'.
+*        CLEAR: barcode_scan1.
+        MESSAGE lv_msg TYPE 'E'.
+      ENDIF.
+
+***********************************************************
+*BDC for confirming created TO.
+***********************************************************
+      CLEAR:lt_messtab.
+      IF wa_picklist-lgnum IS NOT INITIAL AND flag = 'X' AND lv_tanum IS NOT INITIAL.
+        PERFORM bdc_dynpro      USING 'SAPML03T' '0111'.
+        PERFORM bdc_field       USING 'BDC_CURSOR'
+              'LTAK-TANUM'.
+        PERFORM bdc_field       USING 'BDC_OKCODE'
+              '/00'.
+        PERFORM bdc_field       USING 'LTAK-TANUM'
+                                        lv_tanum.
+        PERFORM bdc_field       USING 'LTAK-LGNUM'
+                                       wa_picklist-lgnum.
+
+        PERFORM bdc_dynpro      USING 'SAPML03T' '0113'.
+        PERFORM bdc_field       USING 'BDC_CURSOR'
+              'LTAK-LGNUM'.
+        PERFORM bdc_field       USING 'BDC_OKCODE'
+              '=BU'.
+        CALL TRANSACTION 'LT12' USING it_bdcdata
+               MESSAGES INTO lt_messtab MODE 'N' UPDATE 'S'.
+
+        CLEAR it_bdcdata.
+        CLEAR wa_bdcdata.
+*        CALL FUNCTION 'L_TO_CONFIRM'
+*          EXPORTING
+*            i_lgnum     = wa_picklist-lgnum
+*            i_tanum     = lv_tanum
+*            i_qname     = sy-uname
+**           i_commit_work = 'X'
+*          TABLES
+*            t_ltap_conf = it_ltap_conf.
+
+        CLEAR:lw_messtab,lv_msg.
+        READ TABLE lt_messtab INTO lw_messtab WITH KEY msgtyp = 'E' .
+        IF sy-subrc = 0.
+          CALL FUNCTION 'FORMAT_MESSAGE'
+            EXPORTING
+              id        = lw_messtab-msgid
+              lang      = '-D'
+              no        = lw_messtab-msgnr
+              v1        = lw_messtab-msgv1
+              v2        = lw_messtab-msgv2
+              v3        = lw_messtab-msgv3
+              v4        = lw_messtab-msgv4
+            IMPORTING
+              msg       = lv_msg
+            EXCEPTIONS
+              not_found = 1
+              OTHERS    = 2.
+
+          UPDATE zmm_load_sloc SET "to_no          = lv_tanum
+           err_msg        = lv_msg
+           to_create_date = sy-datum
+           load_status    = 'I'
+           WHERE load_no = load_no.
+          COMMIT WORK AND WAIT.
+*          SET CURSOR FIELD 'BARCODE_SCAN1'.
+*          CLEAR: barcode_scan1.
+          MESSAGE lv_msg TYPE 'E'.
+        ELSE.
+          UPDATE zmm_load_sloc SET to_no = lv_tanum
+          err_msg        = ' '
+          to_create_date = sy-datum
+          load_status    = 'C'
+          WHERE load_no = load_no.
+
+*          DO 60 TIMES.
+*
+*          SELECT SINGLE LTAP WHERE
+*
+*          ENDDO.
+          COMMIT WORK AND WAIT.
+          FREE:it_delit[],it_bdcdata.
+          CONCATENATE gv_text lv_tanum INTO gv_text SEPARATED BY space.
+          MESSAGE gv_text TYPE 'S'.
+        ENDIF.
+        CLEAR lv_tanum.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+
+ENDFORM.
+
+FORM bdc_dynpro USING program dynpro.
+  CLEAR wa_bdcdata.
+  wa_bdcdata-program  = program.
+  wa_bdcdata-dynpro   = dynpro.
+  wa_bdcdata-dynbegin = abap_true.
+  APPEND wa_bdcdata TO it_bdcdata.
+ENDFORM.
+***********************************************************
+*BDC FORM bdc_field
+***********************************************************
+FORM bdc_field USING fnam fval.
+
+  CLEAR wa_bdcdata.
+  wa_bdcdata-fnam = fnam.
+  wa_bdcdata-fval = fval.
+  APPEND wa_bdcdata TO it_bdcdata.
+
+ENDFORM.
+
+

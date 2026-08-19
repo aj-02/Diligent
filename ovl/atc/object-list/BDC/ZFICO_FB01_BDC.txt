@@ -1,0 +1,1681 @@
+*&---------------------------------------------------------------------*
+*& Report  ZFICO_FB01_BDC
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+
+REPORT  zfico_fb01_bdc NO STANDARD PAGE HEADING LINE-SIZE 120 MESSAGE-ID 00.
+
+TYPE-POOLS: truxs.
+
+*INCLUDE bdcrecx1.
+
+*ERROR MESSAGE TABLE
+DATA: BEGIN OF t_err_mess OCCURS 0,
+  matnr     LIKE mara-matnr,
+  TEXT(100) TYPE C,
+END OF t_err_mess.
+*BDC RUN MODE A/E/N
+DATA  MODE(1) TYPE C.
+*MESSAGE TABLE
+DATA: BEGIN OF t_mess OCCURS 0,
+  bukrs     LIKE bkpf-bukrs,
+  msgv1     LIKE bdcmsgcoll-msgv1,
+  TEXT(200) TYPE C,
+END OF t_mess.
+
+
+*       Batchinputdata of single transaction
+DATA:   bdcdata LIKE bdcdata    OCCURS 0 WITH HEADER LINE.
+*       messages of call transaction
+DATA:   messtab LIKE bdcmsgcoll OCCURS 0 WITH HEADER LINE.
+*       error session opened (' ' or 'X')
+
+*structure to hold file data
+DATA: BEGIN OF t_customer OCCURS 0,
+  doc_date(10)   TYPE C,            "document date
+  blart          LIKE bkpf-blart,          "document type
+  bukrs          LIKE bseg-bukrs,          "company code
+  post_date(10)  TYPE C,           "posting date
+  waers          LIKE bkpf-waers,          "currency key
+  kursf(10)      TYPE C,               "exchange rate
+  ldgrp          LIKE bkpf-ldgrp,          " ledger group
+  xblnr          LIKE bkpf-xblnr,          "reference number
+  bktxt          LIKE bkpf-bktxt,          "header text
+  newbs          LIKE rf05a-newbs,         "posting key
+  newko          LIKE rf05a-newko,         "gl account
+  newum          TYPE newum,               "Special G/L Indicator
+  wrbtr(15)      TYPE C,               "amount
+  dmbtr(15)      TYPE C,               "loc. currency
+  dmbe2(15)      TYPE C,               "group curr.
+  gsber          LIKE bseg-gsber,          "business area
+  prctr          LIKE bseg-prctr,          " Profit Center
+  zterm          LIKE bseg-zterm,          "payment terms
+  zfbdt(10)      TYPE C,               "base line date
+  zuonr          LIKE bseg-zuonr,          "assignment
+  sgtxt          LIKE bseg-sgtxt,
+  xref1          LIKE bseg-xref1,
+  xref2          LIKE bseg-xref2,          "long text
+  xref3          LIKE bseg-xref3,                              "Refernce-3
+
+  kostl          LIKE cobl-kostl,          "Cost Center
+  aufnr          LIKE cobl-aufnr,          "Order Number
+  ps_posid       LIKE cobl-ps_posid,    "WBS Element
+
+  hkont          LIKE bseg-hkont,          "Recon account , if ready for input.
+
+  mwskz          LIKE bseg-mwskz,          "tax code
+  wmwst(13)      TYPE C,               " TAX AMOUNT    " sachin 18.03.2011
+  mwsts(13)      TYPE C,               " LC TAX        " sachin 18.03.2011
+
+  wt_base1(15)   TYPE C,
+  wt_amount1(15) TYPE C,
+  wt_base2(15)   TYPE C,
+  wt_amount2(15) TYPE C,
+  wt_base3(15)   TYPE C,
+  wt_amount3(15) TYPE C,
+  wt_base4(15)   TYPE C,
+  wt_amount4(15) TYPE C,
+  wt_base5(15)   TYPE C,
+  wt_amount5(15) TYPE C,
+  wt_base6(15)   TYPE C,
+  wt_amount6(15) TYPE C,
+
+  koart          LIKE bseg-koart,      " account type    " sachin 29122010
+  tdsap(1)       TYPE C,            "TDS applicability fro vendors.
+  taxap(1)       TYPE C,            "tax applicability for GL.
+  cocur(3)       TYPE C,            "Co code currency
+
+END OF t_customer.
+
+DATA: BEGIN OF t_cust OCCURS 0,
+  xblnr          LIKE bkpf-xblnr,        "reference number
+*        matnr LIKE bseg-matnr,       "material number
+  doc_date(10)   TYPE C,          "document date
+  blart          LIKE bkpf-blart,        "document type
+  bukrs          LIKE bseg-bukrs,        "company code
+  post_date(10)  TYPE C,         "posting date
+  waers          LIKE bkpf-waers,        "currency key
+  kursf(10)      TYPE C,             "exchange rate
+  ldgrp          LIKE bkpf-ldgrp,        " ledger group
+  bktxt          LIKE bkpf-bktxt,        "header text
+  newbs          LIKE rf05a-newbs,       "posting key
+  newko          LIKE rf05a-newko,       "gl account
+  newum          TYPE newum,             "Special G/L Indicator
+  wrbtr(15)      TYPE C,             "doc curr. amount
+  dmbtr(15)      TYPE C,             "loc. currency amount
+  dmbe2(15)      TYPE C,             "group curr. amount
+  gsber          LIKE bseg-gsber,        "business area
+  prctr          LIKE bseg-prctr,        " Profit Center
+  zterm          LIKE bseg-zterm,        "payment terms
+  zfbdt(10)      TYPE C,             "base line date
+  zuonr          LIKE bseg-zuonr,        "assignment
+  sgtxt          LIKE bseg-sgtxt,        "long text
+  xref1          LIKE bseg-xref1,
+  xref2          LIKE bseg-xref2,
+  xref3          LIKE bseg-xref3,        "Refernce-3                 "onsite/offshore
+
+
+  kostl          LIKE cobl-kostl,        "Cost Center
+  aufnr          LIKE cobl-aufnr,        "Order Number
+  ps_posid       LIKE cobl-ps_posid,  "WBS Element
+
+  hkont          LIKE bseg-hkont,        "gl account
+
+  mwskz          LIKE bseg-mwskz,        "tax code
+  wmwst(13)      TYPE C,             " TAX AMOUNT  " sachin 18.03.2011
+  mwsts(13)      TYPE C,             " LC TAX      " sachin 18.03.2011
+
+  wt_base1(15)   TYPE C,
+  wt_amount1(15) TYPE C,
+  wt_base2(15)   TYPE C,
+  wt_amount2(15) TYPE C,
+  wt_base3(15)   TYPE C,
+  wt_amount3(15) TYPE C,
+  wt_base4(15)   TYPE C,
+  wt_amount4(15) TYPE C,
+  wt_base5(15)   TYPE C,
+  wt_amount5(15) TYPE C,
+  wt_base6(15)   TYPE C,
+  wt_amount6(15) TYPE C,
+
+  koart          LIKE bseg-koart,
+  tdsap(1)       TYPE C,            "TDS applicability fro vendors.
+  taxap(1)       TYPE C,            " Tax applicability for GL.
+  cocur(3)       TYPE C,            "Co Code local currency.
+  faus1(50)      TYPE C,            "Co Code local currency.
+  tdsap1(1),
+
+END OF t_cust.
+
+TYPES: BEGIN OF s_tbsl,
+  bschl TYPE tbsl-bschl,
+  koart TYPE tbsl-koart,
+END OF s_tbsl.
+DATA: t_tbsl TYPE STANDARD TABLE OF s_tbsl WITH HEADER LINE.
+
+TYPES: BEGIN OF s_skb1,
+  bukrs TYPE skb1-bukrs,
+  saknr TYPE skb1-saknr,
+END OF s_skb1.
+
+TYPES: BEGIN OF s_skb1d,
+  bukrs TYPE skb1-bukrs,
+  saknr TYPE skb1-saknr,
+  fstag TYPE skb1-fstag,
+  fstva TYPE t001-fstva,
+  faus1 TYPE t004f-faus1,
+END OF s_skb1d.
+
+
+TYPES: BEGIN OF s_lfbw,
+  bukrs      TYPE lfbw-bukrs,
+  lifnr      TYPE lfbw-lifnr,
+  witht      TYPE lfbw-witht,
+  invoice(1),
+  payment(1),
+END OF s_lfbw.
+
+TYPES: BEGIN OF s_knbw,
+  bukrs TYPE knbw-bukrs,
+  kunnr TYPE knbw-kunnr,
+END OF s_knbw.
+
+
+TYPES: BEGIN OF s_t001,
+  bukrs TYPE t001-bukrs,
+  waers TYPE t001-waers,
+  fstva TYPE t001-fstva,
+END OF s_t001.
+
+TYPES: BEGIN OF s_t004f,
+  fstva TYPE t004f-bukrs,
+  fstag TYPE t004f-fstag,
+  faus1 TYPE t004f-faus1,
+END OF s_t004f.
+
+
+
+DATA: gt_skb1 TYPE STANDARD TABLE OF s_skb1 WITH HEADER LINE.
+DATA: gt_skb1a TYPE STANDARD TABLE OF s_skb1 WITH HEADER LINE.
+DATA: gt_skb1d TYPE STANDARD TABLE OF s_skb1d WITH HEADER LINE.
+DATA: gt_skb1da TYPE STANDARD TABLE OF s_skb1d WITH HEADER LINE.
+DATA: gt_skb1db TYPE STANDARD TABLE OF s_skb1d WITH HEADER LINE.
+DATA: gt_lfbw TYPE STANDARD TABLE OF s_lfbw WITH HEADER LINE.
+DATA: gt_knbw TYPE STANDARD TABLE OF s_knbw WITH HEADER LINE.
+DATA: gt_knbw1 TYPE STANDARD TABLE OF s_knbw WITH HEADER LINE.
+DATA: gt_lfbw1 TYPE STANDARD TABLE OF s_lfbw WITH HEADER LINE.
+DATA: gt_t001 TYPE STANDARD TABLE OF s_t001 WITH HEADER LINE.
+DATA: gt_t001a TYPE STANDARD TABLE OF s_t001 WITH HEADER LINE.
+DATA: gt_t004f TYPE STANDARD TABLE OF s_t004f WITH HEADER LINE.
+DATA: wa_cust LIKE t_cust OCCURS 0 WITH HEADER LINE.
+DATA: gt_t059p LIKE t059p OCCURS 0 WITH HEADER LINE.
+
+DATA  g_flag(1) TYPE C.    "flag
+DATA  g_flag_t(1) TYPE C.  "flag
+DATA  g_flag_x(1) TYPE C.  "flag
+DATA  g_flag_y(1) TYPE C.
+DATA  g_flag_s(1) TYPE C.
+
+DATA  groupcur(3) TYPE C.
+
+DATA: it_type   TYPE truxs_t_text_data.
+
+DATA: g_length           TYPE I,                    " String Length
+      g_sublen           TYPE I,
+      count_sess         TYPE string,
+      count_item         TYPE string,
+      info_message(1000) TYPE C.                    " Sub String Length
+
+*SELECTION SCREEN DECLARATION
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
+  PARAMETERS: fname LIKE rlgrap-filename OBLIGATORY.
+*SELECTION-SCREEN SKIP.
+SELECTION-SCREEN END OF BLOCK b1.
+SELECTION-SCREEN BEGIN OF BLOCK b10 WITH FRAME TITLE TEXT-010.
+  PARAMETERS: dname LIKE rlgrap-filename OBLIGATORY MODIF ID 002.
+*SELECTION-SCREEN SKIP.
+SELECTION-SCREEN END OF BLOCK b10.
+
+SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
+  PARAMETERS: a       RADIOBUTTON GROUP r1 USER-COMMAND datp2,
+  e       RADIOBUTTON GROUP r1,
+  b       RADIOBUTTON GROUP r1 DEFAULT 'X',
+  session TYPE apqi-groupid MODIF ID 001 OBLIGATORY.
+SELECTION-SCREEN END OF BLOCK b2.
+SELECTION-SCREEN BEGIN OF BLOCK b3 WITH FRAME TITLE TEXT-003.
+  PARAMETERS: CHECK AS CHECKBOX.
+  SKIP 1.
+SELECTION-SCREEN END OF BLOCK b3.
+
+SELECTION-SCREEN: BEGIN OF BLOCK b4 WITH FRAME TITLE TEXT-004.
+  PARAMETERS: r_gsber AS CHECKBOX,
+  r_prctr AS CHECKBOX DEFAULT 'X'.
+SELECTION-SCREEN END OF BLOCK b4.
+
+SELECTION-SCREEN: BEGIN OF BLOCK b8 WITH FRAME TITLE TEXT-008.
+*PARAMETERS: r_xref3 AS CHECKBOX DEFAULT 'X',
+  PARAMETERS :  r_dmbe2 AS CHECKBOX .
+SELECTION-SCREEN END OF BLOCK b8.
+
+
+
+SELECTION-SCREEN: BEGIN OF BLOCK b5 WITH FRAME TITLE TEXT-005.
+
+  PARAMETERS: r_posid AS CHECKBOX,
+  r_kostl AS CHECKBOX DEFAULT 'X',
+  r_aufnr AS CHECKBOX.
+SELECTION-SCREEN END OF BLOCK b5.
+
+SELECTION-SCREEN: BEGIN OF BLOCK b6 WITH FRAME TITLE TEXT-006.
+
+  PARAMETERS: check1 RADIOBUTTON GROUP c1 USER-COMMAND datp1,
+  check2 RADIOBUTTON GROUP c1 DEFAULT 'X',
+  check4 AS CHECKBOX MODIF ID 003,
+  check3 RADIOBUTTON GROUP c1.
+SELECTION-SCREEN END OF BLOCK b6.
+
+SELECTION-SCREEN: BEGIN OF BLOCK b7 WITH FRAME TITLE TEXT-007.
+
+  PARAMETERS: tds1 RADIOBUTTON GROUP t1 DEFAULT 'X',
+  tds2 RADIOBUTTON GROUP t1,
+  tds3 RADIOBUTTON GROUP t1.
+SELECTION-SCREEN END OF BLOCK b7.
+
+
+*initialization.
+
+AT SELECTION-SCREEN OUTPUT.
+LOOP AT SCREEN.
+  CASE SCREEN-group1.
+  WHEN '003'.
+    IF check2 EQ 'X'.
+      SCREEN-invisible =  0.
+      SCREEN-INPUT     =  1.
+    ELSE.
+      SCREEN-invisible =  1.
+      SCREEN-INPUT     =  0.
+    ENDIF.
+
+  WHEN '001'.
+    IF b EQ 'X'.
+      SCREEN-invisible =  0.
+      SCREEN-INPUT     =  1.
+    ELSE.
+      SCREEN-invisible =  1.
+      SCREEN-INPUT     =  0.
+    ENDIF.
+  WHEN '002'.
+    IF b NE 'X'.
+      SCREEN-invisible =  0.
+      SCREEN-INPUT     =  1.
+    ELSE.
+      SCREEN-invisible =  1.
+      SCREEN-INPUT     =  0.
+    ENDIF.
+
+
+
+  ENDCASE.
+  MODIFY SCREEN.
+ENDLOOP.
+
+
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR fname.
+CALL FUNCTION 'KD_GET_FILENAME_ON_F4'
+EXPORTING
+  STATIC        = 'X'
+CHANGING
+  file_name     = fname
+EXCEPTIONS
+  mask_too_long = 1
+  OTHERS        = 2.
+IF sy-subrc <> 0.
+  MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+  WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+ENDIF.
+
+
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR dname.
+CALL FUNCTION 'KD_GET_FILENAME_ON_F4'
+EXPORTING
+  STATIC        = 'X'
+CHANGING
+  file_name     = dname
+EXCEPTIONS
+  mask_too_long = 1
+  OTHERS        = 2.
+IF sy-subrc <> 0.
+  MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+  WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+ENDIF.
+
+
+
+
+
+START-OF-SELECTION.
+*CHECK FOR MODE OPTION
+IF NOT CHECK IS INITIAL.
+  IF a EQ 'X'.
+    MODE = 'A'.
+ELSEIF e EQ 'X'.
+    MODE = 'E'.
+*  ELSEIF n EQ 'X'.
+*    mode = 'N'.
+  ENDIF.
+
+  PERFORM f_upload_customer_file.
+  PERFORM f_post_customer.
+ENDIF.
+IF b NE 'X'.
+  PERFORM write_messages.
+ENDIF.
+
+END-OF-SELECTION.
+IF CHECK IS INITIAL.
+  SKIP 4.
+  PRINT-CONTROL SIZE 2 COLOR BLACK FONT 2.
+  FORMAT COLOR 6 INTENSIFIED ON.
+  WRITE: /45 'No File Processed. Please click on " Update run ".'.
+  MESSAGE 'No File Processed. Please click on " Update run ".' TYPE 'S'.
+  FORMAT INTENSIFIED OFF.
+ENDIF.
+*top of page
+
+
+TOP-OF-PAGE.
+IF CHECK EQ 'X' AND b NE 'X'.
+  PERFORM top_of_page.
+ENDIF.
+*call transaction fb03 on click of document no.
+AT LINE-SELECTION.
+PERFORM display_document USING t_mess-msgv1.
+
+
+
+********************************----------------------------------------------------------------------
+*
+*        Start new screen
+*
+*----------------------------------------------------------------------
+*
+FORM bdc_dynpro USING PROGRAM DYNPRO.
+  CLEAR bdcdata.
+  bdcdata-PROGRAM  = PROGRAM.
+  bdcdata-DYNPRO   = DYNPRO.
+  bdcdata-dynbegin = 'X'.
+  APPEND bdcdata.
+ENDFORM.                    "BDC_DYNPRO
+
+*----------------------------------------------------------------------
+*
+*        Insert field
+*
+*----------------------------------------------------------------------
+*
+FORM bdc_field USING fnam fval.
+  CLEAR bdcdata.
+  bdcdata-fnam = fnam.
+  bdcdata-fval = fval.
+  APPEND bdcdata.
+ENDFORM.                    "BDC_FIELD
+*&---------------------------------------------------------------------*
+*&      Form  upload_file
+*&---------------------------------------------------------------------*
+FORM f_upload_customer_file .
+*  DATA: f_fname TYPE string.
+  DATA: t_lines TYPE I.
+*  f_fname = fname.
+
+  DATA: l_newko LIKE rf05a-newko.
+
+
+
+*DATA: sr_no TYPE i VALUE 1.
+*  FREE it_file.
+  CALL FUNCTION 'TEXT_CONVERT_XLS_TO_SAP'
+  EXPORTING
+*     I_FIELD_SEPERATOR    =
+*     I_LINE_HEADER        =
+    i_tab_raw_data       = it_type
+    i_filename           = fname
+  TABLES
+    i_tab_converted_data = t_customer
+  EXCEPTIONS
+    conversion_failed    = 1
+    OTHERS               = 2.
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+    WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+
+  READ TABLE t_customer INDEX 1.
+*  IF sy-subrc EQ 0.
+*    MOVE-CORRESPONDING wa_file TO wa_head.
+*    APPEND wa_head TO it_head.
+*  ENDIF.
+  DELETE t_customer  INDEX 1.
+*  SR_NO = 0.
+*  LOOP AT it_file INTO wa_file.
+*    sr_no = sr_no + 1.
+*    wa_file-sr_no =  sr_no .
+*    wa_file-file_no = '1'.
+*    MODIFY it_file FROM wa_file TRANSPORTING sr_no file_no.
+*    CLEAR : wa_file.
+*  ENDLOOP.
+
+  LOOP AT t_customer.
+    MOVE-CORRESPONDING t_customer TO t_cust.
+    APPEND t_cust.
+    CLEAR t_cust.
+
+  ENDLOOP.
+
+
+  LOOP AT t_cust.
+    CLEAR: l_newko.
+
+    IF t_cust-newko NA sy-abcde.
+      g_length = STRLEN( t_cust-newko ).
+      g_sublen = 10 - g_length.
+
+      CASE g_sublen.
+      WHEN '1'.
+        CONCATENATE '0' t_cust-newko INTO l_newko.
+        t_cust-newko = l_newko.
+        MODIFY t_cust.
+        CLEAR t_cust.
+
+      WHEN '2'.
+        CONCATENATE '00' t_cust-newko INTO l_newko.
+        t_cust-newko = l_newko.
+        MODIFY t_cust.
+        CLEAR t_cust.
+
+      WHEN '3'.
+        CONCATENATE '000' t_cust-newko INTO l_newko.
+        t_cust-newko = l_newko.
+        MODIFY t_cust.
+        CLEAR t_cust.
+
+      WHEN '4'.
+        CONCATENATE '0000' t_cust-newko INTO l_newko.
+        t_cust-newko = l_newko.
+        MODIFY t_cust.
+        CLEAR t_cust.
+
+      WHEN '5'.
+        CONCATENATE '00000' t_cust-newko INTO l_newko.
+        t_cust-newko = l_newko.
+        MODIFY t_cust.
+        CLEAR t_cust.
+
+      WHEN '6'.
+        CONCATENATE '000000' t_cust-newko INTO l_newko.
+        t_cust-newko = l_newko.
+        MODIFY t_cust.
+        CLEAR t_cust.
+
+      WHEN '7'.
+        CONCATENATE '0000000' t_cust-newko INTO l_newko.
+        t_cust-newko = l_newko.
+        MODIFY t_cust.
+        CLEAR t_cust.
+
+      WHEN '8'.
+        CONCATENATE '00000000' t_cust-newko INTO l_newko.
+        t_cust-newko = l_newko.
+        MODIFY t_cust.
+        CLEAR t_cust.
+
+      WHEN '9'.
+        CONCATENATE '000000000' t_cust-newko INTO l_newko.
+        t_cust-newko = l_newko.
+        MODIFY t_cust.
+        CLEAR t_cust.
+
+      ENDCASE.
+
+    ENDIF.
+
+  ENDLOOP.
+
+
+  SORT t_cust BY bktxt ASCENDING newbs DESCENDING.
+
+  SELECT bschl koart FROM tbsl INTO TABLE t_tbsl
+  FOR ALL ENTRIES IN t_cust WHERE bschl = t_cust-newbs.
+
+  SORT t_cust BY newbs.
+  SORT t_tbsl BY bschl.
+  LOOP AT t_cust.
+    READ TABLE t_tbsl WITH KEY bschl = t_cust-newbs BINARY SEARCH.
+    IF sy-subrc = 0.
+      t_cust-koart = t_tbsl-koart.
+      MODIFY t_cust.
+      CLEAR t_cust.
+    ENDIF.
+  ENDLOOP.
+
+
+  "============="Start -  TDS===================
+  SORT t_cust BY koart.
+
+
+  IF tds2 NE 'X'.
+
+
+    LOOP AT t_cust WHERE koart = 'K'.
+      gt_lfbw-bukrs = t_cust-bukrs.
+      gt_lfbw-lifnr = t_cust-newko.
+
+      APPEND gt_lfbw.
+      CLEAR gt_lfbw.
+    ENDLOOP.
+
+    SORT gt_lfbw BY bukrs lifnr.
+    DELETE ADJACENT DUPLICATES FROM gt_lfbw.
+
+    IF NOT gt_lfbw[] IS INITIAL.
+      SORT gt_lfbw BY  bukrs lifnr.
+      SELECT bukrs lifnr witht FROM lfbw INTO TABLE gt_lfbw1
+      FOR ALL ENTRIES IN gt_lfbw
+      WHERE bukrs EQ gt_lfbw-bukrs AND
+      lifnr EQ gt_lfbw-lifnr AND
+      wt_subjct EQ 'X' .
+      SELECT * FROM t059p
+      INTO TABLE gt_t059p
+      FOR ALL ENTRIES IN gt_lfbw1
+      WHERE land1 = 'IN'
+      AND   witht = gt_lfbw1-witht
+      AND wt_postm = '2'.
+
+      LOOP AT gt_lfbw1.
+        READ TABLE gt_t059p WITH KEY witht = gt_lfbw1-witht.
+        IF sy-subrc = 0.
+          gt_lfbw1-payment = 'X'.
+        ELSE.
+          gt_lfbw1-invoice = 'X'.
+        ENDIF.
+        MODIFY gt_lfbw1 TRANSPORTING payment invoice.
+      ENDLOOP.
+
+
+      SORT gt_lfbw BY  bukrs lifnr.
+      SORT gt_lfbw1 BY  bukrs lifnr.
+
+      DATA: ind TYPE sy-tabix.
+
+      LOOP AT t_cust.
+        ind = sy-tabix.
+
+*        READ TABLE gt_lfbw1 WITH TABLE KEY lifnr = t_cust-newko
+*                                           bukrs = t_cust-bukrs.
+        IF sy-subrc = 0.
+*          t_cust-tdsap = 'X'.
+*          MODIFY t_cust INDEX ind TRANSPORTING tdsap.
+*          CLEAR t_cust.
+        ENDIF.
+
+      ENDLOOP.
+
+    ENDIF.
+
+  ENDIF.
+
+
+
+
+
+
+  LOOP AT t_cust WHERE koart = 'D'.
+    gt_knbw-bukrs = t_cust-bukrs.
+    gt_knbw-kunnr = t_cust-newko.
+
+    APPEND gt_knbw.
+    CLEAR gt_knbw.
+  ENDLOOP.
+
+  SORT gt_knbw BY bukrs kunnr.
+  DELETE ADJACENT DUPLICATES FROM gt_knbw.
+
+  IF NOT gt_knbw[] IS INITIAL.
+    SORT gt_knbw BY  bukrs kunnr.
+    SELECT bukrs kunnr FROM knbw INTO TABLE gt_knbw1
+    FOR ALL ENTRIES IN gt_knbw
+    WHERE bukrs EQ gt_knbw-bukrs AND
+    kunnr EQ gt_knbw-kunnr AND
+    wt_agent EQ 'X' .
+
+    SORT gt_knbw BY  bukrs kunnr.
+    SORT gt_knbw1 BY  bukrs kunnr.
+
+    DATA: ind8 TYPE sy-tabix.
+
+    LOOP AT t_cust.
+      ind8 = sy-tabix.
+
+      READ TABLE gt_knbw1 WITH TABLE KEY kunnr = t_cust-newko
+      bukrs = t_cust-bukrs.
+      IF sy-subrc = 0.
+        t_cust-tdsap = 'X'.
+
+        MODIFY t_cust INDEX ind8 TRANSPORTING tdsap.
+        CLEAR t_cust.
+      ENDIF.
+    ENDLOOP.
+
+  ENDIF.
+
+
+
+
+
+  "=============END "TDS Logic"==============================
+
+
+  "=============Start "TAX Logic"==============================
+
+
+  LOOP AT t_cust WHERE koart EQ 'S' OR koart EQ 'A'.
+
+    gt_skb1-bukrs = t_cust-bukrs.
+    gt_skb1-saknr = t_cust-newko.
+*
+    APPEND gt_skb1.
+    CLEAR gt_skb1.
+  ENDLOOP.
+  SORT gt_skb1 BY bukrs saknr.
+
+  DELETE ADJACENT DUPLICATES FROM gt_skb1.
+
+  IF NOT gt_skb1[] IS INITIAL.
+    SORT gt_skb1 BY  bukrs saknr.
+
+    SELECT bukrs saknr FROM skb1 INTO TABLE gt_skb1a FOR ALL ENTRIES IN gt_skb1
+    WHERE bukrs EQ gt_skb1-bukrs
+    AND saknr EQ gt_skb1-saknr
+    AND mwskz IN ('>','<').
+
+    SORT gt_skb1 BY  bukrs saknr.
+    SORT gt_skb1a BY  bukrs saknr.
+
+    DATA: ind1 TYPE sy-tabix.
+
+    LOOP AT t_cust.
+      ind1 = sy-tabix.
+
+      READ TABLE gt_skb1a WITH TABLE KEY bukrs = t_cust-bukrs
+      saknr = t_cust-newko.
+      IF sy-subrc = 0.
+        t_cust-taxap = 'X'.
+
+        MODIFY t_cust INDEX ind1 TRANSPORTING taxap.
+        CLEAR t_cust.
+      ENDIF.
+    ENDLOOP.
+
+  ENDIF.
+
+  "=============END "TAX Logic"==============================
+
+
+  "=============START "CO Code currency Logic"==============================
+
+  LOOP AT t_cust.
+
+    gt_t001-bukrs = t_cust-bukrs.
+
+    APPEND gt_t001.
+    CLEAR gt_t001.
+  ENDLOOP.
+  SORT gt_t001 BY bukrs.
+
+  DELETE ADJACENT DUPLICATES FROM gt_t001.
+
+  IF NOT gt_t001[] IS INITIAL.
+    SORT gt_t001 BY  bukrs.
+
+    SELECT bukrs waers fstva FROM t001 INTO TABLE gt_t001a FOR ALL ENTRIES IN gt_t001
+    WHERE bukrs EQ gt_t001-bukrs.
+
+    SORT gt_t001 BY  bukrs.
+    SORT gt_t001a BY  bukrs waers.
+
+    DATA: ind2 TYPE sy-tabix.
+
+    LOOP AT t_cust.
+      ind2 = sy-tabix.
+
+      READ TABLE gt_t001a WITH KEY bukrs = t_cust-bukrs.
+
+      IF sy-subrc = 0.
+        t_cust-cocur = gt_t001a-waers.
+
+        MODIFY t_cust INDEX ind2 TRANSPORTING cocur.
+        CLEAR t_cust.
+      ENDIF.
+    ENDLOOP.
+
+  ENDIF.
+
+*select * from T001a for all entries in GT_t001a where bukrs = GT_t001a.
+  SELECT SINGLE mwaer FROM t000 INTO groupcur WHERE mandt = sy-mandt.
+  "=============end "CO Code currency Logic"==============================
+
+  "=============Start "Due date logic"==============================
+  LOOP AT t_cust WHERE koart EQ 'S' OR koart EQ 'A'.
+
+    gt_skb1d-bukrs = t_cust-bukrs.
+    gt_skb1d-saknr = t_cust-newko.
+
+    APPEND gt_skb1d.
+    CLEAR gt_skb1d.
+  ENDLOOP.
+  SORT gt_skb1d BY bukrs saknr.
+
+  DELETE ADJACENT DUPLICATES FROM gt_skb1d.
+
+  IF NOT gt_skb1d[] IS INITIAL.
+    SORT gt_skb1d BY  bukrs saknr.
+
+    SELECT bukrs saknr fstag FROM skb1 INTO TABLE gt_skb1da FOR ALL ENTRIES IN gt_skb1d
+    WHERE bukrs EQ gt_skb1d-bukrs
+    AND saknr EQ gt_skb1d-saknr.
+  ENDIF.
+
+  IF NOT gt_skb1da[] IS INITIAL.
+    SORT gt_skb1da BY  bukrs saknr fstag.
+
+    DATA: ind3 TYPE sy-tabix.
+    LOOP AT gt_skb1da.
+      ind3 = sy-tabix.
+      READ TABLE gt_t001a WITH KEY bukrs = gt_skb1da-bukrs.
+      IF sy-subrc = 0.
+        gt_skb1da-fstva = gt_t001a-fstva.
+        MODIFY gt_skb1da INDEX ind3 TRANSPORTING fstva.
+        CLEAR gt_skb1da.
+      ENDIF.
+    ENDLOOP.
+
+    SELECT bukrs fstag faus1 FROM t004f INTO TABLE gt_t004f FOR ALL ENTRIES IN gt_skb1da
+    WHERE bukrs EQ gt_skb1da-fstva
+    AND fstag EQ gt_skb1da-fstag.
+
+    DATA: ind4 TYPE sy-tabix.
+    LOOP AT gt_skb1da.
+      ind4 = sy-tabix.
+      READ TABLE gt_t004f WITH KEY fstva = gt_skb1da-fstva
+      fstag = gt_skb1da-fstag.
+      IF sy-subrc = 0.
+        gt_skb1da-faus1 = gt_t004f-faus1.
+        MODIFY gt_skb1da INDEX ind4 TRANSPORTING faus1.
+        CLEAR gt_skb1da.
+      ENDIF.
+    ENDLOOP.
+  ENDIF.
+
+  SORT gt_skb1da BY  bukrs saknr.
+
+  DATA: ind5 TYPE sy-tabix.
+  LOOP AT t_cust.
+    ind5 = sy-tabix.
+    READ TABLE gt_skb1da WITH KEY bukrs = t_cust-bukrs
+    saknr = t_cust-newko.
+    IF sy-subrc = 0.
+      t_cust-faus1 = gt_skb1da-faus1.
+      MODIFY t_cust INDEX ind5 TRANSPORTING faus1.
+      CLEAR t_cust.
+    ENDIF.
+  ENDLOOP.
+  "=============END "due date Logic"==============================
+
+
+
+
+
+  SORT t_cust BY bktxt ASCENDING newbs DESCENDING.
+
+
+ENDFORM.                    " upload_file
+
+*&---------------------------------------------------------------------*
+*&      Form  f_post_customer
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+FORM f_post_customer .
+  REFRESH bdcdata.
+  CLEAR bdcdata.
+
+**  PERFORM open_group.
+  IF b = 'X'.
+    CALL FUNCTION 'BDC_OPEN_GROUP'
+    EXPORTING
+      CLIENT = sy-mandt
+      GROUP  = session
+      keep   = 'X'
+      user   = sy-uname.
+    IF sy-subrc <> 0.
+      WRITE: /(30) 'BDC_OPEN_GROUP'(i02),
+      (12) 'returncode:'(i05),
+      sy-subrc.
+
+    ENDIF.
+
+    count_sess = 0.
+    count_item = 0.
+  ENDIF.
+  LOOP AT t_cust.
+
+
+
+    wa_cust = t_cust.
+
+* "   TRANSLATE wa_cust-xref1 TO UPPER CASE.
+
+
+    AT NEW bktxt.
+
+
+      REFRESH bdcdata.
+*header screen with first line item
+      PERFORM bdc_dynpro      USING 'SAPMF05A' '0100'.
+      PERFORM bdc_field       USING 'BDC_CURSOR'
+            'RF05A-NEWKO'.
+      PERFORM bdc_field       USING 'BDC_OKCODE'
+            '/00'.
+      PERFORM bdc_field       USING 'BKPF-BLDAT'
+            wa_cust-doc_date. " posting date
+      PERFORM bdc_field       USING 'BKPF-BLART'
+            wa_cust-blart. " document type
+      PERFORM bdc_field       USING 'BKPF-BUKRS'
+            wa_cust-bukrs.  " company code
+      PERFORM bdc_field       USING 'BKPF-BUDAT'
+            wa_cust-post_date.  " posting date
+*      PERFORM bdc_field       USING 'BKPF-MONAT'
+*                                    '2'.             " period
+      PERFORM bdc_field       USING 'BKPF-WAERS'
+            wa_cust-waers.   " currency
+      PERFORM bdc_field       USING 'BKPF-KURSF'
+            wa_cust-kursf.   " exchange rate
+
+      PERFORM bdc_field       USING 'BKPF-LDGRP'
+            wa_cust-ldgrp.   " exchange rate
+
+      PERFORM bdc_field       USING 'BKPF-XBLNR'
+            wa_cust-xblnr.  " reference no
+      PERFORM bdc_field       USING 'BKPF-BKTXT'
+            wa_cust-bktxt. " text
+      PERFORM bdc_field       USING 'FS006-DOCID'
+            '*'.
+      PERFORM bdc_field       USING 'RF05A-NEWBS'
+            wa_cust-newbs.  "posting key
+      PERFORM bdc_field       USING 'RF05A-NEWKO'
+            wa_cust-newko. " account
+
+
+      IF
+      wa_cust-newum NE ''.
+
+        PERFORM bdc_field       USING 'RF05A-NEWUM'
+              wa_cust-newum.
+      ENDIF.
+
+    ENDAT.
+
+
+    AT END OF bktxt.
+
+
+
+      IF   wa_cust-koart EQ 'S' OR
+      wa_cust-koart EQ 'A'.
+
+        PERFORM gl.
+*
+*        IF WA_cust-taxap NE 'X'.
+*          PERFORM bdc_dynpro      USING 'SAPMF05A' '0330'.
+*        ELSE.
+*          PERFORM bdc_dynpro      USING 'SAPMF05A' '0312'.
+*        ENDIF.
+
+    ELSEIF wa_cust-koart EQ 'D' OR wa_cust-koart EQ 'K'.
+
+        PERFORM custvend.
+*
+*        IF wa_cust-newum NE ''.
+*
+*          IF wa_cust-koart EQ 'K'.
+*            PERFORM bdc_dynpro      USING 'SAPMF05A' '0332'.
+*          ELSE.
+*            PERFORM bdc_dynpro      USING 'SAPMF05A' '0331'.
+*          ENDIF.
+*
+*        ELSE.
+*          PERFORM bdc_dynpro      USING 'SAPMF05A' '0300'.
+*        ENDIF.
+
+      ENDIF.
+      CLEAR g_flag_s.
+      CLEAR g_flag.
+      CLEAR g_flag_t.
+      CLEAR g_flag_x.
+      CLEAR g_flag_y.
+
+      PERFORM bdc_field       USING 'BDC_OKCODE'
+            '=BU'.
+
+
+      IF b = 'X'.
+        CALL FUNCTION 'BDC_INSERT'
+        EXPORTING
+          tcode     = 'FB01L'
+        TABLES
+          dynprotab = bdcdata.
+        IF sy-subrc <> 0.
+          SKIP 4.
+          PRINT-CONTROL SIZE 13 COLOR BLACK FONT 5.
+          FORMAT COLOR 5 INTENSIFIED ON.
+          WRITE: / 'BDC_INSERT'(i03),
+          'FB01L',
+          'returncode:'(i05),
+          sy-subrc,
+          'RECORD:',
+          sy-INDEX.
+          FORMAT INTENSIFIED OFF.
+        ELSE.
+          count_sess = count_sess + 1.
+          count_item = count_item + 1.
+        ENDIF.
+
+      ELSE.
+        CALL TRANSACTION 'FB01L' USING bdcdata MODE MODE MESSAGES INTO messtab.
+
+      ENDIF.
+*perform to capture appropriate text for the messages returned by the
+*recording and append it to t_mess table and display
+
+*      IF b NE 'X'.
+      PERFORM display_messages USING wa_cust-bukrs.
+*      ENDIF.
+      REFRESH messtab.
+      CONTINUE.
+    ENDAT.
+
+*second screen with amount and more data of header line item
+*execute when posting key is 40 or 50
+
+    count_item = count_item + 1.
+    IF
+    wa_cust-koart EQ 'S' OR
+    wa_cust-koart EQ 'A'.
+
+      PERFORM gl.
+
+      CONTINUE.
+*    ENDIF.
+
+  ELSEIF  wa_cust-koart EQ 'D' OR wa_cust-koart EQ 'K'.
+
+      PERFORM custvend.
+
+      CONTINUE.
+
+    ENDIF.
+
+  ENDLOOP.
+
+  IF b = 'X'.
+    CALL FUNCTION 'BDC_CLOSE_GROUP'.
+    IF sy-subrc <> 0.
+      WRITE: /(30) 'BDC_CLOSE_GROUP'(i04),
+      (12) 'returncode:'(i05),
+      sy-subrc.
+    ENDIF.
+    CONCATENATE count_item ' line items to be posted in _' count_sess ' accounting documents added in batch "' session '". Please post the batch via T-Code SM35' INTO info_message.
+    MESSAGE info_message    TYPE 'S'.
+    SKIP 4.
+    PRINT-CONTROL SIZE 13 COLOR BLACK FONT 5.
+    FORMAT COLOR 5 INTENSIFIED ON.
+    WRITE: info_message.
+    FORMAT INTENSIFIED OFF.
+  ENDIF.
+
+ENDFORM.                    " f_post_vendor
+
+*&---------------------------------------------------------------------*
+*&      Form  display_messages
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->BUKRS      text
+*----------------------------------------------------------------------*
+FORM display_messages  USING   bukrs.
+  LOOP AT messtab.
+
+*    IF messtab-msgtyp = 'S' AND messtab-msgnr NE '001'.
+*      CONTINUE.
+*    ENDIF.
+    IF messtab-msgtyp = 'E' OR messtab-msgtyp = 'W'.
+      CONTINUE.
+    ENDIF.
+
+
+
+    CALL FUNCTION 'MESSAGE_TEXT_BUILD'
+    EXPORTING
+      msgid               = messtab-msgid
+      msgnr               = messtab-msgnr
+      msgv1               = messtab-msgv1
+      msgv2               = messtab-msgv2
+      msgv3               = messtab-msgv3
+      msgv4               = messtab-msgv4
+    IMPORTING
+      message_text_output = t_mess-TEXT.
+    IF messtab-msgnr = '060' AND messtab-msgtyp = 'S'.
+*      t_mess-msgv1 = t_cust-matnr.
+    ELSE.
+      t_mess-msgv1 = messtab-msgv1.
+    ENDIF.
+    t_mess-bukrs = bukrs.
+
+    APPEND t_mess.
+    CLEAR t_mess.
+
+  ENDLOOP.
+
+ENDFORM.                    " display_messages
+
+*&---------------------------------------------------------------------*
+*&      Form  write_messages
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+FORM write_messages .
+  DATA: v_col TYPE I.
+
+
+  LOOP AT t_mess.
+    v_col = sy-INDEX MOD 2.
+    IF v_col EQ 0.
+      WRITE:/2 t_mess-msgv1 HOTSPOT COLOR 2 ,
+      25 t_mess-TEXT COLOR 2.
+    ELSE.
+      WRITE:/2 t_mess-msgv1 HOTSPOT COLOR 4 ,
+      25 t_mess-TEXT COLOR 4.
+    ENDIF.
+
+    HIDE: t_mess-msgv1,t_mess-bukrs.
+  ENDLOOP.
+
+
+
+  IF t_mess[] IS NOT INITIAL.
+    TYPES:  BEGIN OF ty_join_fields,
+      field_name(20),
+    END OF ty_join_fields.
+
+    DATA: it_join_fields TYPE STANDARD TABLE OF ty_join_fields,
+          wa_join_fields TYPE ty_join_fields.
+
+
+    DATA: d_file TYPE string.
+    d_file = dname.
+
+    CLEAR : wa_join_fields,it_join_fields.
+
+    wa_join_fields-field_name = 'Co. Code.'.
+    APPEND wa_join_fields TO it_join_fields.
+    CLEAR wa_join_fields.
+
+    wa_join_fields-field_name = 'Log Variable'.
+    APPEND wa_join_fields TO it_join_fields.
+    CLEAR wa_join_fields.
+
+    wa_join_fields-field_name = 'Description'.
+    APPEND wa_join_fields TO it_join_fields.
+    CLEAR wa_join_fields.
+
+*
+*    wa_join_fields-field_name = 'Error Message'.
+*    APPEND wa_join_fields TO it_join_fields.
+*    CLEAR wa_join_fields.
+*      sort it_error by sr_no.
+
+
+    CALL FUNCTION 'GUI_DOWNLOAD'
+    EXPORTING
+      filename                = d_file
+      filetype                = 'ASC'
+      write_field_separator   = 'X'
+*       col_select              = 'X'
+*       col_select_mask         = 'XXX'
+    TABLES
+      data_tab                = t_mess
+      fieldnames              = it_join_fields
+    EXCEPTIONS
+      file_write_error        = 1
+      no_batch                = 2
+      gui_refuse_filetransfer = 3
+      invalid_type            = 4
+      no_authority            = 5
+      unknown_error           = 6
+      header_not_allowed      = 7
+      separator_not_allowed   = 8
+      filesize_not_allowed    = 9
+      header_too_long         = 10
+      dp_error_create         = 11
+      dp_error_send           = 12
+      dp_error_write          = 13
+      unknown_dp_error        = 14
+      access_denied           = 15
+      dp_out_of_memory        = 16
+      disk_full               = 17
+      dp_timeout              = 18
+      file_not_found          = 19
+      dataprovider_exception  = 20
+      control_flush_error     = 21
+      OTHERS                  = 22.
+    IF sy-subrc <> 0.
+*     Implement suitable error handling here
+    ENDIF.
+*    FREE: it_error[],it_file[].
+  ENDIF.
+ENDFORM.                    " write_messages
+
+*&---------------------------------------------------------------------*
+*&      Form  top_of_page
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+FORM top_of_page .
+  WRITE:/40 'BDC for FB01L.'.
+  WRITE:/30 'Vendor Customer GL Posting'.
+  ULINE.
+  WRITE:/1 sy-vline,
+  2  'Username:'(009),
+  12 sy-uname,
+  70 'Program Name :'(011),
+  85 sy-repid,
+  120 sy-vline.
+  ULINE.
+  WRITE:/1 sy-vline,
+  2  'Date    :'(013),
+  12 sy-datum,
+  70 'Client       :'(012),
+  85 sy-mandt,
+  120 sy-vline.
+  ULINE.
+  WRITE:/2 'Document No'(014) COLOR COL_HEADING INTENSIFIED,
+  25 'Text'(015) COLOR COL_HEADING INTENSIFIED.
+
+
+ENDFORM.                    " top_of_page
+
+*&---------------------------------------------------------------------*
+*&      Form  display_document
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->MSGV1      text
+*----------------------------------------------------------------------*
+FORM display_document  USING  msgv1.
+  SET PARAMETER ID 'BLN' FIELD msgv1.
+  SET PARAMETER ID 'BUK' FIELD t_mess-bukrs.
+  SET PARAMETER ID 'GJR' FIELD sy-datum+0(4).
+  CALL TRANSACTION 'FB03' AND SKIP FIRST SCREEN.
+
+ENDFORM.                    " display_document
+
+*&---------------------------------------------------------------------*
+*&      Form  gl
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+FORM gl .
+  PERFORM flags.
+
+  IF wa_cust-taxap NE 'X'.
+
+    PERFORM bdc_dynpro      USING 'SAPMF05A' '0300'.
+  ELSE.
+    PERFORM bdc_dynpro      USING 'SAPMF05A' '0312'.
+  ENDIF.
+
+  PERFORM bdc_field       USING 'BDC_OKCODE'
+        '=ZK'.
+  PERFORM bdc_field       USING 'BSEG-WRBTR'
+        wa_cust-wrbtr.
+  PERFORM tax.
+
+  PERFORM bdc_field       USING 'DKACB-FMORE'
+        'X'.
+
+  IF wa_cust-waers NE wa_cust-cocur.
+    PERFORM bdc_field       USING 'BSEG-DMBTR'
+          wa_cust-dmbtr.
+  ENDIF.
+  IF wa_cust-faus1+4(1) NE '-'.
+    PERFORM bdc_field       USING 'BSEG-ZFBDT'
+          wa_cust-zfbdt.
+  ENDIF.
+
+  PERFORM bdc_field       USING 'BSEG-ZUONR'
+        wa_cust-zuonr.
+  PERFORM bdc_field       USING 'BSEG-SGTXT'
+        wa_cust-sgtxt.
+
+  IF wa_cust-taxap NE 'X'.
+    PERFORM bdc_dynpro      USING 'SAPLKACB' '0002'.
+    g_flag = 'X'.
+  ELSE.
+    g_flag_y = 'X'.
+  ENDIF.
+
+  PERFORM fiaccountassignments.
+
+  PERFORM coaccountassignments.
+
+  PERFORM bdc_dynpro      USING 'SAPMF05A' '0330'.
+
+
+  PERFORM additionaldetails.
+
+
+
+ENDFORM.                    " GL
+
+*&---------------------------------------------------------------------*
+*&      Form  custvend
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+FORM custvend .
+  PERFORM flags.
+  IF wa_cust-newum EQ ''.
+
+    IF wa_cust-koart EQ 'D'.
+      PERFORM bdc_dynpro      USING 'SAPMF05A' '0301'.
+    ELSE.
+      PERFORM bdc_dynpro      USING 'SAPMF05A' '0302'.
+    ENDIF.
+
+    IF wa_cust-newbs NE '27'.
+      PERFORM bdc_field       USING 'BSEG-wskto'     "Discount amount.
+            '0'.
+    ENDIF.
+
+    IF wa_cust-newbs NE '05' AND wa_cust-newbs NE '15' AND wa_cust-newbs NE '07' AND wa_cust-newbs NE '17' AND
+    wa_cust-newbs NE '25' AND wa_cust-newbs NE '35' AND wa_cust-newbs NE '27' AND wa_cust-newbs NE '37'.
+
+      PERFORM bdc_field       USING 'BSEG-skfbt'   "Discount base amount.
+            '0'.
+
+      PERFORM bdc_field       USING 'BSEG-ZTERM'
+            wa_cust-zterm.
+    ENDIF.
+
+
+
+  ELSE.
+
+    PERFORM bdc_dynpro      USING 'SAPMF05A' '0304'.
+
+  ENDIF.
+
+  PERFORM bdc_field       USING 'BDC_OKCODE'
+        '=ZK'.
+
+  PERFORM bdc_field       USING 'BSEG-WRBTR'
+        wa_cust-wrbtr.
+
+*  PERFORM bdc_field       USING 'BSEG-MWSKZ'
+*                                wa_cust-mwskz.
+  PERFORM fiaccountassignments.
+
+  PERFORM tax.
+
+  IF wa_cust-waers NE wa_cust-cocur.
+    PERFORM bdc_field       USING 'BSEG-DMBTR'
+          wa_cust-dmbtr.
+  ENDIF.
+  PERFORM bdc_field       USING 'BSEG-ZUONR'
+        wa_cust-zuonr.
+  PERFORM bdc_field       USING 'BSEG-SGTXT'
+        wa_cust-sgtxt.
+*  PERFORM bdc_field       USING 'BSEG-ZTERM'
+*                                wa_cust-zterm.
+  PERFORM bdc_field       USING 'BSEG-ZFBDT'    " sachin 28122010
+        wa_cust-zfbdt.
+
+  IF NOT wa_cust-hkont IS INITIAL.
+    PERFORM bdc_field       USING 'BSEG-HKONT'
+          wa_cust-hkont.
+  ENDIF.
+
+  PERFORM tds.
+
+  IF wa_cust-koart = 'K'.
+    PERFORM bdc_dynpro      USING 'SAPMF05A' '0332'.
+    g_flag_t = 'X'.
+  ELSE.
+    PERFORM bdc_dynpro      USING 'SAPMF05A' '0331'.
+    g_flag_x = 'X'.
+  ENDIF.
+
+
+  PERFORM additionaldetails.
+
+
+ENDFORM.                    " CUSTVEND
+
+*&---------------------------------------------------------------------*
+*&      Form  flags
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+FORM flags.
+
+  "Check Flags
+
+  IF g_flag = 'X'.
+    PERFORM bdc_dynpro      USING 'SAPMF05A' '0330'.
+ELSEIF g_flag_t = 'X'.
+    PERFORM bdc_dynpro      USING 'SAPMF05A' '0332'.
+ELSEIF g_flag_x = 'X'.
+    PERFORM bdc_dynpro      USING 'SAPMF05A' '0331'.
+ELSEIF g_flag_y = 'X'.
+    PERFORM bdc_dynpro      USING 'SAPMF05A' '0312'.
+ELSEIF g_flag_s = 'X'.
+    PERFORM bdc_dynpro      USING 'SAPMF05A' '0304'.
+  ENDIF.
+
+  PERFORM bdc_field       USING 'RF05A-NEWBS'
+        wa_cust-newbs.
+  PERFORM bdc_field       USING 'RF05A-NEWKO'
+        wa_cust-newko.
+
+  IF
+  wa_cust-newum NE ''.
+
+    PERFORM bdc_field       USING 'RF05A-NEWUM'
+          wa_cust-newum.
+
+  ENDIF.
+  CLEAR g_flag_s.
+  CLEAR g_flag.
+  CLEAR g_flag_t.
+  CLEAR g_flag_x.
+  CLEAR g_flag_y.
+
+ENDFORM.                    " FLAGS
+
+*&---------------------------------------------------------------------*
+*&      Form  coaccountassignments
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+FORM coaccountassignments .
+
+  IF r_posid = 'X' AND NOT wa_cust-ps_posid IS INITIAL.
+    PERFORM bdc_field       USING 'COBL-PS_POSID' "WBS element
+          wa_cust-ps_posid.
+  ENDIF.
+
+  IF r_kostl = 'X' AND NOT wa_cust-kostl IS INITIAL.
+    PERFORM bdc_field       USING 'COBL-KOSTL' "Cost Centre
+          wa_cust-kostl.
+  ENDIF.
+
+  IF r_aufnr = 'X' AND NOT wa_cust-aufnr IS INITIAL.
+    PERFORM bdc_field       USING 'COBL-AUFNR'  " Internal Order.
+          wa_cust-aufnr.
+  ENDIF.
+
+ENDFORM.                    " ACCOUNTASSIGNMENTS
+
+"&---------------------------------------------------------------------*
+"&      form  fiaccountassignments
+"&---------------------------------------------------------------------*
+"       text
+"----------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Form  fiaccountassignments
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+FORM fiaccountassignments .
+
+  IF r_gsber = 'X'.
+    IF wa_cust-koart EQ 'D' OR wa_cust-koart EQ 'K'.
+      PERFORM bdc_field       USING 'BSEG-GSBER' wa_cust-gsber.
+    ELSE.
+      PERFORM bdc_field       USING 'COBL-GSBER' wa_cust-gsber.
+    ENDIF.
+  ENDIF.
+
+  IF r_prctr = 'X'.
+    IF ( wa_cust-koart EQ 'D' OR wa_cust-koart EQ 'K') AND wa_cust-newum NE ''.
+      PERFORM bdc_field       USING 'BSEG-PRCTR' wa_cust-prctr.
+  ELSEIF ( wa_cust-koart EQ 'S' OR wa_cust-koart EQ 'A').
+      PERFORM bdc_field       USING 'COBL-PRCTR' wa_cust-prctr.
+    ENDIF.
+  ENDIF.
+
+ENDFORM.                    " FIACCOUNTASSIGNMENTS
+
+*&---------------------------------------------------------------------*
+*&      Form  tds
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+FORM tds .
+  IF tds2 NE 'X'.
+
+    IF wa_cust-newum IS NOT INITIAL AND wa_cust-koart = 'K'.
+      READ TABLE gt_lfbw1 WITH KEY lifnr = wa_cust-newko bukrs = wa_cust-bukrs payment = 'X'.
+      IF sy-subrc = 0.
+        wa_cust-tdsap = 'X'.
+      ENDIF.
+  ELSEIF wa_cust-koart = 'K'.
+      READ TABLE gt_lfbw1 WITH KEY lifnr = wa_cust-newko bukrs = wa_cust-bukrs ."invoice = 'X'.
+      IF sy-subrc = 0.
+        wa_cust-tdsap = 'X'.
+      ENDIF.
+    ENDIF.
+
+    IF wa_cust-tdsap = 'X'.
+      PERFORM bdc_dynpro      USING 'SAPLFWTD' '0100'.
+      IF tds1 EQ 'X'.
+
+        PERFORM bdc_field       USING 'BDC_OKCODE'
+              '=GO'.
+        PERFORM bdc_field       USING 'WITH_DIALG-WT_BASE(01)'
+              '0'.
+        PERFORM bdc_field       USING 'WITH_DIALG-WT_BASE(02)'
+              '0'.
+        PERFORM bdc_field       USING 'WITH_DIALG-WT_BASE(03)'
+              '0'.
+        PERFORM bdc_field       USING 'WITH_DIALG-WT_BASE(04)'
+              '0'.
+        PERFORM bdc_field       USING 'WITH_DIALG-WT_BASE(05)'
+              '0'.
+        PERFORM bdc_field       USING 'WITH_DIALG-WT_BASE(06)'
+              '0'.
+        " ****************************************************************
+        PERFORM bdc_field       USING 'WITH_DIALG-WT_AMOUNT(01)'
+              '0'.
+        PERFORM bdc_field       USING 'WITH_DIALG-WT_AMOUNT(02)'
+              '0'.
+        PERFORM bdc_field       USING 'WITH_DIALG-WT_AMOUNT(03)'
+              '0'.
+        PERFORM bdc_field       USING 'WITH_DIALG-WT_AMOUNT(04)'
+              '0'.
+        PERFORM bdc_field       USING 'WITH_DIALG-WT_AMOUNT(05)'
+              '0'.
+        PERFORM bdc_field       USING 'WITH_DIALG-WT_AMOUNT(06)'
+              '0'.
+    ELSEIF tds3 EQ 'X'.
+
+        PERFORM bdc_field       USING 'WITH_DIALG-WT_BASE(01)'
+              wa_cust-wt_base1.
+        PERFORM bdc_field       USING 'WITH_DIALG-WT_BASE(02)'
+              wa_cust-wt_base2.
+        PERFORM bdc_field       USING 'WITH_DIALG-WT_BASE(03)'
+              wa_cust-wt_base3.
+        PERFORM bdc_field       USING 'WITH_DIALG-WT_BASE(04)'
+              wa_cust-wt_base4.
+        PERFORM bdc_field       USING 'WITH_DIALG-WT_BASE(05)'
+              wa_cust-wt_base5.
+        PERFORM bdc_field       USING 'WITH_DIALG-WT_BASE(06)'
+              wa_cust-wt_base6.
+******************************************************************************
+        PERFORM bdc_field       USING 'WITH_DIALG-WT_AMOUNT(01)'
+              wa_cust-wt_amount1.
+        PERFORM bdc_field       USING 'WITH_DIALG-WT_AMOUNT(02)'
+              wa_cust-wt_amount2.
+        PERFORM bdc_field       USING 'WITH_DIALG-WT_AMOUNT(03)'
+              wa_cust-wt_amount3.
+        PERFORM bdc_field       USING 'WITH_DIALG-WT_AMOUNT(04)'
+              wa_cust-wt_amount4.
+        PERFORM bdc_field       USING 'WITH_DIALG-WT_AMOUNT(05)'
+              wa_cust-wt_amount5.
+        PERFORM bdc_field       USING 'WITH_DIALG-WT_AMOUNT(06)'
+              wa_cust-wt_amount6.
+      ENDIF.
+      PERFORM bdc_field       USING 'BDC_OKCODE'
+            '=GO'.
+
+    ENDIF.
+  ENDIF.
+ENDFORM.                    " TDS
+
+*&---------------------------------------------------------------------*
+*&      Form  tax
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+FORM tax .
+*  IF check1 = 'X'.
+*    IF ( wa_cust-koart EQ 'K' OR wa_cust-koart EQ 'D' ) AND wa_cust-newum EQ ''.
+*      PERFORM bdc_field       USING 'BSEG-WMWST'
+*                                      '0'.
+*
+*      PERFORM bdc_field       USING 'BSEG-MWSTS'
+*                                      '0'.
+*    ENDIF.
+*  ELSEIF check2 = 'X'.
+  IF check2 = 'X'.
+
+    IF wa_cust-mwskz IS NOT INITIAL.
+
+      PERFORM bdc_field       USING 'BSEG-MWSKZ'
+            wa_cust-mwskz.
+    ENDIF.
+
+
+
+    IF check4 = 'X'.
+
+      IF ( wa_cust-koart EQ 'K' OR wa_cust-koart EQ 'D' ) AND wa_cust-newum EQ ''.
+
+        PERFORM bdc_field       USING 'BKPF-XMWST'
+              'X'.
+      ELSE.
+        PERFORM bdc_field       USING 'RF05A-XMWST'
+              'X'.
+      ENDIF.
+    ENDIF.
+
+ELSEIF check3 = 'X'.
+
+    IF ( wa_cust-koart EQ 'K' OR wa_cust-koart EQ 'D' ) AND wa_cust-newum EQ ''.
+      IF wa_cust-mwskz IS NOT INITIAL.
+        PERFORM bdc_field       USING 'BSEG-MWSKZ'
+              wa_cust-mwskz.
+      ENDIF.
+      IF wa_cust-wmwst IS NOT INITIAL.
+        PERFORM bdc_field       USING 'BSEG-WMWST'
+              wa_cust-wmwst.
+
+      ENDIF.
+      IF wa_cust-mwsts IS NOT INITIAL.
+        PERFORM bdc_field       USING 'BSEG-MWSTS'
+              wa_cust-mwsts.
+      ENDIF.
+
+    ENDIF.
+
+  ENDIF..
+
+ENDFORM.                    " TAX
+
+*&---------------------------------------------------------------------*
+*&      Form  additionaldetails
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+FORM additionaldetails .
+
+  PERFORM bdc_field       USING 'BSEG-XREF1'
+        wa_cust-xref1.
+
+  PERFORM bdc_field       USING 'BSEG-XREF2'
+        wa_cust-xref2.
+
+  PERFORM bdc_field       USING 'BSEG-XREF3'
+        wa_cust-xref3.
+  IF wa_cust-waers NE groupcur AND r_dmbe2 = 'X'.
+
+    PERFORM bdc_field       USING 'BSEG-DMBE2'            "Curr Added
+          wa_cust-dmbe2.
+
+  ENDIF.
+
+ENDFORM.                    " ADDITIONALDETAILS
+
+
+
+"==========Text elements==================
+
+"++++++++ BLOCK Heading+++++++++
+*001  Filename                      8   8
+*002  Processing Modes              16  16
+*003  Checkboxes                    10  10
+*004  FI Account Assignments        22  22
+*005  CO Account Assignments        22  22
+*006  Taxes on Sales & Purchase     25  25
+*007  Withholding tax               15  15
+*008  Additional Details            18  21
+*010  Download log file name        22  22
+"+++++++++End Blaock Headings+++++++++
+
+
+*++++++++Selection text+++++++++++
+*A        Display All Screens
+*B        Generate Batch Session
+*CHECK    Update Run
+*CHECK1	  No Taxes
+*CHECK2	  Enter tax Code only
+*CHECK3	  Enter tax through upload file
+*CHECK4	  Calculate tax Tick
+*DNAME    Download Log file path
+*E        Display Errors Only
+*FNAME    File name
+*R_AUFNR  Internal Order
+*R_DMBE2  Group Currency
+*R_GSBER  Business Area
+*R_KOSTL  Cost Center
+*R_POSID  WBS Element
+*R_PRCTR  Profit Center
+*SESSION  Batch Name
+*TDS1	    No TDS
+*TDS2	    Calculate TDS as per TDS codes
+*TDS3	    Enter TDS through Upload File
+*"+++++++end Selection text++++++++++++

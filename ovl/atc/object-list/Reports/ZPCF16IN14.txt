@@ -1,0 +1,552 @@
+*&---------------------------------------------------------------------*
+*&  Include           PCF16IN14
+*&---------------------------------------------------------------------*
+DATA: it_tan TYPE TABLE OF t7intn,
+      wa_tan LIKE LINE OF it_tan.
+DATA:
+    rc TYPE i,
+    file TYPE file_table,
+    file_table TYPE filetable.
+
+AT SELECTION-SCREEN OUTPUT.
+  DATA: wa_t54c0 TYPE t54c0,
+        tmp_date LIKE sy-datum.
+  IF year IS INITIAL.
+    SELECT SINGLE * INTO wa_t54c0 FROM t54c0
+                                 WHERE molga = '40'.
+    IF sy-subrc = 0.
+      year = sy-datum+0(4).
+      tmp_date+0(4) = year.
+      tmp_date+4(2) = wa_t54c0-txmth.
+      tmp_date+6(2) = wa_t54c0-txday.
+      IF tmp_date > sy-datum.
+        year = year - 1.
+      ENDIF.
+    ELSE.
+      year = sy-datum+0(4).
+      tmp_date+0(4) = year.
+      tmp_date+4(2) = 04.
+      tmp_date+6(2) = 01.
+      IF tmp_date > sy-datum.
+        year = year - 1.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+
+  IF year GE 2012.
+    LOOP AT SCREEN.
+      IF screen-group1 = 'FPT'.
+        screen-active = '0'.
+        MODIFY SCREEN.
+        CLEAR file1.
+      ENDIF.
+    ENDLOOP.
+  ENDIF.
+
+  PERFORM get_fiscal USING year afy_switch CHANGING pbegda pendda.
+
+  SELECT * FROM t511k INTO gv_t511k
+                     WHERE molga EQ '40'
+                       AND konst EQ 'F12BB'
+                       AND begda LE pendda
+                       AND endda GE pendda.
+  ENDSELECT.
+
+  IF year LT gv_t511k-kwert.
+    LOOP AT SCREEN.
+      IF screen-group1 = 'BB1'
+         OR screen-group1 = 'BB3' OR screen-group1 = 'BB4'
+         OR screen-group1 = 'BB7'. " OR screen-group1 = 'BB9'.
+        screen-active = '0'.
+        MODIFY SCREEN.
+        p_f16 = 'X'. "Radio button to Generate Form 16
+        CLEAR: "file2,
+*               dmail,
+               file4,
+               folpath1,
+               p_f12bb,
+               pf16_12b.
+      ENDIF.
+    ENDLOOP.
+  ENDIF.
+
+  IF year LT '2018'.
+    LOOP AT SCREEN.
+      IF "screen-group1 = 'B13' OR
+         screen-group1 = 'B14' OR
+         screen-group1 = 'B15' OR
+         screen-group1 = 'B18'.
+        screen-active = '0'.
+        MODIFY SCREEN.
+      ENDIF.
+    ENDLOOP.
+  ENDIF.
+
+  PERFORM chk_switch USING pbegda pendda CHANGING co_cd tanr.
+
+  PERFORM modify_screen USING tanr co_cd.
+  PERFORM cust_layout USING disp_flg_lot.
+
+  IF p_f12bb EQ 'X' AND PF2F_10K NE 'X'.
+    LOOP AT SCREEN.
+      IF screen-group1 = 'BB2'.
+        screen-active = '0'.
+        MODIFY SCREEN.
+        CLEAR folpath.
+      ENDIF.
+    ENDLOOP.
+  ENDIF.
+
+  IF p_f16 EQ 'X'.
+    LOOP AT SCREEN.
+      IF screen-group1 = 'BB3'.
+        screen-active = '0'.
+        MODIFY SCREEN.
+        CLEAR folpath1.
+      ENDIF.
+    ENDLOOP.
+  ENDIF.
+
+  IF p_email EQ ''.
+    LOOP AT SCREEN.
+      IF screen-group1 = 'BB5' OR screen-group1 = 'BB4'
+        OR screen-group1 = 'BB6' OR screen-group1 = 'BB7'
+        OR screen-group1 = 'B10' OR screen-group1 = 'BB9'
+        OR screen-group1 = 'B14' OR screen-group1 = 'B15'.
+        screen-active = '0'.
+        MODIFY SCREEN.
+        CLEAR: file3,
+               file4,
+               dmail,
+               fmail,
+               form_16,
+               file2,
+               f_path5,
+               f10_mail.
+      ENDIF.
+    ENDLOOP.
+  ELSE.
+    LOOP AT SCREEN.
+      IF screen-group1 = 'BB8' OR screen-group1 = 'BB2'
+                              OR screen-group1 = 'BB3'.
+*                               OR screen-group1 = 'B14' .
+        screen-active = '0'.
+        MODIFY SCREEN.
+        CLEAR: p_pan,
+               folpath,
+               folpath1.
+      ENDIF.
+    ENDLOOP.
+  ENDIF.
+
+  IF dmail EQ ''.
+    LOOP AT SCREEN.
+      IF screen-group1 = 'BB5' OR screen-group1 = 'BB9'
+        OR screen-group1 = 'B10' OR screen-group1 = 'B11'.
+*        OR screen-group1 = 'B14'.
+        screen-active = '0'.
+        MODIFY SCREEN.
+        CLEAR: file3,
+               file2,
+               form_16,
+               f_path.
+      ENDIF.
+    ENDLOOP.
+  ENDIF.
+
+  IF fmail EQ ''.
+    LOOP AT SCREEN.
+      IF screen-group1 = 'BB4'.
+        screen-active = '0'.
+        MODIFY SCREEN.
+        CLEAR file4.
+      ENDIF.
+    ENDLOOP.
+  ENDIF.
+
+  IF form_16 EQ 'X'.
+    LOOP AT SCREEN.
+      IF screen-group1 = 'BB5'.
+        screen-active = '0'.
+        MODIFY SCREEN.
+        CLEAR file3.
+      ENDIF.
+    ENDLOOP.
+  ENDIF.
+
+  IF f10_mail EQ ''.
+    LOOP AT SCREEN.
+      IF screen-group1 = 'B14'.
+        screen-active = '0'.
+        MODIFY SCREEN.
+        CLEAR f_path5.
+      ENDIF.
+    ENDLOOP.
+  ENDIF.
+
+AT SELECTION-SCREEN ON BLOCK box5.
+*  PERFORM GET_FISCAL USING YEAR CHANGING PBEGDA PENDDA.
+*  PERFORM CHK_SWITCH USING PBEGDA PENDDA CHANGING CO_CD TANR.
+
+AT SELECTION-SCREEN ON BLOCK box3.
+  IF sscrfields-ucomm = 'LOUT'.
+    disp_flg_lot = disp_flg_lot * negtv.
+  ENDIF.
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR tan_no.
+  CLEAR: it_tan, wa_tan.
+  REFRESH it_tan.
+
+  SELECT * FROM t7intn INTO wa_tan.
+    APPEND wa_tan TO it_tan.
+  ENDSELECT.
+
+  CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
+    EXPORTING
+      retfield        = 'TANNO'
+      dynpprog        = sy-cprog
+      dynpnr          = sy-dynnr
+      dynprofield     = 'tan_no'
+      value_org       = 'S'
+    TABLES
+      value_tab       = it_tan
+    EXCEPTIONS
+      parameter_error = 1
+      no_values_found = 2
+      OTHERS          = 3.
+  IF sy-subrc <> 0.
+* MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*         WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+  ENDIF.
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR folpath.
+  CALL METHOD cl_gui_frontend_services=>file_open_dialog
+*      EXPORTING
+*        window_title            = title
+*        file_filter             = file_filter
+      CHANGING
+        file_table              = file_table
+        rc                      = rc
+      EXCEPTIONS
+        file_open_dialog_failed = 1
+        cntl_error              = 2
+        error_no_gui            = 3
+        not_supported_by_gui    = 4
+        OTHERS                  = 5.
+  IF sy-subrc <> 0.
+*      MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+*      WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+
+  READ TABLE file_table INTO file INDEX 1.
+  folpath = file.
+
+  PERFORM get_folder_name CHANGING folpath.
+
+** Form 12BB
+*-- Email Attachment folder path
+*&---------------------------------------------------------------------*
+*&      Form  GET_FOLDER_NAME
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_LAYOUT  text
+*      -->P_LANGU  text
+*----------------------------------------------------------------------*
+FORM get_folder_name CHANGING folpath.
+  DATA: patt       TYPE string VALUE `\`,
+        text       TYPE string,
+        result_tab TYPE match_result_tab,
+        len        TYPE i.
+
+  FIELD-SYMBOLS <match> LIKE LINE OF result_tab.
+
+  text = folpath.
+
+
+  FIND ALL OCCURRENCES OF patt IN
+       folpath
+       RESULTS result_tab.
+
+  SORT result_tab DESCENDING BY offset.
+  READ TABLE result_tab INDEX 1 ASSIGNING <match>.
+
+  IF ( sy-subrc EQ 0 ).
+    i = <match>-offset + 1.
+  ENDIF.
+
+  folpath = text+0(i).
+
+ENDFORM.                               " GET_FOLDER_NAME
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR file1.
+
+*  CALL FUNCTION 'F4_FILENAME'
+*    IMPORTING
+*      file_name = w_filex
+*    EXCEPTIONS
+*      OTHERS    = 1.
+*
+*  FILE1 = w_filex.
+
+  CALL FUNCTION 'WS_FILENAME_GET'
+       EXPORTING
+*            DEF_FILENAME     = w_filex
+*            DEF_PATH         = $PATHNAME
+            mask             = ',*.*,*.*.'
+*            MODE             = $MODE
+       IMPORTING
+            filename         = w_filex
+       EXCEPTIONS
+            inv_winsys       = 01
+            no_batch         = 02
+            selection_cancel = 03
+            selection_error  = 04.
+
+  IF sy-subrc = 0.
+    file1 = w_filex.
+  ENDIF.
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR file2.
+
+  CALL FUNCTION 'WS_FILENAME_GET'
+       EXPORTING
+            mask             = ',*.*,*.*.'
+       IMPORTING
+            filename         = w_filex
+       EXCEPTIONS
+            inv_winsys       = 01
+            no_batch         = 02
+            selection_cancel = 03
+            selection_error  = 04.
+
+  IF sy-subrc = 0.
+    file2 = w_filex.
+   PERFORM get_folder_name CHANGING file2.
+  ENDIF.
+
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR file3.
+
+  CALL FUNCTION 'WS_FILENAME_GET'
+       EXPORTING
+            mask             = ',*.*,*.*.'
+       IMPORTING
+            filename         = w_filex2
+       EXCEPTIONS
+            inv_winsys       = 01
+            no_batch         = 02
+            selection_cancel = 03
+            selection_error  = 04.
+
+  IF sy-subrc = 0.
+    file3 = w_filex2.
+   PERFORM get_folder_name CHANGING file3.
+  ENDIF.
+
+  AT SELECTION-SCREEN ON VALUE-REQUEST FOR f_path.
+  CLEAR: file, f_path.
+  CALL METHOD cl_gui_frontend_services=>file_open_dialog
+      CHANGING
+        file_table              = file_table
+        rc                      = rc
+      EXCEPTIONS
+        file_open_dialog_failed = 1
+        cntl_error              = 2
+        error_no_gui            = 3
+        not_supported_by_gui    = 4
+        OTHERS                  = 5.
+
+  READ TABLE file_table INTO file INDEX 1.
+  f_path = file.
+  PERFORM get_folder_name CHANGING f_path.
+
+
+AT SELECTION-SCREEN ON f_path.
+
+  DATA: patt         TYPE string VALUE `.`,
+        result_tab   TYPE match_result_tab,
+        lv_format(4) TYPE c.
+
+  FIELD-SYMBOLS <match> LIKE LINE OF result_tab.
+
+  FIND ALL OCCURRENCES OF patt IN
+     f_path RESULTS result_tab.
+
+  SORT result_tab by offset DESCENDING. "-- To find the last occurrence
+
+*-- Checking only the document format "pdf "xls "doc.
+  READ TABLE result_tab ASSIGNING <match> INDEX 1.
+  IF sy-subrc EQ 0.
+    <match>-offset = <match>-offset + 1.
+    WRITE f_path+<match>-offset(03) to lv_format.
+    IF lv_format NE 'PDF'.
+      MESSAGE e325(hrpadin01).
+    ENDIF.
+  ENDIF.
+  AT SELECTION-SCREEN.
+  IF sscrfields-ucomm NE 'LOUT' OR sscrfields-ucomm EQ 'ONLI' .
+    DATA: sname LIKE t596f-sname,
+          form_date LIKE sy-datum,
+          formname(30) TYPE c,
+          temp_pscript TYPE c.
+
+    sname = '40TAX016'.
+    form_date = '99991231'.
+    form_date+0(4) = year.
+
+    PERFORM get_layout_set USING sname form_date
+                           CHANGING formname.
+    PERFORM get_output_type USING    form_date
+                            CHANGING formname
+                                     temp_pscript.
+    IF disp_flg_lot GE 1.
+      p_script = temp_pscript.
+      IF p_script EQ 'X'.
+        CLEAR p_pdf.
+      ELSE.
+        p_pdf = 'X'.
+      ENDIF.
+    ENDIF.
+
+    IF p_script EQ 'X' AND ( p_f12bb EQ 'X' OR pf16_12b EQ 'X' ).
+       MESSAGE s003(HRPADIN01) DISPLAY LIKE 'E'.
+       LEAVE SCREEN.
+    ELSEIF co_cd = 'X' AND pnpesscf = ' '.
+       MESSAGE s313(hrpadin01).
+    ENDIF.
+
+    IF disp_flg_lot GE 1.
+       p_script = 'X'.
+       CLEAR p_pdf.
+    ENDIF.
+  ENDIF.
+
+  IF annex EQ 'X' AND p_f12bb EQ 'X'.
+    MESSAGE 'Annexure cannot be displayed along with Form 12BB'
+                                      TYPE 'I' DISPLAY LIKE 'I'.
+    LEAVE SCREEN.
+  ENDIF.
+
+  IF file3 IS NOT INITIAL AND file2 IS NOT INITIAL AND dmail IS INITIAL.
+       MESSAGE 'Select Send Form 16 as Mail Attachment Checkbox'
+                                      TYPE 'I' DISPLAY LIKE 'I'.
+       LEAVE SCREEN.
+   ENDIF.
+
+    IF file4 IS NOT INITIAL AND fmail IS INITIAL.
+       MESSAGE 'Select Send Form 12BB as Mail Attachment Checkbox'
+                                      TYPE 'I' DISPLAY LIKE 'I'.
+       LEAVE SCREEN.
+    ENDIF.
+
+    IF fmail IS NOT INITIAL AND dmail IS INITIAL.
+      MESSAGE 'Form 16 should also be sent along with Form 12BB. Select Send Form 16 as Mail Attachment Checkbox as well'
+                                      TYPE 'I' DISPLAY LIKE 'I'.
+       LEAVE SCREEN.
+    ENDIF.
+
+    IF p_pan EQ 'X' AND folpath IS INITIAL AND p_f12bb NE 'X'.
+      MESSAGE 'Maintain folder Path to Download Form 16' TYPE 'I' DISPLAY LIKE 'I'.
+      LEAVE SCREEN.
+    ENDIF.
+
+    IF p_pan EQ 'X' AND folpath1 IS INITIAL AND p_f16 NE 'X'.
+      MESSAGE 'Maintain folder Path to Download Form 12BB' TYPE 'I' DISPLAY LIKE 'I'.
+      LEAVE SCREEN.
+    ENDIF.
+
+*    IF p_pan EQ 'X' AND ( folpath IS INITIAL OR folpath1 IS INITIAL ).
+*      IF folpath IS INITIAL.
+*        MESSAGE 'Maintain folder Path to Download Form 16' TYPE 'I' DISPLAY LIKE 'I'.
+*        LEAVE SCREEN.
+*      ELSE.
+*        MESSAGE 'Maintain folder Path to Download Form 12BB' TYPE 'I' DISPLAY LIKE 'I'.
+*        LEAVE SCREEN.
+*      ENDIF.
+*    ENDIF.
+
+  AT SELECTION-SCREEN ON VALUE-REQUEST FOR folpath1.
+  CALL METHOD cl_gui_frontend_services=>file_open_dialog
+*      EXPORTING
+*        window_title            = title
+*        file_filter             = file_filter
+      CHANGING
+        file_table              = file_table
+        rc                      = rc
+      EXCEPTIONS
+        file_open_dialog_failed = 1
+        cntl_error              = 2
+        error_no_gui            = 3
+        not_supported_by_gui    = 4
+        OTHERS                  = 5.
+  IF sy-subrc <> 0.
+*      MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+*      WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+
+  READ TABLE file_table INTO file INDEX 1.
+  folpath1 = file.
+
+  PERFORM get_folder_name CHANGING folpath1.
+
+
+  AT SELECTION-SCREEN ON VALUE-REQUEST FOR file4.
+
+  CALL FUNCTION 'WS_FILENAME_GET'
+       EXPORTING
+            mask             = ',*.*,*.*.'
+       IMPORTING
+            filename         = w_filex3
+       EXCEPTIONS
+            inv_winsys       = 01
+            no_batch         = 02
+            selection_cancel = 03
+            selection_error  = 04.
+
+  IF sy-subrc = 0.
+    file4 = w_filex3.
+   PERFORM get_folder_name CHANGING file4.
+  ENDIF.
+
+ AT SELECTION-SCREEN ON VALUE-REQUEST FOR f_path5.
+
+  CALL FUNCTION 'WS_FILENAME_GET'
+       EXPORTING
+            mask             = ',*.*,*.*.'
+       IMPORTING
+            filename         = w_filex4
+       EXCEPTIONS
+            inv_winsys       = 01
+            no_batch         = 02
+            selection_cancel = 03
+            selection_error  = 04.
+
+  IF sy-subrc = 0.
+    f_path5 = w_filex4.
+   PERFORM get_folder_name CHANGING f_path5.
+  ENDIF.
+
+*-- Changes for Attachment file path in Email BAdI.
+*-- Only .PDF format is allowed.
+AT SELECTION-SCREEN on year.
+  IF year LT gv_t511k-kwert.
+    LOOP AT SCREEN.
+      IF screen-group1 = 'BB1'
+         OR screen-group1 = 'BB3' OR screen-group1 = 'BB4'
+*         OR screen-group1 = 'BB6' OR screen-group1 = 'BB9'
+         OR screen-group1 = 'BB7' OR screen-group1 = 'B16'.
+        screen-active = '0'.
+        MODIFY SCREEN.
+        p_f16 = 'X'. "Radio button to Generate Form 16
+        CLEAR: file4,
+               p_email,
+               fmail,
+*               dmail,
+*               file2,
+               folpath1,
+               p_f12bb,
+               pf16_12b.
+      ENDIF.
+    ENDLOOP.
+  ENDIF.

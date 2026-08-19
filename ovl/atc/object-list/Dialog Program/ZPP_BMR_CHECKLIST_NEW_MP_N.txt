@@ -1,0 +1,1257 @@
+*&---------------------------------------------------------------------*
+*& Modulpool  ZPP_BMR_CHECKLIST_NEW_MP
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+*&----------------------Development Details----------------------------*
+*&--Report           : ZPP_BMR_CHECKLIST_NEW_MP                     ---*
+*&--Package          : ZPP_ABAP                                     ---*
+*&--Description      : Module Pool for BMR & CheckList              ---*
+*&--Transaction Code : ZPP_BMR_SF_NEW                               ---*
+*&--Technical Owner  : RAHUL VASITA ( VC-ERP ) / PARTH SHUKLA       ---*
+*&--Functional Owner : SOURAV( ABHIYANTA ) / VIPUL KULSHRESTHA      ---*
+*&--TR No            : DEVK942367                                   ---*
+*&---------------------------------------------------------------------*
+PROGRAM zpp_bmr_checklist_new_mp_n.
+
+INCLUDE ZPP_BMR_CHECKLIST_NEW_TOP_N.
+*INCLUDE zpp_bmr_checklist_new_top.
+INCLUDE ZPP_BMR_CHECKLIST_NEW_PBO_N.
+*INCLUDE zpp_bmr_checklist_new_pbo.
+INCLUDE ZPP_BMR_CHECKLIST_NEW_PAI_N.
+*INCLUDE zpp_bmr_checklist_new_pai.
+INCLUDE ZPP_BMR_CHECKLIST_NEW_FORMS_N.
+*INCLUDE zpp_bmr_checklist_new_forms.
+
+
+*&---------------------------------------------------------------------*
+*&  Include           ZPP_BMR_CHECKLIST_NEW_TOP
+*&---------------------------------------------------------------------*
+
+
+*&SPWIZARD: DECLARATION OF TABLECONTROL 'LT_TAB_CTRL' ITSELF
+CONTROLS: lt_tab_ctrl TYPE TABLEVIEW USING SCREEN 9000.
+
+*&SPWIZARD: LINES OF TABLECONTROL 'LT_TAB_CTRL'
+DATA:     g_lt_tab_ctrl_lines  LIKE sy-loopc.
+*******************************Download attachement details***********
+
+TYPES: BEGIN OF ty_sood_tab,   "SAPoffice: Object definition
+         objtp    TYPE sood-objtp,           "Code for document class
+         objyr    TYPE sood-objyr,           "Object: Year from ID
+         objno    TYPE sood-objno,           "Object: Number from ID
+         objdes   TYPE sood-objdes,          "Short description of contents
+         file_ext TYPE sood-file_ext,        "File extension for PC application
+         objlen   TYPE sood-objlen,          "Size of Document Content
+         extct    TYPE sood-extct,           "Object contents are stored externally
+       END OF ty_sood_tab.
+
+DATA : it_sood_tab  TYPE STANDARD TABLE OF ty_sood_tab,
+       it_sood_tab1 TYPE STANDARD TABLE OF ty_sood_tab,
+       wa_sood_tab  TYPE ty_sood_tab.
+
+TYPES : BEGIN OF ty_srgb,
+          instid_a TYPE srgbtbrel-instid_a,
+          instid_b TYPE srgbtbrel-instid_b,
+        END OF ty_srgb.
+
+DATA : it_srgb1 TYPE STANDARD TABLE OF ty_srgb,
+       wa_srgb  TYPE ty_srgb.
+
+TYPES : BEGIN OF ty_final,
+          instid_a TYPE srgbtbrel-instid_a,
+          objdes   TYPE sood-objdes,          "Short description of contents
+        END OF ty_final.
+
+DATA : it_final TYPE STANDARD TABLE OF ty_final,
+       wa_final TYPE ty_final.
+
+DATA : s_int_a TYPE srgbtbrel-instid_a.
+DATA : lv_int TYPE srgbtbrel-instid_a.
+DATA : lv_folder TYPE string.
+DATA : objcont_tab LIKE soli  OCCURS 0 WITH HEADER LINE.  "SAPoffice: line, length 255
+DATA : bin_filesize LIKE soxwd-doc_length.               "SAPoffice: header table for MS WinWord objects
+DATA : bakfilename_g LIKE rlgrap-filename.               "Program Fields/Screen Fields for SAPLGRAP--Local file
+DATA : soc3key_g     LIKE soc3-srtfd.                    "SAPoffice: DB for objects (import/export)
+DATA : lv_file TYPE string.
+DATA : s_file TYPE string.
+DATA : message_v1 TYPE string.
+DATA : lv_msg TYPE string.
+DATA : lv_belnr TYPE string.                             "Local vairable for sales document no
+DATA : l_result      TYPE c,
+       lv_aufnr      TYPE aufnr, "Added by Rahul Vasita on 16.05.2024 14:53:51
+       l_datfilename TYPE string,                        "local variable for filename
+       rtcode_g      LIKE sy-subrc.                      "Return Code of ABAP Statements
+DATA : v_filename TYPE string  .
+DATA : v_path  TYPE string.
+DATA : v_fullpath  TYPE string.
+DATA : t_listheader   TYPE slis_t_listheader   WITH HEADER LINE,
+       t_fieldcatalog TYPE slis_t_fieldcat_alv WITH HEADER LINE,
+       fs_layout      TYPE slis_layout_alv,
+       t_event        TYPE slis_t_event WITH HEADER LINE,
+       gt_sort        TYPE slis_t_sortinfo_alv WITH HEADER LINE.
+
+DATA : p_belnr TYPE bkpf-belnr.
+DATA : p_path TYPE string VALUE 'D:\'.
+
+
+
+
+
+******************************Download attachment details************
+TABLES: afru.
+
+DATA : v_fm_name TYPE  rs38l_fnam.
+DATA : control_parameters TYPE ssfctrlop,
+       control            TYPE ssfctrlop,
+       output             TYPE ssfcompop,
+       "Adding Start by Rahul Vasita on 03.05.2024 14:14:30
+       gv_bin_filesize    TYPE i, " Store the file size
+       lv_xstring1        TYPE xstring,
+       lv_xstring2        TYPE xstring,
+       ls_otfdata         TYPE ssfcrescl, " Smart Forms: Return value at end of form printing
+       ls_reclist         TYPE somlreci1, " SAPoffice: Structure of the API Recipient List
+       ls_pdf_tab         TYPE tline. " Workarea for SAP Script Text Lines
+
+DATA: lt_reclist TYPE TABLE OF somlreci1, " SAPoffice: Structure of the API Recipient List
+      lt_pdf_tab TYPE TABLE OF tline, " SAPscript: Text Lines
+      lt_otf     TYPE TABLE OF itcoo, " OTF Structure
+      lt_content TYPE STANDARD TABLE OF tdline,
+      ls_content TYPE tdline,
+      lt_objbin  TYPE TABLE OF solisti1, " SAPoffice: Single List with Column Length 255
+      lt_objpack TYPE TABLE OF sopcklsti1. " SAPoffice: Description of Imported
+DATA: pdf_merger TYPE REF TO cl_rspo_pdf_merge.
+DATA: ex        TYPE REF TO cx_rspo_pdf_merge, lv_ex_txt TYPE string.
+DATA: merged_document TYPE xstring.
+DATA: rc    TYPE i VALUE 0, lnum TYPE i VALUE 0, p_sel TYPE i VALUE 1.
+DATA: docindex TYPE i VALUE 0, errordoc TYPE xstring.
+DATA: text1      TYPE string, error_text TYPE string.
+"Adding End by Rahul Vasita on 03.05.2024 14:14:30
+
+*DATA : v_con TYPE i. "Comment by Rahul Vasita on 06.06.2024 10:26:35
+DATA : lt_checklist TYPE zpp_bmr_checklist_tt, "Added by Rahul Vasita on 03.05.2024 12:30:29
+       ls_checklist TYPE zpp_bmr_checklist_ts. "Added by Rahul Vasita on 03.05.2024 12:30:31
+*v_con = 1. "Comment by Rahul Vasita on 06.06.2024 10:26:37
+TYPES : BEGIN OF ty_afko,
+          aufnr TYPE afko-aufnr,
+          rsnum TYPE afko-rsnum,
+        END OF ty_afko.
+DATA : it_afko TYPE STANDARD TABLE OF ty_afko,
+       wa_afko TYPE ty_afko.
+
+TYPES : BEGIN OF ty_afru,
+          aufnr TYPE afru-aufnr,
+          werks TYPE afru-werks,
+        END OF ty_afru.
+DATA : it_afru TYPE STANDARD TABLE OF ty_afru,
+       wa_afru TYPE ty_afru.
+
+DATA     print_opts LIKE itcpo.
+DATA : wa_print TYPE print_co.
+DATA: subrc LIKE sy-subrc.
+DATA: v_charg TYPE afpo-charg.
+DATA : v_gamng TYPE netpr.
+DATA : v_stlal TYPE afko-stlal.
+DATA : v_gmein TYPE afko-gmein.
+DATA : v_chargd TYPE afpo-charg.
+DATA : v_maktx TYPE makt-maktx.
+
+DATA: off VALUE ' ',
+      on  VALUE 'X'.
+
+DATA : counter    TYPE n LENGTH 2.
+DATA : counter1    TYPE n LENGTH 2.
+
+TYPES : BEGIN OF ty_rseb,
+          rsnum TYPE resb-rsnum,
+          matnr TYPE resb-matnr,
+          bdmng TYPE resb-bdmng,
+          meins TYPE resb-meins,
+        END OF ty_rseb.
+
+DATA : wa_rseb TYPE ty_rseb,
+       it_rseb TYPE STANDARD TABLE OF ty_rseb.
+
+
+TYPES : BEGIN OF ty_makt,
+          matnr TYPE makt-matnr,
+          maktx TYPE makt-maktx,
+        END OF ty_makt.
+
+DATA : wa_makt TYPE ty_makt,
+       it_makt TYPE STANDARD TABLE OF ty_makt.
+
+TYPES : BEGIN OF ty_rseb1,
+          srno  TYPE char5,
+          matnr TYPE resb-matnr,
+          bdmng TYPE resb-bdmng,
+          meins TYPE resb-meins,
+          batch TYPE c LENGTH 15,
+          sign  TYPE c LENGTH 20,
+        END OF ty_rseb1.
+
+DATA : wa_rseb1 TYPE ty_rseb1,
+       it_rseb1 TYPE STANDARD TABLE OF ty_rseb1.
+
+TYPES : BEGIN OF ty_rseb2,
+          srno  TYPE char5,
+          matnr TYPE resb-matnr,
+          maktx TYPE makt-maktx,
+          gross TYPE char10,
+          tare  TYPE char10,
+          net   TYPE char10,
+        END OF ty_rseb2.
+
+DATA : wa_rseb2 TYPE ty_rseb2,
+       it_rseb2 TYPE STANDARD TABLE OF ty_rseb2.
+
+TYPES : BEGIN OF ty_temp,
+          matnr TYPE mara-matnr,
+          werks TYPE werks_d,
+        END OF ty_temp.
+
+DATA : v_matnr TYPE afko-plnbez.
+
+DATA : it_temp TYPE STANDARD TABLE OF ty_temp,
+       wa_temp TYPE ty_temp.
+
+DATA : caufvd_p_tab LIKE SORTED TABLE OF caufvd_p WITH UNIQUE KEY
+                    aufnr                         WITH HEADER LINE.
+
+DATA : wa_item LIKE SORTED TABLE OF caufvd_p WITH UNIQUE KEY
+                    aufnr                         WITH HEADER LINE.
+
+DATA : v_werks TYPE afru-werks.
+DATA : wa_itema LIKE LINE OF wa_item.
+
+*MODULE POOL DECLARATIONS Starts
+TYPES : BEGIN OF ty_tbctrl,
+          sel(1) TYPE c.
+          INCLUDE STRUCTURE zpp_bmr_checklist_ts.
+        TYPES : END OF ty_tbctrl.
+DATA : lv_dynnr   TYPE sy-dynnr,
+       ok_code1   TYPE sy-ucomm,
+       p_aufnr    TYPE afru-aufnr,
+       a(1)       TYPE c,
+       lv_flag(1) TYPE c.
+DATA: lt_listtab    TYPE TABLE OF zpp_bmr_list,
+      ls_listtab    TYPE zpp_bmr_list,
+      lt_list_trans TYPE TABLE OF zpp_bmr_list_t,
+      ls_list_trans TYPE zpp_bmr_list_t.
+DATA:lt_tbctrl TYPE TABLE OF ty_tbctrl,
+     ls_tbctrl TYPE ty_tbctrl.
+
+data :p_batch    TYPE i.
+
+
+
+*data : p_batch(1) TYPE p DECIMALS 3,
+
+*DATA : v_gamng TYPE netpr.
+
+data :p_alt type mast-stlal,
+
+      p_plant type marc-werks.
+
+*MODULE POOL DECLARATIONS Ends
+
+**SELECTION-SCREEN BEGIN OF SCREEN 9002 AS SUBSCREEN.
+**PARAMETERS : p_aufnr TYPE afru-aufnr.
+**PARAMETERS: a AS CHECKBOX.
+**SELECTION-SCREEN END OF SCREEN 9002.
+
+
+
+*&---------------------------------------------------------------------*
+*&  Include           ZPP_BMR_CHECKLIST_NEW_FORMS
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Form  SAVE_PDF
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM save_pdf .
+*  IF lt_tbctrl[] IS NOT INITIAL.
+  PERFORM build_checklist.
+  PERFORM print.
+*  ELSE.
+*    MESSAGE 'Please Enter Correct Order Number to Print BMR Form' TYPE 'S' DISPLAY LIKE 'E'.
+*    RETURN.
+*  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  GET_ORDERDATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM get_orderdata .
+  IF p_aufnr IS NOT INITIAL.
+    "Comment Start by Rahul Vasita on 07.06.2024 12:00:24
+*    IF a = 'X'.
+**      PERFORM down_attac. "Comment by Rahul Vasita on 06.06.2024 10:59:06
+*    ENDIF.
+    "Comment End by Rahul Vasita on 07.06.2024 12:00:24
+    IF lv_flag = abap_false.
+      REFRESH: lt_tbctrl[].
+      PERFORM fetch_order_details CHANGING lt_tbctrl[].
+    ENDIF.
+    IF lt_tbctrl[] IS INITIAL.
+*      MESSAGE 'BMR Checklist Data Not Found' TYPE 'S' DISPLAY LIKE 'E'.
+*      RETURN.
+    ENDIF.
+  ELSE.
+*    MESSAGE 'Please Enter Production Order Number' TYPE 'S' DISPLAY LIKE 'E'.
+*    RETURN.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FETCH_ORDER_DETAILS
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      <--P_LT_LISTTAB[]  text
+*----------------------------------------------------------------------*
+FORM fetch_order_details  CHANGING p_lt_tbctrl LIKE lt_tbctrl.
+  DATA: lv_base  TYPE stko-bmeng, "Added by Rahul Vasita on 18.06.2024 15:11:43
+        lv_stlnr TYPE afko-stlnr, "Added by Rahul Vasita on 18.06.2024 15:11:43
+        lv_batch TYPE afpo-psmng. "Added by Rahul Vasita on 18.06.2024 15:11:40
+  REFRESH : it_afko[], it_rseb[] , it_makt[] , it_rseb1[] , it_rseb2[] , lt_listtab[].
+  CLEAR : counter , counter1 , lv_stlnr.
+  CLEAR: lv_base , lv_batch. "Added by Rahul Vasita on 18.06.2024 15:11:54
+
+  SELECT aufnr rsnum FROM afko INTO TABLE it_afko WHERE aufnr = p_aufnr.
+
+  IF it_afko IS NOT INITIAL.
+    SELECT rsnum  matnr bdmng meins FROM resb INTO CORRESPONDING FIELDS OF TABLE it_rseb FOR ALL ENTRIES IN it_afko WHERE rsnum = it_afko-rsnum.
+  ENDIF.
+
+
+*  select * from ZPP_BMR_LIST into table @data(it_bmr) where
+*     werks    = @p_plant and
+*    sf_matnr  = @p_aufnr and
+*    stlal = @p_alt.
+
+  SORT it_rseb BY rsnum matnr. "Added by Rahul Vasita on 21.06.2024 16:41:24
+
+  IF p_aufnr IS NOT INITIAL.
+    SELECT SINGLE charg FROM afpo INTO v_charg WHERE aufnr = p_aufnr.
+    SELECT SINGLE gamng stlal gmein FROM afko INTO ( v_gamng ,v_stlal ,v_gmein )  WHERE aufnr = p_aufnr.
+    SELECT SINGLE  charg FROM afpo INTO v_chargd WHERE aufnr = p_aufnr.
+    data(v_gam) = v_gamng.
+    v_gamng = v_gamng * p_batch.
+  ENDIF.
+
+  SELECT SINGLE plnbez stlnr FROM afko INTO ( v_matnr , lv_stlnr ) WHERE aufnr = p_aufnr.
+  wa_temp-matnr =   v_matnr.
+*  SELECT SINGLE werks FROM afru INTO v_werks WHERE aufnr = p_aufnr. "Comment by Rahul Vasita on 17.06.2024 11:25:24
+  SELECT SINGLE dwerk FROM afpo INTO v_werks WHERE aufnr = p_aufnr.
+  wa_temp-werks =  v_werks.
+
+  SELECT SINGLE maktx FROM makt INTO v_maktx WHERE matnr = wa_temp-matnr.
+
+  IF it_rseb IS NOT INITIAL.
+    SELECT  matnr maktx FROM makt INTO CORRESPONDING FIELDS OF TABLE it_makt FOR ALL ENTRIES IN it_rseb WHERE matnr = it_rseb-matnr.
+  ENDIF.
+
+  SELECT SINGLE bmeng FROM stko INTO lv_base WHERE stlty = 'M' AND stlnr = lv_stlnr AND stlal = v_stlal.
+
+  SORT it_rseb1 BY srno matnr bdmng. "Added by Rahul Vasita on 10.06.2024 12:32:56
+  DELETE ADJACENT DUPLICATES FROM it_rseb1 COMPARING matnr bdmng. "Added by Rahul Vasita on 10.06.2024 12:32:57
+
+  IF it_makt IS NOT INITIAL.
+    LOOP AT it_makt INTO wa_makt.
+      counter1 =  counter1 + 1.
+      wa_rseb2-srno  =  counter1.
+      wa_rseb2-matnr  =   wa_makt-matnr.
+      wa_rseb2-maktx =   wa_makt-maktx.
+      APPEND wa_rseb2 TO it_rseb2.
+      CLEAR wa_makt.
+    ENDLOOP.
+  ENDIF.
+
+***********BOM related things
+
+  SELECT * FROM mast INTO TABLE @DATA(it_mast) WHERE
+    matnr = @p_aufnr AND
+    werks = @p_plant AND
+    stlal = @p_alt.
+
+  IF it_mast IS NOT INITIAL.
+    SELECT bmeng FROM stko INTO TABLE @DATA(it_stko) FOR ALL ENTRIES IN @it_mast
+      WHERE stlnr = @it_mast-stlnr AND stlal = @it_mast-stlal AND stlty = 'M'.
+  ENDIF.
+
+  READ TABLE it_stko INTO DATA(wa_stko) INDEX 1.
+
+  lv_batch = wa_stko-bmeng.
+
+  v_matnr = p_aufnr.
+
+  v_chargd = p_batch.
+
+  SELECT SINGLE maktx FROM makt INTO v_maktx WHERE matnr = p_aufnr.
+
+
+  IF it_mast IS NOT INITIAL.
+    SELECT * FROM stas INTO TABLE @DATA(it_stas)
+      FOR ALL ENTRIES IN @it_mast
+      WHERE stlnr = @it_mast-stlnr AND stlal = @it_mast-stlal.
+  ENDIF.
+
+  IF it_mast IS NOT INITIAL.
+    SELECT * FROM stpo INTO TABLE @DATA(it_stpo) FOR ALL ENTRIES IN @it_stas
+      WHERE stlnr = @it_stas-stlnr AND stlkn = @it_stas-stlkn.
+  ENDIF.
+
+*    SELECT SINGLE bmeng FROM stko INTO lv_base WHERE stlty = 'M' AND stlnr = lv_stlnr AND stlal = v_stlal.
+
+*  p_batch = p_batch / 1000.
+
+  data : p_b type wmeng.
+
+
+if wa_stko-bmeng is not INITIAL.
+  p_b = p_batch / wa_stko-bmeng.
+  endif.
+
+  IF it_stpo IS NOT INITIAL.
+    LOOP AT it_stpo INTO DATA(wa_stpo).
+      counter = counter + 1.
+      wa_rseb1-srno  =  counter.
+      wa_rseb1-matnr  =  wa_stpo-idnrk.
+      wa_rseb1-bdmng =  wa_stpo-menge * p_b .
+      wa_rseb1-meins  =  wa_stpo-meins.
+      APPEND wa_rseb1 TO it_rseb1.
+      CLEAR wa_stpo.
+    ENDLOOP.
+  ENDIF.
+
+
+*  p_batch = p_batch * 1000.
+
+
+
+  IF it_rseb1 IS NOT INITIAL.
+    SELECT  matnr maktx FROM makt INTO CORRESPONDING FIELDS OF TABLE it_makt FOR ALL ENTRIES IN it_rseb1 WHERE matnr = it_rseb1-matnr.
+  ENDIF.
+
+***********BOM related things
+
+*  IF wa_temp IS NOT INITIAL AND v_stlal IS NOT INITIAL.
+  SELECT *
+    FROM zpp_bmr_list
+    INTO TABLE lt_listtab
+    WHERE werks = p_plant
+      AND sf_matnr = p_aufnr
+      AND stlal = p_alt.
+  IF sy-subrc = 0.
+    lv_flag = abap_true.
+  ENDIF.
+
+
+  if lt_listtab[] is  INITIAL.
+    message 'Check List not Prepared for above input criteria' type 'E'.
+  endif.
+
+
+  DATA: lv_flag TYPE i.
+  lv_flag = 0.
+  LOOP AT lt_listtab ASSIGNING FIELD-SYMBOL(<ls_listtab>).
+    lv_flag = lv_flag + 1.
+    ls_tbctrl-sr_no = lv_flag.
+    IF <ls_listtab>-matnr IS NOT INITIAL.
+      wa_rseb1-bdmng = VALUE #( it_rseb1[ matnr = <ls_listtab>-matnr ]-bdmng OPTIONAL ).
+    ENDIF."      IF <ls_listtab>-matnr is NOT INITIAL.
+    MOVE-CORRESPONDING <ls_listtab> TO ls_tbctrl.
+
+    ls_tbctrl-std_qty =  (  wa_rseb1-bdmng  * <ls_listtab>-contribution ) / 100.
+
+    APPEND ls_tbctrl TO p_lt_tbctrl.
+    CLEAR: ls_tbctrl , wa_rseb1.
+  ENDLOOP.
+*  ENDIF."IF wa_temp IS NOT INITIAL AND v_stlal IS NOT INITIAL.
+
+  DO 3 TIMES.
+    APPEND INITIAL LINE TO it_rseb1.
+  ENDDO.
+
+
+
+
+ENDFORM.
+
+*----------------------------------------------------------------------*
+*   INCLUDE TABLECONTROL_FORMS                                         *
+*----------------------------------------------------------------------*
+
+*&---------------------------------------------------------------------*
+*&      Form  USER_OK_TC                                               *
+*&---------------------------------------------------------------------*
+FORM user_ok_tc USING    p_tc_name TYPE dynfnam
+                         p_table_name
+                         p_mark_name
+                CHANGING p_ok      LIKE sy-ucomm.
+
+*&SPWIZARD: BEGIN OF LOCAL DATA----------------------------------------*
+  DATA: l_ok     TYPE sy-ucomm,
+        l_offset TYPE i.
+*&SPWIZARD: END OF LOCAL DATA------------------------------------------*
+
+*&SPWIZARD: Table control specific operations                          *
+*&SPWIZARD: evaluate TC name and operations                            *
+  SEARCH p_ok FOR p_tc_name.
+  IF sy-subrc <> 0.
+    EXIT.
+  ENDIF.
+  l_offset = strlen( p_tc_name ) + 1.
+  l_ok = p_ok+l_offset.
+*&SPWIZARD: execute general and TC specific operations                 *
+  CASE l_ok.
+    WHEN 'INSR'.                      "insert row
+      PERFORM fcode_insert_row USING    p_tc_name
+                                        p_table_name.
+      CLEAR p_ok.
+
+    WHEN 'DELE'.                      "delete row
+      PERFORM fcode_delete_row USING    p_tc_name
+                                        p_table_name
+                                        p_mark_name.
+      CLEAR p_ok.
+
+    WHEN 'P--' OR                     "top of list
+         'P-'  OR                     "previous page
+         'P+'  OR                     "next page
+         'P++'.                       "bottom of list
+      PERFORM compute_scrolling_in_tc USING p_tc_name
+                                            l_ok.
+      CLEAR p_ok.
+*     WHEN 'L--'.                       "total left
+*       PERFORM FCODE_TOTAL_LEFT USING P_TC_NAME.
+*
+*     WHEN 'L-'.                        "column left
+*       PERFORM FCODE_COLUMN_LEFT USING P_TC_NAME.
+*
+*     WHEN 'R+'.                        "column right
+*       PERFORM FCODE_COLUMN_RIGHT USING P_TC_NAME.
+*
+*     WHEN 'R++'.                       "total right
+*       PERFORM FCODE_TOTAL_RIGHT USING P_TC_NAME.
+*
+    WHEN 'MARK'.                      "mark all filled lines
+      PERFORM fcode_tc_mark_lines USING p_tc_name
+                                        p_table_name
+                                        p_mark_name   .
+      CLEAR p_ok.
+
+    WHEN 'DMRK'.                      "demark all filled lines
+      PERFORM fcode_tc_demark_lines USING p_tc_name
+                                          p_table_name
+                                          p_mark_name .
+      CLEAR p_ok.
+
+*     WHEN 'SASCEND'   OR
+*          'SDESCEND'.                  "sort column
+*       PERFORM FCODE_SORT_TC USING P_TC_NAME
+*                                   l_ok.
+
+  ENDCASE.
+
+ENDFORM.                              " USER_OK_TC
+
+*&---------------------------------------------------------------------*
+*&      Form  FCODE_INSERT_ROW                                         *
+*&---------------------------------------------------------------------*
+FORM fcode_insert_row
+              USING    p_tc_name           TYPE dynfnam
+                       p_table_name             .
+
+*&SPWIZARD: BEGIN OF LOCAL DATA----------------------------------------*
+  DATA l_lines_name       LIKE feld-name.
+  DATA l_selline          LIKE sy-stepl.
+  DATA l_lastline         TYPE i.
+  DATA l_line             TYPE i.
+  DATA l_table_name       LIKE feld-name.
+  FIELD-SYMBOLS <tc>                 TYPE cxtab_control.
+  FIELD-SYMBOLS <table>              TYPE STANDARD TABLE.
+  FIELD-SYMBOLS <lines>              TYPE i.
+*&SPWIZARD: END OF LOCAL DATA------------------------------------------*
+
+  ASSIGN (p_tc_name) TO <tc>.
+
+*&SPWIZARD: get the table, which belongs to the tc                     *
+  CONCATENATE p_table_name '[]' INTO l_table_name. "table body
+  ASSIGN (l_table_name) TO <table>.                "not headerline
+
+*&SPWIZARD: get looplines of TableControl                              *
+  CONCATENATE 'G_' p_tc_name '_LINES' INTO l_lines_name.
+  ASSIGN (l_lines_name) TO <lines>.
+
+*&SPWIZARD: get current line                                           *
+  GET CURSOR LINE l_selline.
+  IF sy-subrc <> 0.                   " append line to table
+    l_selline = <tc>-lines + 1.
+*&SPWIZARD: set top line                                               *
+    IF l_selline > <lines>.
+      <tc>-top_line = l_selline - <lines> + 1 .
+    ELSE.
+      <tc>-top_line = 1.
+    ENDIF.
+  ELSE.                               " insert line into table
+    l_selline = <tc>-top_line + l_selline - 1.
+    l_lastline = <tc>-top_line + <lines> - 1.
+  ENDIF.
+*&SPWIZARD: set new cursor line                                        *
+  l_line = l_selline - <tc>-top_line + 1.
+
+*&SPWIZARD: insert initial line                                        *
+  INSERT INITIAL LINE INTO <table> INDEX l_selline.
+  <tc>-lines = <tc>-lines + 1.
+*&SPWIZARD: set cursor                                                 *
+  SET CURSOR 1 l_line.
+
+ENDFORM.                              " FCODE_INSERT_ROW
+
+*&---------------------------------------------------------------------*
+*&      Form  FCODE_DELETE_ROW                                         *
+*&---------------------------------------------------------------------*
+FORM fcode_delete_row
+              USING    p_tc_name           TYPE dynfnam
+                       p_table_name
+                       p_mark_name   .
+
+*&SPWIZARD: BEGIN OF LOCAL DATA----------------------------------------*
+  DATA l_table_name       LIKE feld-name.
+
+  FIELD-SYMBOLS <tc>         TYPE cxtab_control.
+  FIELD-SYMBOLS <table>      TYPE STANDARD TABLE.
+  FIELD-SYMBOLS <wa>.
+  FIELD-SYMBOLS <mark_field>.
+*&SPWIZARD: END OF LOCAL DATA------------------------------------------*
+
+  ASSIGN (p_tc_name) TO <tc>.
+
+*&SPWIZARD: get the table, which belongs to the tc                     *
+  CONCATENATE p_table_name '[]' INTO l_table_name. "table body
+  ASSIGN (l_table_name) TO <table>.                "not headerline
+
+*&SPWIZARD: delete marked lines                                        *
+  DESCRIBE TABLE <table> LINES <tc>-lines.
+
+  LOOP AT <table> ASSIGNING <wa>.
+
+*&SPWIZARD: access to the component 'FLAG' of the table header         *
+    ASSIGN COMPONENT p_mark_name OF STRUCTURE <wa> TO <mark_field>.
+
+    IF <mark_field> = 'X'.
+      DELETE <table> INDEX syst-tabix.
+      IF sy-subrc = 0.
+        <tc>-lines = <tc>-lines - 1.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+
+ENDFORM.                              " FCODE_DELETE_ROW
+
+*&---------------------------------------------------------------------*
+*&      Form  COMPUTE_SCROLLING_IN_TC
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_TC_NAME  name of tablecontrol
+*      -->P_OK       ok code
+*----------------------------------------------------------------------*
+FORM compute_scrolling_in_tc USING    p_tc_name
+                                      p_ok.
+*&SPWIZARD: BEGIN OF LOCAL DATA----------------------------------------*
+  DATA l_tc_new_top_line     TYPE i.
+  DATA l_tc_name             LIKE feld-name.
+  DATA l_tc_lines_name       LIKE feld-name.
+  DATA l_tc_field_name       LIKE feld-name.
+
+  FIELD-SYMBOLS <tc>         TYPE cxtab_control.
+  FIELD-SYMBOLS <lines>      TYPE i.
+*&SPWIZARD: END OF LOCAL DATA------------------------------------------*
+
+  ASSIGN (p_tc_name) TO <tc>.
+*&SPWIZARD: get looplines of TableControl                              *
+  CONCATENATE 'G_' p_tc_name '_LINES' INTO l_tc_lines_name.
+  ASSIGN (l_tc_lines_name) TO <lines>.
+
+
+*&SPWIZARD: is no line filled?                                         *
+  IF <tc>-lines = 0.
+*&SPWIZARD: yes, ...                                                   *
+    l_tc_new_top_line = 1.
+  ELSE.
+*&SPWIZARD: no, ...                                                    *
+    CALL FUNCTION 'SCROLLING_IN_TABLE'
+      EXPORTING
+        entry_act      = <tc>-top_line
+        entry_from     = 1
+        entry_to       = <tc>-lines
+        last_page_full = 'X'
+        loops          = <lines>
+        ok_code        = p_ok
+        overlapping    = 'X'
+      IMPORTING
+        entry_new      = l_tc_new_top_line
+      EXCEPTIONS
+*       NO_ENTRY_OR_PAGE_ACT  = 01
+*       NO_ENTRY_TO    = 02
+*       NO_OK_CODE_OR_PAGE_GO = 03
+        OTHERS         = 0.
+  ENDIF.
+
+*&SPWIZARD: get actual tc and column                                   *
+  GET CURSOR FIELD l_tc_field_name
+             AREA  l_tc_name.
+
+  IF syst-subrc = 0.
+    IF l_tc_name = p_tc_name.
+*&SPWIZARD: et actual column                                           *
+      SET CURSOR FIELD l_tc_field_name LINE 1.
+    ENDIF.
+  ENDIF.
+
+*&SPWIZARD: set the new top line                                       *
+  <tc>-top_line = l_tc_new_top_line.
+
+
+ENDFORM.                              " COMPUTE_SCROLLING_IN_TC
+
+*&---------------------------------------------------------------------*
+*&      Form  FCODE_TC_MARK_LINES
+*&---------------------------------------------------------------------*
+*       marks all TableControl lines
+*----------------------------------------------------------------------*
+*      -->P_TC_NAME  name of tablecontrol
+*----------------------------------------------------------------------*
+FORM fcode_tc_mark_lines USING p_tc_name
+                               p_table_name
+                               p_mark_name.
+*&SPWIZARD: EGIN OF LOCAL DATA-----------------------------------------*
+  DATA l_table_name       LIKE feld-name.
+
+  FIELD-SYMBOLS <tc>         TYPE cxtab_control.
+  FIELD-SYMBOLS <table>      TYPE STANDARD TABLE.
+  FIELD-SYMBOLS <wa>.
+  FIELD-SYMBOLS <mark_field>.
+*&SPWIZARD: END OF LOCAL DATA------------------------------------------*
+
+  ASSIGN (p_tc_name) TO <tc>.
+
+*&SPWIZARD: get the table, which belongs to the tc                     *
+  CONCATENATE p_table_name '[]' INTO l_table_name. "table body
+  ASSIGN (l_table_name) TO <table>.                "not headerline
+
+*&SPWIZARD: mark all filled lines                                      *
+  LOOP AT <table> ASSIGNING <wa>.
+
+*&SPWIZARD: access to the component 'FLAG' of the table header         *
+    ASSIGN COMPONENT p_mark_name OF STRUCTURE <wa> TO <mark_field>.
+
+    <mark_field> = 'X'.
+  ENDLOOP.
+ENDFORM.                                          "fcode_tc_mark_lines
+
+*&---------------------------------------------------------------------*
+*&      Form  FCODE_TC_DEMARK_LINES
+*&---------------------------------------------------------------------*
+*       demarks all TableControl lines
+*----------------------------------------------------------------------*
+*      -->P_TC_NAME  name of tablecontrol
+*----------------------------------------------------------------------*
+FORM fcode_tc_demark_lines USING p_tc_name
+                                 p_table_name
+                                 p_mark_name .
+*&SPWIZARD: BEGIN OF LOCAL DATA----------------------------------------*
+  DATA l_table_name       LIKE feld-name.
+
+  FIELD-SYMBOLS <tc>         TYPE cxtab_control.
+  FIELD-SYMBOLS <table>      TYPE STANDARD TABLE.
+  FIELD-SYMBOLS <wa>.
+  FIELD-SYMBOLS <mark_field>.
+*&SPWIZARD: END OF LOCAL DATA------------------------------------------*
+
+  ASSIGN (p_tc_name) TO <tc>.
+
+*&SPWIZARD: get the table, which belongs to the tc                     *
+  CONCATENATE p_table_name '[]' INTO l_table_name. "table body
+  ASSIGN (l_table_name) TO <table>.                "not headerline
+
+*&SPWIZARD: demark all filled lines                                    *
+  LOOP AT <table> ASSIGNING <wa>.
+
+*&SPWIZARD: access to the component 'FLAG' of the table header         *
+    ASSIGN COMPONENT p_mark_name OF STRUCTURE <wa> TO <mark_field>.
+
+    <mark_field> = space.
+  ENDLOOP.
+ENDFORM.                                          "fcode_tc_mark_lines
+*&---------------------------------------------------------------------*
+*&      Form  PRINT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM print .
+  control_parameters-no_dialog = abap_true.
+  control_parameters-getotf = abap_true.
+  output-tddest = 'ZLP02'.
+  "Adding End by Rahul Vasita on 03.05.2024 14:10:09
+
+
+  wa_temp-matnr = p_aufnr.
+  wa_temp-werks = p_plant.
+  v_stlal = p_alt.
+
+  CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
+    EXPORTING
+*     formname = 'ZPP_BMR_FORM_123' "Comment by Rahul Vasita on 02.05.2024 18:59:00
+      formname = 'ZPP_BMR_FORM_N' "Added by Rahul Vasita on 02.05.2024 18:59:05
+    IMPORTING
+      fm_name  = v_fm_name.
+  IF sy-subrc <> 0.
+  ENDIF.
+
+  CALL FUNCTION v_fm_name
+    EXPORTING
+      control_parameters = control_parameters
+      output_options     = output
+      aufnr_imp          = p_aufnr
+      it_item            = it_rseb1
+      it_itema           = it_rseb2
+      wa_temp            = wa_temp
+      v_gamng            = v_gamng
+      v_stlal            = v_stlal
+      v_gmein            = v_gmein
+      v_chargd           = v_chargd
+      v_maktx            = v_maktx
+    IMPORTING
+      job_output_info    = ls_otfdata.
+*        v_con     = v_con. "Comment by Rahul Vasita on 02.05.2024 19:00:01
+  IF sy-subrc <> 0.
+*   Implement suitable error handling here
+  ENDIF.
+
+  lt_otf = ls_otfdata-otfdata[]. "Added by Rahul Vasita on 03.05.2024 14:18:16
+
+  CALL FUNCTION 'CONVERT_OTF'
+    EXPORTING
+      format                = 'PDF'
+      max_linewidth         = 132
+    IMPORTING
+      bin_filesize          = gv_bin_filesize
+      bin_file              = lv_xstring1
+    TABLES
+      otf                   = lt_otf
+      lines                 = lt_pdf_tab
+    EXCEPTIONS
+      err_max_linewidth     = 1
+      err_format            = 2
+      err_conv_not_possible = 3
+      OTHERS                = 4.
+
+  IF sy-subrc <> 0.
+
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+    WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+
+  ENDIF.
+
+  IF lt_checklist[] IS NOT INITIAL.
+
+
+    CLEAR : v_fm_name , gv_bin_filesize , ls_otfdata.
+    REFRESH : lt_pdf_tab[] , lt_otf[].
+    CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
+      EXPORTING
+*       formname = 'ZPP_BMR_FORM_123' "Comment by Rahul Vasita on 02.05.2024 18:59:00
+        formname = 'ZPP_BMR_CHECKLIST_FORM_N' "Added by Rahul Vasita on 02.05.2024 18:59:05
+**formname = 'ZPP_BMR_CHECKLIST_FORM1' "Added by Rahul Vasita on 02.05.2024 18:59:05
+      IMPORTING
+        fm_name  = v_fm_name.
+    IF sy-subrc <> 0.
+    ENDIF.
+
+    CALL FUNCTION v_fm_name "'/1BCDWB/SF00000573'
+      EXPORTING
+        control_parameters = control_parameters
+        output_options     = output
+        wa_temp            = wa_temp
+        aufnr_imp          = p_aufnr
+        v_chargd           = v_chargd
+        v_maktx            = v_maktx
+        v_stlal            = v_stlal
+        v_gamng            = v_gamng
+      IMPORTING
+        job_output_info    = ls_otfdata
+      TABLES
+        lt_checklist       = lt_checklist[]
+      EXCEPTIONS
+        formatting_error   = 1
+        internal_error     = 2
+        send_error         = 3
+        user_canceled      = 4
+        OTHERS             = 5.
+    IF sy-subrc <> 0.
+* Implement suitable error handling here
+    ENDIF.
+
+
+    lt_otf = ls_otfdata-otfdata[]. "Added by Rahul Vasita on 03.05.2024 14:18:16
+
+    CALL FUNCTION 'CONVERT_OTF'
+      EXPORTING
+        format                = 'PDF'
+        max_linewidth         = 132
+      IMPORTING
+        bin_filesize          = gv_bin_filesize
+        bin_file              = lv_xstring2
+      TABLES
+        otf                   = lt_otf
+        lines                 = lt_pdf_tab
+      EXCEPTIONS
+        err_max_linewidth     = 1
+        err_format            = 2
+        err_conv_not_possible = 3
+        OTHERS                = 4.
+
+    IF sy-subrc <> 0.
+
+      MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+      WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+
+    ENDIF.
+    REFRESH : lt_otf[] , lt_pdf_tab[].
+  ENDIF."IF lt_checklist[] IS NOT INITIAL.
+  TRY.
+      CREATE OBJECT pdf_merger.
+    CATCH cx_rspo_pdf_merge INTO ex.
+      lv_ex_txt = ex->get_text( ).
+*      write: / lv_ex_txt color col_negative.
+      rc = 1.
+      RETURN.
+
+  ENDTRY.
+  IF rc = 0.
+
+
+    pdf_merger->check_document( EXPORTING document = lv_xstring1 IMPORTING error_text = error_text rc = rc ).
+    IF rc = 0.
+      pdf_merger->add_document( lv_xstring1 ).
+    ENDIF.
+    CLEAR : rc.
+
+    pdf_merger->check_document( EXPORTING document = lv_xstring2 IMPORTING error_text = error_text rc = rc ).
+    IF rc = 0.
+      pdf_merger->add_document( lv_xstring2 ).
+    ENDIF.
+    CLEAR : rc.
+
+    pdf_merger->merge_documents( IMPORTING merged_document = merged_document rc = rc ).
+
+    IF rc <> 0.
+      pdf_merger->get_err_doc_index( IMPORTING index = docindex ).
+      pdf_merger->get_document( EXPORTING index = docindex IMPORTING document = errordoc ).
+      pdf_merger->get_last_error_text( CHANGING error_text = error_text ).
+    ELSE.
+      PERFORM save_pdf_desktop USING merged_document. "Added by Rahul Vasita on 03.05.2024 14:44:00
+    ENDIF.
+  ENDIF."IF rc = 0.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  SAVE_PDF_DESKTOP
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_MERGED_DOCUMENT  text
+*----------------------------------------------------------------------*
+FORM save_pdf_desktop  USING    merged_document TYPE xstring.
+  DATA: bin_tab TYPE STANDARD TABLE OF tabl1024.
+  DATA: lo_gui TYPE REF TO cl_gui_frontend_services.
+  DATA: path     TYPE string, fullpath TYPE string.
+  DATA: length TYPE i.
+  DATA: filter TYPE string, uact TYPE i, name TYPE string.
+
+  CREATE OBJECT lo_gui.
+  CALL FUNCTION 'SCMS_XSTRING_TO_BINARY'
+    EXPORTING
+      buffer        = merged_document
+    IMPORTING
+      output_length = length
+    TABLES
+      binary_tab    = bin_tab.
+
+  CALL METHOD lo_gui->file_save_dialog
+    EXPORTING
+      default_extension = 'pdf'
+      default_file_name = 'BMR_' && p_aufnr && '.pdf'
+      file_filter       = filter
+    CHANGING
+      filename          = name
+      path              = path
+      fullpath          = fullpath
+      user_action       = uact.
+  IF uact = lo_gui->action_cancel.
+    EXIT.
+  ENDIF.
+
+  lo_gui->gui_download( EXPORTING
+                          filename = fullpath
+                          filetype = 'BIN'
+                          bin_filesize = length
+                        CHANGING
+                          data_tab = bin_tab ).
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  BUILD_CHECKLIST
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM build_checklist .
+  DATA : lt_trans TYPE TABLE OF zpp_bmr_list_t,
+         ls_trans TYPE zpp_bmr_list_t.
+  REFRESH: lt_trans[] , lt_checklist[].
+  LOOP AT lt_tbctrl INTO ls_tbctrl.
+    MOVE-CORRESPONDING : ls_tbctrl TO ls_checklist,
+                         ls_tbctrl TO ls_trans.
+
+    APPEND :ls_checklist TO lt_checklist,
+            ls_trans TO lt_trans.
+    CLEAR: ls_checklist , ls_tbctrl , ls_trans.
+  ENDLOOP.
+*  MODIFY zpp_bmr_list_t FROM TABLE lt_trans[].
+*  IF sy-subrc = 0.
+*    COMMIT WORK.
+*    MESSAGE 'DATA ADDED TO TRANSACTIONAL TABLE' TYPE 'S'.
+*  ELSE.
+*    ROLLBACK WORK.
+*    MESSAGE 'ERROR WHILE UPDATING TRANSACTIONAL DATA' TYPE 'S' DISPLAY LIKE 'E'.
+*    RETURN.
+*  ENDIF.
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+*&  Include           ZPP_BMR_CHECKLIST_NEW_PAI
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_9000  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE user_command_9000 INPUT.
+  CASE ok_code1.
+    WHEN 'BACK' OR 'CANCEL' OR 'EXIT'.
+      LEAVE TO SCREEN 0.
+    WHEN '&SUBMIT'.
+      if lt_listtab is not INITIAL.
+      PERFORM save_pdf.
+      REFRESH: lt_tbctrl[] , lt_checklist[].
+      CLEAR : lv_flag , counter , counter1.
+      endif.
+    WHEN '&CLEAR_N'.
+      CLEAR : lv_flag , p_aufnr , counter , counter1.
+      REFRESH: lt_tbctrl[] , lt_checklist[] ,lt_listtab[].
+      REFRESH : it_afko[], it_rseb[] , it_makt[] , it_rseb1[] , it_rseb2[] , lt_listtab[].
+    WHEN 'ENTER'.
+      PERFORM get_orderdata.
+    WHEN OTHERS.
+  ENDCASE.
+ENDMODULE.
+
+*&SPWIZARD: INPUT MODULE FOR TC 'LT_TAB_CTRL'. DO NOT CHANGE THIS LINE!
+*&SPWIZARD: MODIFY TABLE
+MODULE lt_tab_ctrl_modify INPUT.
+  MODIFY lt_tbctrl
+    FROM ls_tbctrl
+    INDEX lt_tab_ctrl-current_line.
+ENDMODULE.
+
+*&SPWIZARD: INPUT MODUL FOR TC 'LT_TAB_CTRL'. DO NOT CHANGE THIS LINE!
+*&SPWIZARD: MARK TABLE
+MODULE lt_tab_ctrl_mark INPUT.
+  DATA: g_lt_tab_ctrl_wa2 LIKE LINE OF lt_tbctrl.
+  IF lt_tab_ctrl-line_sel_mode = 1
+  AND ls_tbctrl-sel = 'X'.
+    LOOP AT lt_tbctrl INTO g_lt_tab_ctrl_wa2
+      WHERE sel = 'X'.
+      g_lt_tab_ctrl_wa2-sel = ''.
+      MODIFY lt_tbctrl
+        FROM g_lt_tab_ctrl_wa2
+        TRANSPORTING sel.
+    ENDLOOP.
+  ENDIF.
+  MODIFY lt_tbctrl
+    FROM ls_tbctrl
+    INDEX lt_tab_ctrl-current_line
+    TRANSPORTING sel.
+ENDMODULE.
+
+*&SPWIZARD: INPUT MODULE FOR TC 'LT_TAB_CTRL'. DO NOT CHANGE THIS LINE!
+*&SPWIZARD: PROCESS USER COMMAND
+MODULE lt_tab_ctrl_user_command INPUT.
+  ok_code1 = sy-ucomm.
+  PERFORM user_ok_tc USING    'LT_TAB_CTRL'
+                              'LT_TBCTRL'
+                              'SEL'
+                     CHANGING ok_code1.
+  sy-ucomm = ok_code1.
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  CHECK_ACTUAL_QTY  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE check_actual_qty INPUT.
+  IF ls_tbctrl-act_qty CA sy-abcde.
+    MESSAGE 'Alpha-Numeric Input Not ALlowed' TYPE 'I' DISPLAY LIKE 'E'.
+    RETURN.
+  ENDIF.
+
+**  IF ls_tbctrl-act_tmp CA sy-abcde.
+**    MESSAGE 'Alpha-Numeric Input Not ALlowed' TYPE 'I' DISPLAY LIKE 'E'.
+**    RETURN.
+**  ENDIF.
+
+  IF ls_tbctrl-act_time_hr_f CA sy-abcde.
+    MESSAGE 'Alpha-Numeric Input Not ALlowed' TYPE 'I' DISPLAY LIKE 'E'.
+    RETURN.
+  ENDIF.
+
+  IF ls_tbctrl-act_time_hr_t CA sy-abcde.
+    MESSAGE 'Alpha-Numeric Input Not ALlowed' TYPE 'I' DISPLAY LIKE 'E'.
+    RETURN.
+  ENDIF.
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  CHECK_ORDER  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE check_order INPUT.
+*  DATA: lv_werks TYPE werks_d.
+*  CLEAR: lv_werks.
+*  SELECT SINGLE werks FROM aufk INTO lv_werks WHERE aufnr = p_aufnr.
+*  IF lv_werks IS NOT INITIAL.
+*    AUTHORITY-CHECK OBJECT 'ZBMR_WERKS' ID 'WERKS' FIELD lv_werks
+*                                        ID 'ACTVT' FIELD '03'.
+*    IF sy-subrc <> 0.
+*      MESSAGE 'You are not Authorized for Order:-' && p_aufnr && ' and Plant Code:-' && lv_werks TYPE 'E'.
+*    ELSE.
+*      IF p_aufnr IS NOT INITIAL.
+*        SELECT SINGLE * FROM afko INTO @DATA(ls_afko) WHERE aufnr = @p_aufnr.
+*        IF sy-subrc <> 0.
+*          MESSAGE 'Please Enter Correct Order Number' TYPE 'E'.
+*        ENDIF.
+*      ENDIF."IF p_aufnr IS NOT INITIAL.
+*    ENDIF."Auth Object.
+*  ENDIF.
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  GET_ORDERHELP  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE get_orderhelp INPUT.
+  DATA: gt_return  TYPE TABLE OF ddshretval,
+        gwa_return TYPE ddshretval.
+  SELECT DISTINCT aufnr
+          FROM afko
+          INTO TABLE @DATA(lt_afko).
+
+  CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
+    EXPORTING
+      retfield        = 'WERKS'
+      value_org       = 'S'
+    TABLES
+      value_tab       = lt_afko
+      return_tab      = gt_return
+    EXCEPTIONS
+      parameter_error = 1
+      no_values_found = 2
+      OTHERS          = 3.
+
+  READ TABLE gt_return INTO gwa_return INDEX 1.
+  IF gwa_return IS NOT INITIAL.
+    p_aufnr = gwa_return-fieldval.
+  ENDIF."IF gwa_return IS NOT INITIAL.
+ENDMODULE.
+
+
+*&---------------------------------------------------------------------*
+*&  Include           ZPP_BMR_CHECKLIST_NEW_PBO
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Module  STATUS_9000  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE status_9000 OUTPUT.
+  SET PF-STATUS '9000_STATUSN'.
+*  SET TITLEBAR 'xxx'.
+  LOOP AT SCREEN.
+    IF screen-group1 = 'MOD' OR
+       screen-group1 = 'PAG' OR
+       screen-group1 = 'MAR' .
+      screen-active = 0.
+*      screen-invisible = 1.
+      MODIFY SCREEN.
+    ENDIF.
+  ENDLOOP.
+ENDMODULE.
+
+*&SPWIZARD: OUTPUT MODULE FOR TC 'LT_TAB_CTRL'. DO NOT CHANGE THIS LINE!
+*&SPWIZARD: UPDATE LINES FOR EQUIVALENT SCROLLBAR
+MODULE lt_tab_ctrl_change_tc_attr OUTPUT.
+*  DESCRIBE TABLE lt_tbctrl LINES lt_tab_ctrl-lines.
+ENDMODULE.
+
+*&SPWIZARD: OUTPUT MODULE FOR TC 'LT_TAB_CTRL'. DO NOT CHANGE THIS LINE!
+*&SPWIZARD: GET LINES OF TABLECONTROL
+MODULE lt_tab_ctrl_get_lines OUTPUT.
+  g_lt_tab_ctrl_lines = sy-loopc.
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  MODIFY_TABLE  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE modify_table OUTPUT.
+  IF p_aufnr IS INITIAL OR lt_tbctrl[] IS INITIAL.
+    LOOP AT SCREEN.
+      IF screen-group1 = 'HD1'.
+*        screen-active = 0.
+*        screen-invisible = 1.
+        screen-input = 0.
+        MODIFY SCREEN.
+      ENDIF.
+    ENDLOOP.
+  ELSE.
+    LOOP AT SCREEN.
+      IF screen-group1 = 'HD1'.
+*        screen-active = 1.
+*        screen-invisible = 0.
+        screen-input = 1.
+        MODIFY SCREEN.
+      ENDIF.
+    ENDLOOP.
+  ENDIF."IF p_aufnr IS INITIAL.
+ENDMODULE.
+
+

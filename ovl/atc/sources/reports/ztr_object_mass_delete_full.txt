@@ -1,0 +1,374 @@
+REPORT ztr_object_mass_delete_full.
+
+*---------------------------------------------------------------------*
+*  Transport Based Object Deletion Utility (Top → Bottom)
+*---------------------------------------------------------------------*
+
+TABLES: tadir, e070, e071.
+TYPE-POOLS: slis.
+
+*---------------------------------------------------------------------*
+* Selection Screen
+*---------------------------------------------------------------------*
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-001.
+
+PARAMETERS: p_obj   TYPE tadir-obj_name,
+            p_tr    TYPE e070-trkorr,
+            p_deltr TYPE e070-trkorr.
+
+PARAMETERS: p_test AS CHECKBOX DEFAULT 'X'.
+
+SELECTION-SCREEN END OF BLOCK b1.
+
+*---------------------------------------------------------------------*
+* Types
+*---------------------------------------------------------------------*
+TYPES: BEGIN OF ty_object,
+         obj_name TYPE tadir-obj_name,
+         obj_type TYPE tadir-object,
+         devclass TYPE tadir-devclass,
+         orig_tr  TYPE e070-trkorr,
+         del_tr   TYPE e070-trkorr,
+         priority TYPE i,
+         status   TYPE string,
+       END OF ty_object.
+
+DATA: gt_objects      TYPE STANDARD TABLE OF ty_object,
+      gs_object       TYPE ty_object,
+      gt_e071         TYPE STANDARD TABLE OF e071,
+      gv_common_tr    TYPE e070-trkorr,
+      gv_tr_needed    TYPE abap_bool VALUE abap_false.
+
+*---------------------------------------------------------------------*
+INITIALIZATION.
+  text-001 = 'Mass Object Deletion Utility (Top-Down)'.
+
+*---------------------------------------------------------------------*
+START-OF-SELECTION.
+*---------------------------------------------------------------------*
+  PERFORM validate_input.
+  PERFORM fetch_objects.
+  PERFORM determine_common_tr.
+  PERFORM set_priority.
+  PERFORM process_objects.
+  PERFORM display_alv.
+
+*---------------------------------------------------------------------*
+* Validate Input
+*---------------------------------------------------------------------*
+FORM validate_input.
+
+  IF p_obj IS INITIAL AND p_tr IS INITIAL.
+    MESSAGE 'Provide Object Name or Transport Request' TYPE 'E'.
+  ENDIF.
+
+  IF p_tr IS NOT INITIAL.
+    SELECT SINGLE trkorr FROM e070
+      WHERE trkorr = @p_tr
+      INTO @DATA(lv_tr).
+
+    IF sy-subrc <> 0.
+      MESSAGE 'Transport Request does not exist' TYPE 'E'.
+    ENDIF.
+  ENDIF.
+
+ENDFORM.
+
+*---------------------------------------------------------------------*
+* Fetch Objects (NO SELECT INSIDE LOOP)
+*---------------------------------------------------------------------*
+FORM fetch_objects.
+
+  DATA: lt_tadir TYPE STANDARD TABLE OF tadir.
+
+  CLEAR gt_objects.
+
+  "Case 1: Single Object
+  IF p_obj IS NOT INITIAL.
+
+    SELECT *
+      FROM tadir
+      INTO TABLE lt_tadir
+      WHERE obj_name = @p_obj.
+
+  ENDIF.
+
+  "Case 2: Transport Request
+  IF p_tr IS NOT INITIAL.
+
+    SELECT *
+      FROM e071
+      INTO TABLE gt_e071
+      WHERE trkorr = @p_tr
+        AND pgmid  = 'R3TR'.
+
+    IF gt_e071 IS NOT INITIAL.
+
+      SELECT *
+        FROM tadir
+        INTO TABLE lt_tadir
+        FOR ALL ENTRIES IN gt_e071
+        WHERE obj_name = gt_e071-obj_name
+          AND object   = gt_e071-object.
+
+    ENDIF.
+
+  ENDIF.
+
+  IF lt_tadir IS INITIAL.
+    MESSAGE 'No objects found' TYPE 'E'.
+  ENDIF.
+
+  LOOP AT lt_tadir INTO DATA(ls_tadir).
+
+    CLEAR gs_object.
+    gs_object-obj_name = ls_tadir-obj_name.
+    gs_object-obj_type = ls_tadir-object.
+    gs_object-devclass = ls_tadir-devclass.
+    gs_object-orig_tr  = p_tr.
+
+    APPEND gs_object TO gt_objects.
+
+  ENDLOOP.
+
+  "Mass check for open TR (modifiable)
+  SELECT a~obj_name
+    FROM e071 AS a
+    INNER JOIN e070 AS b
+      ON a~trkorr = b~trkorr
+    INTO TABLE @DATA(lt_open_tr)
+    FOR ALL ENTRIES IN @gt_objects
+    WHERE a~obj_name = @gt_objects-obj_name
+      AND b~trstatus = 'D'.
+
+  LOOP AT gt_objects INTO gs_object.
+
+    READ TABLE lt_open_tr
+      WITH KEY obj_name = gs_object-obj_name
+      TRANSPORTING NO FIELDS.
+
+    IF sy-subrc <> 0.
+      gv_tr_needed = abap_true.
+    ENDIF.
+
+  ENDLOOP.
+
+ENDFORM.
+
+*---------------------------------------------------------------------*
+* Determine Single Common TR
+*---------------------------------------------------------------------*
+FORM determine_common_tr.
+
+  IF p_deltr IS NOT INITIAL.
+
+    gv_common_tr = p_deltr.
+
+  ELSEIF gv_tr_needed = abap_true.
+
+    CALL FUNCTION 'TR_INSERT_REQUEST_WITH_TASKS'
+      EXPORTING
+        iv_type = 'K'
+        iv_text = 'Mass Deletion Transport'
+      IMPORTING
+        ev_request = gv_common_tr
+      EXCEPTIONS
+        OTHERS = 1.
+
+    IF sy-subrc <> 0.
+      MESSAGE 'Failed to create Transport Request' TYPE 'E'.
+    ENDIF.
+
+  ENDIF.
+
+ENDFORM.
+
+*---------------------------------------------------------------------*
+* Assign Top → Bottom Priority
+*---------------------------------------------------------------------*
+FORM set_priority.
+
+  LOOP AT gt_objects INTO gs_object.
+
+    CASE gs_object-obj_type.
+
+      WHEN 'FUNC'. gs_object-priority = 1.
+      WHEN 'FUGR'. gs_object-priority = 2.
+      WHEN 'PROG'. gs_object-priority = 3.
+      WHEN 'CLAS'. gs_object-priority = 4.
+      WHEN 'SHLP'. gs_object-priority = 5.
+      WHEN 'VIEW'. gs_object-priority = 6.
+      WHEN 'TTYP'. gs_object-priority = 7.
+      WHEN 'TABL'. gs_object-priority = 8.
+      WHEN 'DTEL'. gs_object-priority = 9.
+      WHEN 'DOMA'. gs_object-priority = 10.
+      WHEN OTHERS. gs_object-priority = 99.
+
+    ENDCASE.
+
+    MODIFY gt_objects FROM gs_object.
+
+  ENDLOOP.
+
+  SORT gt_objects BY priority ASCENDING.
+
+ENDFORM.
+
+*---------------------------------------------------------------------*
+* Process Objects
+*---------------------------------------------------------------------*
+FORM process_objects.
+
+  LOOP AT gt_objects INTO gs_object.
+
+    PERFORM check_authorization USING gs_object-obj_type.
+
+    gs_object-del_tr = gv_common_tr.
+
+    IF p_test = 'X'.
+
+      gs_object-status = 'Test Run - Not Deleted'.
+
+    ELSE.
+
+      IF gv_common_tr IS NOT INITIAL.
+        PERFORM lock_object USING gs_object.
+      ENDIF.
+
+      PERFORM delete_object USING gs_object.
+
+    ENDIF.
+
+    MODIFY gt_objects FROM gs_object.
+
+  ENDLOOP.
+
+ENDFORM.
+
+*---------------------------------------------------------------------*
+* Authorization Check
+*---------------------------------------------------------------------*
+FORM check_authorization USING iv_objtype.
+
+  AUTHORITY-CHECK OBJECT 'S_DEVELOP'
+    ID 'OBJTYPE' FIELD iv_objtype
+    ID 'ACTVT'   FIELD '06'.
+
+  IF sy-subrc <> 0.
+    MESSAGE 'Authorization failure for deletion' TYPE 'E'.
+  ENDIF.
+
+ENDFORM.
+
+*---------------------------------------------------------------------*
+* Lock Object in TR
+*---------------------------------------------------------------------*
+FORM lock_object USING is_object TYPE ty_object.
+
+  CALL FUNCTION 'TR_OBJECTS_INSERT'
+    EXPORTING
+      wi_order    = gv_common_tr
+      wi_pgmid    = 'R3TR'
+      wi_object   = is_object-obj_type
+      wi_obj_name = is_object-obj_name
+    EXCEPTIONS
+      OTHERS = 1.
+
+ENDFORM.
+
+*---------------------------------------------------------------------*
+* Delete Object (Top → Bottom Safe)
+*---------------------------------------------------------------------*
+FORM delete_object USING is_object TYPE ty_object.
+
+  CASE is_object-obj_type.
+
+    WHEN 'PROG'.
+      DELETE REPORT is_object-obj_name.
+
+    WHEN 'CLAS'.
+      CALL FUNCTION 'SEO_CLASS_DELETE_COMPLETE'
+        EXPORTING clskey = is_object-obj_name.
+
+    WHEN 'FUNC'.
+      CALL FUNCTION 'RS_FUNCTION_DELETE'
+        EXPORTING funcname = is_object-obj_name.
+
+    WHEN 'FUGR'.
+      CALL FUNCTION 'RS_FUNCTION_POOL_DELETE'
+        EXPORTING area = is_object-obj_name.
+
+    WHEN 'TABL'.
+      CALL FUNCTION 'DDIF_TABL_DELETE'
+        EXPORTING name = is_object-obj_name.
+
+    WHEN 'VIEW'.
+      CALL FUNCTION 'DDIF_VIEW_DELETE'
+        EXPORTING name = is_object-obj_name.
+
+    WHEN 'DTEL'.
+      CALL FUNCTION 'DDIF_DTEL_DELETE'
+        EXPORTING name = is_object-obj_name.
+
+    WHEN 'DOMA'.
+      CALL FUNCTION 'DDIF_DOMA_DELETE'
+        EXPORTING name = is_object-obj_name.
+
+    WHEN 'SHLP'.
+      CALL FUNCTION 'DDIF_SHLP_DELETE'
+        EXPORTING name = is_object-obj_name.
+
+    WHEN 'TTYP'.
+      CALL FUNCTION 'DDIF_TTYP_DELETE'
+        EXPORTING name = is_object-obj_name.
+
+    WHEN OTHERS.
+      gs_object-status = 'Deletion Not Supported'.
+      RETURN.
+
+  ENDCASE.
+
+  IF sy-subrc = 0.
+    gs_object-status = 'Deleted Successfully'.
+  ELSE.
+    gs_object-status = 'Deletion Failed'.
+  ENDIF.
+
+ENDFORM.
+
+*---------------------------------------------------------------------*
+* ALV Display
+*---------------------------------------------------------------------*
+FORM display_alv.
+
+  DATA: lt_fieldcat TYPE slis_t_fieldcat_alv,
+        ls_fieldcat TYPE slis_fieldcat_alv.
+
+  PERFORM add_field USING 'OBJ_NAME' 'Object Name'
+        CHANGING lt_fieldcat.
+  PERFORM add_field USING 'OBJ_TYPE' 'Object Type'
+        CHANGING lt_fieldcat.
+  PERFORM add_field USING 'ORIG_TR'  'Original TR'
+        CHANGING lt_fieldcat.
+  PERFORM add_field USING 'DEL_TR'   'Delete TR'
+        CHANGING lt_fieldcat.
+  PERFORM add_field USING 'STATUS'   'Deletion Status'
+        CHANGING lt_fieldcat.
+
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      it_fieldcat = lt_fieldcat
+    TABLES
+      t_outtab    = gt_objects.
+
+ENDFORM.
+
+FORM add_field USING iv_field iv_text
+               CHANGING ct_fieldcat TYPE slis_t_fieldcat_alv.
+
+  DATA ls TYPE slis_fieldcat_alv.
+  ls-fieldname = iv_field.
+  ls-seltext_m = iv_text.
+  APPEND ls TO ct_fieldcat.
+
+ENDFORM.

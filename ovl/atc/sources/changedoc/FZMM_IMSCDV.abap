@@ -1,0 +1,13 @@
+*--- MAIN PROGRAM: FZMM_IMSCDV ---*
+* declaration for the long text
+DATA: BEGIN OF ICDTXT_ZMM_IMS OCCURS 20.
+        INCLUDE STRUCTURE CDTXT.
+DATA: END OF ICDTXT_ZMM_IMS.
+DATA: UPD_ICDTXT_ZMM_IMS TYPE C.
+
+* workaera_old of ZMM_IMS
+TABLES: *ZMM_IMS
+* workaera_new of ZMM_IMS
+       , ZMM_IMS.
+DATA: UPD_ZMM_IMS TYPE C.
+

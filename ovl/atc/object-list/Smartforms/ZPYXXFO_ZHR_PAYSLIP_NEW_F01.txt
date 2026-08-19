@@ -1,0 +1,6015 @@
+INCLUDE RSTXLCCALC.
+*----------------------------------------------------------------
+*"  subroutines for smart form ZPYXXFO_ZHR_PAYSLIP_NEW
+*----------------------------------------------------------------
+
+*----------------------------------------------------------------
+*"  MAKRO FILL_TEXTAREA
+*----------------------------------------------------------------
+
+DEFINE FILL_TEXTAREA.
+  CLEAR %TEXTAREA.
+  %TEXTAREA-ENABLED  = &1.
+  %TEXTAREA-NCOLS    = &2.
+  %TEXTAREA-NROWS    = &3.
+  %TEXTAREA-READONLY = &4.
+END-OF-DEFINITION.
+
+*----------------------------------------------------------------
+*"  FORM %WRITE_TEXT
+*----------------------------------------------------------------
+
+FORM %WRITE_TEXT USING NAME        TYPE SSFKEYNAME
+                       STYLE       TYPE TDSSNAME
+                       STYLEVARI   TYPE TDVARIANT
+                       APP_MODE    TYPE TDSFAMODE
+                       PROTECT     TYPE TDSFFLAG
+                       INPUTFIELDS TYPE TSFINPUT
+                       TEXTAREA    TYPE SSFTXTAREA.
+
+DATA: LANGU TYPE SPRAS,
+      L_TOKEN TYPE TSFTOKEN.
+
+  CALL FUNCTION 'SSFRT_READ_TEXT'
+       EXPORTING I_FORMNAME  = 'ZPYXXFO_ZHR_PAYSLIP_NEW'
+                 I_TEXTNAME  = NAME
+                 I_LANGUAGES = %LANGUAGES
+                 I_ACTIVE    = 'X'
+       IMPORTING O_LANGU     = LANGU
+                 O_TEXT      = %TEXT
+       EXCEPTIONS LANGUAGE_NOT_FOUND = 1
+                  OTHERS             = 2.
+  IF SY-SUBRC = 0.
+    SFSY-SUBRC = 0.
+  ELSE.
+    SFSY-SUBRC = 4.
+    CALL FUNCTION 'SSFRT_SET_ERROR_PARAMETERS'
+        EXPORTING I_FORM      = 'ZPYXXFO_ZHR_PAYSLIP_NEW'.
+    CALL FUNCTION 'SSFRT_WRITE_ERROR'
+        EXPORTING I_ERRNUMBER = SSF_ERR_NO_TEXTMODULE
+                  I_MSGID     = 'SSFCOMPOSER'
+                  I_MSGTY     = 'W'
+                  I_MSGNO     = '618'
+                  I_MSGV1     = NAME.
+    EXIT.
+  ENDIF.
+  CALL FUNCTION 'SSFCOMP_CONVERT_ITF_TO_TOKEN'
+       EXPORTING I_NAME     = NAME
+                 I_TEXT     = %TEXT
+                 I_TEXTNAME = SPACE
+                 I_TEXTTYPE = SPACE
+                 I_LANGU    = LANGU
+       IMPORTING E_TOKEN    = L_TOKEN.
+  CALL FUNCTION 'SSFCOMP_WRITE_TEXT'
+       EXPORTING  NAME              = NAME
+                  LANGU             = LANGU
+                  STYLE             = STYLE
+                  STYLEVARI         = STYLEVARI
+                  TEXT              = L_TOKEN
+                  TEXTTYPE          = SPACE
+                  APPEND_MODE       = APP_MODE
+                  PROTECT           = PROTECT
+                  INPUTFIELDS       = INPUTFIELDS
+                  TEXTAREA          = TEXTAREA
+       EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                  OTHERS            = 2.
+  CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+  ENDCASE.
+
+ENDFORM.
+
+*----------------------------------------------------------------
+*"  FORM %WRITE_TEXT_MODULE
+*----------------------------------------------------------------
+
+FORM %WRITE_TEXT_MODULE USING NAME        TYPE SSFKEYNAME
+                              TEXT        TYPE TDSFNAME
+                              TLANG       TYPE SPRAS
+                              STYLE       TYPE TDSSNAME
+                              STYLEVARI   TYPE TDVARIANT
+                              APP_MODE    TYPE TDSFAMODE
+                              PROTECT     TYPE TDSFFLAG
+                              IGNORE      TYPE TDSFFLAG
+                              INPUTFIELDS TYPE TSFINPUT
+                              TEXTAREA    TYPE SSFTXTAREA.
+
+DATA: LANGU        TYPE SPRAS,
+      L_TOKEN      TYPE TSFTOKEN,
+      L_LANGUAGES  TYPE SSFRLANG,
+      L_XSF_STATUS TYPE SSFXSF.
+
+  CALL FUNCTION 'SSFRT_ADD_LANGUAGE'
+       EXPORTING  I_LANG       = TLANG
+                  I_LANGUAGES  = %LANGUAGES
+       IMPORTING  O_LANGUAGES  = L_LANGUAGES.
+  CALL FUNCTION 'SSFRT_READ_TEXTMODULE'
+       EXPORTING  I_TEXTMODULE = TEXT
+                  I_LANGUAGES  = L_LANGUAGES
+       IMPORTING  O_LANGU      = LANGU
+                  O_TEXT       = %TEXT
+       EXCEPTIONS LANGUAGE_NOT_FOUND = 1
+                  OTHERS             = 2.
+  IF SY-SUBRC = 0.
+    SFSY-SUBRC = 0.
+  ELSE.
+    SFSY-SUBRC = 4.
+    CALL FUNCTION 'SSFRT_SET_ERROR_PARAMETERS'
+      EXPORTING I_FORM      = 'ZPYXXFO_ZHR_PAYSLIP_NEW'.
+    IF IGNORE = SPACE.
+      CALL FUNCTION 'SSFRT_WRITE_ERROR'
+        EXPORTING I_ERRNUMBER = SSF_ERR_NO_TEXTMODULE
+                  I_MSGID     = 'SSFCOMPOSER'
+                  I_MSGTY     = 'E'
+                  I_MSGNO     = '615'
+                  I_MSGV1     = TEXT.
+      PERFORM RESET_ALL IN PROGRAM SAPLSTXBC.
+      RAISE ERROR.
+    ELSE.
+      CALL FUNCTION 'SSFRT_WRITE_ERROR'
+        EXPORTING I_ERRNUMBER = SSF_ERR_NO_TEXTMODULE
+                  I_MSGID     = 'SSFCOMPOSER'
+                  I_MSGTY     = 'W'
+                  I_MSGNO     = '615'
+                  I_MSGV1     = TEXT.
+      PERFORM XSF_IS_ACTIVE IN PROGRAM SAPLSTXBC
+              CHANGING L_XSF_STATUS.
+      IF L_XSF_STATUS = 'X' AND TEXTAREA-ENABLED = 'A'.
+        SFSY-SUBRC = 0.
+        CALL FUNCTION 'SSFRT_XSF_DUMMY_TEXT'
+          EXPORTING  I_LANGUAGES = L_LANGUAGES
+          IMPORTING  O_LANGU     = LANGU
+                     O_TEXT      = %TEXT.
+      ELSE.
+        EXIT.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+  CALL FUNCTION 'SSFCOMP_CONVERT_ITF_TO_TOKEN'
+       EXPORTING I_NAME     = NAME
+                 I_TEXT     = %TEXT
+                 I_TEXTNAME = TEXT
+                 I_TEXTTYPE = 'R'
+                 I_LANGU    = LANGU
+       IMPORTING E_TOKEN    = L_TOKEN.
+  CALL FUNCTION 'SSFCOMP_WRITE_TEXT'
+       EXPORTING  NAME              = NAME
+                  LANGU             = LANGU
+                  STYLE             = STYLE
+                  STYLEVARI         = STYLEVARI
+                  TEXT              = L_TOKEN
+                  TEXTTYPE          = 'R'
+                  APPEND_MODE       = APP_MODE
+                  PROTECT           = PROTECT
+                  INPUTFIELDS       = INPUTFIELDS
+                  TEXTAREA          = TEXTAREA
+       EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                  OTHERS            = 2.
+  CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+  ENDCASE.
+
+ENDFORM.
+
+*----------------------------------------------------------------
+*"  FORM %GET_TEXTSTYLE
+*----------------------------------------------------------------
+
+FORM %GET_TEXTSTYLE USING    NAME     TYPE TDSFNAME
+                             TLANG    TYPE SPRAS
+                             IGNORE   TYPE TDSFFLAG
+                    CHANGING STYLE    TYPE TDSSNAME.
+
+DATA: NODENAME     TYPE SSFNAME VALUE 'HEADER',
+      IVARHEADER   TYPE TSFIVHD,
+      VARHEADER_WA TYPE SSFIVHD,
+      SUBRC        TYPE SY-SUBRC,
+      TEXTSTYLE_WA TYPE TY_TEXTSTYLE.
+
+  READ TABLE %TEXTSTYLE_TAB INTO TEXTSTYLE_WA
+       WITH KEY NAME = NAME TLANG = TLANG.
+  IF SY-SUBRC = 0.
+    STYLE = TEXTSTYLE_WA-STYLE.
+    EXIT.
+  ENDIF.
+
+  CALL FUNCTION 'SSF_READ_FORM'
+       EXPORTING  I_FORMNAME     = NAME
+                  I_LANGUAGE     = TLANG
+       EXCEPTIONS OTHERS         = 4.
+  IF SY-SUBRC <> 0.
+    SUBRC = SY-SUBRC.
+  ENDIF.
+
+  CALL FUNCTION 'SSF_READ_NODE_BEGIN'
+       EXPORTING  I_NODETYPE     = 'SF'
+                  I_NODENAME     = NODENAME
+       EXCEPTIONS OTHERS         = 4.
+  IF SY-SUBRC <> 0.
+    SUBRC = SY-SUBRC.
+  ENDIF.
+
+  CALL FUNCTION 'SSF_READ_DATE'
+       EXPORTING  I_NAME         = 'IVARHEADER'
+       IMPORTING  O_DATE         = IVARHEADER
+       EXCEPTIONS OTHERS         = 4.
+  IF SY-SUBRC <> 0.
+    SUBRC = SY-SUBRC.
+  ENDIF.
+
+  LOOP AT IVARHEADER INTO VARHEADER_WA TO 1.
+    STYLE = VARHEADER_WA-STDSTYLE.
+  ENDLOOP.
+  IF SY-SUBRC <> 0 OR STYLE = SPACE.
+    CALL FUNCTION 'SSFRT_SET_ERROR_PARAMETERS'
+      EXPORTING I_FORM      = 'ZPYXXFO_ZHR_PAYSLIP_NEW'.
+    IF IGNORE = SPACE.
+      CALL FUNCTION 'SSFRT_WRITE_ERROR'
+        EXPORTING I_ERRNUMBER = SSF_ERR_NO_TEXTSTYLE
+                  I_MSGID     = 'SSFCOMPOSER'
+                  I_MSGTY     = 'E'
+                  I_MSGNO     = '619'
+                  I_MSGV1     = NAME.
+      PERFORM RESET_ALL IN PROGRAM SAPLSTXBC.
+      RAISE ERROR.
+    ELSE.
+      CALL FUNCTION 'SSFRT_WRITE_ERROR'
+        EXPORTING I_ERRNUMBER = SSF_ERR_NO_TEXTSTYLE
+                  I_MSGID     = 'SSFCOMPOSER'
+                  I_MSGTY     = 'W'
+                  I_MSGNO     = '619'
+                  I_MSGV1     = NAME.
+    ENDIF.
+  ELSE.
+    TEXTSTYLE_WA-NAME  = NAME.
+    TEXTSTYLE_WA-TLANG = TLANG.
+    TEXTSTYLE_WA-STYLE = STYLE.
+    INSERT TEXTSTYLE_WA INTO TABLE %TEXTSTYLE_TAB.
+  ENDIF.
+
+ENDFORM.
+
+*----------------------------------------------------------------
+*"  FORM %WRITE_INCLUDE_TEXT
+*----------------------------------------------------------------
+
+FORM %WRITE_INCLUDE_TEXT USING NAME        TYPE SSFKEYNAME
+                               TEXTKEY     TYPE SSFTKEY
+                               STYLE       TYPE TDSSNAME
+                               STYLEVARI   TYPE TDVARIANT
+                               APP_MODE    TYPE TDSFAMODE
+                               PROTECT     TYPE TDSFFLAG
+                               IGNORE      TYPE TDSFFLAG
+                               INPUTFIELDS TYPE TSFINPUT
+                               TEXTAREA    TYPE SSFTXTAREA.
+
+DATA: LANGU        TYPE SPRAS,
+      L_TOKEN      TYPE TSFTOKEN,
+      L_LANGUAGES  TYPE SSFRLANG,
+      L_XSF_STATUS TYPE SSFXSF.
+
+  CALL FUNCTION 'SSFRT_READ_INCLUDE_TEXT'
+       EXPORTING  I_TEXTKEY   = TEXTKEY
+                  I_LANGUAGES = %LANGUAGES
+       IMPORTING  O_LANGU     = LANGU
+                  O_TEXT      = %TEXT
+       EXCEPTIONS OTHERS      = 1.
+  IF SY-SUBRC <> 0.
+    SFSY-SUBRC = 4.
+      CALL FUNCTION 'SSFRT_SET_ERROR_PARAMETERS'
+        EXPORTING I_FORM      = 'ZPYXXFO_ZHR_PAYSLIP_NEW'.
+    IF IGNORE = SPACE.
+      CALL FUNCTION 'SSFRT_WRITE_ERROR'
+        EXPORTING I_ERRNUMBER = SSF_ERR_INCLUDE_TEXT_NOT_FOUND
+                  I_MSGID     = 'SSFCOMPOSER'
+                  I_MSGTY     = 'E'
+                  I_MSGNO     = '610'
+                  I_MSGV1     = TEXTKEY-NAME
+                  I_MSGV2     = TEXTKEY-OBJECT
+                  I_MSGV3     = TEXTKEY-ID.
+      PERFORM RESET_ALL IN PROGRAM SAPLSTXBC.
+      RAISE ERROR.
+    ELSE.
+      CALL FUNCTION 'SSFRT_WRITE_ERROR'
+        EXPORTING I_ERRNUMBER = SSF_ERR_INCLUDE_TEXT_NOT_FOUND
+                  I_MSGID     = 'SSFCOMPOSER'
+                  I_MSGTY     = 'W'
+                  I_MSGNO     = '610'
+                  I_MSGV1     = TEXTKEY-NAME
+                  I_MSGV2     = TEXTKEY-OBJECT
+                  I_MSGV3     = TEXTKEY-ID.
+      PERFORM XSF_IS_ACTIVE IN PROGRAM SAPLSTXBC
+              CHANGING L_XSF_STATUS.
+      IF L_XSF_STATUS = 'X' AND TEXTAREA-ENABLED = 'A'.
+        SFSY-SUBRC = 0.
+        CALL FUNCTION 'SSFRT_ADD_LANGUAGE'
+          EXPORTING  I_LANG       = TEXTKEY-LANG
+                     I_LANGUAGES  = %LANGUAGES
+          IMPORTING  O_LANGUAGES  = L_LANGUAGES.
+        CALL FUNCTION 'SSFRT_XSF_DUMMY_TEXT'
+          EXPORTING  I_LANGUAGES = L_LANGUAGES
+          IMPORTING  O_LANGU     = LANGU
+                     O_TEXT      = %TEXT.
+      ELSE.
+        EXIT.
+      ENDIF.
+    ENDIF.
+  ELSE.
+    SFSY-SUBRC = 0.
+  ENDIF.
+  CALL FUNCTION 'SSFCOMP_CONVERT_ITF_TO_TOKEN'
+       EXPORTING I_NAME     = NAME
+                 I_TEXT     = %TEXT
+                 I_TEXTNAME = SPACE
+                 I_TEXTTYPE = 'I'
+                 I_LANGU    = LANGU
+       IMPORTING E_TOKEN = L_TOKEN.
+  CALL FUNCTION 'SSFCOMP_WRITE_TEXT'
+       EXPORTING  NAME              = NAME
+                  LANGU             = LANGU
+                  STYLE             = STYLE
+                  STYLEVARI         = STYLEVARI
+                  TEXT              = L_TOKEN
+                  TEXTTYPE          = 'I'
+                  APPEND_MODE       = APP_MODE
+                  PROTECT           = PROTECT
+                  INPUTFIELDS       = INPUTFIELDS
+                  TEXTAREA          = TEXTAREA
+       EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                  OTHERS            = 2.
+  CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+  ENDCASE.
+
+ENDFORM.
+
+*----------------------------------------------------------------
+*"  FORM %WRITE_DYNAMIC_TEXT
+*----------------------------------------------------------------
+
+FORM %WRITE_DYNAMIC_TEXT USING NAME        TYPE SSFKEYNAME
+                               DYNTEXT     TYPE TSFTEXT
+                               TLANG       TYPE SPRAS
+                               STYLE       TYPE TDSSNAME
+                               STYLEVARI   TYPE TDVARIANT
+                               APP_MODE    TYPE TDSFAMODE
+                               PROTECT     TYPE TDSFFLAG
+                               INPUTFIELDS TYPE TSFINPUT
+                               TEXTAREA    TYPE SSFTXTAREA.
+
+DATA: L_TOKEN      TYPE TSFTOKEN.
+
+  CALL FUNCTION 'SSFCOMP_CONVERT_ITF_TO_TOKEN'
+       EXPORTING I_NAME     = NAME
+                 I_TEXT     = DYNTEXT
+                 I_TEXTNAME = SPACE
+                 I_TEXTTYPE = 'D'
+                 I_LANGU    = TLANG
+       IMPORTING E_TOKEN    = L_TOKEN.
+  CALL FUNCTION 'SSFCOMP_WRITE_TEXT'
+       EXPORTING  NAME              = NAME
+                  LANGU             = TLANG
+                  STYLE             = STYLE
+                  STYLEVARI         = STYLEVARI
+                  TEXT              = L_TOKEN
+                  TEXTTYPE          = 'D'
+                  APPEND_MODE       = APP_MODE
+                  PROTECT           = PROTECT
+                  INPUTFIELDS       = INPUTFIELDS
+                  TEXTAREA          = TEXTAREA
+       EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                  OTHERS            = 2.
+  CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+  ENDCASE.
+
+ENDFORM.
+
+*----------------------------------------------------------------
+*"  FORM %MOVE
+*----------------------------------------------------------------
+
+FORM %MOVE USING TARGET TYPE ANY
+                 SOURCE TYPE ANY.
+
+DATA: L_PROGRAM LIKE SY-REPID,
+      L_TARGET(1000).
+
+  IF SOURCE(1) = '&'.
+    L_PROGRAM = SY-REPID.
+    CALL FUNCTION 'SSFRT_SYMBOL_VALUE'
+         EXPORTING  I_PROGRAM      = L_PROGRAM
+                    I_SYMBOLNAME   = SOURCE
+                    I_MOVE_LOGIC   = 'X'
+         IMPORTING  O_SYMBOL_VALUE = L_TARGET
+         EXCEPTIONS OTHERS         = 1.
+    IF SY-SUBRC <> 0.
+      PERFORM RESET_ALL IN PROGRAM SAPLSTXBC.
+      RAISE ERROR.
+    ENDIF.
+    TARGET = L_TARGET.
+  ELSE.
+    TARGET = SOURCE.
+  ENDIF.
+
+ENDFORM.
+
+*----------------------------------------------------------------
+*"  FORM %RAISE
+*----------------------------------------------------------------
+
+FORM %RAISE.
+
+DATA: L_ERROR TYPE SSFERROR,
+      L_EXIST(1).
+
+  CALL FUNCTION 'SSFRT_READ_ERROR'
+       IMPORTING  O_ERROR = L_ERROR
+       EXCEPTIONS OTHERS  = 1.
+  IF SY-SUBRC = 0 AND L_ERROR-MSGID <> SPACE.
+    L_EXIST = 'X'.
+  ENDIF.
+  IF L_EXIST = SPACE.
+    MESSAGE E003(SSFCOMPOSER) RAISING INTERNAL_ERROR.
+  ENDIF.
+  CASE L_ERROR-ERRNUMBER(2).
+  WHEN '00'.
+    MESSAGE ID     L_ERROR-MSGID
+            TYPE   L_ERROR-MSGTY
+            NUMBER L_ERROR-MSGNO
+            WITH   L_ERROR-MSGV1 L_ERROR-MSGV2
+                   L_ERROR-MSGV3 L_ERROR-MSGV4
+            RAISING USER_CANCELED.
+  WHEN '01'.
+    MESSAGE ID     L_ERROR-MSGID
+            TYPE   L_ERROR-MSGTY
+            NUMBER L_ERROR-MSGNO
+            WITH   L_ERROR-MSGV1 L_ERROR-MSGV2
+                   L_ERROR-MSGV3 L_ERROR-MSGV4
+            RAISING SEND_ERROR.
+  WHEN '02'.
+    MESSAGE ID     L_ERROR-MSGID
+            TYPE   L_ERROR-MSGTY
+            NUMBER L_ERROR-MSGNO
+            WITH   L_ERROR-MSGV1 L_ERROR-MSGV2
+                   L_ERROR-MSGV3 L_ERROR-MSGV4
+            RAISING FORMATTING_ERROR.
+  WHEN '03'.
+    MESSAGE ID     L_ERROR-MSGID
+            TYPE   L_ERROR-MSGTY
+            NUMBER L_ERROR-MSGNO
+            WITH   L_ERROR-MSGV1 L_ERROR-MSGV2
+                   L_ERROR-MSGV3 L_ERROR-MSGV4
+            RAISING INTERNAL_ERROR.
+  ENDCASE.
+
+ENDFORM.
+
+
+*----------------------------------------------------------------
+*   FORM %GLOBAL_CLEAR
+*----------------------------------------------------------------
+
+FORM %GLOBAL_CLEAR.
+
+CLEAR WA_PAYRESULT.
+CLEAR WA_EMPLOYEE.
+CLEAR GT_FINAL.
+CLEAR WA_FINAL.
+CLEAR WA_PAYROLL_PERIOD.
+CLEAR GV_MONTH.
+CLEAR GV_YEAR.
+CLEAR GV_BUTXT.
+CLEAR GV_ADRC.
+CLEAR GV_ADRC1.
+CLEAR GV_ADRNR.
+CLEAR WA_BANK.
+CLEAR WA_BANK_ACCOUNT.
+CLEAR WA_GROUP.
+CLEAR WA_POSITION.
+CLEAR WA_AREA.
+CLEAR GV_BANK.
+CLEAR GV_ACCOUNT.
+CLEAR GV_GRADE.
+CLEAR W_OFF.
+CLEAR GV_LWP.
+CLEAR GV_EARNED_DAYS.
+CLEAR GV_CF_LWP.
+CLEAR GV_TOT.
+CLEAR GV_PERNR.
+CLEAR GV_PFNO.
+CLEAR GV_DOJ.
+CLEAR WA_CUMULATED.
+CLEAR GV_NETPAYC.
+CLEAR GV_NETPAY.
+CLEAR GV_TOT_AMT.
+CLEAR GV_TOT_YTD.
+CLEAR GV_DED_AMT.
+CLEAR GV_DED_YTD.
+CLEAR GV_RUPEES.
+CLEAR GV_MESSAGE.
+CLEAR GV_GBDAT.
+CLEAR GT_TIM_B2.
+CLEAR WA_SALDO.
+CLEAR V_9D03.
+CLEAR V_9D02.
+CLEAR V_9D09.
+CLEAR V_9D05.
+CLEAR V_9D19.
+CLEAR V_9D21.
+CLEAR V_9D22.
+CLEAR V_9D20.
+CLEAR V_9D23.
+CLEAR V_9D07.
+CLEAR V_TOT_U.
+CLEAR V_TOT_P.
+CLEAR V_LEAVE.
+CLEAR WA_ABSENCE.
+CLEAR V_9D04.
+CLEAR V_WOFF.
+CLEAR V_PH.
+CLEAR V_ABDAY.
+CLEAR V_PL.
+CLEAR V_CO.
+CLEAR V_PRDAY.
+CLEAR WA_PAYPERIOD.
+CLEAR LV_PERAS.
+CLEAR WA_PER_STRUC.
+CLEAR V_HPL.
+CLEAR V_COD.
+CLEAR V_SLD.
+CLEAR V_CLD.
+CLEAR LWA_HRDATA.
+CLEAR LV_AREA.
+CLEAR LV_BANKNAME.
+CLEAR LV_PAYDATE.
+CLEAR GV_BANKL.
+CLEAR GV_ACC.
+CLEAR WA_PERIOD_DATS.
+CLEAR V_LOCAT.
+CLEAR V_DEPAR.
+CLEAR GV_UANNO.
+CLEAR EMP_GRP.
+CLEAR V_PERSG.
+CLEAR ENAME.
+CLEAR V_COC.
+CLEAR WA_PLANS.
+CLEAR V_TEXT.
+CLEAR V_FCOMPNAME.
+CLEAR WA_PERIOD_DATSID.
+CLEAR V_BUKRS.
+CLEAR V_WERKS.
+CLEAR V_BUKRS1.
+CLEAR V_SPL.
+CLEAR V_MLD.
+CLEAR LV_PERSG.
+CLEAR LV_PERSK.
+CLEAR LV_MONTH.
+CLEAR LV_YEAR.
+CLEAR LV_DAYS.
+CLEAR V_GLD.
+CLEAR V_PL_P.
+CLEAR V_CL_P.
+CLEAR V_AB_P.
+CLEAR V_WO_P.
+CLEAR V_GL_P.
+CLEAR V_SPL_P.
+CLEAR GV_DATE.
+CLEAR GV_DATE_CUTOFF.
+CLEAR V_CO_P.
+CLEAR V_PATL.
+CLEAR GV_PANNO.
+CLEAR V_CL_U.
+CLEAR V_CL_B.
+CLEAR V_GL_U.
+CLEAR V_GL_B.
+CLEAR V_PL_B.
+CLEAR GV_ESIC.
+CLEAR V_PL_U.
+CLEAR V_PAID.
+CLEAR V_BEGDA.
+CLEAR V_ENDDA.
+CLEAR GT_FINAL_F.
+CLEAR WA_FINAL_F.
+CLEAR V_TAX_REG.
+CLEAR V_OFF.
+CLEAR V_OFF_L.
+CLEAR V_SL_U.
+CLEAR V_SL_B.
+
+ENDFORM.                      " %GLOBAL_CLEAR
+
+*----------------------------------------------------------------
+*   FORM %GLOBAL_INIT
+*----------------------------------------------------------------
+
+FORM %GLOBAL_INIT.
+
+
+ENDFORM.                      " %GLOBAL_INIT
+
+*----------------------------------------------------------------
+*   FORM %WI1
+*   NODE %WINDOW1
+*----------------------------------------------------------------
+
+FORM %WI1.
+
+CLEAR %WEXIT.
+PERFORM %WI1_BODY.
+CLEAR %WEXIT.
+
+ENDFORM.                      " %WI1
+
+*----------------------------------------------------------------
+*   FORM %WI1_BODY
+*----------------------------------------------------------------
+
+FORM %WI1_BODY.
+
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT25' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+
+ENDFORM.                      " %WI1_BODY
+
+*----------------------------------------------------------------
+*   FORM %WI2
+*   NODE LOGO_ORIL
+*----------------------------------------------------------------
+
+FORM %WI2.
+
+CLEAR %WEXIT.
+PERFORM %WI2_BODY.
+CLEAR %WEXIT.
+
+ENDFORM.                      " %WI2
+
+*----------------------------------------------------------------
+*   FORM %WI2_BODY
+*----------------------------------------------------------------
+
+FORM %WI2_BODY.
+
+CALL FUNCTION 'SSFCOMP_XSF_SECTION'
+     EXPORTING  NAME   = '%LOOP9'
+                MODE   = %OPEN
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %OPEN
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+LOOP AT HRDATA-DIM_EMPLOYEE INTO WA_EMPLOYEE .
+ENDLOOP.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %CLOSE
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_SECTION'
+     EXPORTING  MODE   = %CLOSE
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+PERFORM %CO1.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+IF ( V_WERKS EQ 'PBUS' ).
+CLEAR %GRAPHICKEY.
+PERFORM %MOVE USING %GRAPHICKEY-TDNAME 'ASTRAL_2022'.
+PERFORM %MOVE USING %GRAPHICKEY-TDOBJECT 'GRAPHICS'.
+PERFORM %MOVE USING %GRAPHICKEY-TDID 'BMAP'.
+PERFORM %MOVE USING %GRAPHICKEY-TDBTYPE 'BCOL'.
+CALL FUNCTION 'SSFCOMP_PRINT_GRAPHIC'
+     EXPORTING  BM_NAME           = %GRAPHICKEY-TDNAME
+                BM_OBJECT         = %GRAPHICKEY-TDOBJECT
+                BM_ID             = %GRAPHICKEY-TDID
+                BM_TYPE           = %GRAPHICKEY-TDBTYPE
+                BM_DPI            = '0100'
+                BM_RESIDENT       = ' '
+                BM_RELMODE        = 'W'
+                BM_ALIGNMENT      = 'L'
+                BM_MARGIN         = '0.00'
+                BM_UMARGIN        = 'CM'
+                BM_VALIGNMENT     = 'C'
+                NAME              = '%GRAPHIC4'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+WHEN 1.
+  %WEXIT = 'X'.
+WHEN 2.
+  RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( V_WERKS EQ 'APTL'
+   OR V_WERKS EQ 'APSA' ).
+CLEAR %GRAPHICKEY.
+PERFORM %MOVE USING %GRAPHICKEY-TDNAME 'ASTRAL_2022'.
+PERFORM %MOVE USING %GRAPHICKEY-TDOBJECT 'GRAPHICS'.
+PERFORM %MOVE USING %GRAPHICKEY-TDID 'BMAP'.
+PERFORM %MOVE USING %GRAPHICKEY-TDBTYPE 'BCOL'.
+CALL FUNCTION 'SSFCOMP_PRINT_GRAPHIC'
+     EXPORTING  BM_NAME           = %GRAPHICKEY-TDNAME
+                BM_OBJECT         = %GRAPHICKEY-TDOBJECT
+                BM_ID             = %GRAPHICKEY-TDID
+                BM_TYPE           = %GRAPHICKEY-TDBTYPE
+                BM_DPI            = '0100'
+                BM_RESIDENT       = ' '
+                BM_RELMODE        = 'W'
+                BM_ALIGNMENT      = 'L'
+                BM_MARGIN         = '0.00'
+                BM_UMARGIN        = 'CM'
+                BM_VALIGNMENT     = 'C'
+                NAME              = '%GRAPHIC1'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+WHEN 1.
+  %WEXIT = 'X'.
+WHEN 2.
+  RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( V_WERKS EQ 'AADH'
+   OR V_WERKS EQ 'AAL' ).
+CLEAR %GRAPHICKEY.
+PERFORM %MOVE USING %GRAPHICKEY-TDNAME 'ASTRAL_2022'.
+PERFORM %MOVE USING %GRAPHICKEY-TDOBJECT 'GRAPHICS'.
+PERFORM %MOVE USING %GRAPHICKEY-TDID 'BMAP'.
+PERFORM %MOVE USING %GRAPHICKEY-TDBTYPE 'BCOL'.
+CALL FUNCTION 'SSFCOMP_PRINT_GRAPHIC'
+     EXPORTING  BM_NAME           = %GRAPHICKEY-TDNAME
+                BM_OBJECT         = %GRAPHICKEY-TDOBJECT
+                BM_ID             = %GRAPHICKEY-TDID
+                BM_TYPE           = %GRAPHICKEY-TDBTYPE
+                BM_DPI            = '0100'
+                BM_RESIDENT       = ' '
+                BM_RELMODE        = 'W'
+                BM_ALIGNMENT      = 'L'
+                BM_MARGIN         = '0.00'
+                BM_UMARGIN        = 'CM'
+                BM_VALIGNMENT     = 'C'
+                NAME              = '%GRAPHIC3'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+WHEN 1.
+  %WEXIT = 'X'.
+WHEN 2.
+  RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+
+ENDFORM.                      " %WI2_BODY
+
+*----------------------------------------------------------------
+*   FORM %WI3
+*   NODE ORIL_ADDR
+*----------------------------------------------------------------
+
+FORM %WI3.
+
+CLEAR %WEXIT.
+PERFORM %WI3_BODY.
+CLEAR %WEXIT.
+
+ENDFORM.                      " %WI3
+
+*----------------------------------------------------------------
+*   FORM %WI3_BODY
+*----------------------------------------------------------------
+
+FORM %WI3_BODY.
+
+CALL FUNCTION 'SSFCOMP_XSF_SECTION'
+     EXPORTING  NAME   = '%LOOP2'
+                MODE   = %OPEN
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %OPEN
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+LOOP AT HRDATA-DIM_EMPLOYEE INTO WA_EMPLOYEE .
+ENDLOOP.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %CLOSE
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_SECTION'
+     EXPORTING  MODE   = %CLOSE
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+PERFORM %CO2.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT13' 'ZHR_PAYSLIP_STYLE1' SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+
+ENDFORM.                      " %WI3_BODY
+
+*----------------------------------------------------------------
+*   FORM %WI4
+*   NODE PAYSLIP_MONTH
+*----------------------------------------------------------------
+
+FORM %WI4.
+
+CLEAR %WEXIT.
+PERFORM %WI4_BODY.
+CLEAR %WEXIT.
+
+ENDFORM.                      " %WI4
+
+*----------------------------------------------------------------
+*   FORM %WI4_BODY
+*----------------------------------------------------------------
+
+FORM %WI4_BODY.
+
+CALL FUNCTION 'SSFCOMP_XSF_SECTION'
+     EXPORTING  NAME   = '%LOOP1'
+                MODE   = %OPEN
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %OPEN
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+LOOP AT HRDATA-DIM_FORPERIOD INTO WA_PAYROLL_PERIOD .
+PERFORM %CO3.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDLOOP.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %CLOSE
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_SECTION'
+     EXPORTING  MODE   = %CLOSE
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT12' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+
+ENDFORM.                      " %WI4_BODY
+
+*----------------------------------------------------------------
+*   FORM %WI5
+*   NODE EMP_DETAIL
+*----------------------------------------------------------------
+
+FORM %WI5.
+
+CLEAR %WEXIT.
+PERFORM %WI5_BODY.
+CLEAR %WEXIT.
+
+ENDFORM.                      " %WI5
+
+*----------------------------------------------------------------
+*   FORM %WI5_BODY
+*----------------------------------------------------------------
+
+FORM %WI5_BODY.
+
+PERFORM %CO4.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_BEGIN'
+     EXPORTING  I_DEFINITION = '%TEMPLATE7'
+     EXCEPTIONS OTHERS       = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %OPEN
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+PERFORM %CO5.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 001
+                I_COL  = 002
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT87' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 001
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT86' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 002
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT201' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 003
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT259' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 003
+                I_COL  = 003
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT193' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 004
+                I_COL  = 003
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT205' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 005
+                I_COL  = 003
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT197' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 006
+                I_COL  = 003
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT199' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 005
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT195' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 001
+                I_COL  = 003
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT29' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 004
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT207' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 002
+                I_COL  = 003
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT203' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 007
+                I_COL  = 003
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT209' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 006
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT229' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 007
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT260' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 002
+                I_COL  = 002
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT202' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 003
+                I_COL  = 002
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT261' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 003
+                I_COL  = 004
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT194' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 004
+                I_COL  = 004
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT206' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 005
+                I_COL  = 004
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT198' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 006
+                I_COL  = 004
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT200' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 005
+                I_COL  = 002
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT196' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 001
+                I_COL  = 004
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT192' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 004
+                I_COL  = 002
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT208' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 002
+                I_COL  = 004
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT204' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 007
+                I_COL  = 004
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT210' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 006
+                I_COL  = 002
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT230' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 007
+                I_COL  = 002
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT262' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %CLOSE
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+WHEN 1.
+  %WEXIT = 'X'.
+WHEN 2.
+  RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+IF ( 1 EQ 2 ).
+PERFORM %CO6.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+
+ENDFORM.                      " %WI5_BODY
+
+*----------------------------------------------------------------
+*   FORM %WI6
+*   NODE %WINDOW2
+*----------------------------------------------------------------
+
+FORM %WI6.
+
+CLEAR %WEXIT.
+PERFORM %WI6_BODY.
+CLEAR %WEXIT.
+
+ENDFORM.                      " %WI6
+
+*----------------------------------------------------------------
+*   FORM %WI6_BODY
+*----------------------------------------------------------------
+
+FORM %WI6_BODY.
+
+PERFORM %CO7.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_BEGIN'
+     EXPORTING  I_DEFINITION = '%TABLE3'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_HEADER_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+PERFORM %EV1.
+CALL FUNCTION 'SSFCOMP_TABLE_HEADER_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_BODY_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+PERFORM %EV2.
+CALL FUNCTION 'SSFCOMP_TABLE_BODY_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_FOOTER_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+PERFORM %EV3.
+CALL FUNCTION 'SSFCOMP_TABLE_FOOTER_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+
+ENDFORM.                      " %WI6_BODY
+
+*----------------------------------------------------------------
+*   FORM %WI7
+*   NODE %WINDOW4
+*----------------------------------------------------------------
+
+FORM %WI7.
+
+CLEAR %WEXIT.
+PERFORM %WI7_BODY.
+CLEAR %WEXIT.
+
+ENDFORM.                      " %WI7
+
+*----------------------------------------------------------------
+*   FORM %WI7_BODY
+*----------------------------------------------------------------
+
+FORM %WI7_BODY.
+
+PERFORM %CO8.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_BEGIN'
+     EXPORTING  I_DEFINITION = '%TABLE4'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_HEADER_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+PERFORM %EV4.
+CALL FUNCTION 'SSFCOMP_TABLE_HEADER_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_BODY_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+PERFORM %EV5.
+CALL FUNCTION 'SSFCOMP_TABLE_BODY_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_FOOTER_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+PERFORM %EV6.
+CALL FUNCTION 'SSFCOMP_TABLE_FOOTER_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+
+ENDFORM.                      " %WI7_BODY
+
+*----------------------------------------------------------------
+*   FORM %WI8
+*   NODE %WINDOW5
+*----------------------------------------------------------------
+
+FORM %WI8.
+
+CLEAR %WEXIT.
+PERFORM %WI8_BODY.
+CLEAR %WEXIT.
+
+ENDFORM.                      " %WI8
+
+*----------------------------------------------------------------
+*   FORM %WI8_BODY
+*----------------------------------------------------------------
+
+FORM %WI8_BODY.
+
+PERFORM %CO9.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_BEGIN'
+     EXPORTING  I_DEFINITION = '%TABLE5'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_HEADER_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+PERFORM %EV7.
+CALL FUNCTION 'SSFCOMP_TABLE_HEADER_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_BODY_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+PERFORM %EV8.
+CALL FUNCTION 'SSFCOMP_TABLE_BODY_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_FOOTER_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+PERFORM %EV9.
+CALL FUNCTION 'SSFCOMP_TABLE_FOOTER_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+
+ENDFORM.                      " %WI8_BODY
+
+*----------------------------------------------------------------
+*   FORM %WI9
+*   NODE %WINDOW3
+*----------------------------------------------------------------
+
+FORM %WI9.
+
+CLEAR %WEXIT.
+PERFORM %WI9_BODY.
+CLEAR %WEXIT.
+
+ENDFORM.                      " %WI9
+
+*----------------------------------------------------------------
+*   FORM %WI9_BODY
+*----------------------------------------------------------------
+
+FORM %WI9_BODY.
+
+CALL FUNCTION 'SSFCOMP_TABLE_BEGIN'
+     EXPORTING  I_DEFINITION = '%TEMPLATE1'
+     EXCEPTIONS OTHERS       = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %OPEN
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 001
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT241' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %CLOSE
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+WHEN 1.
+  %WEXIT = 'X'.
+WHEN 2.
+  RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_BEGIN'
+     EXPORTING  I_DEFINITION = '%TEMPLATE6'
+     EXCEPTIONS OTHERS       = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %OPEN
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+PERFORM %CO10.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 002
+                I_COL  = 007
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT256' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 001
+                I_COL  = 007
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT255' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 002
+                I_COL  = 006
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT254' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 002
+                I_COL  = 005
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT253' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 002
+                I_COL  = 004
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT252' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 002
+                I_COL  = 003
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT251' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 002
+                I_COL  = 002
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT250' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 002
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT249' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 001
+                I_COL  = 006
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT248' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 001
+                I_COL  = 005
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT247' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 001
+                I_COL  = 004
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT246' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 001
+                I_COL  = 003
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT245' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 001
+                I_COL  = 002
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT244' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+IF ( V_BUKRS1 NE '7000' ).
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 001
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT243' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( V_BUKRS1 EQ '7000' ).
+CALL FUNCTION 'SSFCOMP_TABLE_GOTO_CELL'
+     EXPORTING  I_ROW  = 001
+                I_COL  = 001
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT93' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %CLOSE
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+WHEN 1.
+  %WEXIT = 'X'.
+WHEN 2.
+  RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+
+ENDFORM.                      " %WI9_BODY
+
+*----------------------------------------------------------------
+*   FORM %WI10
+*   NODE MAIN
+*----------------------------------------------------------------
+
+FORM %WI10.
+
+CLEAR %WEXIT.
+PERFORM %WI10_BODY.
+CLEAR %WEXIT.
+
+ENDFORM.                      " %WI10
+
+*----------------------------------------------------------------
+*   FORM %WI10_BODY
+*----------------------------------------------------------------
+
+FORM %WI10_BODY.
+
+PERFORM %CO11.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CLEAR %SECTION.
+%SECTION-NAME = '%TABLE1'.
+%SECTION-HEADER-EVENT = 'X'.
+%SECTION-HEADER-TABEVENT = 'X'.
+%SECTION-HEADER-PROG  = SY-REPID.
+%SECTION-HEADER-FORM  = '%EV10'.
+%SECTION-FOOTER-EVENT = 'X'.
+%SECTION-FOOTER-TABEVENT = 'X'.
+%SECTION-FOOTER-PROG   = SY-REPID.
+%SECTION-FOOTER-FORM   = '%EV12'.
+%SECTION-FOOTER-HEIGHT = '1.00'.
+%SECTION-FOOTER-UNIT   = 'CM'.
+%SECTION-LANGU = %LANGUAGES-LANGU1.
+CALL FUNCTION 'SSFCOMP_BEGIN_SECTION'
+     EXPORTING  SECTION = %SECTION
+     EXCEPTIONS OTHERS  = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CLEAR %CALCU.
+%CALCU-CNT = '00000001'.
+CREATE OBJECT %CALCU-OBJ.
+APPEND %CALCU TO %CALCULATIONS.
+CALL METHOD %CALCU-OBJ->AVERAGE_CONSTR
+     EXPORTING I_SUMMAND   = WA_FINAL-E_AMOUNT.
+CLEAR %CALCU.
+%CALCU-CNT = '00000002'.
+CREATE OBJECT %CALCU-OBJ.
+APPEND %CALCU TO %CALCULATIONS.
+CALL METHOD %CALCU-OBJ->AVERAGE_CONSTR
+     EXPORTING I_SUMMAND   = WA_FINAL-E_YTD.
+CLEAR %CALCU.
+%CALCU-CNT = '00000003'.
+CREATE OBJECT %CALCU-OBJ.
+APPEND %CALCU TO %CALCULATIONS.
+CALL METHOD %CALCU-OBJ->AVERAGE_CONSTR
+     EXPORTING I_SUMMAND   = WA_FINAL-D_AMOUNT.
+CLEAR %CALCU.
+%CALCU-CNT = '00000004'.
+CREATE OBJECT %CALCU-OBJ.
+APPEND %CALCU TO %CALCULATIONS.
+CALL METHOD %CALCU-OBJ->AVERAGE_CONSTR
+     EXPORTING I_SUMMAND   = WA_FINAL-D_YTD.
+CALL FUNCTION 'SSFCOMP_TABLE_BEGIN'
+     EXPORTING  I_DEFINITION = '%TABLE1'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_HEADER_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+PERFORM %EV10.
+CALL FUNCTION 'SSFCOMP_TABLE_HEADER_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_BODY_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+PERFORM %EV11.
+CALL FUNCTION 'SSFCOMP_TABLE_BODY_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_FOOTER_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+PERFORM %EV12.
+CALL FUNCTION 'SSFCOMP_TABLE_FOOTER_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_END_SECTION'
+     EXCEPTIONS OTHERS  = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_BEGIN'
+     EXPORTING  I_DEFINITION = '%TEMPLATE2'
+     EXCEPTIONS OTHERS       = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %OPEN
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_XSF_BODY'
+     EXPORTING  MODE   = %CLOSE
+     EXCEPTIONS OTHERS = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+WHEN 1.
+  %WEXIT = 'X'.
+WHEN 2.
+  RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CLEAR %SECTION.
+%SECTION-NAME = '%TABLE2'.
+%SECTION-HEADER-EVENT = 'X'.
+%SECTION-HEADER-TABEVENT = 'X'.
+%SECTION-HEADER-PROG  = SY-REPID.
+%SECTION-HEADER-FORM  = '%EV13'.
+%SECTION-FOOTER-EVENT = 'X'.
+%SECTION-FOOTER-TABEVENT = 'X'.
+%SECTION-FOOTER-PROG   = SY-REPID.
+%SECTION-FOOTER-FORM   = '%EV15'.
+%SECTION-FOOTER-HEIGHT = '1.00'.
+%SECTION-FOOTER-UNIT   = 'CM'.
+%SECTION-LANGU = %LANGUAGES-LANGU1.
+CALL FUNCTION 'SSFCOMP_BEGIN_SECTION'
+     EXPORTING  SECTION = %SECTION
+     EXCEPTIONS OTHERS  = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_BEGIN'
+     EXPORTING  I_DEFINITION = '%TABLE2'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_HEADER_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+PERFORM %EV13.
+CALL FUNCTION 'SSFCOMP_TABLE_HEADER_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_BODY_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+PERFORM %EV14.
+CALL FUNCTION 'SSFCOMP_TABLE_BODY_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_FOOTER_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+PERFORM %EV15.
+CALL FUNCTION 'SSFCOMP_TABLE_FOOTER_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_END_SECTION'
+     EXCEPTIONS OTHERS  = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+
+ENDFORM.                      " %WI10_BODY
+
+
+*----------------------------------------------------------------
+*   FORM %CO1
+*   NODE %CODE10
+*----------------------------------------------------------------
+
+FORM %CO1.
+
+*
+*break sap_abap.
+**LOOP AT hrdata-star_pay_result INTO wa_payresult.
+*IF GT_FINAL IS INITIAL.
+*  MESSAGE : 'PRINT' TYPE 'E'.
+* ENDIF.
+**ENDLOOP.
+READ TABLE hrdata-dim_inpayroll_area
+ INTO lwa_hrdata INDEX 1.
+lv_area = lwa_hrdata-assignment_key+0(2).
+*lwa_hrdata.
+************** comment by parth 01.10.2022
+* SELECT SINGLE bukrs FROM pa0001
+*   INTO v_bukrs
+*   WHERE pernr = WA_EMPLOYEE-KEY-PERSONNEL_NUMBER
+*    AND  abkrs = lv_area.
+***********************
+****************  added by parth 01.10.2022
+break sap_abap.
+SELECT SINGLE werks FROM pa0001
+   INTO v_werks
+   WHERE pernr = wa_employee-key-personnel_number
+    AND  abkrs = lv_area.
+lv_month = wa_employee-key-begda+4(2).
+lv_year  = wa_employee-key-begda+0(4).
+SELECT SINGLE bukrs FROM pa0001
+  INTO v_bukrs1
+  WHERE pernr = wa_employee-key-personnel_number.
+
+ENDFORM.                      " %CO1
+
+*----------------------------------------------------------------
+*   FORM %CO2
+*   NODE %CODE3
+*----------------------------------------------------------------
+
+FORM %CO2.
+
+clear : gv_butxt,gv_adrc,gv_adrc1.
+DATA : v_bukrs TYPE pa0001-bukrs.
+DATA : v_endda TYPE pa0001-endda.
+DATA: wa_add_old TYPE zwa_address_old. " add old address
+*DATA : v_fcompname TYPE zsd_address_old-fcompname.
+*BREAK-POINT.
+break SAP_ABAP.
+*******
+ READ TABLE HRDATA-DIM_INPERIOD_ID
+ INTO WA_PERIOD_DATSID INDEX 1.
+v_endda = WA_PERIOD_DATSID-ENDDA.
+CLEAR : WA_PERIOD_DATSID.
+*******
+ SELECT SINGLE bukrs FROM pa0001
+   INTO v_bukrs
+   WHERE pernr = WA_EMPLOYEE-KEY-PERSONNEL_NUMBER
+*    AND endda = '99991231'.
+    AND abkrs = lv_area.
+CALL FUNCTION 'Z_FM_SD_ADDRESS_OLD'
+    EXPORTING
+      im_werks    = v_bukrs
+      im_fromdate = v_endda
+      im_typeind  = 'C'
+    IMPORTING
+      wa_add      = wa_add_old.
+IF wa_add_old IS NOT INITIAL AND wa_add_old-fcompname IS INITIAL.
+    gv_butxt = wa_add_old-name1.
+ ELSE.
+    v_fcompname = wa_add_old-fcompname.
+    SELECT SINGLE butxt FROM t001
+     INTO gv_butxt
+     WHERE bukrs = v_bukrs.
+ENDIF.
+*concatenate gv_butxt 'Astral Poly Technik Ltd.'
+*into gv_butxt.
+condense gv_butxt.
+concatenate gv_adrc ''
+into gv_adrc.
+" Advanced Adhesives Ltd.  " AA
+concatenate gv_adrc1 'Ahmedabad-380059'
+into gv_adrc1.
+condense: gv_butxt,gv_adrc,gv_adrc1.
+
+ENDFORM.                      " %CO2
+
+*----------------------------------------------------------------
+*   FORM %CO3
+*   NODE %CODE2
+*----------------------------------------------------------------
+
+FORM %CO3.
+
+*BREAK SAP_ABAP.
+TABLES : t247.
+DATA : v_mon(2) TYPE n,
+       v_date(10) ,
+       v_ltx LIKE t247-ltx,
+       v_ktx LIKE t247-ktx.
+v_mon = wa_payroll_period-key-begin_date+4(2).
+SELECT SINGLE ktx
+              ltx
+              INTO (v_ktx , v_ltx)
+              FROM t247
+              WHERE spras = sy-langu AND
+                    mnr EQ v_mon."v_date+3(2).
+gv_month = v_ltx.
+gv_year = wa_payroll_period-key-begin_date+0(4).
+concatenate 'Payslip for the month of' gv_month '-' gv_year
+into gv_month separated by space.
+READ TABLE HRDATA-DIM_EMPLOYEE INTO wa_employee INDEX 1.
+SELECT single gbdat INTO gv_gbdat from pa0002
+  where pernr = wa_employee-key-personnel_number.
+IF gv_gbdat+4(2) eq v_mon.
+GV_message = 'Happy Birthday'.
+ENDIF.
+
+ENDFORM.                      " %CO3
+
+*----------------------------------------------------------------
+*   FORM %CO4
+*   NODE %CODE14
+*----------------------------------------------------------------
+
+FORM %CO4.
+
+*TABLES:t512t.
+**********************************
+DATA : lv_date TYPE pa0002-begda.
+DATA : lv_ear TYPE i,
+       lv_ded TYPE i.
+DATA: BEGIN OF gv_earning OCCURS 0 ,
+        wage_type TYPE lgart,
+        wage_text TYPE lgtxt,
+        amount    TYPE maxbt,
+        arrears   TYPE maxbt,
+        ytd       TYPE maxbt,
+      END OF gv_earning .
+DATA: BEGIN OF gv_deduction OCCURS 0,
+        wage_type TYPE lgart,
+        wage_text TYPE lgtxt,
+        amount    TYPE maxbt,
+        arrears   TYPE maxbt,
+        ytd       TYPE maxbt,
+      END OF gv_deduction .
+DATA : count          TYPE c,
+       line           TYPE c,
+       lv_orig_wt     TYPE t512t-lgart,
+       lv_orig_wt1(6) TYPE c.
+DATA:it_text LIKE TABLE OF t512t WITH HEADER LINE.
+DATA lv_cnt TYPE i.
+DATA: lv_gjhar TYPE gjahr,
+      lv_gjhar_b TYPE gjahr,
+      lv_first_date TYPE sy-datum,
+      lv_end_date TYPE sy-datum.
+DESCRIBE TABLE hrdata-dim_forperiod LINES lv_cnt.
+READ TABLE hrdata-dim_forperiod INTO DATA(lv_period) INDEX lv_cnt.
+IF sy-subrc = 0.
+  v_endda = lv_period-key-end_date.
+  v_begda = lv_period-key-begin_date.
+ENDIF.
+lv_date = '01012000'.
+****Reading payroll period***********
+*break sap_abap.  " 11.08.2015
+SORT hrdata-star_payroll_period
+DESCENDING BY forperiod_key-end_date.
+*read table hrdata-star_payroll_period into wa_payperiod
+*index 1.
+*****add 12.08.2015
+*break sap_abap."
+READ TABLE hrdata-star_payroll_period INTO wa_payperiod
+INDEX 1.
+CLEAR: lv_paydate."add 12.08
+lv_paydate = wa_payroll_period-key-paydate.
+READ TABLE hrdata-dim_employee INTO DATA(wa_doj)
+INDEX 1.
+IF sy-subrc = 0.
+  gv_doj = wa_doj-hire_date.
+ENDIF.
+SELECT SINGLE persk FROM pa0001 INTO gv_grade
+  where pernr eq wa_employee-key-personnel_number
+  AND begda >= lv_date
+  and endda >= v_endda.
+*****
+IF sy-subrc EQ 0.
+  SORT hrdata-star_ity_pers_struct BY employee_key-endda DESCENDING.
+******Reading personal data structure**********
+  LOOP AT hrdata-star_ity_pers_struct INTO wa_per_struc
+          WHERE employee_key-begda LE wa_payperiod-inperiod_key-end_date
+            AND employee_key-endda GE wa_payperiod-inperiod_key-begin_date.
+    lv_peras = wa_per_struc-assignment_key-peras.
+  ENDLOOP.
+ENDIF.
+SELECT * FROM t512t INTO TABLE it_text WHERE sprsl EQ 'EN'
+AND molga EQ '40'.
+SORT hrdata-star_pay_result ASCENDING.
+LOOP AT hrdata-star_pay_result INTO wa_payresult
+    WHERE evalclass02_key-wagetypegroup EQ '03'
+       "OR evalclass02_key-wagetypegroup EQ '08' )
+    AND   result_retro_key-retro = ' '.  " ADDchd
+  READ TABLE hrdata-star_cumulated_pay INTO wa_cumulated
+  WITH KEY cum_daterng_df_key-cumul_type = 'Y'   " '9' was changed to Y
+           wagetype_key = wa_payresult-wagetype_key
+           inperiod_key-period = wa_payresult-inperiod_key-period   "ADDchd
+           forperiod_key-period = wa_payresult-inperiod_key-period. "ADDchd
+  IF sy-subrc = 0.
+    MOVE wa_cumulated-pay_amount TO gv_earning-ytd.
+  ENDIF.
+*To get wagetype text.
+  READ TABLE it_text WITH KEY lgart = wa_payresult-wagetype_key-wagetype.
+  IF sy-subrc = 0.
+    IF wa_payresult-wagetype_key-wagetype = '1000'.
+      IF v_bukrs1 = '1000'.
+        it_text-lgtxt = 'Basic + DA'.
+      ELSE.
+       READ TABLE hrdata-dim_employee_group INTO DATA(wa_egroup) INDEX 1.
+       IF sy-subrc = 0.
+       SELECT SINGLE low FROM tvarvc INTO @DATA(v_persg)
+         WHERE name = 'ZHR_PAYSLIP_EMPGROUP'
+           AND low  = @wa_egroup-key-employee_group.
+       IF sy-subrc NE 0.
+        it_text-lgtxt = 'Basic + DA'.
+       ENDIF.
+       ENDIF.
+    ENDIF.
+   ENDIF.
+    IF wa_payresult-wagetype_key-wagetype = '1002'.
+      IF v_bukrs1 = '1000'.
+        it_text-lgtxt = 'Basic + DA Arreas'.
+      ELSE.
+       READ TABLE hrdata-dim_employee_group INTO wa_egroup INDEX 1.
+       IF sy-subrc = 0.
+       SELECT SINGLE low FROM tvarvc INTO @v_persg
+         WHERE name = 'ZHR_PAYSLIP_EMPGROUP'
+           AND low  = @wa_egroup-key-employee_group.
+       IF sy-subrc NE 0.
+        it_text-lgtxt = 'Basic + DA Arreas'.
+       ENDIF.
+       ENDIF.
+    ENDIF.
+   ENDIF.
+    MOVE it_text-lgtxt TO gv_earning-wage_text .
+  ENDIF.
+  MOVE wa_payresult-wagetype_key-wagetype TO gv_earning-wage_type.
+  MOVE wa_payresult-pay_amount        TO gv_earning-amount.
+  APPEND gv_earning.
+  CLEAR gv_earning.
+ENDLOOP.
+DELETE gv_earning WHERE wage_type = ' '.
+BREAK sap_abap.
+LOOP AT hrdata-star_pay_result INTO wa_payresult
+                 WHERE forperiod_oc_key-payroll_type = 'A'
+                  AND result_status_key = 'A'.
+CALL FUNCTION 'DATE_TO_PERIOD_CONVERT'
+  EXPORTING
+    i_date               = v_begda
+   I_MONMIT              = 00
+    i_periv              = 'V3'
+ IMPORTING
+   E_GJAHR              = lv_gjhar
+ EXCEPTIONS
+   INPUT_FALSE          = 1
+   T009_NOTFOUND        = 2
+   T009B_NOTFOUND       = 3
+   OTHERS               = 4
+          .
+IF sy-subrc <> 0.
+* Implement suitable error handling here
+ENDIF.
+CALL FUNCTION 'DATE_TO_PERIOD_CONVERT'
+  EXPORTING
+    i_date               = wa_payresult-forperiod_oc_key-bondt
+   I_MONMIT              = 00
+    i_periv              = 'V3'
+ IMPORTING
+   E_GJAHR              = lv_gjhar_b
+ EXCEPTIONS
+   INPUT_FALSE          = 1
+   T009_NOTFOUND        = 2
+   T009B_NOTFOUND       = 3
+   OTHERS               = 4
+          .
+IF sy-subrc <> 0.
+* Implement suitable error handling here
+ENDIF.
+IF lv_gjhar_b = lv_gjhar.
+  IF ( wa_payresult-forperiod_oc_key-bondt BETWEEN v_begda AND v_endda )
+             AND ( wa_payresult-wagetype_key-wagetype = '4004'
+                   OR wa_payresult-wagetype_key-wagetype = '4000' ).
+    IF wa_payresult-wagetype_key-wagetype = '4000' .
+      gv_earning-wage_text = 'Offcycle(Leave Encash)'.
+    ELSEIF wa_payresult-wagetype_key-wagetype = '4004'.
+      gv_earning-wage_text = 'Offcycle(Bonus)'.
+    ENDIF.
+    gv_earning-wage_type = wa_payresult-wagetype_key-wagetype.
+    gv_earning-ytd = wa_payresult-pay_amount.
+    APPEND gv_earning.
+    CLEAR gv_earning.
+  ENDIF.
+ ENDIF.
+ENDLOOP.
+*break sap_abap."12.08.2015
+LOOP AT hrdata-star_pay_result INTO wa_payresult
+    WHERE ( evalclass02_key-wagetypegroup EQ '04'
+       OR evalclass02_key-wagetypegroup EQ '05' )
+    AND   result_retro_key-retro = ' '.    " ADDchd
+  READ TABLE hrdata-star_cumulated_pay INTO wa_cumulated
+  WITH KEY cum_daterng_df_key-cumul_type = 'Y'    " '9' was changed into Y
+      wagetype_key = wa_payresult-wagetype_key
+      inperiod_key-period = wa_payresult-inperiod_key-period   "ADDchd
+      forperiod_key-period = wa_payresult-inperiod_key-period. "ADDchd
+  IF sy-subrc = 0.
+    IF wa_cumulated-pay_amount LT 0.
+      wa_cumulated-pay_amount = wa_cumulated-pay_amount * -1.
+    ENDIF.
+    MOVE wa_cumulated-pay_amount TO gv_deduction-ytd.
+  ENDIF.
+  READ TABLE it_text WITH KEY lgart = wa_payresult-wagetype_key-wagetype.
+  IF sy-subrc = 0.
+    MOVE it_text-lgtxt TO gv_deduction-wage_text .
+  ENDIF.
+  MOVE wa_payresult-wagetype_key-wagetype TO gv_deduction-wage_type.
+  IF wa_payresult-pay_amount LT 0.
+    wa_payresult-pay_amount = wa_payresult-pay_amount * ( -1 ).
+    MOVE wa_payresult-pay_amount   TO gv_deduction-amount.
+  ELSE.
+    MOVE wa_payresult-pay_amount   TO gv_deduction-amount.
+  ENDIF.
+  APPEND gv_deduction.
+  CLEAR gv_deduction.
+ENDLOOP.
+DELETE gv_deduction WHERE wage_type = ' '.
+************************************************************
+*************************************************************
+SORT gv_earning BY wage_type ASCENDING.
+SORT gv_deduction BY wage_type ASCENDING.
+DESCRIBE TABLE gv_earning LINES lv_ear .
+DESCRIBE TABLE gv_deduction LINES lv_ded.
+IF lv_ear GE lv_ded .
+  LOOP AT gv_earning.
+    READ TABLE gv_deduction INDEX sy-tabix.
+    IF sy-subrc = 0.
+      MOVE : gv_deduction-wage_text TO wa_final-d_wage_text,
+             gv_deduction-amount TO wa_final-d_amount,
+             gv_deduction-arrears TO wa_final-d_arrears,
+             gv_deduction-ytd TO wa_final-d_ytd.
+    ENDIF.
+    MOVE : gv_earning-wage_text TO wa_final-e_wage_text,
+           gv_earning-amount TO wa_final-e_amount,
+           gv_earning-arrears TO wa_final-e_arrears,
+           gv_earning-ytd TO wa_final-e_ytd.
+    APPEND wa_final TO gt_final.
+    CLEAR wa_final.
+  ENDLOOP.
+ELSE.
+  LOOP AT gv_deduction.
+    READ TABLE gv_earning INDEX sy-tabix.
+    IF sy-subrc = 0.
+      MOVE : gv_earning-wage_text TO wa_final-e_wage_text,
+             gv_earning-amount    TO wa_final-e_amount,
+             gv_earning-arrears   TO wa_final-e_arrears,
+             gv_earning-ytd       TO wa_final-e_ytd.
+    ENDIF.
+    MOVE : gv_deduction-wage_text TO wa_final-d_wage_text,
+           gv_deduction-amount    TO wa_final-d_amount,
+           gv_deduction-arrears   TO wa_final-d_arrears,
+           gv_deduction-ytd       TO wa_final-d_ytd.
+    APPEND wa_final TO gt_final.
+    CLEAR wa_final.
+  ENDLOOP.
+ENDIF.
+DO 2 TIMES.
+  CLEAR wa_final.
+  APPEND wa_final TO gt_final.
+ENDDO.
+READ TABLE hrdata-star_pay_result INTO wa_payresult
+           WITH KEY wagetype_key-wagetype = '/560'
+           result_retro_key-retro = ' '.  "ADDchg
+IF sy-subrc = 0.
+  gv_netpay = wa_payresult-pay_amount.
+ENDIF.
+CLEAR wa_payresult.
+CLEAR :v_tot_p, v_9d03 , v_9d09 , v_9d05,
+v_tot_u , v_9d02 , v_9d04 , v_9d07.
+CLEAR: gv_earned_days, gv_lwp,gv_cf_lwp,gv_tot,w_off.
+READ TABLE hrdata-dim_forperiod INTO wa_payroll_period INDEX 1.
+IF sy-subrc EQ 0.
+  READ TABLE hrdata-dim_employee INTO wa_employee INDEX 1.
+**  CALL FUNCTION 'HR_FORMS_TIM_GET_B2_RESULTS'
+**    EXPORTING
+**      pernr  = wa_employee-key-personnel_number
+**      begda  = wa_payroll_period-key-begin_date
+**      endda  = wa_payroll_period-key-end_date
+***     PERIODS                     =
+**    IMPORTING
+**      tim_b2 = gt_tim_b2.
+**  LOOP AT gt_tim_b2-ft_saldo INTO wa_saldo.
+**    CASE wa_saldo-ztart.
+**      WHEN '1CAD'."'9D09'.
+**        v_9d09 = v_9d09 + wa_saldo-anzhl.
+**      WHEN '1WOF'."'9D03'.
+**        v_9d03 = v_9d03 + wa_saldo-anzhl.
+**      WHEN '1PHO'."'9D02'.
+**        v_9d02 = v_9d02 + wa_saldo-anzhl.
+**      WHEN '1ABD'."'9D04'.
+**        v_9d04 = v_9d04 + wa_saldo-anzhl.
+**      WHEN '1HAB'."'9D05'.
+**        v_9d05 = v_9d05 + wa_saldo-anzhl.
+**      WHEN '1PLD'."'9D07'.
+**        v_9d07 = v_9d07 + wa_saldo-anzhl.
+**
+**        " add below code @ 1st april 2014.
+**      WHEN '1HPL'."'9D19'.
+**        v_9d19 = v_9d19 + wa_saldo-anzhl.
+**      WHEN '1COD'."'9D21'.
+**        v_9d21 = v_9d21 + wa_saldo-anzhl.
+***      WHEN '9D22'.
+***        v_9d22 = v_9d22 + wa_saldo-anzhl.
+***      WHEN '9D20'.
+***        v_9d20 = v_9d20 + wa_saldo-anzhl.
+***      WHEN '9D23'.
+***        v_9d23 = v_9d23 + wa_saldo-anzhl.
+**      WHEN OTHERS.
+**    ENDCASE.
+**  ENDLOOP.
+ENDIF.
+CLEAR : v_leave.
+****************************************
+****************************************
+*
+********** personal name changes
+SELECT SINGLE ename FROM pa0001 INTO ename
+  WHERE pernr EQ wa_employee-key-personnel_number
+*  and  begda between '01012000' and
+*  wa_period_dats-key-end_date.
+  AND   endda EQ '99991231'.
+wa_employee-print_name = ename.
+CLEAR : ename.
+*********
+break sap_abap.
+*LOOP AT hrdata-star_pay_result INTO wa_payresult WHERE
+*   inperiod_key-begin_date = wa_payperiod-inperiod_key-begin_date
+*  AND inperiod_key-end_date = wa_payperiod-inperiod_key-end_date AND
+*   forperiod_key-begin_date = wa_payperiod-inperiod_key-begin_date
+*  AND forperiod_key-end_date = wa_payperiod-inperiod_key-end_date   .
+*
+*  IF wa_payresult-wagetype_key-wagetype = '1CAD'.
+*    v_9d09 = v_9d09 + wa_payresult-pay_amount."PRESENT Days
+*  ENDIF.
+*  IF wa_payresult-wagetype_key-wagetype = '1WOF'.
+*    v_9d03 = v_9d03 + wa_payresult-pay_amount."Week Off
+*  ENDIF.
+*  IF wa_payresult-wagetype_key-wagetype = '1PHO'.
+**    v_9d02 = v_9d02 + wa_payresult-pay_amount."PH
+*    v_9d02 = v_9d02 + wa_payresult-pay_number."PH "Updated by Carina Jose on 19.12.2020
+*  ENDIF.
+*  IF wa_payresult-wagetype_key-wagetype = '1ABD'.
+*    v_9d04 = v_9d04 + wa_payresult-pay_amount."Absence Days
+*  ENDIF.
+*  IF wa_payresult-wagetype_key-wagetype = '1HAB'.
+*    v_9d05 = v_9d05 + wa_payresult-pay_amount."Absence Days
+*  ENDIF.
+*  IF wa_payresult-wagetype_key-wagetype = '1PLD'.
+*    v_9d07 = v_9d07 + wa_payresult-pay_amount."PL
+*  ENDIF.
+*  IF wa_payresult-wagetype_key-wagetype = '1HPL'.
+*    v_hpl = v_hpl + wa_payresult-pay_amount."PL
+*    v_hpl = v_hpl / 2. " Added by Carina Jose on 21.12.2020
+*  ENDIF.
+*  IF wa_payresult-wagetype_key-wagetype = '1COD'.
+*    v_cod = v_cod + wa_payresult-pay_amount."Comp-Off
+*  ENDIF.
+*  IF wa_payresult-wagetype_key-wagetype = '1COC'.
+*    v_coc = v_coc + wa_payresult-pay_amount."Comp-Off
+*  ENDIF.
+*  IF wa_payresult-wagetype_key-wagetype = '1SLD'.
+*    v_sld = v_sld + wa_payresult-pay_amount."Sick Leave " Updated with v_sld by Carina Jose on 19.12.2020
+*  ENDIF.
+*  IF wa_payresult-wagetype_key-wagetype = '1CLD'.
+*    v_cld = v_cld + wa_payresult-pay_amount."Casual Leave " Updated with v_cld by Carina Jose on 19.12.2020
+*  ENDIF.
+*
+*  IF wa_payresult-wagetype_key-wagetype = '1SPL'.
+*    v_spl = v_spl + wa_payresult-pay_amount."SPECIAL LEAVE " Updated with v_SPL by Raj Kumar  on 06.04.2023
+*  ENDIF.
+*  IF wa_payresult-wagetype_key-wagetype = '1MLD'.
+*    v_mld = v_mld + wa_payresult-pay_amount."SPECIAL LEAVE " Updated with v_SPL by Raj Kumar  on 06.04.2023
+*  ENDIF.
+*
+*  IF wa_payresult-wagetype_key-wagetype = '1GLD'.
+*    v_gld = v_gld + wa_payresult-pay_amount."SPECIAL LEAVE " Updated with v_SPL by Raj Kumar  on 09.06.2023
+*  ENDIF.
+*
+**********************Added by Rutvi on 26.12.2024
+*  READ TABLE hrdata-dim_company_code INTO DATA(ls_company_code)
+*  INDEX 1.
+*  IF ls_company_code-key-company_code = '1000'.
+*    IF wa_payresult-wagetype_key-wagetype = '1PAT'.
+*      v_patl = v_patl + wa_payresult-pay_amount."Paternity Leave " Updated with v_SPL by Raj Kumar  on 06.04.2023
+*    ENDIF.
+*  ENDIF.
+**********************************************************
+*
+***      WHEN '1CAD'."'9D09'.
+***        v_9d09 = v_9d09 + wa_saldo-anzhl.
+***      WHEN '1WOF'."'9D03'.
+***        v_9d03 = v_9d03 + wa_saldo-anzhl.
+***      WHEN '1PHO'."'9D02'.
+***        v_9d02 = v_9d02 + wa_saldo-anzhl.
+***      WHEN '1ABD'."'9D04'.
+***        v_9d04 = v_9d04 + wa_saldo-anzhl.
+***      WHEN '1HAB'."'9D05'.
+***        v_9d05 = v_9d05 + wa_saldo-anzhl.
+***      WHEN '1PLD'."'9D07'.
+***        v_9d07 = v_9d07 + wa_saldo-anzhl.
+*ENDLOOP.
+*****************************************
+*****************************************
+**BREAK kpitabap.
+*break sap_abap.
+*v_woff  = v_9d03. " Weekly Off
+*v_ph    = v_9d02. " PH
+*v_abday = v_9d04 + v_9d05."Absence
+*v_pl    = v_9d07 + v_hpl." PL
+*v_co    = v_cod.
+*
+********************Added by Mayank on 22-05-2023***********
+*
+*SELECT SINGLE persg persk FROM pa0001 INTO ( lv_persg,
+*lv_persk ) WHERE pernr EQ wa_employee-key-personnel_number
+*AND endda EQ '99991231'.
+*
+*CALL FUNCTION 'NUMBER_OF_DAYS_PER_MONTH_GET'
+*  EXPORTING
+*    par_month = lv_month
+*    par_year  = lv_year
+*  IMPORTING
+*    par_days  = lv_days.
+*
+**IF ( lv_persk = 'W3' OR lv_persk = 'W1') AND
+**   ( lv_persg <> '6' ).
+**  v_prday = lv_days - ( v_woff + v_ph + v_abday + v_pl +
+**                       v_co + v_sld + v_cld ) - ( v_GLD + V_spl + v_mld ) .
+**ELSE.
+**  v_prday = v_9d09 - ( v_woff + v_ph + v_abday + v_pl +
+**                       v_co + v_sld + v_cld ) - ( v_GLD + V_spl + v_mld ).
+**ENDIF.
+*
+********************Till Here*******************************
+*
+********Added by Raj on 03.07.2023**********
+*
+*
+*IF ( lv_persk = 'W3' OR lv_persk = 'W1') AND
+*   ( lv_persg <> '6' ).
+*  v_prday = v_9d09 - ( v_woff + v_ph + v_abday + v_pl +
+*                       v_co + v_sld + v_cld ) - ( v_GLD + V_spl + v_mld + v_patl ) .
+*ELSE.
+*  IF ls_company_code-key-company_code = '1000'.
+*    IF lv_persg <> '6'.
+*      v_prday = v_9d09 - ( v_woff + v_ph + v_abday + v_pl +
+*                       v_co + v_sld + v_cld ) - ( v_GLD + V_spl + v_mld + v_patl ).
+*    ENDIF.
+*  ELSE.
+*    v_prday = v_9d09 - ( v_woff + v_ph + v_abday + v_pl +
+*                       v_co + v_sld + v_cld ) - ( v_GLD + V_spl + v_mld ).
+*  ENDIF.
+*ENDIF.
+**********Added by Raj on 03.07.2023*******
+" add below code @ 1 april
+*v_leave = v_9d19 + v_9d21 + v_9d22 + v_9d20 + v_9d23.
+" add above code @ 1 april
+" comment on 1 st april
+*LOOP AT HRDATA-STAR_ABSENCE INTO wa_absence.
+*v_leave = v_leave + wa_absence-DEDUCTION.
+*ENDLOOP.
+" comment code @ 1st april
+*v_tot_p = v_9d03 + v_9d09 + v_9d05 + v_leave.
+*v_tot_u = v_9d02 + v_9d04 + v_9d07.
+
+ENDFORM.                      " %CO4
+
+*----------------------------------------------------------------
+*   FORM %CO5
+*   NODE %CODE13
+*----------------------------------------------------------------
+
+FORM %CO5.
+
+BREAK sap_abap.
+TABLES: PA0009.
+TYPES: BEGIN OF T_FINAL,
+     PERNR TYPE PA0009-PERNR,
+     BEGDA TYPE PA0009-BEGDA,
+     bankl TYPE PA0009-bankl,
+     bankn TYPE PA0009-bankn,
+    END OF T_FINAL.
+DATA : v_begda_f TYPE pa0002-begda.
+DATA: IT_FINAL TYPE STANDARD TABLE OF T_FINAL,
+      WA_FINAL1 TYPE T_FINAL.
+DATA : lv_date TYPE pa0002-begda.
+DATA : v_bankn TYPE pa0009-bankn,
+       v_bankl TYPE pa0009-bankl.
+lv_date = '01012000'.
+DATA lv_cnt TYPE i.
+DESCRIBE TABLE hrdata-dim_forperiod LINES lv_cnt.
+READ TABLE hrdata-dim_forperiod INTO DATA(lv_period) INDEX lv_cnt.
+IF sy-subrc = 0.
+  v_begda = lv_period-key-begin_date.
+  v_endda = lv_period-key-end_date.
+ENDIF.
+*READ TABLE hrdata-dim_bank INTO wa_bank INDEX 1.
+*lv_bankname = wa_bank-bank_name.
+*IF lv_bankname cs 'CORPORATION'.
+*lv_bankname = 'Corporation Bank'.
+*ENDIF.
+*BREAK-POINT.
+read table hrdata-dim_bank_account into wa_bank_account
+index 1.
+read table hrdata-dim_employee_group into wa_group
+index 1.
+read table hrdata-dim_position_key into wa_position
+index 1.
+SELECT SINGLE PLANS FROM PA0001 INTO WA_PLANS
+  WHERE PERNR EQ wa_employee-key-personnel_number
+*  AND ENDDA EQ '99991231'. " commented on 12.03.2021
+*******  Added by Carina Jose on 12.03.2021
+  AND begda >= lv_date
+  and endda >= v_endda.
+*******  End of changes by Carina Jose on 12.03.2021
+SELECT SINGLE PLSTX FROM T528T INTO v_text
+  WHERE PLANS EQ WA_PLANS AND
+*        ENDDA EQ '99991231' AND " commented on 12.03.2021
+*******  Added by Carina Jose on 12.03.2021
+   begda >= lv_date
+  and endda >= v_endda AND
+*******  End of changes by Carina Jose on 12.03.2021
+        SPRSL EQ 'EN'.
+wa_position-text = v_text.
+*read table hrdata-star_pay_corp_struct into wa_area
+*index 1.
+read table hrdata-dim_forperiod_dats into wa_period_dats
+index 1.
+select single eepfm from pa0587 into gv_pfno
+where pernr eq wa_employee-key-personnel_number
+  AND ENDDA EQ '99991231'.
+SELECT SINGLE ICNUM FROM PA0185 INTO GV_UANNO
+  WHERE PERNR EQ wa_employee-key-personnel_number AND
+        SUBTY EQ '08'
+    AND endda = '99991231'.
+SELECT SINGLE ICNUM FROM PA0185 INTO GV_PANNO
+  WHERE PERNR EQ wa_employee-key-personnel_number AND
+        SUBTY EQ '02' AND
+        begda >= lv_date
+    and endda >= v_endda.
+*        endda = '99991231'.
+SELECT SINGLE esinm FROM PA0588 INTO GV_ESIC
+  WHERE PERNR EQ wa_employee-key-personnel_number AND
+        SUBTY EQ '0001'
+    AND begda >= lv_date
+    AND endda >= v_endda.
+break sap_abap.
+*select PERNR BEGDA bankl bankn from pa0009 into TABLE IT_FINAL
+ SELECT SINGLE bankl bankn FROM pa0009 INTO (v_bankl, v_bankn)
+  where pernr eq wa_employee-key-personnel_number
+*  and  begda between '01012000' and
+*  wa_period_dats-key-end_date.
+*  and   endda eq '99991231'. " commented by Carina Jose on 12.03.2021
+*******  Added by Carina Jose on 12.03.2021
+  AND begda >= lv_date
+  and endda >= v_endda.
+*******  End of changes by Carina Jose on 12.03.2021
+*SORT IT_FINAL DESCENDING BY BEGDA.
+*READ TABLE IT_FINAL INTO WA_FINAL1 INDEX 1.
+*wa_bank_account-key-account_number = WA_FINAL1-BANKN.
+wa_bank_account-key-account_number = V_BANKN.
+*select single banka from bnka into lv_bankname
+*  where bankl =  WA_FINAL1-BANKL.
+select single banka from bnka into lv_bankname
+  where bankl = V_BANKL.
+select single begda locat depar from pa0002 into (v_begda_f,v_locat,v_depar)
+where pernr eq wa_employee-key-personnel_number
+*  and endda eq '99991231'. " commented by Carina Jose on 11.03.2021
+*******  Added by Carina Jose on 11.03.2021
+  AND begda >= lv_date
+  and endda >= v_endda.
+*******  End of changes by Carina Jose on 11.03.2021
+wa_area-pers_subarea_pers_subareatext = v_locat.
+wa_area-org_unit_key-text = v_depar.
+SELECT single persg from pa0001 into (v_persg)
+  where pernr eq wa_employee-key-personnel_number
+  and endda >= v_endda.
+SELECT single ptext from T501T INTO (EMP_GRP)
+  WHERE SPRSL = 'EN' AND
+        PERSG =  v_persg.
+
+ENDFORM.                      " %CO5
+
+*----------------------------------------------------------------
+*   FORM %CO6
+*   NODE %CODE5
+*----------------------------------------------------------------
+
+FORM %CO6.
+
+TABLES:t512t.
+**********************************
+DATA : lv_ear TYPE i,
+       lv_ded TYPE i.
+DATA: BEGIN OF gv_earning OCCURS 0 ,
+        wage_type TYPE lgart,
+        wage_text TYPE lgtxt,
+        amount    TYPE maxbt,
+        arrears   TYPE maxbt,
+        ytd       TYPE maxbt,
+      END OF gv_earning .
+DATA: BEGIN OF gv_deduction OCCURS 0,
+        wage_type TYPE lgart,
+        wage_text TYPE lgtxt,
+        amount    TYPE maxbt,
+        arrears   TYPE maxbt,
+        ytd       TYPE maxbt,
+      END OF gv_deduction .
+DATA : count          TYPE c,
+       line           TYPE c,
+       lv_orig_wt     TYPE t512t-lgart,
+       lv_orig_wt1(6) TYPE c.
+DATA:it_text LIKE TABLE OF t512t WITH HEADER LINE.
+*break sap_abap.
+****Reading payroll period***********
+SORT hrdata-star_payroll_period DESCENDING BY forperiod_key-end_date.
+READ TABLE hrdata-star_payroll_period INTO wa_payperiod INDEX 1.
+IF sy-subrc EQ 0.
+  SORT hrdata-star_ity_pers_struct BY employee_key-endda DESCENDING.
+******Reading personal data structure**********
+  LOOP AT hrdata-star_ity_pers_struct INTO wa_per_struc
+          WHERE employee_key-begda LE wa_payperiod-inperiod_key-end_date
+            AND employee_key-endda GE wa_payperiod-inperiod_key-begin_date.
+    lv_peras = wa_per_struc-assignment_key-peras.
+  ENDLOOP.
+ENDIF.
+SELECT * FROM t512t INTO TABLE it_text WHERE sprsl EQ 'EN'
+AND molga EQ '40'.
+SORT hrdata-star_pay_result ASCENDING.
+LOOP AT hrdata-star_pay_result INTO wa_payresult
+    WHERE evalclass02_key-wagetypegroup EQ '03'
+       "OR evalclass02_key-wagetypegroup EQ '08' )
+    AND   result_retro_key-retro = ' '.  " ADDchd
+  READ TABLE hrdata-star_cumulated_pay INTO wa_cumulated
+  WITH KEY cum_daterng_df_key-cumul_type = 'Y'   " '9' was changed to Y
+           wagetype_key = wa_payresult-wagetype_key
+           inperiod_key-period = wa_payresult-inperiod_key-period   "ADDchd
+           forperiod_key-period = wa_payresult-inperiod_key-period. "ADDchd
+  IF sy-subrc = 0.
+    MOVE wa_cumulated-pay_amount TO gv_earning-ytd.
+  ENDIF.
+*To get wagetype text.
+  READ TABLE it_text WITH KEY lgart = wa_payresult-wagetype_key-wagetype.
+  IF sy-subrc = 0.
+    MOVE it_text-lgtxt TO gv_earning-wage_text .
+  ENDIF.
+  MOVE wa_payresult-wagetype_key-wagetype TO gv_earning-wage_type.
+  MOVE wa_payresult-pay_amount        TO gv_earning-amount.
+  APPEND gv_earning.
+  CLEAR gv_earning.
+ENDLOOP.
+*LOOP AT hrdata-star_pay_result INTO wa_payresult
+*    WHERE ( evalclass02_key-wagetypegroup EQ '06'
+*       OR evalclass02_key-wagetypegroup EQ '08' )
+*       AND result_retro_key-retro = ' '.  " ADDchd
+*  IF wa_payresult-evalclass02_key-wagetypegroup EQ '06'.
+*    READ TABLE hrdata-star_cumulated_pay INTO wa_cumulated
+*    WITH KEY cum_daterng_df_key-cumul_type = 'Y'   " '9' was changed to Y
+*             wagetype_key = wa_payresult-wagetype_key
+*             inperiod_key-period = wa_payresult-inperiod_key-period   "ADDchd
+*             forperiod_key-period = wa_payresult-inperiod_key-period. "ADDchd
+*    IF sy-subrc = 0.
+*      MOVE wa_cumulated-pay_amount TO gv_earning-ytd.
+*    ENDIF.
+**To get wagetype text.
+*    READ TABLE it_text WITH KEY lgart = wa_payresult-wagetype_key-wagetype.
+*    IF sy-subrc = 0.
+*      MOVE it_text-lgtxt TO gv_earning-wage_text .
+*    ENDIF.
+*    MOVE wa_payresult-wagetype_key-wagetype TO gv_earning-wage_type.
+*    MOVE wa_payresult-pay_amount        TO gv_earning-amount.
+*    APPEND gv_earning.
+*    CLEAR gv_earning.
+*  ELSEIF wa_payresult-evalclass02_key-wagetypegroup EQ '08'.
+*
+*    CLEAR: count, line.
+*    DESCRIBE TABLE gv_earning LINES line.
+*    LOOP AT gv_earning.
+*      gv_earning-wage_type = gv_earning-wage_type + 3.
+*      count = count + 1.
+*      IF wa_payresult-wagetype_key-wagetype =
+*                          gv_earning-wage_type.
+*        IF sy-subrc = 0.
+*          MOVE wa_payresult-pay_amount TO gv_earning-arrears.
+*          MODIFY gv_earning INDEX sy-tabix TRANSPORTING arrears.
+*        ENDIF.
+*        EXIT.
+*      ELSE.
+** To get the C/F wagetype, for those original wagetype is
+** not available in the RT for the month which we are running.
+*        IF count = line.
+*          READ TABLE it_text WITH KEY lgart = wa_payresult-wagetype_key-wagetype.
+*          IF sy-subrc = 0.
+*            MOVE it_text-lgtxt TO gv_earning-wage_text.
+*          ENDIF.
+*
+*          CLEAR :lv_orig_wt, lv_orig_wt1.
+*          lv_orig_wt = wa_payresult-wagetype_key-wagetype - 3.
+** To get cumulated result of C/F wagetype's original
+** wagetype amount in CRT for the month which we are running.
+*          CONCATENATE '40' lv_orig_wt INTO lv_orig_wt1.
+*          CLEAR wa_cumulated.
+*          READ TABLE hrdata-star_cumulated_pay INTO wa_cumulated
+*             WITH KEY cum_daterng_df_key-cumul_type = 'Y'   " '9' was changed to Y
+*              wagetype_key = lv_orig_wt1
+*              inperiod_key-period = wa_payresult-inperiod_key-period   "ADDchd
+*              forperiod_key-period = wa_payresult-inperiod_key-period. "ADDchd
+*          IF sy-subrc = 0.
+*            MOVE wa_cumulated-pay_amount TO gv_earning-ytd.
+*          ELSE.
+*            CLEAR gv_earning-ytd.
+*          ENDIF.
+*          MOVE wa_payresult-wagetype_key-wagetype TO gv_earning-wage_type.
+*          MOVE wa_payresult-pay_amount TO gv_earning-arrears.
+*          CLEAR :gv_earning-amount.
+*          APPEND gv_earning.
+*          CLEAR: gv_earning.
+*        ENDIF.
+*      ENDIF.
+*    ENDLOOP.
+*  ENDIF.
+*ENDLOOP.
+DELETE gv_earning WHERE wage_type = ' '.
+***Deduction
+*LOOP AT hrdata-star_pay_result INTO wa_payresult
+*    WHERE ( evalclass02_key-wagetypegroup EQ '07'
+*       OR evalclass02_key-wagetypegroup EQ '05' )
+*       AND result_retro_key-retro = ' '.    " ADDchd
+*  IF wa_payresult-evalclass02_key-wagetypegroup EQ '07'.
+*    READ TABLE hrdata-star_cumulated_pay INTO wa_cumulated
+*    WITH KEY cum_daterng_df_key-cumul_type = 'Y'    " '9' was changed into Y
+*        wagetype_key = wa_payresult-wagetype_key
+*        inperiod_key-period = wa_payresult-inperiod_key-period   "ADDchd
+*        forperiod_key-period = wa_payresult-inperiod_key-period. "ADDchd
+*    IF sy-subrc = 0.
+*      MOVE wa_cumulated-pay_amount TO gv_deduction-ytd.
+*    ENDIF.
+*
+*    READ TABLE it_text WITH KEY lgart = wa_payresult-wagetype_key-wagetype.
+*    IF sy-subrc = 0.
+*      MOVE it_text-lgtxt TO gv_deduction-wage_text .
+*    ENDIF.
+*    MOVE wa_payresult-wagetype_key-wagetype TO gv_deduction-wage_type.
+*    IF wa_payresult-pay_amount LT 0.
+* wa_payresult-pay_amount = wa_payresult-pay_amount * ( -1 ).
+*      MOVE wa_payresult-pay_amount   TO gv_deduction-amount.
+*    ELSE.
+*      MOVE wa_payresult-pay_amount   TO gv_deduction-amount.
+*    ENDIF.
+*    APPEND gv_deduction.
+*    CLEAR gv_deduction.
+*  ELSEIF wa_payresult-evalclass02_key-wagetypegroup EQ '05'.
+*    IF wa_payresult-wagetype_key-wagetype EQ '2003'.
+*      READ TABLE gv_deduction WITH KEY wage_type = '2000'.
+*      IF sy-subrc = 0.
+*        MOVE wa_payresult-pay_amount TO gv_deduction-arrears.
+*        MODIFY gv_deduction INDEX sy-tabix TRANSPORTING
+*        arrears.
+*      ELSE.
+*        APPEND gv_deduction.
+*      ENDIF.
+*    ENDIF.
+*
+*    IF wa_payresult-wagetype_key-wagetype EQ '2008'.
+*      READ TABLE gv_deduction WITH KEY wage_type = '2005'.
+*      IF sy-subrc = 0.
+*        MOVE wa_payresult-pay_amount TO gv_deduction-arrears.
+*        MODIFY gv_deduction INDEX sy-tabix TRANSPORTING
+*        arrears.
+*      ELSE.
+*        APPEND gv_deduction.
+*      ENDIF.
+*    ENDIF.
+*  ENDIF.
+*ENDLOOP.
+*BREAK SAP_ABAP.
+LOOP AT hrdata-star_pay_result INTO wa_payresult
+    WHERE ( evalclass02_key-wagetypegroup EQ '04'
+       OR evalclass02_key-wagetypegroup EQ '05' )
+    AND   result_retro_key-retro = ' '.    " ADDchd
+  READ TABLE hrdata-star_cumulated_pay INTO wa_cumulated
+  WITH KEY cum_daterng_df_key-cumul_type = 'Y'    " '9' was changed into Y
+      wagetype_key = wa_payresult-wagetype_key
+      inperiod_key-period = wa_payresult-inperiod_key-period   "ADDchd
+      forperiod_key-period = wa_payresult-inperiod_key-period. "ADDchd
+  IF sy-subrc = 0.
+    IF wa_cumulated-pay_amount LT 0.
+      wa_cumulated-pay_amount = wa_cumulated-pay_amount * -1.
+    ENDIF.
+    MOVE wa_cumulated-pay_amount TO gv_deduction-ytd.
+  ENDIF.
+  READ TABLE it_text WITH KEY lgart = wa_payresult-wagetype_key-wagetype.
+  IF sy-subrc = 0.
+    MOVE it_text-lgtxt TO gv_deduction-wage_text .
+  ENDIF.
+  MOVE wa_payresult-wagetype_key-wagetype TO gv_deduction-wage_type.
+  IF wa_payresult-pay_amount LT 0.
+    wa_payresult-pay_amount = wa_payresult-pay_amount * ( -1 ).
+    MOVE wa_payresult-pay_amount   TO gv_deduction-amount.
+  ELSE.
+    MOVE wa_payresult-pay_amount   TO gv_deduction-amount.
+  ENDIF.
+  APPEND gv_deduction.
+  CLEAR gv_deduction.
+ENDLOOP.
+DELETE gv_deduction WHERE wage_type = ' '.
+************************************************************
+*************************************************************
+SORT gv_earning BY wage_type ASCENDING.
+SORT gv_deduction BY wage_type ASCENDING.
+DESCRIBE TABLE gv_earning LINES lv_ear .
+DESCRIBE TABLE gv_deduction LINES lv_ded.
+IF lv_ear GE lv_ded .
+  LOOP AT gv_earning.
+    READ TABLE gv_deduction INDEX sy-tabix.
+    IF sy-subrc = 0.
+      MOVE : gv_deduction-wage_text TO wa_final-d_wage_text,
+             gv_deduction-amount TO wa_final-d_amount,
+             gv_deduction-arrears TO wa_final-d_arrears,
+             gv_deduction-ytd TO wa_final-d_ytd.
+    ENDIF.
+    MOVE : gv_earning-wage_text TO wa_final-e_wage_text,
+           gv_earning-amount TO wa_final-e_amount,
+           gv_earning-arrears TO wa_final-e_arrears,
+           gv_earning-ytd TO wa_final-e_ytd.
+    APPEND wa_final TO gt_final.
+    CLEAR wa_final.
+  ENDLOOP.
+ELSE.
+  LOOP AT gv_deduction.
+    READ TABLE gv_earning INDEX sy-tabix.
+    IF sy-subrc = 0.
+      MOVE : gv_earning-wage_text TO wa_final-e_wage_text,
+             gv_earning-amount    TO wa_final-e_amount,
+             gv_earning-arrears   TO wa_final-e_arrears,
+             gv_earning-ytd       TO wa_final-e_ytd.
+    ENDIF.
+    MOVE : gv_deduction-wage_text TO wa_final-d_wage_text,
+           gv_deduction-amount    TO wa_final-d_amount,
+           gv_deduction-arrears   TO wa_final-d_arrears,
+           gv_deduction-ytd       TO wa_final-d_ytd.
+    APPEND wa_final TO gt_final.
+    CLEAR wa_final.
+  ENDLOOP.
+ENDIF.
+DO 2 TIMES.
+  CLEAR wa_final.
+  APPEND wa_final TO gt_final.
+ENDDO.
+READ TABLE hrdata-star_pay_result INTO wa_payresult
+           WITH KEY wagetype_key-wagetype = '/560'
+           result_retro_key-retro = ' '.  "ADDchg
+IF sy-subrc = 0.
+  gv_netpay = wa_payresult-pay_amount.
+ENDIF.
+CLEAR wa_payresult.
+CLEAR :v_tot_p, v_9d03 , v_9d09 , v_9d05,
+v_tot_u , v_9d02 , v_9d04 , v_9d07.
+CLEAR: gv_earned_days, gv_lwp,gv_cf_lwp,gv_tot,w_off.
+READ TABLE hrdata-dim_forperiod INTO wa_payroll_period INDEX 1.
+IF sy-subrc EQ 0.
+  READ TABLE hrdata-dim_employee INTO wa_employee INDEX 1.
+**  CALL FUNCTION 'HR_FORMS_TIM_GET_B2_RESULTS'
+**    EXPORTING
+**      pernr  = wa_employee-key-personnel_number
+**      begda  = wa_payroll_period-key-begin_date
+**      endda  = wa_payroll_period-key-end_date
+***     PERIODS                     =
+**    IMPORTING
+**      tim_b2 = gt_tim_b2.
+**  LOOP AT gt_tim_b2-ft_saldo INTO wa_saldo.
+**    CASE wa_saldo-ztart.
+**      WHEN '1CAD'."'9D09'.
+**        v_9d09 = v_9d09 + wa_saldo-anzhl.
+**      WHEN '1WOF'."'9D03'.
+**        v_9d03 = v_9d03 + wa_saldo-anzhl.
+**      WHEN '1PHO'."'9D02'.
+**        v_9d02 = v_9d02 + wa_saldo-anzhl.
+**      WHEN '1ABD'."'9D04'.
+**        v_9d04 = v_9d04 + wa_saldo-anzhl.
+**      WHEN '1HAB'."'9D05'.
+**        v_9d05 = v_9d05 + wa_saldo-anzhl.
+**      WHEN '1PLD'."'9D07'.
+**        v_9d07 = v_9d07 + wa_saldo-anzhl.
+**
+**        " add below code @ 1st april 2014.
+**      WHEN '1HPL'."'9D19'.
+**        v_9d19 = v_9d19 + wa_saldo-anzhl.
+**      WHEN '1COD'."'9D21'.
+**        v_9d21 = v_9d21 + wa_saldo-anzhl.
+***      WHEN '9D22'.
+***        v_9d22 = v_9d22 + wa_saldo-anzhl.
+***      WHEN '9D20'.
+***        v_9d20 = v_9d20 + wa_saldo-anzhl.
+***      WHEN '9D23'.
+***        v_9d23 = v_9d23 + wa_saldo-anzhl.
+**      WHEN OTHERS.
+**    ENDCASE.
+**  ENDLOOP.
+ENDIF.
+CLEAR : v_leave.
+****************************************
+****************************************
+*
+*BREAK sap_abap.
+*LOOP AT hrdata-star_pay_result INTO wa_payresult WHERE
+*   inperiod_key-begin_date = wa_payperiod-inperiod_key-begin_date
+*  AND inperiod_key-end_date = wa_payperiod-inperiod_key-end_date AND
+*   forperiod_key-begin_date = wa_payperiod-inperiod_key-begin_date
+*  AND forperiod_key-end_date = wa_payperiod-inperiod_key-end_date   .
+*
+*  IF wa_payresult-wagetype_key-wagetype = '1CAD'.
+*    v_9d09 = v_9d09 + wa_payresult-pay_amount."PRESENT Days
+*  ENDIF.
+*  IF wa_payresult-wagetype_key-wagetype = '1WOF'.
+*    v_9d03 = v_9d03 + wa_payresult-pay_amount."Week Off
+*  ENDIF.
+*  IF wa_payresult-wagetype_key-wagetype = '1PHO'.
+*    v_9d02 = v_9d02 + wa_payresult-pay_amount."PH
+*  ENDIF.
+*  IF wa_payresult-wagetype_key-wagetype = '1ABD'.
+*    v_9d04 = v_9d04 + wa_payresult-pay_amount."Absence Days
+*  ENDIF.
+*  IF wa_payresult-wagetype_key-wagetype = '1HAB'.
+*    v_9d05 = v_9d05 + wa_payresult-pay_amount."Absence Days
+*  ENDIF.
+*  IF wa_payresult-wagetype_key-wagetype = '1PLD'.
+*    v_9d07 = v_9d07 + wa_payresult-pay_amount."PL
+*  ENDIF.
+*  IF wa_payresult-wagetype_key-wagetype = '1HPL'.
+*    v_hpl = v_hpl + wa_payresult-pay_amount."PL
+*  ENDIF.
+*  IF wa_payresult-wagetype_key-wagetype = '1COD'.
+*    v_cod = v_cod + wa_payresult-pay_amount."Comp-Off
+*  ENDIF.
+*  IF wa_payresult-wagetype_key-wagetype = '1SLD'.
+*    v_sld = v_cod + wa_payresult-pay_amount."Sick Leave
+*  ENDIF.
+*  IF wa_payresult-wagetype_key-wagetype = '1CLD'.
+*    v_cld = v_cod + wa_payresult-pay_amount."Casual Leave
+*  ENDIF.
+*
+***      WHEN '1CAD'."'9D09'.
+***        v_9d09 = v_9d09 + wa_saldo-anzhl.
+***      WHEN '1WOF'."'9D03'.
+***        v_9d03 = v_9d03 + wa_saldo-anzhl.
+***      WHEN '1PHO'."'9D02'.
+***        v_9d02 = v_9d02 + wa_saldo-anzhl.
+***      WHEN '1ABD'."'9D04'.
+***        v_9d04 = v_9d04 + wa_saldo-anzhl.
+***      WHEN '1HAB'."'9D05'.
+***        v_9d05 = v_9d05 + wa_saldo-anzhl.
+***      WHEN '1PLD'."'9D07'.
+***        v_9d07 = v_9d07 + wa_saldo-anzhl.
+*ENDLOOP.
+*****************************************
+*****************************************
+**BREAK kpitabap.
+**BREAK SAP_ABAP.
+*v_woff  = v_9d03. " Weekly Off
+*v_ph    = v_9d02. " PH
+*v_abday = v_9d04 + v_9d05."Absence
+*v_pl    = v_9d07 + v_hpl." PL
+*v_co    = v_cod.
+*v_prday = v_9d09 - ( v_woff + v_ph + v_abday + v_pl +
+*                     v_co + v_sld + v_cld ).
+" add below code @ 1 april
+*v_leave = v_9d19 + v_9d21 + v_9d22 + v_9d20 + v_9d23.
+" add above code @ 1 april
+" comment on 1 st april
+*LOOP AT HRDATA-STAR_ABSENCE INTO wa_absence.
+*v_leave = v_leave + wa_absence-DEDUCTION.
+*ENDLOOP.
+" comment code @ 1st april
+*v_tot_p = v_9d03 + v_9d09 + v_9d05 + v_leave.
+*v_tot_u = v_9d02 + v_9d04 + v_9d07.
+
+ENDFORM.                      " %CO6
+
+*----------------------------------------------------------------
+*   FORM %CO7
+*   NODE %CODE1
+*----------------------------------------------------------------
+
+FORM %CO7.
+
+*  TABLES:t512t.
+**********************************
+DATA : lv_ear TYPE i,
+       lv_ded TYPE i.
+DATA: BEGIN OF gv_earning OCCURS 0 ,
+        wage_type TYPE lgart,
+        wage_text TYPE lgtxt,
+        amount    TYPE maxbt,
+        arrears   TYPE maxbt,
+        ytd       TYPE maxbt,
+      END OF gv_earning .
+DATA: BEGIN OF gv_deduction OCCURS 0,
+        wage_type TYPE lgart,
+        wage_text TYPE lgtxt,
+        amount    TYPE maxbt,
+        arrears   TYPE maxbt,
+        ytd       TYPE maxbt,
+      END OF gv_deduction .
+DATA : count          TYPE c,
+       line           TYPE c,
+       lv_orig_wt     TYPE t512t-lgart,
+       lv_orig_wt1(6) TYPE c.
+DATA:it_text LIKE TABLE OF t512t WITH HEADER LINE.
+break: sap_abap,aplit10.
+LOOP AT hrdata-star_pay_result INTO wa_payresult WHERE
+   inperiod_key-begin_date = wa_payperiod-inperiod_key-begin_date
+  AND inperiod_key-end_date = wa_payperiod-inperiod_key-end_date AND
+   forperiod_key-begin_date = wa_payperiod-inperiod_key-begin_date
+  AND forperiod_key-end_date = wa_payperiod-inperiod_key-end_date.
+  IF wa_payresult-wagetype_key-wagetype = '1CAD'.
+    v_9d09 = v_9d09 + wa_payresult-pay_amount."PRESENT Days
+  ENDIF.
+  IF wa_payresult-wagetype_key-wagetype = '1WOF'.
+    v_9d03 = v_9d03 + wa_payresult-pay_amount."Week Off
+  ENDIF.
+  IF wa_payresult-wagetype_key-wagetype = '1PHO'.
+*    v_9d02 = v_9d02 + wa_payresult-pay_amount."PH
+    v_9d02 = v_9d02 + wa_payresult-pay_number."PH "Updated by Carina Jose on 19.12.2020
+  ENDIF.
+  IF wa_payresult-wagetype_key-wagetype = '1ABD'.
+    v_9d04 = v_9d04 + wa_payresult-pay_amount."Absence Days
+  ENDIF.
+  IF wa_payresult-wagetype_key-wagetype = '1HAB'.
+    v_9d05 = v_9d05 + wa_payresult-pay_amount."Absence Days
+  ENDIF.
+  IF wa_payresult-wagetype_key-wagetype = '1PLD'.
+    v_9d07 = v_9d07 + wa_payresult-pay_amount."PL
+  ENDIF.
+  IF wa_payresult-wagetype_key-wagetype = '1HPL'.
+    v_hpl = v_hpl + wa_payresult-pay_amount."PL
+    v_hpl = v_hpl / 2. " Added by Carina Jose on 21.12.2020
+  ENDIF.
+  IF wa_payresult-wagetype_key-wagetype = '1COD'.
+    v_cod = v_cod + wa_payresult-pay_amount."Comp-Off
+  ENDIF.
+  IF wa_payresult-wagetype_key-wagetype = '1COC'.
+    v_coc = v_coc + wa_payresult-pay_amount."Comp-Off
+  ENDIF.
+  IF wa_payresult-wagetype_key-wagetype = '1SLD'.
+    v_sld = v_sld + wa_payresult-pay_amount."Sick Leave " Updated with v_sld by Carina Jose on 19.12.2020
+  ENDIF.
+  IF wa_payresult-wagetype_key-wagetype = '1CLD'.
+    v_cld = v_cld + wa_payresult-pay_amount."Casual Leave " Updated with v_cld by Carina Jose on 19.12.2020
+  ENDIF.
+  IF wa_payresult-wagetype_key-wagetype = '1SPL'.
+    v_spl = v_spl + wa_payresult-pay_amount."SPECIAL LEAVE " Updated with v_SPL by Raj Kumar  on 06.04.2023
+  ENDIF.
+  IF wa_payresult-wagetype_key-wagetype = '1MLD'.
+    v_mld = v_mld + wa_payresult-pay_amount."SPECIAL LEAVE " Updated with v_SPL by Raj Kumar  on 06.04.2023
+  ENDIF.
+  IF wa_payresult-wagetype_key-wagetype = '1GLD'.
+    v_gld = v_gld + wa_payresult-pay_amount."SPECIAL LEAVE " Updated with v_SPL by Raj Kumar  on 09.06.2023
+  ENDIF.
+*********************Added by Rutvi on 26.12.2024
+  READ TABLE hrdata-dim_company_code INTO DATA(ls_company_code)
+  INDEX 1.
+  IF ls_company_code-key-company_code = '1000'.
+    IF wa_payresult-wagetype_key-wagetype = '1PAT'.
+      v_patl = v_patl + wa_payresult-pay_amount."Paternity Leave " Updated with v_SPL by Raj Kumar  on 06.04.2023
+    ENDIF.
+  ENDIF.
+ENDLOOP.
+****************************************
+*BREAK kpitabap.
+break: sap_abap,aplit10.
+v_woff  = v_9d03. " Weekly Off
+v_ph    = v_9d02. " PH
+v_abday = v_9d04 + v_9d05."Absence
+v_pl    = v_9d07 + v_hpl." PL
+v_co    = v_cod.
+*******************Added by Mayank on 22-05-2023***********
+SELECT SINGLE persg persk FROM pa0001 INTO ( lv_persg,
+lv_persk ) WHERE pernr EQ wa_employee-key-personnel_number
+AND endda EQ '99991231'.
+CALL FUNCTION 'NUMBER_OF_DAYS_PER_MONTH_GET'
+  EXPORTING
+    par_month = lv_month
+    par_year  = lv_year
+  IMPORTING
+    par_days  = lv_days.
+*IF ( lv_persk = 'W3' OR lv_persk = 'W1') AND
+*   ( lv_persg <> '6' ).
+*  v_prday = lv_days - ( v_woff + v_ph + v_abday + v_pl +
+*                       v_co + v_sld + v_cld ) - ( v_GLD + V_spl + v_mld ) .
+*ELSE.
+*  v_prday = v_9d09 - ( v_woff + v_ph + v_abday + v_pl +
+*                       v_co + v_sld + v_cld ) - ( v_GLD + V_spl + v_mld ).
+*ENDIF.
+*******************Till Here*******************************
+*******Added by Raj on 03.07.2023**********
+BREAK sap_abap.
+IF ( lv_persk = 'W3' OR lv_persk = 'W1') AND
+   ( lv_persg <> '6' ).
+  v_prday = v_9d09 - ( v_woff + v_ph + v_abday + v_pl +
+                       v_co + v_sld + v_cld ) - ( v_GLD + V_spl + v_mld + v_patl ) .
+ELSE.
+  IF ls_company_code-key-company_code = '1000'.
+    IF lv_persg <> '6'.
+      v_prday = v_9d09 - ( v_woff + v_ph + v_abday + v_pl +
+                       v_co + v_sld + v_cld ) - ( v_GLD + V_spl + v_mld + v_patl ).
+    ENDIF.
+  ELSE.
+    v_prday = v_9d09 - ( v_woff + v_ph + v_abday + v_pl +
+                       v_co + v_sld + v_cld ) - ( v_GLD + V_spl + v_mld ).
+  ENDIF.
+ENDIF.
+READ TABLE hrdata-dim_employee_sgroup INTO DATA(lv_grade)
+INDEX 1.
+READ TABLE hrdata-dim_employee_group INTO DATA(lv_group)
+INDEX 1.
+IF  ( lv_grade-key-employee_sgroup = 'W3' OR lv_grade-key-employee_sgroup = 'W1')
+  AND ( lv_group-key-employee_group <> '6' ) .
+  v_paid = v_prday + v_pl + v_ph  + v_spl + v_cld +
+  v_sld + v_mld + v_gld + v_patl.
+ELSE.
+  v_paid =  v_prday + v_woff + v_pl + v_ph + v_spl + v_cld +
+  v_sld + v_mld + v_gld + v_co + v_patl.
+ENDIF.
+**********Added by Raj on 03.07.2023*******
+" add below code @ 1 april
+*v_leave = v_9d19 + v_9d21 + v_9d22 + v_9d20 + v_9d23.
+" add above code @ 1 april
+" comment on 1 st april
+*LOOP AT HRDATA-STAR_ABSENCE INTO wa_absence.
+*v_leave = v_leave + wa_absence-DEDUCTION.
+*ENDLOOP.
+" comment code @ 1st april
+*v_tot_p = v_9d03 + v_9d09 + v_9d05 + v_leave.
+*v_tot_u = v_9d02 + v_9d04 + v_9d07.
+
+ENDFORM.                      " %CO7
+
+*----------------------------------------------------------------
+*   FORM %EV1
+*   NODE %EVENT7
+*----------------------------------------------------------------
+
+FORM %EV1.
+
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_BEGIN'
+     EXPORTING  I_LINE_TYPE       = '%LTYPE1'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT3' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+
+ENDFORM.                      " %EV1
+
+*----------------------------------------------------------------
+*   FORM %EV2
+*   NODE %EVENT8
+*----------------------------------------------------------------
+
+FORM %EV2.
+
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_BEGIN'
+     EXPORTING  I_LINE_TYPE       = '%LTYPE2'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT28' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT50' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+IF ( NOT V_PRDAY IS INITIAL ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT30' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_WOFF IS INITIAL ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT35' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_PH IS INITIAL ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT34' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( V_BUKRS1 NE '7000'
+   AND NOT V_PL IS INITIAL ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT31' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( V_BUKRS1 EQ '7000'
+   AND NOT V_PL IS INITIAL ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT49' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_CLD IS INITIAL ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT37' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_GLD IS INITIAL ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT38' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_ABDAY IS INITIAL ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT32' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_CO IS INITIAL ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT33' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_SPL IS INITIAL ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT36' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_MLD IS INITIAL ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT40' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_PATL IS INITIAL ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT39' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+IF ( NOT V_PRDAY IS INITIAL ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT51' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_WOFF IS INITIAL ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT56' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_PH IS INITIAL ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT55' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_PL IS INITIAL ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT52' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_CLD IS INITIAL ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT58' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_GLD IS INITIAL ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT59' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_ABDAY IS INITIAL ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT53' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_CO IS INITIAL ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT54' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_SPL IS INITIAL ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT57' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_MLD IS INITIAL ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT61' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_PATL IS INITIAL
+   AND V_BUKRS1 NE '7000' ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT60' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+
+ENDFORM.                      " %EV2
+
+*----------------------------------------------------------------
+*   FORM %EV3
+*   NODE %EVENT9
+*----------------------------------------------------------------
+
+FORM %EV3.
+
+CLEAR %WEXIT.
+PERFORM %EV3_BODY.
+CLEAR %WEXIT.
+
+ENDFORM.                      " %EV3
+
+*----------------------------------------------------------------
+*   FORM %EV3_BODY
+*----------------------------------------------------------------
+
+FORM %EV3_BODY.
+
+
+ENDFORM.                      " %EV3_BODY
+
+*----------------------------------------------------------------
+*   FORM %CO8
+*   NODE %CODE7
+*----------------------------------------------------------------
+
+FORM %CO8.
+
+BREAK: sap_abap,aplit10.
+*READ TABLE HRDATA-DIM_FORPERIOD_ID
+* INTO DATA(WA_date) INDEX 1.
+*IF sy-subrc = 0.
+  LOOP AT hrdata-star_absence INTO DATA(wa_star_abs).
+    IF v_begda BETWEEN wa_star_abs-date_range_key-begin_date AND
+      wa_star_abs-date_range_key-end_date.
+      IF wa_star_abs-quotatype_key-pers_suba_group = '70'.
+        IF wa_star_abs-quotatype_key-quota_type = '10'
+        OR wa_star_abs-quotatype_key-quota_type = '11'.
+        v_pl_u = wa_star_abs-deduction + v_pl_u.
+        ENDIF.
+        IF wa_star_abs-quotatype_key-quota_type = '20'.
+        v_cl_u = wa_star_abs-deduction + v_cl_u.
+        ENDIF.
+        IF wa_star_abs-quotatype_key-quota_type = '30'.
+        v_sl_u = wa_star_abs-deduction + v_sl_u.
+        ENDIF.
+      ELSE.
+        IF wa_star_abs-quotatype_key-quota_type = '10'
+        OR wa_star_abs-quotatype_key-quota_type = '11'.
+        v_pl_u = wa_star_abs-deduction + v_pl_u.
+        ENDIF.
+        IF wa_star_abs-quotatype_key-quota_type = '30'.
+        v_cl_u = wa_star_abs-deduction + v_cl_u.
+        ENDIF.
+        IF wa_star_abs-quotatype_key-quota_type = '40'.
+        v_gl_u = wa_star_abs-deduction + v_gl_u.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+*ENDIF.
+
+ENDFORM.                      " %CO8
+
+*----------------------------------------------------------------
+*   FORM %EV4
+*   NODE %EVENT10
+*----------------------------------------------------------------
+
+FORM %EV4.
+
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_BEGIN'
+     EXPORTING  I_LINE_TYPE       = '%LTYPE1'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT27' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+
+ENDFORM.                      " %EV4
+
+*----------------------------------------------------------------
+*   FORM %EV5
+*   NODE %EVENT11
+*----------------------------------------------------------------
+
+FORM %EV5.
+
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_BEGIN'
+     EXPORTING  I_LINE_TYPE       = '%LTYPE2'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+IF ( V_BUKRS1 EQ '7000'
+   AND NOT V_SL_U IS INITIAL ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT89' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_PL_U IS INITIAL
+   AND V_BUKRS1 EQ '7000' ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT47' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_PL_U IS INITIAL
+   AND V_BUKRS1 NE '7000' ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT41' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_CL_U IS INITIAL ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT42' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_GL_U IS INITIAL
+   AND V_BUKRS1 NE '7000' ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT43' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+IF ( NOT V_SL_U IS INITIAL
+   AND V_BUKRS1 EQ '7000' ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT90' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_PL_U IS INITIAL ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT62' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_CL_U IS INITIAL ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT63' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_GL_U IS INITIAL
+   AND V_BUKRS1 NE '7000' ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT64' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+
+ENDFORM.                      " %EV5
+
+*----------------------------------------------------------------
+*   FORM %EV6
+*   NODE %EVENT12
+*----------------------------------------------------------------
+
+FORM %EV6.
+
+CLEAR %WEXIT.
+PERFORM %EV6_BODY.
+CLEAR %WEXIT.
+
+ENDFORM.                      " %EV6
+
+*----------------------------------------------------------------
+*   FORM %EV6_BODY
+*----------------------------------------------------------------
+
+FORM %EV6_BODY.
+
+
+ENDFORM.                      " %EV6_BODY
+
+*----------------------------------------------------------------
+*   FORM %CO9
+*   NODE %CODE8
+*----------------------------------------------------------------
+
+FORM %CO9.
+
+BREAK: sap_abap,aplit10.
+*READ TABLE HRDATA-DIM_FORPERIOD_ID
+* INTO DATA(WA_date) INDEX 1.
+*IF sy-subrc = 0.
+  LOOP AT hrdata-star_absence INTO DATA(wa_star_abs).
+    IF v_begda BETWEEN wa_star_abs-date_range_key-begin_date AND
+      wa_star_abs-date_range_key-end_date.
+      IF wa_star_abs-quotatype_key-pers_suba_group = '70'.
+        IF wa_star_abs-quotatype_key-quota_type = '10'
+        OR wa_star_abs-quotatype_key-quota_type = '11'.
+        v_pl_b = wa_star_abs-rest + v_pl_b.
+       ENDIF.
+       IF wa_star_abs-quotatype_key-quota_type = '20'.
+        v_cl_b = wa_star_abs-rest + v_cl_b.
+       ENDIF.
+       IF wa_star_abs-quotatype_key-quota_type = '30'.
+        v_sl_b = wa_star_abs-rest + v_sl_b.
+       ENDIF.
+      ELSE.
+        IF wa_star_abs-quotatype_key-quota_type = '10'
+        OR wa_star_abs-quotatype_key-quota_type = '11'.
+        v_pl_b = wa_star_abs-rest + v_pl_b.
+        ENDIF.
+        IF wa_star_abs-quotatype_key-quota_type = '30'.
+        v_cl_b = wa_star_abs-rest + v_cl_b.
+        ENDIF.
+        IF wa_star_abs-quotatype_key-quota_type = '40'.
+        v_gl_b = wa_star_abs-rest + v_gl_b.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+*ENDIF.
+
+ENDFORM.                      " %CO9
+
+*----------------------------------------------------------------
+*   FORM %EV7
+*   NODE %EVENT13
+*----------------------------------------------------------------
+
+FORM %EV7.
+
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_BEGIN'
+     EXPORTING  I_LINE_TYPE       = '%LTYPE1'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT26' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+
+ENDFORM.                      " %EV7
+
+*----------------------------------------------------------------
+*   FORM %EV8
+*   NODE %EVENT14
+*----------------------------------------------------------------
+
+FORM %EV8.
+
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_BEGIN'
+     EXPORTING  I_LINE_TYPE       = '%LTYPE2'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+IF ( NOT V_SL_B IS INITIAL
+   AND V_BUKRS1 EQ '7000' ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT91' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_PL_B IS INITIAL
+   AND V_BUKRS1 EQ '7000' ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT88' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_PL_B IS INITIAL
+   AND V_BUKRS1 NE '7000' ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT44' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_CL_B IS INITIAL ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT45' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_GL_B IS INITIAL
+   AND NOT V_BUKRS1 IS INITIAL ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT46' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+IF ( NOT V_SL_B IS INITIAL
+   AND V_BUKRS1 EQ '7000' ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT92' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_PL_B IS INITIAL ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT65' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_CL_B IS INITIAL ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT66' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_GL_B IS INITIAL
+   AND V_BUKRS1 NE '7000' ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT67' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+
+ENDFORM.                      " %EV8
+
+*----------------------------------------------------------------
+*   FORM %EV9
+*   NODE %EVENT15
+*----------------------------------------------------------------
+
+FORM %EV9.
+
+CLEAR %WEXIT.
+PERFORM %EV9_BODY.
+CLEAR %WEXIT.
+
+ENDFORM.                      " %EV9
+
+*----------------------------------------------------------------
+*   FORM %EV9_BODY
+*----------------------------------------------------------------
+
+FORM %EV9_BODY.
+
+
+ENDFORM.                      " %EV9_BODY
+
+*----------------------------------------------------------------
+*   FORM %CO10
+*   NODE %CODE11
+*----------------------------------------------------------------
+
+FORM %CO10.
+
+DATA: lv_begda TYPE sy-datum,
+      lv_endda TYPE sy-datum,
+      lv_begda_c TYPE sy-datum,
+      lv_endda_c TYPE sy-datum,
+      lv_prev_date TYPE sy-datum,
+      lv_year     TYPE pabrj,
+      lv_mon      TYPE pabrp,
+      lv_period TYPE iperi.
+BREAK: sap_abap,aplit10.
+LOOP AT hrdata-dim_forperiod_id INTO DATA(wa_dim_forperiod_id).
+IF wa_payresult-inperiod_key-period NE wa_dim_forperiod_id-key-period.
+  CALL FUNCTION 'OIL_LAST_DAY_OF_PREVIOUS_MONTH'
+  EXPORTING
+    i_date_old       = wa_payresult-inperiod_key-begin_date
+ IMPORTING
+   e_date_new       = lv_prev_date.
+  CALL FUNCTION 'HR_PAYROLL_PERIODS_GET'
+  EXPORTING
+    get_begda = lv_prev_date
+    GET_PERMO = '20'
+  importing
+    get_pabrj = lv_year
+    get_pabrp = lv_mon
+ EXCEPTIONS
+   no_period_found       = 1
+   no_valid_permo        = 2
+   OTHERS    = 3
+  .
+IF sy-subrc <> 0.
+* Implement suitable error handling here
+ENDIF.
+CONCATENATE lv_year lv_mon INTO lv_period.
+*  lv_period = wa_payresult-inperiod_key-period - 1.
+  IF wa_dim_forperiod_id-key-period = lv_period.
+    LOOP AT hrdata-star_pay_result INTO DATA(wa_pl_p)
+                                   WHERE wagetype_key-wagetype = '1PLD'
+                                    AND  result_retro_key = 'X'.
+      v_pl_p = wa_pl_p-pay_amount + v_pl_p.
+    ENDLOOP.
+    LOOP AT hrdata-star_pay_result INTO DATA(wa_cl_p)
+                                   WHERE wagetype_key-wagetype = '1CLD'
+                                    AND  result_retro_key = 'X'.
+      v_cl_p = wa_cl_p-pay_amount + v_cl_p.
+    ENDLOOP.
+    LOOP AT hrdata-star_pay_result INTO DATA(wa_ab_p)
+                                   WHERE wagetype_key-wagetype = '1ABD'
+                                    AND  result_retro_key = 'X'.
+      v_ab_p = wa_ab_p-pay_amount + v_ab_p.
+    ENDLOOP.
+    LOOP AT hrdata-star_pay_result INTO DATA(wa_wof_p)
+                                   WHERE wagetype_key-wagetype = '1WOF'
+                                    AND  result_retro_key = 'X'.
+      v_wo_p = wa_wof_p-pay_amount + v_wo_p.
+    ENDLOOP.
+    LOOP AT hrdata-star_pay_result INTO DATA(wa_gl_p)
+                                   WHERE wagetype_key-wagetype = '1GLD'
+                                    AND  result_retro_key = 'X'.
+      v_gl_p = wa_gl_p-pay_amount + v_gl_p.
+    ENDLOOP.
+    LOOP AT hrdata-star_pay_result INTO DATA(wa_spl_p)
+                                   WHERE wagetype_key-wagetype = '1SPL'
+                                    AND  result_retro_key = 'X'.
+      v_spl_p = wa_spl_p-pay_amount + v_spl_p.
+    ENDLOOP.
+    LOOP AT hrdata-star_pay_result INTO DATA(wa_co_p)
+                                   WHERE wagetype_key-wagetype = '1COD'
+                                    AND  result_retro_key = 'X'.
+      v_co_p = wa_co_p-pay_amount + v_co_p.
+    ENDLOOP.
+*    lv_begda = wa_dim_forperiod_id-begda.
+*    lv_begda_c = wa_payresult-inperiod_key-begin_date.
+*    lv_endda_c = wa_payresult-inperiod_key-end_date.
+*    lv_endda = wa_dim_forperiod_id-endda.
+*
+*SELECT * FROM pa2001 INTO TABLE @DATA(it_pa2001)
+*                        WHERE pernr = @wa_employee-key-personnel_number
+*                          AND begda BETWEEN @lv_begda AND @lv_endda
+*                          AND endda BETWEEN @lv_begda AND @lv_endda
+*                          AND aedtm BETWEEN @lv_begda_c AND @lv_endda_c.
+*  IF it_pa2001 IS NOT INITIAL.
+*    LOOP AT it_pa2001 INTO DATA(wa_pa2001).
+*      IF v_bukrs1 = '7000'.
+*        IF wa_pa2001-subty = 'EL'.
+*        v_pl_p = wa_pa2001-abrtg + v_pl_p.
+*      ELSEIF wa_pa2001-subty = 'HE'.
+*        IF wa_pa2001-abrtg IS NOT INITIAL.
+*          v_pl_p = wa_pa2001-abrtg + v_pl_p.
+*        ELSE.
+*          v_pl_p = v_pl_p + ( 1 / 2 ).
+*        ENDIF.
+*      ELSEIF wa_pa2001-subty = 'CL'.
+*        v_cl_p = wa_pa2001-abrtg + v_cl_p.
+*      ELSEIF wa_pa2001-subty = 'HCL'.
+*        IF wa_pa2001-abrtg IS NOT INITIAL.
+*          v_cl_p = wa_pa2001-abrtg + v_cl_p.
+*        ELSE.
+*          v_cl_p = v_cl_p + ( 1 / 2 ).
+*        ENDIF.
+*      ELSEIF wa_pa2001-subty = 'A'.
+*        v_ab_p = wa_pa2001-abwtg + v_ab_p.
+*      ELSEIF wa_pa2001-subty = 'HD'.
+*        IF wa_pa2001-abrtg IS NOT INITIAL.
+*          v_ab_p = wa_pa2001-abrtg + v_ab_p.
+*        ELSE.
+*          v_ab_p = v_ab_p + ( 1 / 2 ).
+*        ENDIF.
+*      ELSEIF wa_pa2001-subty = 'WO'.
+*        v_wo_p = wa_pa2001-abwtg + v_wo_p.
+*      ELSEIF wa_pa2001-subty = 'SPL'.
+*        v_spl_p = wa_pa2001-abwtg + v_spl_p.
+*      ELSEIF wa_pa2001-subty = 'CO'.
+*        v_co_p = wa_pa2001-abrtg + v_co_p.
+*      ELSEIF wa_pa2001-subty = 'HC'.
+*        IF wa_pa2001-abrtg IS NOT INITIAL.
+*          v_co_p = wa_pa2001-abrtg + v_co_p.
+*        ELSE.
+*          v_co_p = v_co_p + ( 1 / 2 ).
+*        ENDIF.
+*      ENDIF.
+*      ELSE.
+*        IF wa_pa2001-subty = 'PL'.
+*         v_pl_p = wa_pa2001-abrtg + v_pl_p.
+*        ELSEIF wa_pa2001-subty = 'HP'.
+*         IF wa_pa2001-abrtg IS NOT INITIAL.
+*          v_pl_p = wa_pa2001-abrtg + v_pl_p.
+*         ELSE.
+*          v_pl_p = v_pl_p + ( 1 / 2 ).
+*         ENDIF.
+*        ELSEIF wa_pa2001-subty = 'CL'.
+*         v_cl_p = wa_pa2001-abrtg + v_cl_p.
+*        ELSEIF wa_pa2001-subty = 'AHCL'.
+*         IF wa_pa2001-abrtg IS NOT INITIAL.
+*          v_cl_p = wa_pa2001-abrtg + v_cl_p.
+*         ELSE.
+*          v_cl_p = v_cl_p + ( 1 / 2 ).
+*        ENDIF.
+*       ELSEIF wa_pa2001-subty = 'A'.
+*        v_ab_p = wa_pa2001-abwtg + v_ab_p.
+*       ELSEIF wa_pa2001-subty = 'HD'.
+*        IF wa_pa2001-abrtg IS NOT INITIAL.
+*          v_ab_p = wa_pa2001-abrtg + v_ab_p.
+*        ELSE.
+*          v_ab_p = v_ab_p + ( 1 / 2 ).
+*        ENDIF.
+*       ELSEIF wa_pa2001-subty = 'WO'.
+*        v_wo_p = wa_pa2001-abwtg + v_wo_p.
+*       ELSEIF wa_pa2001-subty = 'GL'.
+*        v_gl_p = wa_pa2001-abrtg + v_gl_p.
+*       ELSEIF wa_pa2001-subty = 'AHGL'.
+*        IF wa_pa2001-abrtg IS NOT INITIAL.
+*          v_gl_p = wa_pa2001-abrtg + v_gl_p.
+*        ELSE.
+*          v_gl_p = v_gl_p + ( 1 / 2 ).
+*        ENDIF.
+*       ELSEIF wa_pa2001-subty = 'SPL'.
+*        v_spl_p = wa_pa2001-abwtg + v_spl_p.
+*       ELSEIF wa_pa2001-subty = 'CO'.
+*        v_co_p = wa_pa2001-abrtg + v_co_p.
+*       ELSEIF wa_pa2001-subty = 'HC'.
+*        IF wa_pa2001-abrtg IS NOT INITIAL.
+*          v_co_p = wa_pa2001-abrtg + v_co_p.
+*        ELSE.
+*          v_co_p = v_co_p + ( 1 / 2 ).
+*        ENDIF.
+*      ENDIF.
+*      CLEAR wa_pa2001.
+     ENDIF.
+*    ENDLOOP.
+*   ENDIF.
+  ENDIF.
+* ENDIF.
+ENDLOOP.
+
+ENDFORM.                      " %CO10
+
+*----------------------------------------------------------------
+*   FORM %CO11
+*   NODE %CODE4
+*----------------------------------------------------------------
+
+FORM %CO11.
+
+TYPES: BEGIN OF ty_other,
+        other TYPE lgtxt,
+        amt   TYPE maxbt,
+       END OF ty_other.
+TYPES: BEGIN OF ty_form16,
+        form_sum TYPE lgtxt,
+        amt      TYPE maxbt,
+       END OF ty_form16.
+TYPES: BEGIN OF ty_exem,
+        exem_inc TYPE lgtxt,
+        amt      TYPE maxbt,
+       END OF ty_exem.
+TYPES: BEGIN OF ty_invest,
+        invest TYPE pin_itext,
+        amt    TYPE pin_ainvt,
+       END OF ty_invest.
+TYPES: BEGIN OF ty_sec,
+        sbsec TYPE pin_sbsec,
+        sbdiv TYPE pin_sbdiv,
+        amt   TYPE pin_acntr,
+       END OF ty_sec.
+TYPES: BEGIN OF ty_sec_86,
+        inv_code TYPE pin_icode,
+        amt   TYPE pin_pinvt,
+       END OF ty_sec_86.
+DATA: it_other TYPE TABLE OF ty_other,
+      wa_other TYPE ty_other.
+DATA: it_form16 TYPE TABLE OF ty_form16,
+      wa_form16 TYPE ty_form16,
+      wa_form16_t TYPE ty_form16.
+DATA: it_exem TYPE TABLE OF ty_exem,
+      wa_exem TYPE ty_exem.
+DATA: it_invest TYPE TABLE OF ty_invest,
+      wa_invest TYPE ty_invest.
+DATA: it_sec TYPE TABLE OF ty_sec,
+      wa_sec TYPE ty_sec.
+DATA: it_sec_86 TYPE TABLE OF ty_sec_86,
+      wa_sec_86 TYPE ty_sec_86.
+DATA:it_text LIKE TABLE OF t512t WITH HEADER LINE.
+DATA: lv_cnt_f TYPE i,
+      lv_cnt_i TYPE i,
+      lv_cnt_e TYPE i.
+DATA it_val TYPE TABLE OF dd07v.
+DATA lv_reg TYPE char10.
+DATA : v_mon(2) TYPE n,
+       v_date(10) ,
+       v_ltx LIKE t247-ltx,
+       v_ktx LIKE t247-ktx.
+BREAK: sap_abap,aplit10.
+v_mon = v_begda+4(2).
+SELECT SINGLE ktx
+              ltx
+              INTO (v_ktx , v_ltx)
+              FROM t247
+              WHERE spras = sy-langu AND
+                    mnr EQ v_mon."v_date+3(2).
+gv_month = v_ltx.
+gv_year = v_begda+0(4).
+SELECT * FROM t512t INTO TABLE it_text WHERE sprsl EQ 'EN'
+AND molga EQ '40'.
+READ TABLE hrdata-dim_assignment INTO DATA(v_pernr) INDEX 1.
+IF sy-subrc = 0.
+  DATA(lv_pernr) = v_pernr-key-peras.
+ENDIF.
+DATA: lv_gjhar TYPE gjahr,
+      lv_first_date TYPE sy-datum,
+      lv_end_date TYPE sy-datum.
+CALL FUNCTION 'DATE_TO_PERIOD_CONVERT'
+  EXPORTING
+    i_date               = v_begda
+   I_MONMIT              = 00
+    i_periv              = 'V3'
+ IMPORTING
+   E_GJAHR              = lv_gjhar
+ EXCEPTIONS
+   INPUT_FALSE          = 1
+   T009_NOTFOUND        = 2
+   T009B_NOTFOUND       = 3
+   OTHERS               = 4
+          .
+IF sy-subrc <> 0.
+* Implement suitable error handling here
+ENDIF.
+CALL FUNCTION 'FIRST_AND_LAST_DAY_IN_YEAR_GET'
+  EXPORTING
+    i_gjahr              = lv_gjhar
+    i_periv              = 'V3'
+ IMPORTING
+   E_FIRST_DAY          = lv_first_date
+   E_LAST_DAY           = lv_end_date
+ EXCEPTIONS
+   INPUT_FALSE          = 1
+   T009_NOTFOUND        = 2
+   T009B_NOTFOUND       = 3
+   OTHERS               = 4
+          .
+IF sy-subrc <> 0.
+* Implement suitable error handling here
+ENDIF.
+SELECT SINGLE * FROM pa0585 INTO @DATA(wa_pa0585) WHERE pernr = @lv_pernr
+                                             AND begda = @lv_first_date
+                                             AND endda = @lv_end_date.
+SELECT SINGLE * FROM pa0586 INTO @DATA(wa_pa0586) WHERE pernr = @lv_pernr
+                                                    AND begda = @lv_first_date
+                                                    AND endda = @lv_end_date.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn01 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs01.
+  wa_sec-sbdiv = wa_pa0585-sbd01.
+  wa_sec-amt = wa_pa0585-pcn01.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn01 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs01.
+  wa_sec-sbdiv = wa_pa0585-sbd01.
+  wa_sec-amt = wa_pa0585-acn01.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn02 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs02.
+  wa_sec-sbdiv = wa_pa0585-sbd02.
+  wa_sec-amt = wa_pa0585-pcn02.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn02 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs02.
+  wa_sec-sbdiv = wa_pa0585-sbd02.
+  wa_sec-amt = wa_pa0585-acn02.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn03 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs03.
+  wa_sec-sbdiv = wa_pa0585-sbd03.
+  wa_sec-amt = wa_pa0585-pcn03.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn03 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs03.
+  wa_sec-sbdiv = wa_pa0585-sbd03.
+  wa_sec-amt = wa_pa0585-acn03.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn04 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs04.
+  wa_sec-sbdiv = wa_pa0585-sbd04.
+  wa_sec-amt = wa_pa0585-pcn04.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn04 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs04.
+  wa_sec-sbdiv = wa_pa0585-sbd04.
+  wa_sec-amt = wa_pa0585-acn04.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn05 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs05.
+  wa_sec-sbdiv = wa_pa0585-sbd05.
+  wa_sec-amt = wa_pa0585-pcn05.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn05 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs05.
+  wa_sec-sbdiv = wa_pa0585-sbd05.
+  wa_sec-amt = wa_pa0585-acn05.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn06 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs06.
+  wa_sec-sbdiv = wa_pa0585-sbd06.
+  wa_sec-amt = wa_pa0585-pcn06.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn06 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs06.
+  wa_sec-sbdiv = wa_pa0585-sbd06.
+  wa_sec-amt = wa_pa0585-acn06.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn07 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs07.
+  wa_sec-sbdiv = wa_pa0585-sbd07.
+  wa_sec-amt = wa_pa0585-pcn07.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn07 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs07.
+  wa_sec-sbdiv = wa_pa0585-sbd07.
+  wa_sec-amt = wa_pa0585-acn07.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn08 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs08.
+  wa_sec-sbdiv = wa_pa0585-sbd08.
+  wa_sec-amt = wa_pa0585-pcn08.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn08 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs08.
+  wa_sec-sbdiv = wa_pa0585-sbd08.
+  wa_sec-amt = wa_pa0585-acn08.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn09 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs09.
+  wa_sec-sbdiv = wa_pa0585-sbd09.
+  wa_sec-amt = wa_pa0585-pcn09.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn09 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs09.
+  wa_sec-sbdiv = wa_pa0585-sbd09.
+  wa_sec-amt = wa_pa0585-acn09.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn10 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs10.
+  wa_sec-sbdiv = wa_pa0585-sbd10.
+  wa_sec-amt = wa_pa0585-pcn10.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn10 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs10.
+  wa_sec-sbdiv = wa_pa0585-sbd10.
+  wa_sec-amt = wa_pa0585-acn10.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn11 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs11.
+  wa_sec-sbdiv = wa_pa0585-sbd11.
+  wa_sec-amt = wa_pa0585-pcn11.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn11 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs11.
+  wa_sec-sbdiv = wa_pa0585-sbd11.
+  wa_sec-amt = wa_pa0585-acn11.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn12 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs12.
+  wa_sec-sbdiv = wa_pa0585-sbd12.
+  wa_sec-amt = wa_pa0585-pcn12.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn12 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs12.
+  wa_sec-sbdiv = wa_pa0585-sbd12.
+  wa_sec-amt = wa_pa0585-acn12.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn13 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs13.
+  wa_sec-sbdiv = wa_pa0585-sbd13.
+  wa_sec-amt = wa_pa0585-pcn13.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn13 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs13.
+  wa_sec-sbdiv = wa_pa0585-sbd13.
+  wa_sec-amt = wa_pa0585-acn13.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn14 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs14.
+  wa_sec-sbdiv = wa_pa0585-sbd14.
+  wa_sec-amt = wa_pa0585-pcn14.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn14 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs14.
+  wa_sec-sbdiv = wa_pa0585-sbd14.
+  wa_sec-amt = wa_pa0585-acn14.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn15 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs15.
+  wa_sec-sbdiv = wa_pa0585-sbd15.
+  wa_sec-amt = wa_pa0585-pcn15.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn15 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs15.
+  wa_sec-sbdiv = wa_pa0585-sbd15.
+  wa_sec-amt = wa_pa0585-acn15.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn16 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs16.
+  wa_sec-sbdiv = wa_pa0585-sbd16.
+  wa_sec-amt = wa_pa0585-pcn16.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn16 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs16.
+  wa_sec-sbdiv = wa_pa0585-sbd16.
+  wa_sec-amt = wa_pa0585-acn16.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn17 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs17.
+  wa_sec-sbdiv = wa_pa0585-sbd17.
+  wa_sec-amt = wa_pa0585-pcn17.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn17 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs17.
+  wa_sec-sbdiv = wa_pa0585-sbd17.
+  wa_sec-amt = wa_pa0585-acn17.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn18 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs18.
+  wa_sec-sbdiv = wa_pa0585-sbd18.
+  wa_sec-amt = wa_pa0585-pcn18.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn18 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs18.
+  wa_sec-sbdiv = wa_pa0585-sbd18.
+  wa_sec-amt = wa_pa0585-acn18.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn19 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs19.
+  wa_sec-sbdiv = wa_pa0585-sbd19.
+  wa_sec-amt = wa_pa0585-pcn19.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn19 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs19.
+  wa_sec-sbdiv = wa_pa0585-sbd19.
+  wa_sec-amt = wa_pa0585-acn19.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn20 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs20.
+  wa_sec-sbdiv = wa_pa0585-sbd20.
+  wa_sec-amt = wa_pa0585-pcn20.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn20 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs20.
+  wa_sec-sbdiv = wa_pa0585-sbd20.
+  wa_sec-amt = wa_pa0585-acn20.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn21 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs21.
+  wa_sec-sbdiv = wa_pa0585-sbd21.
+  wa_sec-amt = wa_pa0585-pcn21.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn21 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs21.
+  wa_sec-sbdiv = wa_pa0585-sbd21.
+  wa_sec-amt = wa_pa0585-acn21.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn22 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs22.
+  wa_sec-sbdiv = wa_pa0585-sbd22.
+  wa_sec-amt = wa_pa0585-pcn22.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn22 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs22.
+  wa_sec-sbdiv = wa_pa0585-sbd22.
+  wa_sec-amt = wa_pa0585-acn22.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn23 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs23.
+  wa_sec-sbdiv = wa_pa0585-sbd23.
+  wa_sec-amt = wa_pa0585-pcn23.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn23 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs23.
+  wa_sec-sbdiv = wa_pa0585-sbd23.
+  wa_sec-amt = wa_pa0585-acn23.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn24 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs24.
+  wa_sec-sbdiv = wa_pa0585-sbd24.
+  wa_sec-amt = wa_pa0585-pcn24.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn24 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs24.
+  wa_sec-sbdiv = wa_pa0585-sbd24.
+  wa_sec-amt = wa_pa0585-acn24.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn25 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs25.
+  wa_sec-sbdiv = wa_pa0585-sbd25.
+  wa_sec-amt = wa_pa0585-pcn25.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn25 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs25.
+  wa_sec-sbdiv = wa_pa0585-sbd25.
+  wa_sec-amt = wa_pa0585-acn25.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn26 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs26.
+  wa_sec-sbdiv = wa_pa0585-sbd26.
+  wa_sec-amt = wa_pa0585-pcn26.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn26 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs26.
+  wa_sec-sbdiv = wa_pa0585-sbd26.
+  wa_sec-amt = wa_pa0585-acn26.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn27 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs27.
+  wa_sec-sbdiv = wa_pa0585-sbd27.
+  wa_sec-amt = wa_pa0585-pcn27.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn27 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs27.
+  wa_sec-sbdiv = wa_pa0585-sbd27.
+  wa_sec-amt = wa_pa0585-acn27.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn28 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs28.
+  wa_sec-sbdiv = wa_pa0585-sbd28.
+  wa_sec-amt = wa_pa0585-pcn28.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn28 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs28.
+  wa_sec-sbdiv = wa_pa0585-sbd28.
+  wa_sec-amt = wa_pa0585-acn28.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn29 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs29.
+  wa_sec-sbdiv = wa_pa0585-sbd29.
+  wa_sec-amt = wa_pa0585-pcn29.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn29 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs29.
+  wa_sec-sbdiv = wa_pa0585-sbd29.
+  wa_sec-amt = wa_pa0585-acn29.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn30 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs30.
+  wa_sec-sbdiv = wa_pa0585-sbd30.
+  wa_sec-amt = wa_pa0585-pcn30.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn30 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs30.
+  wa_sec-sbdiv = wa_pa0585-sbd30.
+  wa_sec-amt = wa_pa0585-acn30.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn31 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs31.
+  wa_sec-sbdiv = wa_pa0585-sbd31.
+  wa_sec-amt = wa_pa0585-pcn31.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn31 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs31.
+  wa_sec-sbdiv = wa_pa0585-sbd31.
+  wa_sec-amt = wa_pa0585-acn31.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn32 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs32.
+  wa_sec-sbdiv = wa_pa0585-sbd32.
+  wa_sec-amt = wa_pa0585-pcn32.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn32 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs32.
+  wa_sec-sbdiv = wa_pa0585-sbd32.
+  wa_sec-amt = wa_pa0585-acn32.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn33 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs33.
+  wa_sec-sbdiv = wa_pa0585-sbd33.
+  wa_sec-amt = wa_pa0585-pcn33.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn33 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs33.
+  wa_sec-sbdiv = wa_pa0585-sbd33.
+  wa_sec-amt = wa_pa0585-acn33.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn34 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs34.
+  wa_sec-sbdiv = wa_pa0585-sbd34.
+  wa_sec-amt = wa_pa0585-pcn34.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn34 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs34.
+  wa_sec-sbdiv = wa_pa0585-sbd34.
+  wa_sec-amt = wa_pa0585-acn34.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn35 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs35.
+  wa_sec-sbdiv = wa_pa0585-sbd35.
+  wa_sec-amt = wa_pa0585-pcn35.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn35 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs35.
+  wa_sec-sbdiv = wa_pa0585-sbd35.
+  wa_sec-amt = wa_pa0585-acn35.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn36 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs36.
+  wa_sec-sbdiv = wa_pa0585-sbd36.
+  wa_sec-amt = wa_pa0585-pcn36.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn36 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs36.
+  wa_sec-sbdiv = wa_pa0585-sbd36.
+  wa_sec-amt = wa_pa0585-acn36.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn37 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs37.
+  wa_sec-sbdiv = wa_pa0585-sbd37.
+  wa_sec-amt = wa_pa0585-pcn37.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn37 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs37.
+  wa_sec-sbdiv = wa_pa0585-sbd37.
+  wa_sec-amt = wa_pa0585-acn37.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn38 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs38.
+  wa_sec-sbdiv = wa_pa0585-sbd38.
+  wa_sec-amt = wa_pa0585-pcn38.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn38 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs38.
+  wa_sec-sbdiv = wa_pa0585-sbd38.
+  wa_sec-amt = wa_pa0585-acn38.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn39 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs39.
+  wa_sec-sbdiv = wa_pa0585-sbd39.
+  wa_sec-amt = wa_pa0585-pcn39.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn39 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs39.
+  wa_sec-sbdiv = wa_pa0585-sbd39.
+  wa_sec-amt = wa_pa0585-acn39.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+IF wa_pa0585-acopc = 'P'.
+ IF wa_pa0585-pcn40 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs40.
+  wa_sec-sbdiv = wa_pa0585-sbd40.
+  wa_sec-amt = wa_pa0585-pcn40.
+ ENDIF.
+ELSEIF wa_pa0585-acopc = 'A'.
+ IF wa_pa0585-acn40 IS NOT INITIAL.
+  wa_sec-sbsec = wa_pa0585-sbs40.
+  wa_sec-sbdiv = wa_pa0585-sbd40.
+  wa_sec-amt = wa_pa0585-acn40.
+ ENDIF.
+ENDIF.
+APPEND wa_sec TO it_sec.
+CLEAR wa_sec.
+DELETE it_sec WHERE sbsec IS INITIAL.
+IF it_sec IS NOT INITIAL.
+  SELECT * FROM zhr_invest_det INTO TABLE @DATA(it_scod_text)
+  FOR ALL ENTRIES IN @it_sec WHERE icode = @it_sec-sbsec
+                               AND subdiv = @it_sec-sbdiv.
+ENDIF.
+IF wa_pa0586-acopc = 'P'.
+IF wa_pa0586-pin01 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc01.
+  wa_sec_86-amt = wa_pa0586-pin01.
+ENDIF.
+ELSEIF wa_pa0586-acopc = 'A'.
+  IF wa_pa0586-ain01 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc01.
+  wa_sec_86-amt = wa_pa0586-ain01.
+ ENDIF.
+ENDIF.
+APPEND wa_sec_86 TO it_sec_86.
+CLEAR wa_sec_86.
+IF wa_pa0586-acopc = 'P'.
+IF wa_pa0586-pin02 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc02.
+  wa_sec_86-amt = wa_pa0586-pin02.
+ENDIF.
+ELSEIF wa_pa0586-acopc = 'A'.
+ IF wa_pa0586-ain02 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc02.
+  wa_sec_86-amt = wa_pa0586-ain02.
+ ENDIF.
+ENDIF.
+APPEND wa_sec_86 TO it_sec_86.
+CLEAR wa_sec_86.
+IF wa_pa0586-acopc = 'P'.
+IF wa_pa0586-pin03 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc03.
+  wa_sec_86-amt = wa_pa0586-pin03.
+ENDIF.
+ELSEIF wa_pa0586-acopc = 'A'.
+  IF wa_pa0586-ain03 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc03.
+  wa_sec_86-amt = wa_pa0586-ain03.
+ ENDIF.
+ENDIF.
+APPEND wa_sec_86 TO it_sec_86.
+CLEAR wa_sec_86.
+IF wa_pa0586-acopc = 'P'.
+IF wa_pa0586-pin04 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc04.
+  wa_sec_86-amt = wa_pa0586-pin04.
+ENDIF.
+ELSEIF wa_pa0586-acopc = 'A'.
+  IF wa_pa0586-ain04 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc04.
+  wa_sec_86-amt = wa_pa0586-ain04.
+ ENDIF.
+ENDIF.
+APPEND wa_sec_86 TO it_sec_86.
+CLEAR wa_sec_86.
+IF wa_pa0586-acopc = 'P'.
+IF wa_pa0586-pin05 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc05.
+  wa_sec_86-amt = wa_pa0586-pin05.
+ENDIF.
+ELSEIF wa_pa0586-acopc = 'A'.
+  IF wa_pa0586-ain05 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc05.
+  wa_sec_86-amt = wa_pa0586-ain05.
+ ENDIF.
+ENDIF.
+APPEND wa_sec_86 TO it_sec_86.
+CLEAR wa_sec_86.
+IF wa_pa0586-acopc = 'P'.
+IF wa_pa0586-pin06 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc06.
+  wa_sec_86-amt = wa_pa0586-pin06.
+ENDIF.
+ELSEIF wa_pa0586-acopc = 'A'.
+  IF wa_pa0586-ain06 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc06.
+  wa_sec_86-amt = wa_pa0586-ain06.
+ ENDIF.
+ENDIF.
+APPEND wa_sec_86 TO it_sec_86.
+CLEAR wa_sec_86.
+IF wa_pa0586-acopc = 'P'.
+IF wa_pa0586-pin07 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc07.
+  wa_sec_86-amt = wa_pa0586-pin07.
+ENDIF.
+ELSEIF wa_pa0586-acopc = 'A'.
+  IF wa_pa0586-ain07 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc07.
+  wa_sec_86-amt = wa_pa0586-ain07.
+ ENDIF.
+ENDIF.
+APPEND wa_sec_86 TO it_sec_86.
+CLEAR wa_sec_86.
+IF wa_pa0586-acopc = 'P'.
+IF wa_pa0586-pin08 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc08.
+  wa_sec_86-amt = wa_pa0586-pin08.
+ENDIF.
+ELSEIF wa_pa0586-acopc = 'A'.
+  IF wa_pa0586-ain08 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc08.
+  wa_sec_86-amt = wa_pa0586-ain08.
+ ENDIF.
+ENDIF.
+APPEND wa_sec_86 TO it_sec_86.
+CLEAR wa_sec_86.
+IF wa_pa0586-acopc = 'P'.
+IF wa_pa0586-pin09 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc09.
+  wa_sec_86-amt = wa_pa0586-pin09.
+ENDIF.
+ELSEIF wa_pa0586-acopc = 'A'.
+  IF wa_pa0586-ain09 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc09.
+  wa_sec_86-amt = wa_pa0586-ain09.
+ ENDIF.
+ENDIF.
+APPEND wa_sec_86 TO it_sec_86.
+CLEAR wa_sec_86.
+IF wa_pa0586-acopc = 'P'.
+IF wa_pa0586-pin10 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc10.
+  wa_sec_86-amt = wa_pa0586-pin10.
+ENDIF.
+ELSEIF wa_pa0586-acopc = 'A'.
+  IF wa_pa0586-ain10 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc10.
+  wa_sec_86-amt = wa_pa0586-ain10.
+ ENDIF.
+ENDIF.
+APPEND wa_sec_86 TO it_sec_86.
+CLEAR wa_sec_86.
+IF wa_pa0586-acopc = 'P'.
+IF wa_pa0586-pin11 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc11.
+  wa_sec_86-amt = wa_pa0586-pin11.
+ENDIF.
+ELSEIF wa_pa0586-acopc = 'A'.
+  IF wa_pa0586-ain11 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc11.
+  wa_sec_86-amt = wa_pa0586-ain11.
+ ENDIF.
+ENDIF.
+APPEND wa_sec_86 TO it_sec_86.
+CLEAR wa_sec_86.
+IF wa_pa0586-acopc = 'P'.
+IF wa_pa0586-pin12 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc12.
+  wa_sec_86-amt = wa_pa0586-pin12.
+ENDIF.
+ELSEIF wa_pa0586-acopc = 'A'.
+  IF wa_pa0586-ain12 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc12.
+  wa_sec_86-amt = wa_pa0586-ain12.
+ ENDIF.
+ENDIF.
+APPEND wa_sec_86 TO it_sec_86.
+CLEAR wa_sec_86.
+IF wa_pa0586-acopc = 'P'.
+IF wa_pa0586-pin13 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc13.
+  wa_sec_86-amt = wa_pa0586-pin13.
+ENDIF.
+ELSEIF wa_pa0586-acopc = 'A'.
+  IF wa_pa0586-ain13 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc13.
+  wa_sec_86-amt = wa_pa0586-ain13.
+ ENDIF.
+ENDIF.
+APPEND wa_sec_86 TO it_sec_86.
+CLEAR wa_sec_86.
+IF wa_pa0586-acopc = 'P'.
+IF wa_pa0586-pin14 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc14.
+  wa_sec_86-amt = wa_pa0586-pin14.
+ENDIF.
+ELSEIF wa_pa0586-acopc = 'A'.
+  IF wa_pa0586-ain14 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc14.
+  wa_sec_86-amt = wa_pa0586-ain14.
+ ENDIF.
+ENDIF.
+APPEND wa_sec_86 TO it_sec_86.
+CLEAR wa_sec_86.
+IF wa_pa0586-acopc = 'P'.
+IF wa_pa0586-pin15 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc15.
+  wa_sec_86-amt = wa_pa0586-pin15.
+ENDIF.
+ELSEIF wa_pa0586-acopc = 'A'.
+ IF wa_pa0586-ain15 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc15.
+  wa_sec_86-amt = wa_pa0586-ain15.
+ ENDIF.
+ENDIF.
+APPEND wa_sec_86 TO it_sec_86.
+CLEAR wa_sec_86.
+IF wa_pa0586-acopc = 'P'.
+IF wa_pa0586-pin16 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc16.
+  wa_sec_86-amt = wa_pa0586-pin16.
+ENDIF.
+ELSEIF wa_pa0586-acopc = 'A'.
+  IF wa_pa0586-ain16 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc16.
+  wa_sec_86-amt = wa_pa0586-ain16.
+ ENDIF.
+ENDIF.
+APPEND wa_sec_86 TO it_sec_86.
+CLEAR wa_sec_86.
+IF wa_pa0586-acopc = 'P'.
+IF wa_pa0586-pin17 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc17.
+  wa_sec_86-amt = wa_pa0586-pin17.
+ENDIF.
+ELSEIF wa_pa0586-acopc = 'A'.
+ IF wa_pa0586-ain17 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc17.
+  wa_sec_86-amt = wa_pa0586-ain17.
+ ENDIF.
+ENDIF.
+APPEND wa_sec_86 TO it_sec_86.
+CLEAR wa_sec_86.
+IF wa_pa0586-acopc = 'P'.
+IF wa_pa0586-pin18 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc18.
+  wa_sec_86-amt = wa_pa0586-pin18.
+ENDIF.
+ELSEIF wa_pa0586-acopc = 'A'.
+  IF wa_pa0586-ain18 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc18.
+  wa_sec_86-amt = wa_pa0586-ain18.
+ ENDIF.
+ENDIF.
+APPEND wa_sec_86 TO it_sec_86.
+CLEAR wa_sec_86.
+IF wa_pa0586-acopc = 'P'.
+IF wa_pa0586-pin19 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc19.
+  wa_sec_86-amt = wa_pa0586-pin19.
+ENDIF.
+ELSEIF wa_pa0586-acopc = 'A'.
+  IF wa_pa0586-ain19 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc19.
+  wa_sec_86-amt = wa_pa0586-ain19.
+ ENDIF.
+ENDIF.
+APPEND wa_sec_86 TO it_sec_86.
+CLEAR wa_sec_86.
+IF wa_pa0586-acopc = 'P'.
+IF wa_pa0586-pin20 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc20.
+  wa_sec_86-amt = wa_pa0586-pin20.
+ENDIF.
+ELSEIF wa_pa0586-acopc = 'A'.
+ IF wa_pa0586-ain20 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc20.
+  wa_sec_86-amt = wa_pa0586-ain20.
+ ENDIF.
+ENDIF.
+APPEND wa_sec_86 TO it_sec_86.
+CLEAR wa_sec_86.
+IF wa_pa0586-acopc = 'P'.
+IF wa_pa0586-pin21 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc21.
+  wa_sec_86-amt = wa_pa0586-pin21.
+ENDIF.
+ELSEIF wa_pa0586-acopc = 'A'.
+  IF wa_pa0586-ain21 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc21.
+  wa_sec_86-amt = wa_pa0586-ain21.
+ ENDIF.
+ENDIF.
+APPEND wa_sec_86 TO it_sec_86.
+CLEAR wa_sec_86.
+IF wa_pa0586-acopc = 'P'.
+IF wa_pa0586-pin22 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc22.
+  wa_sec_86-amt = wa_pa0586-pin22.
+ENDIF.
+ELSEIF wa_pa0586-acopc = 'A'.
+  IF wa_pa0586-ain22 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc22.
+  wa_sec_86-amt = wa_pa0586-ain22.
+ ENDIF.
+ENDIF.
+APPEND wa_sec_86 TO it_sec_86.
+CLEAR wa_sec_86.
+IF wa_pa0586-acopc = 'P'.
+IF wa_pa0586-pin23 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc23.
+  wa_sec_86-amt = wa_pa0586-pin23.
+ENDIF.
+ELSEIF wa_pa0586-acopc = 'A'.
+ IF wa_pa0586-ain23 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc23.
+  wa_sec_86-amt = wa_pa0586-ain23.
+ ENDIF.
+ENDIF.
+APPEND wa_sec_86 TO it_sec_86.
+CLEAR wa_sec_86.
+IF wa_pa0586-acopc = 'P'.
+IF wa_pa0586-pin24 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc24.
+  wa_sec_86-amt = wa_pa0586-pin24.
+ENDIF.
+ELSEIF wa_pa0586-acopc = 'A'.
+  IF wa_pa0586-ain24 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc24.
+  wa_sec_86-amt = wa_pa0586-ain24.
+ ENDIF.
+ENDIF.
+APPEND wa_sec_86 TO it_sec_86.
+CLEAR wa_sec_86.
+IF wa_pa0586-acopc = 'P'.
+IF wa_pa0586-pin25 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc25.
+  wa_sec_86-amt = wa_pa0586-pin25.
+ENDIF.
+ELSEIF wa_pa0586-acopc = 'A'.
+  IF wa_pa0586-ain25 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc25.
+  wa_sec_86-amt = wa_pa0586-ain25.
+ ENDIF.
+ENDIF.
+APPEND wa_sec_86 TO it_sec_86.
+CLEAR wa_sec_86.
+IF wa_pa0586-acopc = 'P'.
+IF wa_pa0586-pin26 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc26.
+  wa_sec_86-amt = wa_pa0586-pin26.
+ENDIF.
+ELSEIF wa_pa0586-acopc = 'A'.
+  IF wa_pa0586-ain26 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc26.
+  wa_sec_86-amt = wa_pa0586-ain26.
+ ENDIF.
+ENDIF.
+APPEND wa_sec_86 TO it_sec_86.
+CLEAR wa_sec_86.
+IF wa_pa0586-acopc = 'P'.
+IF wa_pa0586-pin27 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc27.
+  wa_sec_86-amt = wa_pa0586-pin27.
+ENDIF.
+ELSEIF wa_pa0586-acopc = 'A'.
+  IF wa_pa0586-ain27 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc27.
+  wa_sec_86-amt = wa_pa0586-ain27.
+ ENDIF.
+ENDIF.
+APPEND wa_sec_86 TO it_sec_86.
+CLEAR wa_sec_86.
+IF wa_pa0586-acopc = 'P'.
+IF wa_pa0586-pin28 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc28.
+  wa_sec_86-amt = wa_pa0586-pin28.
+ENDIF.
+ELSEIF wa_pa0586-acopc = 'A'.
+  IF wa_pa0586-ain28 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc28.
+  wa_sec_86-amt = wa_pa0586-ain28.
+ ENDIF.
+ENDIF.
+APPEND wa_sec_86 TO it_sec_86.
+CLEAR wa_sec_86.
+IF wa_pa0586-acopc = 'P'.
+IF wa_pa0586-pin29 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc29.
+  wa_sec_86-amt = wa_pa0586-pin29.
+ENDIF.
+ELSEIF wa_pa0586-acopc = 'A'.
+  IF wa_pa0586-ain29 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc29.
+  wa_sec_86-amt = wa_pa0586-ain29.
+ ENDIF.
+ENDIF.
+APPEND wa_sec_86 TO it_sec_86.
+CLEAR wa_sec_86.
+IF wa_pa0586-acopc = 'P'.
+IF wa_pa0586-pin30 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc30.
+  wa_sec_86-amt = wa_pa0586-pin30.
+ENDIF.
+ELSEIF wa_pa0586-acopc = 'A'.
+  IF wa_pa0586-ain30 IS NOT INITIAL.
+  wa_sec_86-inv_code = wa_pa0586-itc30.
+  wa_sec_86-amt = wa_pa0586-ain30.
+ ENDIF.
+ENDIF.
+APPEND wa_sec_86 TO it_sec_86.
+CLEAR wa_sec_86.
+IF it_sec_86 IS NOT INITIAL.
+  SELECT * FROM zhr_invest_det INTO TABLE @DATA(it_inv_cod_text)
+  FOR ALL ENTRIES IN @it_sec_86 WHERE icode = @it_sec_86-inv_code
+                                  AND subdiv = ''.
+ENDIF.
+READ TABLE hrdata-star_pay_result INTO DATA(wa_tax_reg)
+              WITH KEY wagetype_key-wagetype = '/405'.
+IF sy-subrc = 0.
+  CALL FUNCTION 'GET_DOMAIN_VALUES'
+    EXPORTING
+      domname               = 'PIN_TXOPT'
+     TEXT                  = 'X'
+   TABLES
+     VALUES_TAB            = it_val
+   EXCEPTIONS
+     NO_VALUES_FOUND       = 1
+     OTHERS                = 2
+            .
+  IF sy-subrc <> 0.
+* Implement suitable error handling here
+  ENDIF.
+  lv_reg = wa_tax_reg-pay_amount.
+  CONDENSE lv_reg.
+  BREAK sap_abap.
+  READ TABLE it_val INTO DATA(wa_val) WITH KEY domvalue_l = lv_reg+0(1).
+  IF sy-subrc = 0.
+    v_tax_reg = wa_val-ddtext.
+  ENDIF.
+ENDIF.
+LOOP AT hrdata-star_pay_result INTO wa_payresult
+    WHERE evalclass02_key-wagetypegroup EQ '06'
+       "OR evalclass02_key-wagetypegroup EQ '08' )
+    AND   result_retro_key-retro = ' '.  " ADDchd
+*To get wagetype text.
+  READ TABLE it_text WITH KEY lgart = wa_payresult-wagetype_key-wagetype.
+  IF sy-subrc = 0.
+    MOVE it_text-lgtxt TO wa_other-other .
+  ENDIF.
+  wa_other-amt = wa_payresult-pay_amount.
+  APPEND wa_other TO it_other.
+  CLEAR wa_other.
+ENDLOOP.
+SELECT * FROM zhr_incoexem_det INTO TABLE @DATA(it_inco_exem).
+LOOP AT it_inco_exem INTO DATA(wa_inco_exem).
+ LOOP AT hrdata-star_pay_result INTO wa_payresult
+    WHERE evalclass02_key-wagetypegroup EQ '07'
+     AND  wagetype_key-wagetype = wa_inco_exem-wage_type
+       "OR evalclass02_key-wagetypegroup EQ '08' )
+    AND   result_retro_key-retro = ' '.  " ADDchd
+    DATA(lv_tabix) = sy-tabix.
+*    READ TABLE it_text WITH KEY lgart = wa_payresult-wagetype_key-wagetype.
+*    IF sy-subrc = 0.
+      MOVE wa_inco_exem-wage_txt TO wa_form16-form_sum.
+*    ENDIF.
+    READ TABLE hrdata-star_pay_result INTO DATA(ls_wage)
+                            INDEX lv_tabix.
+    IF ls_wage-wagetype_key-wagetype = '/130' OR
+       ls_wage-wagetype_key-wagetype = '/420' OR
+       ls_wage-wagetype_key-wagetype = '/422' OR
+       ls_wage-wagetype_key-wagetype = '/432'.
+      wa_form16-amt = wa_payresult-pay_amount * ( -1 ).
+    ELSEIF ls_wage-wagetype_key-wagetype = '/131'.
+      IF wa_payresult-pay_amount GT 0.
+        wa_form16-amt = wa_payresult-pay_amount * ( -1 ).
+      ELSE.
+        wa_form16-amt = wa_payresult-pay_amount.
+      ENDIF.
+    ELSE.
+      wa_form16-amt = wa_payresult-pay_amount.
+    ENDIF.
+    APPEND wa_form16 TO it_form16.
+    CLEAR wa_form16.
+  ENDLOOP.
+*LOOP AT it_form16 INTO wa_form16_t.
+*  IF wa_form16_t-form_sum CS 'Exemption'.
+*  IF sy-tabix NE 3.
+*  DELETE it_form16 WHERE form_sum CS 'Exemption'.
+*  INSERT wa_form16_t INTO it_form16 INDEX 3.
+*  ELSE.
+*    CLEAR wa_form16_t.
+*    CONTINUE.
+*  ENDIF.
+*  ENDIF.
+*ENDLOOP.
+**DELETE it_form16 INDEX 1.
+*INSERT wa_form16_t INTO it_form16 INDEX 3.
+ LOOP AT hrdata-star_pay_result INTO wa_payresult
+    WHERE evalclass02_key-wagetypegroup EQ '08'
+     AND  wagetype_key-wagetype = wa_inco_exem-wage_type
+       "OR evalclass02_key-wagetypegroup EQ '08' )
+    AND   result_retro_key-retro = ' '.  " ADDchd
+*To get wagetype text.
+*  READ TABLE it_text WITH KEY lgart = wa_payresult-wagetype_key-wagetype.
+*  IF sy-subrc = 0.
+    MOVE wa_inco_exem-wage_txt TO wa_exem-exem_inc .
+*  ENDIF.
+  wa_exem-amt = wa_payresult-pay_amount.
+  APPEND wa_exem TO it_exem.
+  CLEAR wa_exem.
+ ENDLOOP.
+ENDLOOP.
+LOOP AT it_sec INTO wa_sec.
+  READ TABLE it_scod_text INTO DATA(wa_scod_text) WITH KEY icode = wa_sec-sbsec
+                                                           subdiv = wa_sec-sbdiv.
+  IF sy-subrc = 0.
+    wa_invest-invest = wa_scod_text-itext.
+    wa_invest-amt = wa_sec-amt.
+    APPEND wa_invest TO it_invest.
+    CLEAR: wa_invest,wa_scod_text.
+  ENDIF.
+ENDLOOP.
+LOOP AT it_sec_86 INTO wa_sec_86.
+  READ TABLE it_inv_cod_text INTO DATA(wa_inv_cod_text) WITH KEY icode = wa_sec_86-inv_code
+                                                                 subdiv = ''.
+  IF sy-subrc = 0.
+    wa_invest-invest = wa_inv_cod_text-itext.
+    wa_invest-amt = wa_sec_86-amt.
+    APPEND wa_invest TO it_invest.
+    CLEAR: wa_invest,wa_inv_cod_text.
+  ENDIF.
+ENDLOOP.
+READ TABLE hrdata-star_pay_result INTO DATA(wa_pf_ann)
+              WITH KEY wagetype_key-wagetype = '/3F6'
+                       result_retro_key-retro = ' '.
+*                       forperiod_id_begda = v_begda
+*                       forperiod_id_endda = v_endda.
+IF sy-subrc = 0.
+  wa_invest-invest = 'Ee Ann PF contribution'.
+  wa_invest-amt = wa_pf_ann-pay_amount.
+  APPEND wa_invest TO it_invest.
+  CLEAR: wa_invest,wa_pf_ann.
+ENDIF.
+DESCRIBE TABLE it_form16 LINES lv_cnt_f.
+DESCRIBE TABLE it_invest LINES lv_cnt_i.
+DESCRIBE TABLE it_exem LINES lv_cnt_e.
+IF ( lv_cnt_f GE lv_cnt_i ) AND ( lv_cnt_f GE lv_cnt_e ).
+CLEAR lv_tabix.
+  LOOP AT it_form16 INTO wa_form16.
+    lv_tabix = sy-tabix.
+    wa_final_f-form16 = wa_form16-form_sum.
+    wa_final_f-amt_f  = wa_form16-amt.
+    READ TABLE it_other INTO wa_other INDEX lv_tabix.
+    IF sy-subrc = 0.
+      wa_final_f-other = wa_other-other.
+      wa_final_f-amt_o = wa_other-amt.
+    ENDIF.
+    READ TABLE it_exem INTO wa_exem INDEX lv_tabix.
+    IF sy-subrc = 0.
+      wa_final_f-exemp = wa_exem-exem_inc.
+      wa_final_f-amt_e = wa_exem-amt.
+    ENDIF.
+    READ TABLE it_invest INTO wa_invest INDEX lv_tabix.
+    IF sy-subrc = 0.
+      wa_final_f-inv_det = wa_invest-invest.
+      wa_final_f-amt_i   = wa_invest-amt.
+    ENDIF.
+    APPEND wa_final_f TO gt_final_f.
+    CLEAR: wa_final_f,wa_invest,wa_exem,wa_other,wa_form16,lv_tabix.
+  ENDLOOP.
+ELSEIF ( lv_cnt_i GT lv_cnt_f ) AND ( lv_cnt_i GE lv_cnt_e ).
+  LOOP AT it_invest INTO wa_invest.
+    lv_tabix = sy-tabix.
+    wa_final_f-inv_det = wa_invest-invest.
+    wa_final_f-amt_i  = wa_invest-amt.
+    READ TABLE it_other INTO wa_other INDEX lv_tabix.
+    IF sy-subrc = 0.
+      wa_final_f-other = wa_other-other.
+      wa_final_f-amt_o = wa_other-amt.
+    ENDIF.
+    READ TABLE it_exem INTO wa_exem INDEX lv_tabix.
+    IF sy-subrc = 0.
+      wa_final_f-exemp = wa_exem-exem_inc.
+      wa_final_f-amt_e = wa_exem-amt.
+    ENDIF.
+    READ TABLE it_form16 INTO wa_form16 INDEX lv_tabix.
+    IF sy-subrc = 0.
+      wa_final_f-form16 = wa_form16-form_sum.
+      wa_final_f-amt_f  = wa_form16-amt.
+    ENDIF.
+    APPEND wa_final_f TO gt_final_f.
+    CLEAR: wa_final_f,wa_invest,wa_exem,wa_other,wa_form16,lv_tabix.
+  ENDLOOP.
+ELSEIF ( lv_cnt_e GT lv_cnt_f ) AND ( lv_cnt_e GT lv_cnt_i ).
+  LOOP AT it_exem INTO wa_exem.
+    lv_tabix = sy-tabix.
+    wa_final_f-exemp = wa_exem-exem_inc.
+    wa_final_f-amt_e = wa_exem-amt.
+    READ TABLE it_other INTO wa_other INDEX lv_tabix.
+    IF sy-subrc = 0.
+      wa_final_f-other = wa_other-other.
+      wa_final_f-amt_o = wa_other-amt.
+    ENDIF.
+    READ TABLE it_invest INTO wa_invest INDEX lv_tabix.
+    IF sy-subrc = 0.
+     wa_final_f-inv_det = wa_invest-invest.
+     wa_final_f-amt_i  = wa_invest-amt.
+    ENDIF.
+    READ TABLE it_form16 INTO wa_form16 INDEX lv_tabix.
+    IF sy-subrc = 0.
+      wa_final_f-form16 = wa_form16-form_sum.
+      wa_final_f-amt_f  = wa_form16-amt.
+    ENDIF.
+    APPEND wa_final_f TO gt_final_f.
+    CLEAR: wa_final_f,wa_invest,wa_exem,wa_other,wa_form16,lv_tabix.
+   ENDLOOP.
+ENDIF.
+CLEAR wa_final_f.
+APPEND wa_final_f TO gt_final_f.
+*LOOP AT hrdata-star_pay_result INTO wa_payresult
+*                 WHERE forperiod_oc_key-payroll_type = 'A'
+*                  AND result_status_key = 'A'.
+*
+*  IF ( wa_payresult-forperiod_oc_key-bondt BETWEEN v_begda
+*                   AND v_endda ) AND wa_payresult-wagetype_key-wagetype = '4004' OR
+*     wa_payresult-wagetype_key-wagetype = '4000'.
+*    v_off_l = wa_payresult-wagetype_key-wagetype.
+*    v_off = wa_payresult-pay_amount.
+*  ENDIF.
+*ENDLOOP.
+
+ENDFORM.                      " %CO11
+
+*----------------------------------------------------------------
+*   FORM %EV10
+*   NODE %EVENT1
+*----------------------------------------------------------------
+
+FORM %EV10.
+
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_BEGIN'
+     EXPORTING  I_LINE_TYPE       = '%LTYPE1'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT4' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT5' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT6' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT9' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT7' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT8' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+
+ENDFORM.                      " %EV10
+
+*----------------------------------------------------------------
+*   FORM %EV11
+*   NODE %EVENT2
+*----------------------------------------------------------------
+
+FORM %EV11.
+
+LOOP AT GT_FINAL INTO WA_FINAL .
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_BEGIN'
+     EXPORTING  I_LINE_TYPE       = '%LTYPE2'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT14' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT15' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT16' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT17' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT18' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT19' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+READ TABLE %CALCULATIONS WITH KEY CNT = '00000001' INTO %CALCU.
+CALL METHOD %CALCU-OBJ->ADD
+     EXPORTING I_SUMMAND = WA_FINAL-E_AMOUNT
+     CHANGING  O_SUM     = GV_TOT_AMT.
+READ TABLE %CALCULATIONS WITH KEY CNT = '00000002' INTO %CALCU.
+CALL METHOD %CALCU-OBJ->ADD
+     EXPORTING I_SUMMAND = WA_FINAL-E_YTD
+     CHANGING  O_SUM     = GV_TOT_YTD.
+READ TABLE %CALCULATIONS WITH KEY CNT = '00000003' INTO %CALCU.
+CALL METHOD %CALCU-OBJ->ADD
+     EXPORTING I_SUMMAND = WA_FINAL-D_AMOUNT
+     CHANGING  O_SUM     = GV_DED_AMT.
+READ TABLE %CALCULATIONS WITH KEY CNT = '00000004' INTO %CALCU.
+CALL METHOD %CALCU-OBJ->ADD
+     EXPORTING I_SUMMAND = WA_FINAL-D_YTD
+     CHANGING  O_SUM     = GV_DED_YTD.
+ENDLOOP.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+
+ENDFORM.                      " %EV11
+
+*----------------------------------------------------------------
+*   FORM %EV12
+*   NODE %EVENT3
+*----------------------------------------------------------------
+
+FORM %EV12.
+
+CLEAR %WEXIT.
+PERFORM %EV12_BODY.
+CLEAR %WEXIT.
+
+ENDFORM.                      " %EV12
+
+*----------------------------------------------------------------
+*   FORM %EV12_BODY
+*----------------------------------------------------------------
+
+FORM %EV12_BODY.
+
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_BEGIN'
+     EXPORTING  I_LINE_TYPE       = '%LTYPE1'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT10' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT20' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT21' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT11' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT22' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT23' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_BEGIN'
+     EXPORTING  I_LINE_TYPE       = '%LTYPE3'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+PERFORM %CO12.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT24' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+
+ENDFORM.                      " %EV12_BODY
+
+*----------------------------------------------------------------
+*   FORM %EV13
+*   NODE %EVENT4
+*----------------------------------------------------------------
+
+FORM %EV13.
+
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_BEGIN'
+     EXPORTING  I_LINE_TYPE       = '%LTYPE1'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT1' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_BEGIN'
+     EXPORTING  I_LINE_TYPE       = '%LTYPE2'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT68' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_BEGIN'
+     EXPORTING  I_LINE_TYPE       = '%LTYPE3'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT69' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT70' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT71' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT72' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT73' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT74' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT75' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT76' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+
+ENDFORM.                      " %EV13
+
+*----------------------------------------------------------------
+*   FORM %EV14
+*   NODE %EVENT5
+*----------------------------------------------------------------
+
+FORM %EV14.
+
+LOOP AT GT_FINAL_F INTO WA_FINAL_F .
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_BEGIN'
+     EXPORTING  I_LINE_TYPE       = '%LTYPE4'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT77' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT78' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT79' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT80' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT81' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT82' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT83' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT84' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDLOOP.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+
+ENDFORM.                      " %EV14
+
+*----------------------------------------------------------------
+*   FORM %EV15
+*   NODE %EVENT6
+*----------------------------------------------------------------
+
+FORM %EV15.
+
+CLEAR %WEXIT.
+PERFORM %EV15_BODY.
+CLEAR %WEXIT.
+
+ENDFORM.                      " %EV15
+
+*----------------------------------------------------------------
+*   FORM %EV15_BODY
+*----------------------------------------------------------------
+
+FORM %EV15_BODY.
+
+IF ( NOT V_OFF IS INITIAL ).
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_BEGIN'
+     EXPORTING  I_LINE_TYPE       = '%LTYPE5'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+IF ( NOT V_OFF IS INITIAL
+   AND V_OFF_L EQ '4000' ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT48' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+IF ( NOT V_OFF IS INITIAL
+   AND V_OFF_L EQ '4004' ).
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT2' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_BEGIN'
+     EXPORTING  I_LINE_TYPE       = '%LTYPE6'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_BEGIN'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+REFRESH %INPUTFIELDS.
+FILL_TEXTAREA 'F'  0  0 ' '.
+PERFORM %WRITE_TEXT USING '%TEXT85' SPACE SPACE 'P' SPACE %INPUTFIELDS %TEXTAREA.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_COL_END'
+     EXCEPTIONS OTHERS            = 1.
+IF SY-SUBRC <> 0. RAISE ERROR. ENDIF.
+CALL FUNCTION 'SSFCOMP_TABLE_ROW_END'
+     EXCEPTIONS NON_MAIN_OVERFLOW = 1
+                OTHERS            = 2.
+CASE SY-SUBRC.
+  WHEN 1.
+    %WEXIT = 'X'.
+  WHEN 2.
+    RAISE ERROR.
+ENDCASE.
+IF %WEXIT <> SPACE. EXIT. ENDIF.
+
+ENDFORM.                      " %EV15_BODY
+
+
+*----------------------------------------------------------------
+*   FORM %CO12
+*   NODE %CODE6
+*----------------------------------------------------------------
+
+FORM %CO12.
+
+BREAK SAP_ABAP.
+DATA : lv_rupees TYPE char40 ,
+       lv_amt TYPE pc207-betrg .
+*lv_amt = gv_netpay . Comment by parth for final amount
+lv_amt = gv_tot_amt - gv_ded_amt. "added by parth
+DATA : lv_amt1 TYPE char10 ,
+       ls_spell TYPE spell,
+       lv_rup TYPE c LENGTH 100.
+lv_amt1 = lv_amt .
+CALL FUNCTION 'HR_IN_CHG_INR_WRDS'
+  EXPORTING
+    amt_in_num         = lv_amt
+  IMPORTING
+    amt_in_words       = lv_rup
+  EXCEPTIONS
+    data_type_mismatch = 1
+    OTHERS             = 2.
+IF lv_rup CS 'Paise'.
+  REPLACE 'Rupees' IN lv_rup WITH 'and' .
+  IF sy-subrc NE 0.
+    REPLACE 'Rupee' IN lv_rup WITH 'And'.
+    CONCATENATE 'Rupee' lv_rup 'ONLY' INTO lv_rup
+    SEPARATED BY space.
+  ELSE.
+    CONCATENATE 'Rupees' lv_rup 'ONLY' INTO lv_rup
+    SEPARATED BY space.
+  ENDIF.
+ELSE.
+  REPLACE 'Rupees' IN lv_rup WITH 'ONLY' .
+  IF sy-subrc NE 0.
+    REPLACE 'Rupee' IN lv_rup WITH 'ONLY'.
+    CONCATENATE 'Rupee' lv_rup INTO lv_rup.
+  ELSE.
+    CONCATENATE 'Rupees' lv_rup INTO lv_rup .
+  ENDIF.
+ENDIF.
+gv_rupees = lv_rup .
+IF gv_netpay IS NOT INITIAL.
+*  gv_netpayc = gv_netpay."comment by parth
+  gv_netpayc = lv_amt. "added by parth
+  CONDENSE gv_netpayc.
+ENDIF.
+
+ENDFORM.                      " %CO12

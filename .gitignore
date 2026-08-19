@@ -1,9 +1,13 @@
 # Local tooling / connection config — never commit
 .mcp.json
 .claude/
-*.zip
+
+# Redundant archives — their contents are tracked unpacked alongside them
+/kpmg/zmb5b/drafts/final_code.zip
+/ovl/ztest_t001/ZTEST_T001.zip
 
 # OS / editor noise
 Thumbs.db
 desktop.ini
 .DS_Store
+~$*

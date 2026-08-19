@@ -1,0 +1,43 @@
+REPORT ZHR_HINCF160.
+*-------------------------------------------------------------------*
+*
+* PDF Form CONVERSION FOR: HR_IN_TAXF16000Y,HR_IN_TAXF1600AA        *
+*                          HR_IN_TAXF16NX_Y & HR_IN_TAXF16NX_P Forms*
+*
+* Author : Pratheek Bhonsley & Tarun Kumar Mishra
+*          (C5146253)           (I056108)                        *
+*
+* Date : 19/10/2010                                                 *
+*
+* Program description: Print program for FORM16,16AA,ANNEXURE-16 &  *
+*                                        FORM12BA                   *
+*
+* supports Both PDF Output & SAPScript output.                      *
+*-------------------------------------------------------------------*
+
+* -------------------------------------------------------------------- *
+*        Program to generate the form 16 for India
+* -------------------------------------------------------------------- *
+INCLUDE ZPCF16IN11.
+*INCLUDE PCF16IN11.               " Declares tables and infotypes needed
+INCLUDE ZPUMAPIN7.
+*INCLUDE PUMAPIN7.
+INCLUDE ZPCF16IN12.
+*INCLUDE PCF16IN12.               " Declarations
+INCLUDE ZPCREMIN6.
+*INCLUDE PCREMIN6.                " Include for Global & Indian Cluster
+INCLUDE ZPCF16IN15.
+*INCLUDE PCF16IN15.               " Include for Selection Screen
+INCLUDE ZPCF16IN14.
+*INCLUDE PCF16IN14.               " Selection screen layout
+INCLUDE ZPCF16IN13.
+*INCLUDE PCF16IN13.               " Main Processing
+INCLUDE ZPCF16IN17.
+*INCLUDE PCF16IN17.               " Subroutines
+INCLUDE ZPCF16IN16_PDF.
+*INCLUDE PCF16IN16_PDF.           " Print rountine for PDF
+*INCLUDE PCSAPIN0.               " SAP Script routines
+*INCLUDE PCF16INUT01.             " Include for unit tests
+*INCLUDE PCF16INUT02.             " Include for unit tests  2
+INCLUDE ZPCF16IN8.
+*INCLUDE PCF16IN8.                " Subroutines for reading tables

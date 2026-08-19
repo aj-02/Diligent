@@ -1,0 +1,635 @@
+REPORT zpp_cs02_bdc_reports1.
+
+*&---------------------------------------------------------------------*
+*&    Created By     :  Parth Shukla
+*&    Creation Date  :  29/06/2021
+*&---------------------------------------------------------------------*
+
+TYPES: BEGIN OF ty_final,
+         matnr(18),
+         werks(04),
+         stlan(01),
+         stlal(02),
+         idnrk(18),
+         menge(018)," type menge,
+         postp(01),
+       END OF ty_final.
+
+TYPES : BEGIN OF ty_stpo,
+          stlnr TYPE stpo-stlnr,
+          stlty TYPE stpo-stlty,
+          stpoz TYPE stpo-stpoz,
+          idnrk TYPE stpo-idnrk,
+          posnr TYPE stpo-posnr,
+        END OF ty_stpo.
+
+TYPES: BEGIN OF ty_temp,
+         matnr(18),
+         werks(04),
+         stlan(01),
+         stlal(02),
+         idnrk(18),
+         menge(018)," type menge,
+         postp(01),
+         count      TYPE i,
+       END OF ty_temp.
+
+DATA : it_temps TYPE STANDARD TABLE OF ty_temp,
+       wa_temps TYPE ty_temp.
+
+DATA : it_stpo TYPE STANDARD TABLE OF ty_stpo,
+       wa_stpo TYPE ty_stpo.
+DATA : lv_cursor  TYPE c LENGTH 20,
+       lv_cursor1 TYPE c LENGTH 20,
+       lv_tabix   TYPE sy-tabix,
+       counter    TYPE n LENGTH 2.
+DATA : lv_posnr TYPE n LENGTH 5.
+
+DATA :lv_cursor2 TYPE c LENGTH 20,
+      lv_cursor3 TYPE c LENGTH 20,
+      lv_cursor4 TYPE c LENGTH 20.
+
+DATA :it_type TYPE truxs_t_text_data.
+DATA : file_name TYPE string.
+DATA : it_data  TYPE STANDARD TABLE  OF ty_final WITH HEADER LINE,
+       it_temp  TYPE STANDARD TABLE  OF ty_final WITH HEADER LINE,
+       it_temp1 TYPE STANDARD TABLE  OF ty_final WITH HEADER LINE,
+       wa_temp1 TYPE ty_final,
+       wa_temp  TYPE STANDARD TABLE  OF ty_final WITH HEADER LINE,
+       wa_data  TYPE ty_final.
+
+TYPES : BEGIN OF ty_mast,
+          matnr TYPE mast-matnr,
+          werks TYPE mast-werks,
+          stlan TYPE mast-stlan,
+          stlnr TYPE mast-stlnr,
+          stlal TYPE mast-stlal,
+        END OF ty_mast.
+
+DATA : it_mast TYPE STANDARD TABLE OF ty_mast,
+       wa_mast TYPE ty_mast.
+
+DATA:wa_bdc TYPE bdcdata,
+     it_bdc TYPE TABLE OF bdcdata.
+
+
+TYPES : BEGIN OF ty_error,
+          sno          TYPE i,
+*          efield(200),
+          message(100) TYPE c,
+        END OF ty_error.
+DATA: wa_error TYPE ty_error,
+      it_error TYPE STANDARD TABLE OF ty_error.
+TYPES : BEGIN OF ty_header,
+          text(20),
+        END OF ty_header.
+TYPES : BEGIN OF t_message ,
+          matnr   TYPE char20  , " Material Number
+          status  TYPE char4   , " Light Indicator
+          type    TYPE char4   , " Error Type
+          message TYPE char255 , " Message Description
+        END OF t_message    .
+
+DATA : it_header TYPE STANDARD TABLE OF ty_header,
+       wa_header TYPE ty_header.
+DATA:count  TYPE i.
+DATA:lv_count  TYPE c LENGTH 2
+      .
+
+*DATA : lv_cursor  TYPE c LENGTH 20,
+*       lv_cursor1 TYPE c LENGTH 20,
+*       lv_tabix   TYPE sy-tabix,
+*       counter    TYPE n LENGTH 2.
+DATA : lv_pos TYPE char4.
+
+DATA: i_field     TYPE slis_t_fieldcat_alv,
+      it_fieldcat TYPE slis_t_fieldcat_alv WITH HEADER LINE,
+      i_message   TYPE STANDARD TABLE OF t_message.
+
+DATA:wa_msg TYPE bdcmsgcoll,
+     it_msg TYPE TABLE OF bdcmsgcoll.
+FIELD-SYMBOLS :
+  <x_message> TYPE t_message,
+  <x_field>   TYPE slis_fieldcat_alv,
+  <x_bdcdata> TYPE bdcdata,
+  <x_msg>     TYPE bdcmsgcoll.
+*&----Constant Declaration
+CONSTANTS:
+  c_x    TYPE char1 VALUE 'X',
+  c_e    TYPE char1 VALUE 'E',
+  c_i    TYPE char1 VALUE 'I',
+  c_s    TYPE char1 VALUE 'S',
+  c_l    TYPE char1 VALUE 'L',
+  c_a    TYPE char1 VALUE 'A',
+  c_n    TYPE char1 VALUE 'N',
+  c_xls  TYPE char4 VALUE '.XLS',
+  c_vbn2 TYPE char4 VALUE 'VBN2',
+  c_en   TYPE char2 VALUE 'EN'.
+*&-------------------------------SELECTION SCREEN--------------------------------------------------&*
+SELECTION-SCREEN: BEGIN OF BLOCK a1 WITH FRAME TITLE text-000.
+PARAMETERS:p_file  TYPE rlgrap-filename OBLIGATORY,
+           p_file1 TYPE rlgrap-filename , " Download FileName
+           p_mode  LIKE ctu_params-dismode DEFAULT 'A'.         " Mode .
+SELECTION-SCREEN:END OF BLOCK a1.
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_file.
+  CALL FUNCTION 'WS_FILENAME_GET'
+    EXPORTING
+      def_filename     = space
+      def_path         = space
+      mask             = ',*.*,*.*.'
+      mode             = space
+      title            = space
+    IMPORTING
+      filename         = p_file
+*     RC               =
+    EXCEPTIONS
+      inv_winsys       = 1
+      no_batch         = 2
+      selection_cancel = 3
+      selection_error  = 4
+      OTHERS           = 5.
+  IF sy-subrc <> 0 AND sy-subrc <> 3.
+    MESSAGE e102(yb) WITH 'Error Selecting File'(007).
+  ENDIF.
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_file1.
+  PERFORM f4_help1.
+
+START-OF-SELECTION.
+  PERFORM upload.
+  PERFORM authorization_check.
+  PERFORM bdc.
+  PERFORM field_catalog.
+  PERFORM append_header.
+  PERFORM download_file.
+  PERFORM alv_display.          " Display Return Message In ALV
+
+
+*&---------------------------------------------------------------------*
+*&      Form  UPLOAD
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM upload .
+  file_name  = p_file.
+  CALL FUNCTION 'TEXT_CONVERT_XLS_TO_SAP'
+    EXPORTING
+*     I_FIELD_SEPERATOR    =
+      i_line_header        = 'X'
+      i_tab_raw_data       = it_type
+      i_filename           = p_file
+    TABLES
+      i_tab_converted_data = it_data
+    EXCEPTIONS
+      conversion_failed    = 1
+      OTHERS               = 2.
+  IF sy-subrc <> 0.
+  ENDIF.
+  it_temp[] = it_data[].
+  it_temp1[] = it_data[].
+  it_temps[] = it_data[].
+
+  DELETE ADJACENT DUPLICATES FROM it_temp COMPARING matnr.
+  DELETE ADJACENT DUPLICATES FROM it_temps COMPARING matnr.
+*  IF it_data[] IS NOT INITIAL.
+*
+*    SELECT matnr werks stlan stlnr stlal FROM mast INTO TABLE it_mast
+*       FOR ALL ENTRIES IN it_data WHERE matnr = it_data-matnr AND werks = it_data-werks  and
+*    stlal = it_data-stlal ."and stlan = it_temp-stlan.
+*  ENDIF.
+*  IF it_mast IS NOT INITIAL.
+*
+*    LOOP AT it_temps INTO wa_temps.
+*
+*      SELECT stlnr STLTY STPOZ idnrk posnr FROM stpo INTO TABLE it_stpo FOR ALL ENTRIES IN it_mast WHERE stlnr = it_mast-stlnr.
+*      DESCRIBE TABLE it_stpo LINES DATA(lv_counts).
+*      wa_temps-count = lv_counts.
+*      MODIFY it_temps FROM wa_temps TRANSPORTING count.
+*      CLEAR : wa_temp,lv_counts.
+*      REFRESH it_stpo.
+*    ENDLOOP.
+*  ENDIF.
+
+
+
+
+
+
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  AUTHORIZATION_CHECK
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM authorization_check .
+  LOOP AT it_data INTO wa_data.
+    AUTHORITY-CHECK OBJECT 'ZWRKK_CS02'
+        ID 'WERKS' FIELD wa_data-werks
+        ID 'ACTVT' FIELD '03'.
+    IF sy-subrc <> 0.
+      MESSAGE e035(zsd) WITH wa_data-werks.
+    ENDIF.
+    CLEAR : wa_data.
+  ENDLOOP.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  BDC
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM bdc .
+
+  CLEAR: wa_data.", lv_cursor, lv_cursor1.
+
+
+
+  LOOP AT it_data INTO wa_data." WHERE matnr = wa_temps-matnr.
+
+
+    SELECT SINGLE matnr,WERKS,STLAN,STLNR,stlal FROM mast INTO @DATA(wa_mast)
+       WHERE matnr = @wa_data-matnr AND werks = @wa_data-werks ."and stlan = @wa_data-stlan and stlal = @wa_data-stlal.
+
+      data : lv_stlal type char2.
+
+   lv_stlal = wa_data-stlal.
+
+   CONCATENATE '0' lv_stlal into lv_stlal.
+
+      if wa_mast is not INITIAL.
+      select single stlnr,stlal,stlst from stko into @data(wa_stko) where STLTY = 'M' and stlnr = @wa_mast-stlnr and stlal = @lv_stlal.
+      endif.
+
+
+
+
+    REFRESH it_bdc.
+
+    if wa_stko-stlst = 1.
+
+    PERFORM bdc_dynpro      USING 'SAPLCSDI' '0100'.
+    PERFORM bdc_field       USING 'BDC_CURSOR'
+                                  'RC29N-STLAL'.
+    PERFORM bdc_field       USING 'BDC_OKCODE'
+                                  '/00'.
+    PERFORM bdc_field       USING 'RC29N-MATNR'
+                                  wa_data-matnr.
+    PERFORM bdc_field       USING 'RC29N-WERKS'
+                                  wa_data-werks.
+    PERFORM bdc_field       USING 'RC29N-STLAN'
+                                  wa_data-stlan.
+    PERFORM bdc_field       USING 'RC29N-STLAL'
+                                  wa_data-stlal.
+
+*perform bdc_field       using 'RC29N-DATUV'
+*                              wa_data-DATUV_005.
+    PERFORM bdc_dynpro      USING 'SAPLCSDI' '0150'.
+
+*  CLEAR lv_cursor4.
+*    CONCATENATE 'RC29P-POSNR(' lv_posnr ')' INTO lv_cursor4.
+**
+*perform bdc_field       using 'BDC_CURSOR'
+*                               'RC29P-POSNR'.
+    "  'RC29P-POSNR(01)'.
+    PERFORM bdc_field       USING 'BDC_OKCODE'
+                                  '=FCNP'.
+    PERFORM bdc_dynpro      USING 'SAPLCSDI' '0140'.
+    PERFORM bdc_field       USING 'BDC_CURSOR'
+                                  'RC29P-MEINS(02)'.
+    PERFORM bdc_field       USING 'BDC_OKCODE'
+                                  '/00'.
+
+
+* CLEAR lv_cursor.
+*    CONCATENATE 'RC29P-IDNRK(' lv_count ')' INTO lv_cursor.
+
+
+    PERFORM bdc_field       USING    'RC29P-IDNRK(02)'
+                                  wa_data-idnrk.
+
+*
+* CLEAR lv_cursor1.
+*    CONCATENATE 'RC29P-MENGE(' lv_count ')' INTO lv_cursor1.
+
+
+    PERFORM bdc_field   USING      'RC29P-MENGE(02)'
+                                  wa_data-menge.
+
+
+
+*
+* CLEAR lv_cursor2.
+*    CONCATENATE 'RC29P-POSTP(' lv_count ')' INTO lv_cursor2.
+
+
+    PERFORM bdc_field       USING   'RC29P-POSTP(02)'
+                                  wa_data-postp.
+    PERFORM bdc_dynpro      USING 'SAPLCSDI' '0130'.
+    PERFORM bdc_field       USING 'BDC_OKCODE'
+                                  '/00'.
+    PERFORM bdc_field       USING 'BDC_CURSOR'
+                                  'RC29P-POSNR'.
+*perform bdc_field       using 'RC29P-POSNR'
+*                              wa_data-POSNR.
+
+
+    PERFORM bdc_field       USING   'RC29P-IDNRK'
+                                     wa_data-idnrk.
+
+
+    PERFORM bdc_field       USING                                     'RC29P-MENGE'
+                                  wa_data-menge.
+*perform bdc_field       using 'RC29P-MEINS'
+*                              wa_data-MEINS.
+    PERFORM bdc_dynpro      USING 'SAPLCSDI' '0131'.
+    PERFORM bdc_field       USING 'BDC_OKCODE'
+                                  '/00'.
+    PERFORM bdc_field       USING 'BDC_CURSOR'
+                                  'RC29P-POTX1'.
+*perform bdc_field       using 'RC29P-SANKA'
+*                              wa_data-SANKA.
+    PERFORM bdc_dynpro      USING 'SAPLCSDI' '0140'.
+*perform bdc_field       using 'BDC_CURSOR'
+*                              'RC29P-POSNR(02)'.
+    PERFORM bdc_field       USING 'BDC_OKCODE'
+                                  '=FCBU'.
+
+*endif.
+
+
+
+
+    CALL TRANSACTION 'CS02' USING it_bdc MODE p_mode UPDATE 'S'
+             MESSAGES INTO it_msg.
+
+    REFRESH it_bdc.
+
+    IF  it_msg IS NOT INITIAL.
+      PERFORM populate_error.
+    ENDIF.
+    REFRESH it_bdc.
+    CLEAR : lv_count, lv_pos,wa_data.
+
+    endif.
+    clear : wa_data,wa_mast,wa_stko,lv_stlal,wa_mast.
+  ENDLOOP.
+
+*    CLEAR : wa_temps.
+*  ENDLOOP.
+
+ENDFORM.
+
+FORM bdc_dynpro USING program screen.
+
+  wa_bdc-program = program.
+  wa_bdc-dynpro = screen.
+  wa_bdc-dynbegin = 'X'.
+  APPEND wa_bdc TO it_bdc.
+  CLEAR:wa_bdc.
+ENDFORM.
+FORM bdc_field USING field value.
+
+  wa_bdc-fnam = field.
+  wa_bdc-fval = value.
+  APPEND wa_bdc TO it_bdc.
+  CLEAR:wa_bdc.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  POPULATE_ERROR
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM populate_error .
+
+  DATA : lv_msg TYPE string.
+  LOOP AT it_msg INTO wa_msg.
+    CALL FUNCTION 'FORMAT_MESSAGE'
+      EXPORTING
+        id   = wa_msg-msgid
+        lang = sy-langu
+        no   = wa_msg-msgnr
+        v1   = wa_msg-msgv1
+        v2   = wa_msg-msgv2
+        v3   = wa_msg-msgv3
+        v4   = wa_msg-msgv4
+      IMPORTING
+        msg  = lv_msg.
+
+    IF wa_msg-msgtyp = c_s .
+* AND wa_msg-msgid = 'F2'
+*                              AND wa_msg-msgnr = '175'.
+      UNASSIGN <x_message>.
+      APPEND INITIAL LINE TO i_message ASSIGNING <x_message>.
+      IF <x_message> IS ASSIGNED.
+        <x_message>-matnr        = wa_data-matnr         .
+        <x_message>-status       = icon_led_green        .
+        <x_message>-type         =  wa_msg-msgtyp       .
+        <x_message>-message      = lv_msg                .
+      ENDIF.
+*      ELSEIF wa_msg-msgtyp = c_i  .
+*        UNASSIGN <x_message>.
+*        APPEND INITIAL LINE TO i_message ASSIGNING <x_message>.
+*        IF <x_message> IS ASSIGNED.
+*          <x_message>-lifnr        = wa_msg-msgv1         .
+*          <x_message>-status       = icon_led_yellow        .
+*          <x_message>-type         =  wa_msg-msgtyp       .
+*          <x_message>-message      = lv_msg                .
+*        ENDIF.
+    ELSEIF wa_msg-msgtyp = c_e.
+      UNASSIGN <x_message>.
+      APPEND INITIAL LINE TO i_message ASSIGNING <x_message>.
+      IF <x_message> IS ASSIGNED.
+
+        <x_message>-matnr        = wa_data-matnr                   .
+        <x_message>-status       = icon_led_red          .
+        <x_message>-type         = wa_msg-msgtyp        .
+        IF wa_msg-msgid = 'AM' AND wa_msg-msgnr = '214'
+          OR wa_msg-msgid = 'AM' AND wa_msg-msgnr = '215'.
+          <x_message>-type = c_e.
+        ENDIF.
+        <x_message>-message      = lv_msg                .
+      ENDIF.
+    ENDIF.
+
+    DELETE it_msg WHERE msgnr = wa_msg-msgnr.
+*      IF <x_message>-kunnr IS NOT INITIAL.
+*        EXIT.
+*      ENDIF.
+  ENDLOOP.
+
+  IF sy-subrc = 0 .
+    count = count + 1.
+    wa_error-sno = count.
+*    CONCATENATE wa_msg-msgv1 wa_msg-msgv2 wa_msg-msgv3 wa_msg-msgv4 INTO wa_error-efield.
+    wa_error-message = lv_msg.
+*    wa_error-matnr = wa_msg-msgv1.
+*    wa_error-werks = wa_msg-msgv2.
+    APPEND wa_error TO it_error.
+    CLEAR:wa_error.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  F4_HELP1
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM f4_help1 .
+  CALL FUNCTION 'F4_FILENAME'
+    EXPORTING
+      program_name = sy-repid
+    IMPORTING
+      file_name    = p_file1.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FIELD_CATALOG
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM field_catalog .
+  PERFORM fieldcat_append  USING  'MATNR'               'Material Number'                'X'  'I_MESSAGE'  '20' .
+  PERFORM fieldcat_append  USING  'STATUS'               'STATUS'                'X'  'I_MESSAGE'    '5'.
+  PERFORM fieldcat_append  USING  'TYPE'               'TYPE'                'X'  'I_MESSAGE'    '5'.
+  PERFORM fieldcat_append  USING  'MESSAGE'               'MESSAGE DESCRIPTION'                'X'  'I_MESSAGE'  '60'  .
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FIELDCAT_APPEND
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_0772   text
+*      -->P_0773   text
+*      -->P_0774   text
+*      -->P_0775   text
+*      -->P_0776   text
+*----------------------------------------------------------------------*
+FORM fieldcat_append  USING    VALUE(p_fname)
+                               VALUE(p_ftext)
+                               VALUE(p_fixcol)
+                               VALUE(p_table)
+                                 VALUE(p_outlen).
+  it_fieldcat-fieldname   = p_fname.
+  it_fieldcat-seltext_l   = p_ftext.
+  it_fieldcat-fix_column  = p_fixcol.
+  it_fieldcat-tabname     = p_table.
+  it_fieldcat-outputlen   = p_outlen.
+  APPEND it_fieldcat.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  APPEND_HEADER
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM append_header .
+  wa_header-text = 'Sr. No.'.
+  APPEND wa_header TO it_header.
+  CLEAR :wa_header.
+
+  wa_header-text = 'Error Message'.
+  APPEND wa_header TO it_header.
+  CLEAR :wa_header.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  DOWNLOAD_FILE
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM download_file .
+
+  DATA: lv_file TYPE string.
+  lv_file = p_file1.
+
+  CALL FUNCTION 'GUI_DOWNLOAD'
+    EXPORTING
+      filename                = lv_file
+      filetype                = 'ASC'
+      write_field_separator   = 'X'
+      show_transfer_status    = 'X'
+    TABLES
+      data_tab                = it_error
+      fieldnames              = it_header
+    EXCEPTIONS
+      file_write_error        = 1
+      no_batch                = 2
+      gui_refuse_filetransfer = 3
+      invalid_type            = 4
+      no_authority            = 5
+      unknown_error           = 6
+      header_not_allowed      = 7
+      separator_not_allowed   = 8
+      filesize_not_allowed    = 9
+      header_too_long         = 10
+      dp_error_create         = 11
+      dp_error_send           = 12
+      dp_error_write          = 13
+      unknown_dp_error        = 14
+      access_denied           = 15
+      dp_out_of_memory        = 16
+      disk_full               = 17
+      dp_timeout              = 18
+      file_not_found          = 19
+      dataprovider_exception  = 20
+      control_flush_error     = 21
+      OTHERS                  = 22.
+
+  IF sy-subrc = 0.
+    MESSAGE 'File successfully downloaded' TYPE 'S'.
+*    CLEAR :i_final1,i_header.
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  ALV_DISPLAY
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM alv_display .
+  DATA : lv_repid TYPE sy-repid.
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      i_callback_program = lv_repid
+      it_fieldcat        = it_fieldcat[]
+      i_save             = 'A'
+    TABLES
+      t_outtab           = i_message
+    EXCEPTIONS
+      program_error      = 1
+      OTHERS             = 2.
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+
+ENDFORM.

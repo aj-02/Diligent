@@ -1,0 +1,822 @@
+----------------------------------------------------------------------------------------------------
+Main program     ZMM_TENDER_RPT                            Level 0    Page 1
+Object           ZMM_TENDER_RPT                            Lines 14
+System           OCQ / 500   User SAP_ABAP   12.08.2026 11:17:40
+----------------------------------------------------------------------------------------------------
+1      *&---------------------------------------------------------------------*
+2      *& Report  ZMM_TENDER_RPT
+3      *&
+4      *&---------------------------------------------------------------------*
+5      *&  cab_dhiraj
+6      *&
+7      *  cab_dhiraj  15.04.2014  changed as per CR 30011444
+8      *&---------------------------------------------------------------------*
+9
+10     REPORT ZMM_TENDER_RPT.
+11
+12     INCLUDE ZMM_TENDER_RPT_TOP.
+13
+14     INCLUDE ZMM_TENDER_RPT_F01.
+*--- End of ZMM_TENDER_RPT - 14 lines ---
+
+----------------------------------------------------------------------------------------------------
+Include          ZMM_TENDER_RPT_TOP                        Level 1    Page 2
+Object           ZMM_TENDER_RPT                            Lines 81
+System           OCQ / 500   User SAP_ABAP   12.08.2026 11:17:40
+----------------------------------------------------------------------------------------------------
+1      *&---------------------------------------------------------------------*
+2      *&  Include           ZMM_TENDER_RPT_TOP
+3      *&---------------------------------------------------------------------*
+4
+5      TABLES: ZMM_PUR_TRTYP.
+6      ***********************************************************************
+7      ** data fields **
+8      ***********************************************************************
+9
+10     TYPES: Begin of sum_tender_rpt,
+11             title(25) type c,
+12             tendercount type i,
+13             tendervalue type  ZMMTENDERAMT, "p DECIMALS 2, " zmm_pur_tender_d-tndr_val, "ZMM_TENDER_VAL,
+14             tendercountper type  p DECIMALS 2, "zmm_pur_tender_d-tndr_val,
+15             tendervalueper type  ZMMTENDERAMT, "p DECIMALS 2, "zmm_pur_tender_d-tndr_val,
+16            End of sum_tender_rpt.
+17
+18     TYPES: Begin of tender_rpt,
+19             submi type zmm_pur_tender_d-submi,
+20             tdrdt type zmm_pur_tender_d-tdrdt,
+21             BATXT type ZMM_PUR_TRTYP-BATXT,  "zmm_pur_tender_d-bsart,
+22             eknam type t024-eknam,
+23             tndr_val TYPE wt_dmbtr," type p DECIMALS 2, "zmm_pur_tender_d-tndr_val,
+24             srm_tndr_val TYPE wt_dmbtr, "type p DECIMALS 2 , "zmm_pur_tender_d-srm_tndr_val,
+25            end of tender_rpt.
+26
+27
+28
+29     DATA: i_startdate type dats,
+30           i_enddate type dats,
+31           sum_check type c,
+32           list_check type c.
+33
+34
+35     ***********************************************************************
+36     ** Internal tables and workarea **
+37     ***********************************************************************
+38     DATA: itab_zmm_pur_tender_d type table of zmm_pur_tender_d,
+39           wa_zmm_pur_tender_d type zmm_pur_tender_d.
+40
+41     DATA: itab_zmm_tms type table of zmm_tms,
+42           wa_zmm_tms type  zmm_tms.
+43
+44     DATA: itab_sum_tender_rpt type table of sum_tender_rpt,
+45           wa_sum_tender_rpt type  sum_tender_rpt,
+46           wa1_sum_tender_rpt type  sum_tender_rpt.
+47
+48     DATA: itab_ekko type table of ekko,
+49           wa_ekko type  ekko.
+50
+51     DATA: itab_tender_rpt type table of tender_rpt,
+52           wa_tender_rpt type  tender_rpt.
+53
+54     DATA: itab_zmm_dumven_tnrpt type table of zmm_dumven_tnrpt,
+55           wa_zmm_dumven_tnrpt type zmm_dumven_tnrpt.
+56     ***********************************************************************
+57
+58     Type-pools : SLIS.
+59     *Internal tables - ALV
+60     DATA : ist_fcat TYPE slis_fieldcat_alv OCCURS 0,
+61            ist_events TYPE slis_alv_event  OCCURS 0,
+62            ist_listheader TYPE slis_t_listheader.
+63
+64     *Structure -ALV
+65     DATA : wa_fieldcat    TYPE slis_fieldcat_alv,
+66            wa_events      TYPE slis_alv_event,
+67            wa_listheader  TYPE slis_listheader,
+68            wa_layout      TYPE slis_layout_alv.
+69     Data : g_repid like sy-repid.
+70     DATA: ist_final type standard table of zmm_pur_tender_d,
+71           wa_final type zmm_pur_tender_d.
+72
+73     *---------------------------------------------------------------------*
+74     * START-OF-SELECTION             - start of database access           *
+75     *---------------------------------------------------------------------*
+76     start-of-selection.
+77       call screen '0100'.
+78     *---------------------------------------------------------------------*
+79     * END-OF-SELECTION             -  Display DPR                         *
+80     *---------------------------------------------------------------------*
+81     end-of-selection.
+*--- End of ZMM_TENDER_RPT_TOP - 81 lines ---
+
+----------------------------------------------------------------------------------------------------
+Include          ZMM_TENDER_RPT_F01                        Level 1    Page 3
+Object           ZMM_TENDER_RPT                            Lines 707
+System           OCQ / 500   User SAP_ABAP   12.08.2026 11:17:40
+----------------------------------------------------------------------------------------------------
+1      *&---------------------------------------------------------------------*
+2      *&  Include           ZMM_TENDER_RPT_F01
+3      *&---------------------------------------------------------------------*
+4      *&---------------------------------------------------------------------*
+5      *&      Module  STATUS_0100  OUTPUT
+6      *&---------------------------------------------------------------------*
+7      *       text
+8      *----------------------------------------------------------------------*
+9      MODULE STATUS_0100 OUTPUT.
+10       SET PF-STATUS 'STATUS_0100'.
+11       SET TITLEBAR 'TITLE_0100'.
+12
+13     ENDMODULE.                 " STATUS_0100  OUTPUT
+14     *&---------------------------------------------------------------------*
+15     *&      Module  USER_COMMAND_0100  INPUT
+16     *&---------------------------------------------------------------------*
+17     *       text
+18     *----------------------------------------------------------------------*
+19     MODULE USER_COMMAND_0100 INPUT.
+20       CASE SY-UCOMM.
+21         WHEN 'EXIT'.
+22           LEAVE PROGRAM.
+23         WHEN 'BACK'.
+24           LEAVE PROGRAM.
+25         WHEN 'CANCEL'.
+26           LEAVE PROGRAM.
+27         WHEN 'EXC'.
+28
+29           if i_startdate is INITIAL or i_startdate lt '20130401'.
+30             MESSAGE i010(ad) WITH text-101 DISPLAY LIKE 'E'.
+31           elseif i_enddate is INITIAL or i_enddate lt i_startdate.
+32             MESSAGE i010(ad) WITH text-102 DISPLAY LIKE 'E'.
+33           elseif sum_check = '' and list_check = ''.
+34             MESSAGE i010(ad) WITH text-002 DISPLAY LIKE 'E'.
+35           else.
+36             perform operations_100.
+37           endif.
+38         WHEN 'SUMCHK'.
+39           LOOP AT SCREEN.
+40             IF SCREEN-NAME = 'SUM_CHECK'.
+41               sum_check = 'X'.
+42               MODIFY SCREEN.
+43               CONTINUE.
+44             ENDIF.
+45             IF SCREEN-NAME = 'LIST_CHECK'.
+46               list_check = ''.
+47               MODIFY SCREEN.
+48               CONTINUE.
+49             ENDIF.
+50           ENDLOOP.
+51
+52         WHEN 'LISTCHK'.
+53           LOOP AT SCREEN.
+54             IF SCREEN-NAME = 'SUM_CHECK'.
+55               sum_check = ''.
+56               MODIFY SCREEN.
+57               CONTINUE.
+58             ENDIF.
+59             IF SCREEN-NAME = 'LIST_CHECK'.
+60               list_check = 'X'.
+61               MODIFY SCREEN.
+62               CONTINUE.
+63             ENDIF.
+64           ENDLOOP.
+65
+66
+67       ENDCASE.
+68     ENDMODULE.                 " USER_COMMAND_0100  INPUT
+69     *&---------------------------------------------------------------------*
+70     *&      Form  OPERATIONS_100
+71     *&---------------------------------------------------------------------*
+72     *       text
+73     *----------------------------------------------------------------------*
+74     *  -->  p1        text
+75     *  <--  p2        text
+76     *----------------------------------------------------------------------*
+77     FORM OPERATIONS_100 .
+78       DATA: ld_idx    TYPE sy-tabix,
+79             flag1  type c.
+80       DATA: itab1_zmm_pur_tender_d type table of zmm_pur_tender_d.
+81       DATA: count_n_tender type i,
+82             count_e_tender type i,
+83             total_n_tender type  ZMMTENDERAMT, "p DECIMALS 2, "zmm_pur_tender_d-tndr_val, "sum_tender_rpt-tendervalue, "
+84             total_e_tender type  ZMMTENDERAMT, "p DECIMALS 2, " zmm_pur_tender_d-tndr_val. "sum_tender_rpt-tendervalue. "
+85             rfc_srm_tender_val type  wt_dmbtr. "p DECIMALS 2.
+86       refresh itab_zmm_pur_tender_d.
+87       refresh itab1_zmm_pur_tender_d.
+88       refresh itab_zmm_dumven_tnrpt.
+89     *  select * from zmm_dumven_tnrpt into CORRESPONDING FIELDS OF TABLE  itab_zmm_dumven_tnrpt.
+90     ** selecting values within date ranges from zmm)ims_status.
+91       select submi tdrdt ekgrp tndr_val srm_tndr_val bsart  from
+92           zmm_pur_tender_d into CORRESPONDING FIELDS OF TABLE itab1_zmm_pur_tender_d
+93         where
+94           tdrdt ge i_startdate and
+95           tdrdt le i_enddate and
+96           ekgrp not like 'O%'.          "  added CR 30011444
+97
+98       if sy-subrc = 0.
+99         sort itab1_zmm_pur_tender_d by submi.
+100
+101        loop at itab1_zmm_pur_tender_d into wa_zmm_pur_tender_d.
+102          clear flag1.
+103          if wa_zmm_pur_tender_d-bsart cs 'ET' .
+104            flag1 = 'X'.
+105          else.
+106            perform check_in_ekko using wa_zmm_pur_tender_d-submi CHANGING flag1.
+107          endif.
+108          if flag1  = 'X'.
+109            append wa_zmm_pur_tender_d to itab_zmm_pur_tender_d.
+110          endif.
+111          clear wa_zmm_pur_tender_d.
+112        endloop.
+113
+114        refresh itab1_zmm_pur_tender_d.
+115
+116
+117    **   if values found.
+118      endif.
+119
+120      if itab_zmm_pur_tender_d is not INITIAL.
+121        refresh itab_tender_rpt.
+122        count_n_tender = 0.
+123        count_e_tender = 0.
+124        clear total_n_tender.
+125        clear total_e_tender.
+126        loop at itab_zmm_pur_tender_d into wa_zmm_pur_tender_d.
+127
+128          wa_tender_rpt-submi = wa_zmm_pur_tender_d-submi.
+129          wa_tender_rpt-tdrdt = wa_zmm_pur_tender_d-tdrdt.
+130          select eknam from t024 into wa_tender_rpt-eknam where ekgrp = wa_zmm_pur_tender_d-ekgrp.
+131          endselect.
+132
+133          if wa_zmm_pur_tender_d-tndr_val is INITIAL.
+134    " Code Remediation changes S4 2025_1_A Conversion **BEGIN OF CHANGE BY SAP_ABAP 06.06.2026  FOR ATC
+135            select KTWRT from EKKO into wa_zmm_pur_tender_d-tndr_val "#EC CI_NOORDER
+136    " Code Remediation changes S4 2025_1_A Conversion * *END OF CHANGE BY SAP_ABAP 06.06.2026 FOR ATC
+137    *           for ALL ENTRIES IN itab_zmm_dumven_tnrpt
+138              where submi = wa_zmm_pur_tender_d-submi
+139              and
+140             lifnr not in ( select lifnr from zmm_dumven_tnrpt )
+141    *    ( lifnr ne '107291' and
+142    *    lifnr ne '403790' )
+143    *            and
+144    *    ( lifnr ne '0000107291' and
+145    *    lifnr ne '0000403790' )
+146        and
+147        ( ebeln like '6%' or
+148          ebeln like '7%' or
+149          ebeln like '3%'
+150         ).
+151            endselect.
+152            wa_tender_rpt-tndr_val = wa_zmm_pur_tender_d-tndr_val.
+153          else.
+154            wa_tender_rpt-tndr_val = wa_zmm_pur_tender_d-tndr_val.
+155          endif.
+156
+157          if wa_zmm_pur_tender_d-bsart cs 'ET' and wa_zmm_pur_tender_d-srm_tndr_val is INITIAL.
+158    **       call rfc to get values from srm
+159            perform get_data_from_srm using wa_zmm_pur_tender_d-submi  CHANGING   rfc_srm_tender_val ."wa_zmm_pur_tender_d-srm_tndr_val  .
+160            wa_tender_rpt-srm_tndr_val = rfc_srm_tender_val.  "wa_zmm_pur_tender_d-srm_tndr_val.
+161          else.
+162            wa_tender_rpt-srm_tndr_val = wa_zmm_pur_tender_d-srm_tndr_val.
+163          endif.
+164
+165          select single BATXT from ZMM_PUR_TRTYP  into wa_tender_rpt-batxt  where bsart = wa_zmm_pur_tender_d-bsart.
+166    *        endselect.
+167    *        wa_tender_rpt-batxt = wa_zmm_pur_tender_d-bsart.
+168
+169          if wa_tender_rpt-srm_tndr_val is not INITIAL.
+170            clear wa_tender_rpt-tndr_val.
+171          endif.
+172          if wa_tender_rpt-srm_tndr_val is INITIAL and wa_zmm_pur_tender_d-bsart cs 'ET'.
+173
+174          else.
+175
+176            if wa_zmm_pur_tender_d-bsart cs 'ET'.
+177              count_e_tender = count_e_tender + 1.
+178              total_e_tender =  total_e_tender + wa_tender_rpt-srm_tndr_val .
+179            else.
+180              count_n_tender = count_n_tender + 1.
+181              total_n_tender = total_n_tender + wa_tender_rpt-tndr_val.
+182            endif.
+183            append wa_tender_rpt to itab_tender_rpt .
+184          endif.
+185
+186          clear wa_tender_rpt.
+187          clear wa_zmm_pur_tender_d.
+188        endloop.
+189
+190        total_e_tender = total_e_tender / '10000000.00' .          " changing in crores
+191        total_n_tender = total_n_tender / '10000000.00' .          " changing in crores
+192
+193
+194        refresh itab_zmm_pur_tender_d.
+195
+196        if list_check = 'X'.
+197          perform generate_fcat.
+198          perform event_get.
+199          perform display_in_alv_grid .
+200          leave to screen 100.
+201        elseif sum_check = 'X'.
+202
+203          refresh  itab_sum_tender_rpt .
+204
+205          clear wa1_sum_tender_rpt .
+206          clear wa_sum_tender_rpt .
+207          wa_sum_tender_rpt-title = 'Normal Tender'.
+208          wa_sum_tender_rpt-tendercount = count_n_tender.
+209          wa_sum_tender_rpt-tendervalue = total_n_tender.
+210          if (  count_n_tender + count_e_tender ) gt 0.
+211            wa_sum_tender_rpt-tendercountper = ( count_n_tender * 100 ) /
+212                                                 ( count_n_tender + count_e_tender  ).
+213            wa1_sum_tender_rpt-tendercountper =  wa_sum_tender_rpt-tendercountper.
+214          endif.
+215          if ( total_n_tender + total_e_tender ) gt 0.
+216            wa_sum_tender_rpt-tendervalueper = ( total_n_tender * 100 ) /
+217                                               ( total_n_tender + total_e_tender ).
+218            wa1_sum_tender_rpt-tendervalueper =  wa_sum_tender_rpt-tendervalueper.
+219          endif.
+220          append wa_sum_tender_rpt to itab_sum_tender_rpt.
+221
+222          clear wa_sum_tender_rpt .
+223          wa_sum_tender_rpt-title = 'E-Tender'.
+224          wa_sum_tender_rpt-tendercount = count_e_tender.
+225          wa_sum_tender_rpt-tendervalue = total_e_tender.
+226          if (  count_n_tender + count_e_tender ) gt 0.
+227            wa_sum_tender_rpt-tendercountper = ( count_e_tender * 100 )  /
+228                                                 ( count_n_tender + count_e_tender  ) .
+229            wa1_sum_tender_rpt-tendercountper = wa1_sum_tender_rpt-tendercountper + wa_sum_tender_rpt-tendercountper.
+230          endif.
+231          if ( total_n_tender + total_e_tender ) gt 0.
+232            wa_sum_tender_rpt-tendervalueper = ( total_e_tender * 100 )  /
+233                                               ( total_n_tender + total_e_tender ) .
+234            wa1_sum_tender_rpt-tendervalueper = wa1_sum_tender_rpt-tendervalueper + wa_sum_tender_rpt-tendervalueper.
+235          endif.
+236          append wa_sum_tender_rpt to itab_sum_tender_rpt.
+237
+238          clear wa_sum_tender_rpt .
+239          wa_sum_tender_rpt-title = 'Total'.
+240          wa_sum_tender_rpt-tendercount = count_e_tender + count_n_tender .
+241          wa_sum_tender_rpt-tendervalue = total_e_tender + total_n_tender.
+242          wa_sum_tender_rpt-tendercountper = wa1_sum_tender_rpt-tendercountper.
+243          wa_sum_tender_rpt-tendervalueper = wa1_sum_tender_rpt-tendervalueper .
+244
+245          append wa_sum_tender_rpt to itab_sum_tender_rpt.
+246          clear wa1_sum_tender_rpt .
+247          clear wa_sum_tender_rpt .
+248
+249          perform generate_fcat_sum.
+250          perform event_get.
+251          perform display_in_alv_grid_sum .
+252          leave to screen 100.
+253        endif.
+254      else.
+255        MESSAGE i010(ad) WITH text-003 DISPLAY LIKE 'I'.
+256      endif.
+257
+258    ENDFORM.                    " OPERATIONS_100
+259    *&---------------------------------------------------------------------*
+260    *&      Form  CHECK_IN_EKKO
+261    *&---------------------------------------------------------------------*
+262    *       text
+263    *----------------------------------------------------------------------*
+264    *      -->P_WA_ITAB_ZMM_PUR_TENDER_D_SUBMI  text
+265    *      <--P_FLAG1  text
+266    *----------------------------------------------------------------------*
+267    FORM CHECK_IN_EKKO  USING    P_WA_ZMM_PUR_TENDER_D_SUBMI
+268                        CHANGING P_FLAG1.
+269
+270      select * from ekko into CORRESPONDING FIELDS OF TABLE itab_ekko
+271    *    for ALL ENTRIES IN itab_zmm_dumven_tnrpt
+272        where
+273        submi = P_WA_ZMM_PUR_TENDER_D_SUBMI
+274        and
+275        bedat ge i_startdate and
+276    *    bedat le i_enddate
+277    *    and
+278        lifnr not in ( select lifnr from zmm_dumven_tnrpt )
+279    *     ( lifnr ne '0000107291' and
+280    *    lifnr ne '0000403790' ) and
+281    *    ( lifnr ne '107291' and
+282    *    lifnr ne '403790' )
+283        and
+284        ( ebeln like '6%' or
+285          ebeln like '7%' or
+286          ebeln like '3%'
+287         )
+288        .
+289      if sy-subrc = 0.
+290        P_FLAG1 = 'X'.
+291        clear itab_ekko.
+292      else.
+293        clear P_FLAG1.
+294      endif.
+295
+296    ENDFORM.                    " CHECK_IN_EKKO
+297    *&---------------------------------------------------------------------*
+298    *&      Form  GENERATE_FCAT
+299    *&---------------------------------------------------------------------*
+300    *       text
+301    *----------------------------------------------------------------------*
+302    *  -->  p1        text
+303    *  <--  p2        text
+304    *----------------------------------------------------------------------*
+305    FORM GENERATE_FCAT .
+306      DATA: countm type i,
+307            title_str type string.
+308
+309      countm = 0.
+310      refresh ist_fcat.
+311
+312      countm = countm + 1.
+313      clear title_str.
+314      title_str = 'Tender No'.
+315      wa_fieldcat-fieldname = 'SUBMI'.
+316      wa_fieldcat-tabname = 'itab_tender_rpt'.
+317      wa_fieldcat-col_pos = countm.
+318      wa_fieldcat-SELTEXT_L = title_str.
+319      wa_fieldcat-SELTEXT_m = title_str.
+320      wa_fieldcat-SELTEXT_S = title_str.
+321      wa_fieldcat-hotspot     = 'X' .
+322      wa_fieldcat-outputlen = '000012'.
+323      append  wa_fieldcat to ist_fcat.
+324      clear wa_fieldcat.
+325
+326      countm = countm + 1.
+327      clear title_str.
+328      title_str = 'TenderDate'.
+329      wa_fieldcat-fieldname = 'TDRDT'.
+330      wa_fieldcat-tabname = 'itab_tender_rpt'.
+331      wa_fieldcat-col_pos = countm.
+332      wa_fieldcat-SELTEXT_L = title_str.
+333      wa_fieldcat-SELTEXT_m = title_str.
+334      wa_fieldcat-SELTEXT_S = title_str.
+335      wa_fieldcat-outputlen = '000012'.
+336      append  wa_fieldcat to ist_fcat.
+337      clear wa_fieldcat.
+338
+339      countm = countm + 1.
+340      clear title_str.
+341      title_str = 'Tender Type'.
+342      wa_fieldcat-fieldname = 'BATXT'.
+343      wa_fieldcat-tabname = 'itab_tender_rpt'.
+344      wa_fieldcat-col_pos = countm.
+345      wa_fieldcat-SELTEXT_L = title_str.
+346      wa_fieldcat-SELTEXT_m = title_str.
+347      wa_fieldcat-SELTEXT_S = title_str.
+348      wa_fieldcat-outputlen = '000022'.
+349      append  wa_fieldcat to ist_fcat.
+350      clear wa_fieldcat.
+351
+352      countm = countm + 1.
+353      clear title_str.
+354      title_str = 'Purchasing Group'.
+355      wa_fieldcat-fieldname = 'EKNAM'.                 "  changed CR 30011444
+356      wa_fieldcat-tabname = 'T024'.
+357      wa_fieldcat-col_pos = countm.
+358      wa_fieldcat-SELTEXT_L = title_str.
+359      wa_fieldcat-SELTEXT_m = title_str.
+360      wa_fieldcat-SELTEXT_S = title_str.
+361      wa_fieldcat-outputlen = '000020'.
+362      append  wa_fieldcat to ist_fcat.
+363      clear wa_fieldcat.
+364
+365    **  countm = countm + 1.
+366    **  clear title_str.
+367    **  title_str = 'Purchasing Group'.
+368    **  wa_fieldcat-fieldname = 'EKGRP'.
+369    **  wa_fieldcat-tabname = 'ZMM_PUR_TENDER_D'.
+370    **  wa_fieldcat-col_pos = countm.
+371    **  wa_fieldcat-SELTEXT_L = title_str.
+372    **  wa_fieldcat-SELTEXT_m = title_str.
+373    **  wa_fieldcat-SELTEXT_S = title_str.
+374    **  wa_fieldcat-outputlen = '000012'.
+375    **  append  wa_fieldcat to ist_fcat.
+376    **  clear wa_fieldcat.
+377
+378      countm = countm + 1.
+379      clear title_str.
+380      title_str = 'Tender Value'.
+381      wa_fieldcat-fieldname = 'TNDR_VAL'.
+382      wa_fieldcat-tabname = 'itab_tender_rpt'.
+383      wa_fieldcat-col_pos = countm.
+384      wa_fieldcat-SELTEXT_L = title_str.
+385      wa_fieldcat-SELTEXT_m = title_str.
+386      wa_fieldcat-SELTEXT_S = title_str.
+387      wa_fieldcat-outputlen = '000020'.
+388      append  wa_fieldcat to ist_fcat.
+389      clear wa_fieldcat.
+390
+391      countm = countm + 1.
+392      clear title_str.
+393      title_str = 'SRMTender Value'.
+394      wa_fieldcat-fieldname = 'SRM_TNDR_VAL'.
+395      wa_fieldcat-tabname = 'itab_tender_rpt'.
+396      wa_fieldcat-col_pos = countm.
+397      wa_fieldcat-SELTEXT_L = title_str.
+398      wa_fieldcat-SELTEXT_m = title_str.
+399      wa_fieldcat-SELTEXT_S = title_str.
+400      wa_fieldcat-outputlen = '000020'.
+401      append  wa_fieldcat to ist_fcat.
+402      clear wa_fieldcat.
+403
+404
+405
+406
+407
+408
+409    ENDFORM.                    " GENERATE_FCAT
+410    *&---------------------------------------------------------------------*
+411    *&      Form  EVENT_GET
+412    *&---------------------------------------------------------------------*
+413    *       text
+414    *----------------------------------------------------------------------*
+415    *  -->  p1        text
+416    *  <--  p2        text
+417    *----------------------------------------------------------------------*
+418    FORM EVENT_GET .
+419      g_repid = sy-repid.
+420
+421      wa_events-name = 'USER_COMMAND'.
+422      wa_events-form =  'PROCESS_USER_COMMAND'.
+423      APPEND wa_events TO ist_events.
+424      CLEAR wa_events.
+425
+426      wa_events-name = slis_ev_top_of_page.
+427      wa_events-form =  'TOP_OF_PAGE'.
+428      append wa_events to ist_events.
+429    *  wa_events-name = slis_ev_user_command.
+430    *  wa_events-form = 'USER_COMMAND'.
+431    *  append wa_events to ist_events.
+432      clear wa_events.
+433    ENDFORM.                    " EVENT_GET
+434    *&---------------------------------------------------------------------*
+435    *&      Form  DISPLAY_IN_ALV_GRID
+436    *&---------------------------------------------------------------------*
+437    *       text
+438    *----------------------------------------------------------------------*
+439    *  -->  p1        text
+440    *  <--  p2        text
+441    *----------------------------------------------------------------------*
+442    FORM DISPLAY_IN_ALV_GRID .
+443      wa_layout-zebra                = 'X'.
+444
+445      CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+446        EXPORTING
+447          I_CALLBACK_PROGRAM     = g_repid
+448          I_CALLBACK_TOP_OF_PAGE = 'TOP_OF_PAGE'
+449          I_GRID_TITLE           = text-001
+450          IS_LAYOUT              = wa_layout
+451          IT_FIELDCAT            = ist_fcat
+452          IT_EVENTS              = ist_events
+453          I_DEFAULT              = 'X'
+454          I_SAVE                 = 'A'
+455        TABLES
+456          T_OUTTAB               = itab_tender_rpt
+457        EXCEPTIONS
+458          PROGRAM_ERROR          = 1
+459          OTHERS                 = 2.
+460      IF SY-SUBRC <> 0.
+461        MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+462                WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+463      ENDIF.
+464    ENDFORM.                    " DISPLAY_IN_ALV_GRID
+465    *&---------------------------------------------------------------------*
+466    *&      Form  GENERATE_FCAT_SUM
+467    *&---------------------------------------------------------------------*
+468    *       text
+469    *----------------------------------------------------------------------*
+470    *  -->  p1        text
+471    *  <--  p2        text
+472    *----------------------------------------------------------------------*
+473    FORM GENERATE_FCAT_SUM .
+474
+475      DATA: countm type i,
+476            title_str type string.
+477
+478      countm = 0.
+479      refresh ist_fcat.
+480
+481      countm = countm + 1.
+482      clear title_str.
+483      title_str = 'DESCRIPTION'.
+484      wa_fieldcat-fieldname = 'TITLE'.
+485      wa_fieldcat-tabname = 'itab_sum_tender_rpt'.
+486      wa_fieldcat-col_pos = countm.
+487      wa_fieldcat-SELTEXT_L = title_str.
+488      wa_fieldcat-SELTEXT_m = title_str.
+489      wa_fieldcat-SELTEXT_S = title_str.
+490      wa_fieldcat-outputlen = '000020'.
+491      append  wa_fieldcat to ist_fcat.
+492      clear wa_fieldcat.
+493
+494      countm = countm + 1.
+495      clear title_str.
+496      title_str = 'NUMBER'.
+497      wa_fieldcat-fieldname = 'TENDERCOUNT'.
+498      wa_fieldcat-tabname = 'itab_sum_tender_rpt'.
+499      wa_fieldcat-col_pos = countm.
+500      wa_fieldcat-SELTEXT_L = title_str.
+501      wa_fieldcat-SELTEXT_m = title_str.
+502      wa_fieldcat-SELTEXT_S = title_str.
+503      wa_fieldcat-outputlen = '000012'.
+504      append  wa_fieldcat to ist_fcat.
+505      clear wa_fieldcat.
+506
+507      countm = countm + 1.
+508      clear title_str.
+509      title_str = 'VALUE(in Crores)'.
+510      wa_fieldcat-fieldname = 'TENDERVALUE'.
+511      wa_fieldcat-tabname = 'itab_sum_tender_rpt'.
+512      wa_fieldcat-col_pos = countm.
+513      wa_fieldcat-SELTEXT_L = title_str.
+514      wa_fieldcat-SELTEXT_m = title_str.
+515      wa_fieldcat-SELTEXT_S = title_str.
+516      wa_fieldcat-outputlen = '000025'.
+517      append  wa_fieldcat to ist_fcat.
+518      clear wa_fieldcat.
+519
+520      countm = countm + 1.
+521      clear title_str.
+522      title_str = 'NUMBER OF TENDERS(%)'.
+523      wa_fieldcat-fieldname = 'TENDERCOUNTPER'.
+524      wa_fieldcat-tabname = 'itab_sum_tender_rpt'.
+525      wa_fieldcat-col_pos = countm.
+526      wa_fieldcat-SELTEXT_L = title_str.
+527      wa_fieldcat-SELTEXT_m = title_str.
+528      wa_fieldcat-SELTEXT_S = title_str.
+529      wa_fieldcat-outputlen = '000020'.
+530      append  wa_fieldcat to ist_fcat.
+531      clear wa_fieldcat.
+532
+533      countm = countm + 1.
+534      clear title_str.
+535      title_str = 'VALUE OF TENDERS(%)'.
+536      wa_fieldcat-fieldname = 'TENDERVALUEPER'.
+537      wa_fieldcat-tabname = 'itab_sum_tender_rpt'.
+538      wa_fieldcat-col_pos = countm.
+539      wa_fieldcat-SELTEXT_L = title_str.
+540      wa_fieldcat-SELTEXT_m = title_str.
+541      wa_fieldcat-SELTEXT_S = title_str.
+542      wa_fieldcat-outputlen = '000020'.
+543      append  wa_fieldcat to ist_fcat.
+544      clear wa_fieldcat.
+545
+546
+547
+548    ENDFORM.                    " GENERATE_FCAT_SUM
+549    *&---------------------------------------------------------------------*
+550    *&      Form  DISPLAY_IN_ALV_GRID_SUM
+551    *&---------------------------------------------------------------------*
+552    *       text
+553    *----------------------------------------------------------------------*
+554    *  -->  p1        text
+555    *  <--  p2        text
+556    *----------------------------------------------------------------------*
+557    FORM DISPLAY_IN_ALV_GRID_SUM .
+558      wa_layout-zebra                = 'X'.
+559
+560      CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+561        EXPORTING
+562          I_CALLBACK_PROGRAM     = g_repid
+563          I_CALLBACK_TOP_OF_PAGE = 'TOP_OF_PAGE'
+564          I_GRID_TITLE           = text-001
+565          IS_LAYOUT              = wa_layout
+566          IT_FIELDCAT            = ist_fcat
+567          IT_EVENTS              = ist_events
+568          I_DEFAULT              = 'X'
+569          I_SAVE                 = 'A'
+570        TABLES
+571          T_OUTTAB               = itab_sum_tender_rpt
+572        EXCEPTIONS
+573          PROGRAM_ERROR          = 1
+574          OTHERS                 = 2.
+575      IF SY-SUBRC <> 0.
+576        MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+577                WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+578      ENDIF.
+579    ENDFORM.                    " DISPLAY_IN_ALV_GRID_SUM
+580
+581    *-------------------------------------------------------------------*
+582    * Form  TOP-OF-PAGE                                                 *
+583    *-------------------------------------------------------------------*
+584    * ALV Report Header                                                 *
+585    *-------------------------------------------------------------------*
+586    FORM TOP_OF_PAGE.
+587    *ALV Header declarations
+588      DATA: T_HEADER TYPE SLIS_T_LISTHEADER,
+589            WA_HEADER TYPE SLIS_LISTHEADER,
+590            T_LINE LIKE WA_HEADER-INFO,
+591            LD_LINES TYPE I,
+592            LD_LINESC(10) TYPE C.
+593    * Title
+594      WA_HEADER-TYP  = 'H'.
+595      WA_HEADER-INFO = 'Tender Report'.
+596      APPEND WA_HEADER TO T_HEADER.
+597      CLEAR WA_HEADER.
+598    * Date
+599      WA_HEADER-TYP  = 'S'.
+600      WA_HEADER-KEY = 'Date: '.
+601    **  CONCATENATE  SY-DATUM+6(2) '.'
+602    **               SY-DATUM+4(2) '.'
+603    **               SY-DATUM(4) INTO WA_HEADER-INFO.   "todays date
+604      CONCATENATE  i_startdate+6(2) '.'
+605                   i_startdate+4(2) '.'
+606                   i_startdate(4)
+607                   '-to-'
+608                   i_enddate+6(2) '.'
+609                   i_enddate+4(2) '.'
+610                   i_enddate(4)
+611
+612                   INTO WA_HEADER-INFO.   "todays date
+613    *  CONCATENATE i_startdate 'to' i_enddate  INTO WA_HEADER-INFO SEPARATED BY space.   "todays date
+614      APPEND WA_HEADER TO T_HEADER.
+615      CLEAR: WA_HEADER.
+616      CALL FUNCTION 'REUSE_ALV_COMMENTARY_WRITE'
+617        EXPORTING
+618          IT_LIST_COMMENTARY = T_HEADER.
+619    ENDFORM.                    "top-of-page
+620
+621    *&---------------------------------------------------------------------*
+622    *----------------------------------------------------------------------*
+623    FORM get_data_from_srm using WA_SUBMI
+624                                 CHANGING
+625                                 WA_SRMTNDRVAL  .
+626
+627      DATA : l_submi TYPE ZMM_PUR_TENDER_D-submi.
+628
+629      DATA : l_start_time        TYPE sy-datum,
+630             l_quot_dead         TYPE sy-datum,
+631             l_zzpricebid_dt     TYPE sy-datum,
+632             l_zztbid_dt         TYPE sy-datum,
+633             l_zzpbconf_dt       TYPE sy-datum,
+634             l_zzten_typ(1)               ,
+635             l_tndr_cl_dt        TYPE sy-datum,
+636             l_zzpricebid_act_dt TYPE sy-datum,
+637             l_zztbid_act_dt     TYPE sy-datum,
+638             l_zztendval         TYPE wt_dmbtr.
+639
+640
+641      DATA: l_logsys(32).
+642
+643    * To fetch logical system
+644      SELECT SINGLE logsys FROM zmm_logsys INTO l_logsys
+645                    WHERE  appl = 'SRM'.
+646
+647      IF sy-subrc NE 0.
+648        MESSAGE e206(zmm).
+649      ENDIF.
+650
+651
+652
+653      CLEAR : l_submi,
+654              l_start_time,
+655              l_quot_dead,
+656              l_zzpricebid_dt,
+657              l_zztbid_dt,
+658              l_zzpbconf_dt,
+659              l_zzten_typ,
+660              l_zzpricebid_act_dt,
+661              l_zztbid_act_dt,
+662              l_zztendval.
+663
+664      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+665        EXPORTING
+666          input  = WA_SUBMI
+667        IMPORTING
+668          output = l_submi.
+669
+670      CALL FUNCTION 'ZSRM_GET_E_PROC_DATES' DESTINATION l_logsys
+671        EXPORTING
+672          object_id         = l_submi
+673        IMPORTING
+674          start_time        = l_start_time
+675          quot_dead         = l_quot_dead
+676          zzpricebid_dt     = l_zzpricebid_dt
+677          zztbid_dt         = l_zztbid_dt
+678          zzpbconf_dt       = l_zzpbconf_dt
+679          zzten_typ         = l_zzten_typ
+680          ps_tndr_cl_dt     = l_tndr_cl_dt
+681          zzpricebid_act_dt = l_zzpricebid_act_dt
+682          zztbid_act_dt     = l_zztbid_act_dt
+683          zztendval         = l_zztendval.
+684
+685      WA_SRMTNDRVAL = l_zztendval.
+686    ENDFORM.                    "get_data_from_srm
+687
+688    *&---------------------------------------------------------------------*
+689    *&      Form  process_user_command
+690    *&---------------------------------------------------------------------*
+691    *       text
+692    *----------------------------------------------------------------------*
+693    *      -->P_UCOMM    text
+694    *      -->P_SELFIELD text
+695    *----------------------------------------------------------------------*
+696    FORM process_user_command USING p_ucomm     LIKE sy-ucomm
+697                                    p_selfield TYPE slis_selfield.
+698
+699      DATA : l_f1(5).
+700      MOVE p_selfield-fieldname TO l_f1.
+701
+702      IF l_f1 = text-048 .
+703        SET PARAMETER ID 'ZTMS' FIELD p_selfield-value.
+704
+705        CALL TRANSACTION 'ZMMTMSDISP' AND SKIP FIRST SCREEN.
+706      ENDIF.
+707    ENDFORM.                    "process_user_command
+*--- End of ZMM_TENDER_RPT_F01 - 707 lines ---

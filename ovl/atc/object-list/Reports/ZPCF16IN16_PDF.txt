@@ -1,0 +1,2683 @@
+*&---------------------------------------------------------------------*
+*&  Include           PCF16IN16_PDF
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Form  PRINT_PDF_MODULE
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM print_pdf_module .
+  DATA:   lang TYPE sy-langu,
+          page_no TYPE i,
+          tax_perk(10) TYPE c,
+          eerecvr(9) TYPE c,
+          val_perk(10) TYPE c,
+          val_f12ba TYPE maxbt,
+          prof_f12ba TYPE maxbt,
+          sal_sec17 TYPE maxbt,
+          tot_val_perk TYPE maxbt,
+          tot_eerecvr TYPE maxbt,
+          tot_tax_perk TYPE maxbt,
+          salaries_wo_perk TYPE maxbt,
+          f12ba_balance TYPE maxbt,
+          f12ba_std_ded TYPE maxbt,
+          total_taxpdf LIKE pc207-betrg,
+          conmt_pf_pdf TYPE maxbt,
+          dedmt_pf_pdf TYPE maxbt,
+          enddate TYPE sy-datum.
+  DATA : gs_f16data TYPE hcm_hincf160_f16_pdf,
+         gs_deductions TYPE hcm_hincf160_deductions_pdf,
+         gt_deductions TYPE STANDARD
+              TABLE OF hcm_hincf160_deductions_pdf,
+         gs_rebate TYPE hcm_hincf160_rebate_pdf,
+         gt_rebate TYPE STANDARD
+                TABLE OF hcm_hincf160_rebate_pdf,
+         gs_annexure TYPE hcm_hincf160_annexure_pdf,
+         gt_grosstab TYPE STANDARD TABLE OF hcm_hincf160_annexure_pdf,
+         gt_perkstab TYPE STANDARD TABLE OF hcm_hincf160_annexure_pdf,
+         gt_ifostab TYPE STANDARD TABLE OF hcm_hincf160_annexure_pdf,
+         gt_exemptab TYPE STANDARD TABLE OF hcm_hincf160_annexure_pdf,
+         gt_annex_exemptab TYPE STANDARD TABLE OF hcm_hincf160_annexure_pdf,
+         gs_f12badetails TYPE hcm_hincf160_f12ba_details_pdf,
+         gs_temsedetails TYPE hcm_hincf160_temsedetails_pdf, " MDSNT
+         gt_temsedetails TYPE STANDARD TABLE OF
+         hcm_hincf160_temsedetails_pdf,
+         gt_f12k_deductions TYPE STANDARD TABLE OF hcm_hincf160_deductions_pdf.
+
+  DATA : oth_income_s(15) TYPE c,                           "PKT1148133
+         net_tax_payable_s(15) TYPE c,
+         val_perk_s(15) TYPE c,
+         eerecvr_s(15) TYPE c,
+         tax_perk_s(15) TYPE c,
+         tot_val_perk_s(15) TYPE c,
+         tot_eerecvr_s(15) TYPE c,
+         tot_tax_perk_s(15) TYPE c,
+         gross_tab_amount_s(15) TYPE c,
+         perk_tab_amount_s(15) TYPE c,
+         ifos_tab_amount_s(15) TYPE c,
+         sec10_tab_amount_s(15) TYPE c,
+         gross_tab_amount(15) TYPE c,
+         perk_tab_amount(15) TYPE c,
+         ifos_tab_amount(15) TYPE c,
+         sec10_tab_amount(15) TYPE c.
+
+  DATA: ent_all LIKE pc207-betrg,
+        conti TYPE i.
+  DATA: lst_formoutput type fpformoutput,
+        lv_filename_out   TYPE string.
+  DATA: l_length      TYPE i,
+        l_table      TYPE tsfixml,
+        mail_counter TYPE int4,
+        lv_time TYPE string.
+  DATA: BEGIN OF temp_payments OCCURS 10.
+          INCLUDE STRUCTURE pinbk.
+  DATA: END OF temp_payments.
+  DATA: out TYPE i.
+  DATA : j TYPE i.
+
+  DATA: l_fp             TYPE REF TO if_fp,
+        l_pdfobj         TYPE REF TO if_fp_pdf_object,
+        l_fpex           TYPE REF TO cx_fp_runtime,
+        l_filename_out   TYPE string,
+        pdf_string_x  TYPE xstring,
+        pdf_fsize TYPE i.
+
+  DATA: p_dest       TYPE rfcdest VALUE 'ADS_HTTPS',
+        p_dest2      TYPE rfcdest VALUE 'ADS'.
+  DATA: s_field(100)   TYPE c VALUE 'data[0].FORM16_BODY_PAGE2.FORM16_2.TOT_AMT_DEDUC.SignatureField1[0]'.
+  DATA: s_field1(100)  TYPE c VALUE 'data[0].F12BA_BODY_PAGE.F12BA.FOOTER.DETAILS.SignatureField1[0]'.
+  DATA: s_field2(100)  TYPE c VALUE 'data[0].FORM16_BODY_PAGE2.TOT_AMT_DEDUC.SignatureField1[0]'.  "Page 2/3
+  DATA: l_out           TYPE xstring,
+        l_in            TYPE xstring,
+        l_f16           TYPE xstring,
+        l_12ba          TYPE xstring,
+        l_annex         TYPE xstring,
+        l_f12bb         TYPE xstring,
+        l_out1          TYPE xstring,
+        formoutput TYPE fpformoutput,
+        form12ba   TYPE fpformoutput,
+        formannex  TYPE fpformoutput,
+        form12bb  TYPE fpformoutput,
+        form_annex_new TYPE fpformoutput.
+
+  DATA : gs_fpoutparams TYPE sfpoutputparams, "output parameters
+         gv_fmname  TYPE rs38l_fnam, " function module name
+         gs_fpdocparams      TYPE sfpdocparams,
+         error_string      TYPE string.
+  DATA: num TYPE i,
+        assm_end(4) TYPE c,
+        fin_start(4) TYPE c,
+        fin_end(4) TYPE c,
+        sname LIKE t596f-sname,
+        disp_flg_lot TYPE i VALUE 1,
+        disp_flg_lo1 TYPE i VALUE 1,
+        disp_flg_bnk TYPE i VALUE 1,
+        negtv TYPE i VALUE -1,
+*      ENDDATE LIKE SY-DATUM,
+        ret_cd LIKE sy-subrc,
+        title LIKE sy-title,
+        headline(20).
+  DATA: state LIKE t005u-bezei.
+* COntrol log changes 09/11/2009.
+  DATA: control_log TYPE hrin_contlog,
+        wa_cont_log LIKE LINE OF control_log.
+  DATA: contlogform TYPE fpformoutput.
+  DATA: s_field10(100)  TYPE c VALUE 'data[0].SignatureField1[0]'.
+
+  DATA : cntr TYPE i,                             " MDSNT927906
+          seq TYPE i.
+  DATA: cntr_f16 TYPE i,
+        cntr_rec TYPE n.
+  MOVE text-240 TO lang. "'EN'(240).
+  enddate = sy-datum.
+  IF NOT adscon IS INITIAL.
+    p_dest = adscon.
+  ENDIF.
+  DATA: number(6) TYPE n,
+        pbegda LIKE sy-datum,
+        pendda LIKE sy-datum,
+        fiyear LIKE t549q-pabrj,
+        doc_type(12),
+        eccback(40),
+        back_subrc LIKE sy-subrc,
+        count TYPE i,
+        found,
+        formname(30) TYPE c,
+        formname1(30) TYPE c,
+        formname2(30) TYPE c,
+        tax_pay_date LIKE sy-datum,
+        spec LIKE t52d4-evclv,
+        bankname(60) TYPE c,
+*      STATE LIKE T005U-BEZEI,
+        kwert LIKE t511k-kwert,
+        pr_emp_total LIKE pc207-betrg,  " Total of tax paid by the present
+                                        " employer to the tax office.
+        tax_deducted_wrds(130).
+********START OF PDF CODING********
+  DATA : lv_formname TYPE fpname.
+  DATA : lv_formname2 TYPE fpname.
+  DATA : lv_formname3 TYPE fpname.
+  DATA : lv_formname4 TYPE fpname,
+         lv_form_new_annex TYPE fpname.
+  DATA : lv_text(21) TYPE c,
+         lv_text1(18) TYPE c,
+         lv_text2(3) TYPE c,
+         lv_mesg TYPE string.
+  DATA lv_w_cx_root TYPE REF TO cx_root.
+  DATA f16_addr TYPE HCM_HINCF160_F16_PDF-ename1.
+  DATA lv_index TYPE i.
+  TYPES: BEGIN OF tmp_final_tab.
+        INCLUDE STRUCTURE hd_tab.
+        INCLUDE STRUCTURE main_tab.
+  TYPES: END OF tmp_final_tab.
+
+  DATA ls_final_tab TYPE tmp_final_tab.
+  DATA: tot_curr_sal TYPE pc207-betrg,
+        gs_chapvi TYPE hcm_hincf160_rebate_pdf,
+        gt_chapvi TYPE STANDARD
+                TABLE OF hcm_hincf160_rebate_pdf,
+        gs_deds TYPE hcm_hincf160_deductions_pdf,
+        gt_deds TYPE TABLE OF hcm_hincf160_deductions_pdf,
+        sec_80ccd1_ded TYPE maxbt,
+        sec_80ccd1_cont TYPE maxbt,
+        lv_ded80_conmt Type maxbt,
+        lv_ded80_dedmt TYPE maxbt,
+        sec80D_conmt TYPE maxbt,
+        sec80D_dedmt TYPE maxbt,
+        tot_coamt TYPE maxbt,
+        tot_qlamt TYPE maxbt,
+        tot_dedmt_k TYPE maxbt,
+        temp2(1) TYPE C.
+  DATA : dedmt_80g TYPE maxbt.
+
+  CONSTANTS:lc_form_2021  TYPE char20 VALUE 'HRIN_2F10K_2021'. " Added by C5309103 - 14.04.2021
+*******END OF PDF CODING***********
+  IF sy-batch = 'X' AND ( NOT layout IS INITIAL OR
+                          NOT layout1 IS INITIAL OR
+                          NOT layout2 IS INITIAL OR
+                          NOT layout3 IS INITIAL ).
+    disp_flg_lot = -1.
+  ENDIF.
+  PERFORM get_fiscal USING year afy_switch CHANGING pbegda pendda.
+********START OF CODING************
+  PERFORM job_open_pdf USING lang.
+********END OF CODING************
+  DESCRIBE TABLE final_tab LINES cntr_f16.
+  DATA:  form_16(1) TYPE c,
+        htext_switch TYPE c,
+        flextxt TYPE char40.
+  IF org = 'X'.
+    doc_type = 'ORIGINAL'.
+  ELSE.
+    doc_type = 'NON-ORIGINAL'.
+  ENDIF.
+  fin_start = pbegda(4).
+  fin_end = fin_start + 1.
+*  PERFORM get_custom_text CHANGING FLEXTXT.
+  LOOP AT final_tab.
+    lv_index = sy-tabix + 1.
+
+    CALL METHOD cl_hrpayin_switch_check_4=>hrlocin_sfws_sc_01
+      RECEIVING
+        rv_active = htext_switch.
+    IF htext_switch = 'X'.
+      PERFORM get_custom_text CHANGING flextxt final_tab-pernr.
+    ELSE.
+      flextxt = final_tab-pernr.
+    ENDIF.
+********START OF PDF CODING************
+    CLEAR :     gt_grosstab,
+                gt_perkstab,
+                gt_ifostab,
+                gt_exemptab,
+                gt_grosstab,
+                gt_perkstab,
+                gt_ifostab,
+                gs_f16data,
+                gs_f12badetails.
+
+    REFRESH : gt_deductions,
+              gt_rebate, gt_temsedetails ,gt_grosstab,
+              gt_perkstab, gt_ifostab, gt_exemptab,
+              gt_annex_exemptab,
+              gt_f12k_deductions.
+********END OF PDF CODING************
+    CLEAR : formoutput,
+            formannex,
+            form12ba.
+    CLEAR: state, form_16.
+************************************************************************
+* CLEARING VARIABLES OF FORM12BA
+    CLEAR val_f12ba.CLEAR prof_f12ba.CLEAR sal_sec17.CLEAR tot_val_perk.
+    CLEAR tot_eerecvr.CLEAR tot_tax_perk.
+    CLEAR: lv_ded80_conmt,
+           lv_ded80_dedmt,
+           sec80D_conmt,
+           sec80D_dedmt,
+           sec_80ccd1_ded,
+           sec_80ccd1_cont,
+           tot_coamt,
+           tot_dedmt_k,
+           tot_qlamt,
+           ifos_tab_amount,
+           ifos_tab_amount_s,
+           tot_curr_sal,
+           dedmt_80g.
+    enddate = final_tab-f16_endda.
+************************************************************************
+* Change for Form 16AA not applicable.
+" The Sname 40TAX016 in T596F is delimited until 12.2014
+" If customer is running the report for any period, check for the
+" end date in the table T596f, if the report year is within the date,
+" 40TAX016 is set in sname; otherwise 40TAX16A is set.
+    sname = '40TAX016'.
+
+    IF infos IS INITIAL.
+      IF final_tab-balance < 150000 AND final_tab-bus_prof <= 0 AND
+         final_tab-tds_ifos <= 0.
+        PERFORM re596f USING '40TAX16A' enddate.
+        IF sy-subrc NE 0. "If T596F entry for Form 16AA is delimited
+          IF disp_flg_lot < 1 AND layout3 NE ' '.
+            formname = layout3.
+            sname = '40TAX16A'.
+          ELSE.
+            sname = '40TAX016'.
+            PERFORM get_layout_set USING sname enddate
+                                    CHANGING formname.
+          ENDIF.
+        ELSE. "If entry available, display Form 16AA
+          sname = '40TAX16A'.
+          PERFORM get_layout_set USING sname enddate
+                                  CHANGING formname.
+        ENDIF.
+      ELSE.
+        form_16 = 'X'.
+        IF layout NE ' '.
+          formname = layout.
+        ELSE.
+          sname = '40TAX016'.
+          PERFORM get_layout_set USING sname enddate
+                                 CHANGING formname.
+        ENDIF.
+      ENDIF.
+    ELSE.
+      form_16 = 'X'.
+      IF layout NE ' '.
+        formname = layout.
+      ELSE.
+        sname = '40TAX016'.
+        PERFORM get_layout_set USING sname enddate
+                               CHANGING formname.
+      ENDIF.
+    ENDIF.
+********START OF PDF CODING***********
+    IF pf2f_10k = 'X' AND f16_new = 'X'.
+      IF layout5 NE ' '.
+        formname = layout5.
+      ELSE.
+       sname = '40IN2F10'.
+        PERFORM get_layout_set USING sname enddate
+                               CHANGING formname.
+      ENDIF.
+    ENDIF.
+    MOVE formname TO lv_formname.
+********END OF PDF CODING*************
+
+* Get employer address
+    CLEAR state.
+    CLEAR sadr.
+
+    PERFORM er_address USING final_tab-tanno
+                             final_tab-pernr
+                           CHANGING sadr_empr
+                                    sadr_cit
+                                    addr1_val_empr
+                                    addr1_val_cit  .
+    CONCATENATE addr1_val_empr-name1 addr1_val_empr-name2
+                addr1_val_empr-name3 addr1_val_empr-name4
+                INTO f16_addr.
+    MOVE : f16_addr TO gs_f16data-ename1,
+           doc_type TO gs_f16data-doc_type,
+           sadr_empr-stras TO gs_f16data-estreet,
+    sadr_empr-pstlz+0(6) TO gs_f16data-epocode,
+    sadr_empr-ort01 TO gs_f16data-ecity.
+    IF ( NOT sadr_empr-land1 IS INITIAL ) AND ( NOT sadr_empr-regio IS INITIAL ).
+      PERFORM re_t005u USING sadr_empr-land1 sadr_empr-regio
+                     CHANGING state.
+    ENDIF.
+    MOVE : state TO gs_f16data-estate.
+
+*  Fill CIT address
+    MOVE: sadr_cit-stras TO gs_f16data-itstreet,
+          sadr_cit-pfach TO gs_f16data-cpobox,
+          sadr_cit-pstlz+0(6) TO gs_f16data-itpocode,
+          sadr_cit-ort01 TO gs_f16data-itcity.
+
+* Get TDS Circle address
+    CLEAR sadr.
+    CLEAR state.
+    PERFORM get_address USING final_tab-addrs.
+    IF ( NOT sadr-land1 IS INITIAL ) AND ( NOT sadr-regio IS INITIAL ).
+      PERFORM re_t005u USING sadr-land1 sadr-regio
+                       CHANGING state.
+    ENDIF.
+********START OF PDF CODING*********
+    MOVE : sadr-name1 TO gs_f16data-cname1,
+           sadr-stras TO gs_f16data-cstreet,
+     sadr-pstlz+0(6) TO gs_f16data-cpocode,
+    sadr-ort01 TO gs_f16data-ccity,
+    state TO gs_f16data-cstate.
+********END OF PDF CODING*********
+
+    gs_f16data-ename = final_tab-ename.
+    gs_f16data-design = final_tab-position.
+    gs_f16data-empno = final_tab-pernr.
+    IF final_tab-emp_id IS NOT INITIAL.
+      gs_f16data-empid = final_tab-emp_id.
+      ELSE.
+      gs_f16data-empid = final_tab-pernr.
+    ENDIF.
+    gs_f16data-panno = final_tab-panno.
+    gs_f16data-tanno = final_tab-tanno.
+    gs_f16data-girno = final_tab-girno.
+    gs_f16data-icnum = final_tab-icnum.
+    gs_f16data-cert_no     = final_tab-cert_no.
+    gs_f16data-emp_refno   = final_tab-emp_refno.
+    gs_f16data-last_upd    = final_tab-last_upd.
+    gs_f16data-emp_address = final_tab-emp_address.
+
+    IF pbegda < final_tab-f16_begda.
+      gs_f16data-fybegda = final_tab-f16_begda.
+    ELSE.
+      IF afy_switch IS INITIAL.
+        MOVE pbegda TO gs_f16data-fybegda.
+      ELSE.
+        pbegda+4(4) = '0401'.
+        MOVE pbegda TO gs_f16data-fybegda.
+      ENDIF.
+    ENDIF.
+    IF final_tab-f16_endda < pendda.
+      gs_f16data-fyendda = final_tab-f16_endda.
+    ELSE.
+      IF afy_switch IS INITIAL.
+        gs_f16data-fyendda = pendda.
+      ELSE.
+        pendda+4(4) = '0331'.
+        gs_f16data-fyendda = pendda.
+      ENDIF.
+    ENDIF.
+    gs_f16data-assm_start = pendda(4).
+    gs_f16data-assm_end = pendda(4) + 1.
+
+    CLEAR sum_tab.
+    READ TABLE sum_tab WITH KEY cntr2 = final_tab-cntr2 pernr = final_tab-pernr.
+    IF sy-subrc = 0.
+
+      gs_f16data-acknoq1_1 = sum_tab-ackno_q1_1.
+      gs_f16data-acknoq1_2 = sum_tab-ackno_q1_2.
+      gs_f16data-acknoq1_3 = sum_tab-ackno_q1_3.
+      gs_f16data-acknoq1_4 = sum_tab-ackno_q1_4.
+      gs_f16data-txdedq1_1 = sum_tab-tax_ded_q1.
+      gs_f16data-txdepq1_1 = sum_tab-tax_dep_q1.
+      gs_f16data-amt_paid_q1 =  sum_tab-amt_paid_q1.
+
+      gs_f16data-acknoq2_1 = sum_tab-ackno_q2_1.
+      gs_f16data-acknoq2_2 = sum_tab-ackno_q2_2.
+      gs_f16data-acknoq2_3 = sum_tab-ackno_q2_3.
+      gs_f16data-acknoq2_4 = sum_tab-ackno_q2_4.
+      gs_f16data-txdedq2_1 = sum_tab-tax_ded_q2.
+      gs_f16data-txdepq2_1 = sum_tab-tax_dep_q2.
+      gs_f16data-amt_paid_q2 =  sum_tab-amt_paid_q2.
+
+      gs_f16data-acknoq3_1 = sum_tab-ackno_q3_1.
+      gs_f16data-acknoq3_2 = sum_tab-ackno_q3_2.
+      gs_f16data-acknoq3_3 = sum_tab-ackno_q3_3.
+      gs_f16data-acknoq3_4 = sum_tab-ackno_q3_4.
+      gs_f16data-txdedq3_1 = sum_tab-tax_ded_q3.
+      gs_f16data-txdepq3_1 = sum_tab-tax_dep_q3.
+      gs_f16data-amt_paid_q3 =  sum_tab-amt_paid_q3.
+
+      gs_f16data-acknoq4_1 = sum_tab-ackno_q4_1.
+      gs_f16data-acknoq4_2 = sum_tab-ackno_q4_2.
+      gs_f16data-acknoq4_3 = sum_tab-ackno_q4_3.
+      gs_f16data-acknoq4_4 = sum_tab-ackno_q4_4.
+      gs_f16data-txdedq4_1 = sum_tab-tax_ded_q4.
+      gs_f16data-txdepq4_1 = sum_tab-tax_dep_q4.
+      gs_f16data-amt_paid_q4 =  sum_tab-amt_paid_q4.
+
+      gs_f16data-taxded = sum_tab-tax_ded_q1 + sum_tab-tax_ded_q2 +
+                    sum_tab-tax_ded_q3 + sum_tab-tax_ded_q4.
+
+      gs_f16data-taxdep = sum_tab-tax_dep_q1 + sum_tab-tax_dep_q2 +
+                    sum_tab-tax_dep_q3 + sum_tab-tax_dep_q4.
+
+      gs_f16data-amt_paid = sum_tab-amt_paid_q1 + sum_tab-amt_paid_q2 +
+                   sum_tab-amt_paid_q3 + sum_tab-amt_paid_q4.
+
+    ENDIF.
+* Compute for sl. no. 1(b) of form 16
+    IF final_tab-f16_endda LT pendda.
+      LOOP AT form12ba_tab WHERE pernr = final_tab-pernr
+                             AND cntr2 = final_tab-cntr2
+                             AND evcls_spec NE 17 .
+        val_f12ba = val_f12ba + form12ba_tab-tax_perk .
+      ENDLOOP.
+    ELSE.
+      LOOP AT form12ba_tab WHERE pernr = final_tab-pernr
+                             AND evcls_spec NE 17 .
+        val_f12ba = val_f12ba + form12ba_tab-tax_perk .
+      ENDLOOP.
+    ENDIF.
+*   Value of perq u/s 17(2) from Prev Emp added.
+    IF f16_new EQ 'X'.
+      MOVE val_f12ba TO gs_f16data-val_f12ba.
+    ELSE.
+     val_f12ba = val_f12ba + final_tab-petd_s172.
+     MOVE val_f12ba TO gs_f16data-val_f12ba.
+    ENDIF.
+
+* Compute for sl. no. 1(c) of form 16
+    IF final_tab-f16_endda LT pendda.
+      LOOP AT form12ba_tab WHERE pernr = final_tab-pernr
+                             AND cntr2 = final_tab-cntr2
+                             AND evcls_spec = 17 .
+        prof_f12ba = prof_f12ba + form12ba_tab-tax_perk.
+      ENDLOOP.
+    ELSE.
+      LOOP AT form12ba_tab WHERE pernr = final_tab-pernr
+                             AND evcls_spec = 17 .
+        prof_f12ba = prof_f12ba + form12ba_tab-tax_perk.
+      ENDLOOP.
+    ENDIF.
+*   Value of Profits u/s 17(3) from Prev Emp added.
+    IF f16_new = 'X'.
+      MOVE prof_f12ba TO gs_f16data-prof_f12ba.
+    ELSE.
+     prof_f12ba = prof_f12ba + final_tab-petd_s173.
+     MOVE prof_f12ba TO gs_f16data-prof_f12ba.
+    ENDIF.
+
+    IF f16_new = 'X'.
+      sal_sec17 = final_tab-gross_sal -
+                  ( prof_f12ba + val_f12ba +
+                  final_tab-prev_emp_sal +
+                  final_tab-petd_s172 +
+                  final_tab-petd_s173 +
+                  final_tab-prev_com_sal ).
+
+      gs_f16data-sal_sec17 = sal_sec17.
+
+      tot_curr_sal = gs_f16data-sal_sec17 +
+                     gs_f16data-prof_f12ba +
+                     gs_f16data-val_f12ba.
+
+      gs_f16data-gross_sal = tot_curr_sal.
+
+      gs_f16data-prev_emp_sal = final_tab-prev_emp_sal +
+                                final_tab-petd_s172 +
+                                final_tab-petd_s173 +
+                                final_tab-prev_com_sal.
+
+      gs_f16data-std_ded = final_tab-std_ded.
+      gs_f16data-ptax = final_tab-ptax.
+      gs_f16data-sec10_all = final_tab-sec10_all.
+      gs_f16data-balance = gs_f16data-gross_sal - gs_f16data-sec10_all.
+      gs_f16data-aggr_ded = final_tab-aggr_ded.
+      gs_f16data-salaries = final_tab-salaries.
+      gs_f16data-income_hous = final_tab-dedn_s24.
+      gs_f16data-oth_income = final_tab-oth_income.
+      gs_f16data-tot_income = final_tab-tot_income.
+      gs_f16data-tax_tot_income = final_tab-tax_tot_income.
+      gs_f16data-tax_credit = final_tab-tax_credit.
+      gs_f16data-surcharge = final_tab-surchg.
+      gs_f16data-edu_cess = final_tab-edu_cess.
+      gs_f16data-tax_bef_relief = final_tab-tax_payable_before_relief.
+      gs_f16data-sec89_relief = final_tab-sec89_relief.
+      gs_f16data-tax_payable = final_tab-tax_payable.
+      gs_f16data-tax_deducted = final_tab-tax_deducted.
+      gs_f16data-tot_tax_deducted = final_tab-tot_tax_deducted.
+      gs_f16data-employer_tax = final_tab-tax_paid_employer.
+      gs_f16data-grs_annex = gs_f16data-gross_sal +
+                             gs_f16data-prev_emp_sal.
+    ELSE.
+*   Compute for sl. no. 1(a) of form 16
+    sal_sec17 = final_tab-gross_sal - ( prof_f12ba + val_f12ba ).
+    gs_f16data-sal_sec17 = sal_sec17.
+    gs_f16data-gross_sal = final_tab-gross_sal.
+    gs_f16data-sec10_all = final_tab-sec10_all.
+    gs_f16data-balance = final_tab-balance.
+    gs_f16data-std_ded = final_tab-std_ded.
+    gs_f16data-ptax = final_tab-ptax.
+    gs_f16data-aggr_ded = final_tab-aggr_ded.
+    gs_f16data-salaries = final_tab-salaries.
+    gs_f16data-oth_income = final_tab-oth_income.
+    gs_f16data-gross_tot_income = final_tab-gross_tot_income.
+    gs_f16data-sec80_ded = final_tab-sec80_ded.
+    gs_f16data-tot_income = final_tab-tot_income.
+    gs_f16data-tax_tot_income = final_tab-tax_tot_income.
+    gs_f16data-tot_epf = final_tab-epf_tot.
+*      GS_F16DATA-TOT_SEC88 = FINAL_TAB-TOT_SEC88.
+    gs_f16data-chapvi_ded = final_tab-chapvi_ded.
+    gs_f16data-sec88_ded = final_tab-sec88_ded.
+    gs_f16data-secb88_ded = final_tab-sec88b_ded.
+    gs_f16data-secc88_ded = final_tab-sec88c_ded.
+    gs_f16data-chapvi_ded = final_tab-chapvi_ded.
+    gs_f16data-sec89_relief = final_tab-sec89_relief.
+    gs_f16data-tax_payable = final_tab-tax_payable.
+    gs_f16data-tax_deducted = final_tab-tax_deducted.
+    gs_f16data-employer_tax = final_tab-tax_paid_employer.
+    gs_f16data-tax_bef_relief = final_tab-tax_payable_before_relief.
+*      GS_F16DATA-TOTAL_TAX = FINAL_TAB-TOTAL_TAX.
+    gs_f16data-net_tax_payable = final_tab-net_tax_payable.
+    gs_f16data-tds_petd = final_tab-tds_petd.
+    gs_f16data-tds_ifos = final_tab-tds_ifos.
+    gs_f16data-tot_tax_deducted = final_tab-tot_tax_deducted.
+    gs_f16data-surcharge = final_tab-surchg.
+    gs_f16data-edu_cess = final_tab-edu_cess.
+   ENDIF.
+    MOVE: ftext1 TO gs_f16data-ftext1,
+          final_tab-ftext TO gs_f16data-ftext2.
+*    gs_f16data-flextxt = flextxt.
+    IF year GE '2012'.
+      IF final_tab-icnum IS NOT INITIAL.
+      CONCATENATE flextxt space '/' space final_tab-icnum INTO gs_f16data-flextxt.
+      ELSE.
+      gs_f16data-flextxt = flextxt.
+     ENDIF.
+    ENDIF.
+
+    IF form_16 IS INITIAL.
+      final_tab-tax_payable_before_relief = final_tab-tax_payable_before_relief
+                                             - final_tab-edu_cess.
+      gs_f16data-tax_bef_relief = final_tab-tax_payable_before_relief.
+    ENDIF.
+*    Annexure A
+    IF govt = 'X'.
+      gs_f16data-annexa = 1.
+      CLEAR gs_f16data-annexb.
+    ELSE.         "Annexure B
+      gs_f16data-annexb =  1 .
+      CLEAR gs_f16data-annexa.
+    ENDIF.
+
+
+
+    READ TABLE int_s88 WITH KEY pernr = final_tab-pernr
+                                 cntr2 = final_tab-cntr2.
+    IF sy-subrc = 0.
+      CLEAR : conmt_pf_pdf, dedmt_pf_pdf.
+    ELSE.
+      conmt_pf_pdf = final_tab-epf_tot.
+      READ TABLE int_s80 WITH KEY pernr = final_tab-pernr
+                         sbsec = '15' sbdiv = '01' cntr2 = final_tab-cntr2.
+      IF sy-subrc EQ 0.
+        dedmt_pf_pdf = int_s80-dedmt.
+        conmt_pf_pdf = int_s80-coamt.
+      ENDIF.
+    ENDIF.
+    MOVE : conmt_pf_pdf TO gs_f16data-conmt_pf,
+           dedmt_pf_pdf TO gs_f16data-dedmt_pf.
+********END OF PDF CODING*********
+    total_taxpdf = final_tab-tax_deducted + final_tab-tax_paid_employer.
+    MOVE total_taxpdf TO gs_f16data-total_tax.
+
+    READ TABLE int_s80 WITH KEY pernr = final_tab-pernr
+                                cntr2 = final_tab-cntr2
+                                sbsec = '01' sbdiv = '01'.
+    IF sy-subrc EQ 0.
+      IF int_s80-coamt IS INITIAL AND int_s80-qlamt IS INITIAL.
+
+      ELSE.
+*        IF int_s80-qlamt IS INITIAL.
+          gs_f16data-sec80_ccc_conmt = int_s80-coamt.
+*        ELSE.
+*          gs_f16data-sec80_ccc_conmt = int_s80-qlamt.
+*        ENDIF.
+      ENDIF.
+      gs_f16data-sec80_ccc_dedmt = int_s80-dedmt.
+    ENDIF.
+
+* Populate Section 80CCD values
+*    READ TABLE int_s80 WITH KEY pernr = final_tab-pernr
+*                                cntr2 = final_tab-cntr2
+*                                sbsec = '17' sbdiv = '01'.
+*    IF sy-subrc EQ 0.
+*      IF int_s80-coamt IS INITIAL AND int_s80-qlamt IS INITIAL.
+*
+*      ELSE.
+*        IF int_s80-qlamt IS INITIAL.
+*          gs_f16data-sec80_ccd_conmt = int_s80-coamt.
+*        ELSE.
+*          gs_f16data-sec80_ccd_conmt = int_s80-qlamt.
+*        ENDIF.
+*      ENDIF.
+*      gs_f16data-sec80_ccd_dedmt = int_s80-dedmt.
+*      READ TABLE rt WITH KEY lgart = '/3I6'.
+*      IF sy-subrc = 0.
+*        gs_f16data-sec80_ccd_dedmt = gs_f16data-sec80_ccd_dedmt + rt-betrg.
+*        READ TABLE rt WITH KEY lgart = '/3FT'.
+*        IF sy-subrc = 0.
+*          gs_f16data-sec80_ccd_conmt = gs_f16data-sec80_ccd_conmt + rt-betrg.
+*        ENDIF.
+*      ENDIF.
+*    ELSE.
+      READ TABLE int_nps WITH KEY pernr = final_tab-pernr
+                                  wgtyp = '/3I6'.
+      IF sy-subrc = 0.
+        gs_f16data-sec80_ccd_dedmt = gs_f16data-sec80_ccd_dedmt + int_nps-amt.
+        READ TABLE int_nps WITH KEY pernr = final_tab-pernr
+                                    wgtyp = '/3FT'.
+        IF sy-subrc = 0.
+          gs_f16data-sec80_ccd_conmt = gs_f16data-sec80_ccd_conmt + int_nps-amt.
+        ENDIF.
+      ENDIF.
+*    ENDIF.
+
+***
+    IF sname = '40TAX016'.                             "RBSNT927906
+      CLEAR j.
+      LOOP AT int_s80 WHERE pernr = final_tab-pernr AND
+                                    cntr2 = final_tab-cntr2  AND
+                                   sbsec <> '01' AND sbsec <> '15' AND sbsec <> '17' AND sbsec <> '22'.
+        CLEAR temp.
+        CLEAR temp1.
+        temp = alpha+j(1).
+        j = j + 1.
+        temp1 = '('.
+        MOVE temp TO temp1+1(1).
+        MOVE ')' TO temp1+2(1).
+        CONDENSE temp1 NO-GAPS.
+        MOVE temp1 TO int_s80-sbtds+0(3).
+        CLEAR gs_deductions.
+        MOVE : int_s80-sbtds TO gs_deductions-sbtds,
+               int_s80-sbdiv TO gs_deductions-sbdiv,
+               int_s80-coamt TO gs_deductions-conmt,
+               int_s80-qlamt TO gs_deductions-qlamt,
+               int_s80-dedmt TO gs_deductions-dedmt.
+        CONCATENATE gs_deductions-sbtds '(' gs_deductions-sbdiv ')' INTO gs_deductions-sbtds.
+        APPEND gs_deductions TO gt_deductions.
+
+      ENDLOOP.
+    ELSE.
+      IF sname = '40TAX16A'.
+        CLEAR j.
+        LOOP AT int_s80 WHERE pernr = final_tab-pernr AND
+                                      cntr2 = final_tab-cntr2." AND
+          "SBSEC <> '01' AND SBSEC <> '15' AND SBSEC <> '17'.
+          CLEAR temp.
+          CLEAR temp1.                                                  "MDSNT927906
+          temp = alpha+j(1).
+          j = j + 1.
+          temp1 = '('.
+          MOVE temp TO temp1+1(1).
+          MOVE ')' TO temp1+2(1).
+          CONDENSE temp1 NO-GAPS.
+          MOVE temp1 TO int_s80-sbtds+0(3).
+          CLEAR gs_deductions.
+          MOVE : int_s80-sbtds TO gs_deductions-sbtds,
+                 int_s80-sbdiv TO gs_deductions-sbdiv,
+                 int_s80-coamt TO gs_deductions-conmt,
+                 int_s80-qlamt TO gs_deductions-qlamt,
+                 int_s80-dedmt TO gs_deductions-dedmt.
+          CONCATENATE gs_deductions-sbtds '(' gs_deductions-sbdiv ')' INTO gs_deductions-sbtds.
+          APPEND gs_deductions TO gt_deductions.
+
+        ENDLOOP.
+      ENDIF.
+    ENDIF.
+
+    CLEAR i.
+    CLEAR seq.
+    cntr = 0.
+    LOOP AT int_s88 WHERE pernr = final_tab-pernr AND
+                         cntr2 = final_tab-cntr2.
+      seq = seq + 1.
+    ENDLOOP.
+    i = 1.
+    cntr = 1.
+    LOOP AT int_s88 WHERE pernr = final_tab-pernr AND
+                          cntr2 = final_tab-cntr2.
+      i = i + 1.
+********START OF PDF CODING************
+      CLEAR gs_rebate.
+      MOVE : int_s88-itext TO gs_rebate-itext,
+             int_s88-inamt TO gs_rebate-qlamt.
+      IF int_s88-inamt IS NOT INITIAL.
+        MOVE int_s88-invmt TO gs_rebate-invmt.
+      ELSE.
+        MOVE int_s88-inamt TO gs_rebate-invmt.
+      ENDIF.
+      IF cntr NE seq.
+        gs_rebate-conmt = ''.
+        gs_rebate-dedmt  = ''.
+      ELSE.
+        READ TABLE int_s80 WITH KEY pernr = final_tab-pernr
+                                      sbsec = '15' sbdiv = '01' cntr2 = int_s88-cntr2.
+        IF sy-subrc EQ 0.
+          gs_rebate-conmt  = int_s80-coamt.
+*            CONDENSE GS_REBATE-CONMT NO-GAPS.
+          gs_rebate-dedmt = int_s80-dedmt.
+*            CONDENSE GS_REBATE-DEDMT NO-GAPS.
+        ENDIF.
+      ENDIF.
+      cntr = cntr + 1.
+      APPEND gs_rebate TO gt_rebate.
+********END OF PDF CODING************
+    ENDLOOP.
+
+*    IF p_f16 EQ ' '.
+*      gt_f12bb_deductions[] = gt_deductions[].
+*      gt_f12bb_rebate[] = gt_rebate[].
+*    ENDIF.
+
+    CLEAR temp.
+    CLEAR temp1.
+    i = 0.
+    temp = alpha+i(1).
+    temp1 = '('.
+    MOVE temp TO temp1+1(1).
+    MOVE ')' TO temp1+2(1).
+    CONDENSE temp1 NO-GAPS.
+    MOVE text-239 TO temp1+4. "'TOTAL'(239)
+    temp = alpha+0(1).
+    MOVE '[(' TO temp1+10.
+    MOVE temp TO temp1+12.
+    MOVE ') to (' TO temp1+13.
+    IF i = 0.
+      i = 1.
+    ENDIF.
+    i = i - 1.
+    temp = alpha+i(1).
+    MOVE temp TO temp1+20.
+    MOVE ')]' TO temp1+21.
+********START OF PDF CODING************
+    MOVE temp1 TO gs_f16data-tot_sec88.
+********END OF PDF CODING************
+
+    i = i + 1.
+    MOVE '[I(' TO temp1.
+    temp = alpha+i(1).
+    MOVE temp TO temp1+3.
+    CONDENSE temp1 NO-GAPS.
+********START OF PDF CODING************
+    MOVE temp1 TO gs_f16data-p14_text.
+* Annexure
+*    IF DISP_FLG_LOT LT 1 AND LAYOUT1 NE ' '.
+*      FORMNAME1 = LAYOUT1.
+*    ELSE.
+*      FORMNAME1 = 'HR_IN_TAXF16NX_Y'.
+*    ENDIF.
+*    LANG = 'EN'.
+
+*****new f16 layout logic for Chapter VI
+     CLEAR int_s80.
+     IF f16_new = 'X'.
+       READ TABLE int_s80 WITH KEY pernr = final_tab-pernr
+                         sbsec = '17' sbdiv = '01'
+                         cntr2 = final_tab-cntr2.
+       IF sy-subrc EQ 0.
+         sec_80ccd1_ded =  int_s80-dedmt.
+         sec_80ccd1_cont = int_s80-coamt.
+       ENDIF.
+
+       gs_chapvi-itext = text-704."80C
+       READ TABLE int_s80 WITH KEY pernr = final_tab-pernr
+                         sbsec = '15' sbdiv = '01'
+                         cntr2 = final_tab-cntr2.
+       IF sy-subrc EQ 0.
+         gs_chapvi-dedmt = int_s80-dedmt - sec_80ccd1_ded.
+         gs_chapvi-conmt = int_s80-coamt - sec_80ccd1_cont.
+         IF gs_chapvi-dedmt LT 0.
+           CLEAR gs_chapvi-dedmt .
+         ENDIF.
+         IF gs_chapvi-conmt LT 0.
+           CLEAR gs_chapvi-conmt .
+         ENDIF.
+       ENDIF.
+       APPEND gs_chapvi TO gt_chapvi.
+       CLEAR gs_chapvi.
+
+      gs_chapvi-itext = text-705."80CCC
+      READ TABLE int_s80 WITH KEY pernr = final_tab-pernr
+                         sbsec = '01' sbdiv = '01'
+                         cntr2 = final_tab-cntr2.
+      IF sy-subrc EQ 0.
+        gs_chapvi-conmt = gs_f16data-sec80_ccc_conmt.
+        gs_chapvi-dedmt = gs_f16data-sec80_ccc_dedmt.
+      ENDIF.
+      APPEND gs_chapvi TO gt_chapvi.
+      CLEAR gs_chapvi.
+
+     gs_chapvi-itext = text-706."80CCD1
+     READ TABLE int_s80 WITH KEY pernr = final_tab-pernr
+                         sbsec = '17' sbdiv = '01'
+                         cntr2 = final_tab-cntr2.
+     IF sy-subrc EQ 0.
+       gs_chapvi-conmt = sec_80ccd1_cont.
+       gs_chapvi-dedmt = sec_80ccd1_ded.
+     ENDIF.
+     APPEND gs_chapvi to gt_chapvi.
+     CLEAR gs_chapvi.
+
+     LOOP AT gt_chapvi INTO gs_chapvi.
+       lv_ded80_conmt =  gs_chapvi-conmt + lv_ded80_conmt.
+       lv_ded80_dedmt = gs_chapvi-dedmt + lv_ded80_dedmt.
+     ENDLOOP.
+
+     gs_chapvi-itext = text-707."sum of 80C, 80CCC,80CCD1
+     gs_chapvi-conmt = lv_ded80_conmt.
+     gs_chapvi-dedmt = lv_ded80_dedmt.
+     APPEND gs_chapvi to gt_chapvi.
+     CLEAR: gs_chapvi, lv_ded80_dedmt, lv_ded80_conmt.
+
+     gs_chapvi-itext = text-708."80CCD(1B)
+     READ TABLE int_s80 WITH KEY pernr = final_tab-pernr
+                                cntr2 = final_tab-cntr2
+                                sbsec = '21' sbdiv = '01'.
+
+     IF sy-subrc eq 0.
+       gs_chapvi-conmt = int_s80-coamt.
+       gs_chapvi-dedmt = int_s80-dedmt.
+     ENDIF.
+     APPEND gs_chapvi to gt_chapvi.
+     CLEAR gs_chapvi.
+
+     gs_chapvi-itext = text-709."80CCD(2)
+     READ TABLE int_nps WITH KEY pernr = final_tab-pernr
+                                  wgtyp = '/3I6'.
+     IF sy-subrc EQ 0.
+       gs_chapvi-dedmt = int_nps-amt.
+     ENDIF.
+     READ TABLE int_nps WITH KEY pernr = final_tab-pernr
+                                  wgtyp = '/3FT'.
+     IF sy-subrc EQ 0.
+       gs_chapvi-conmt = int_nps-amt.
+     ENDIF.
+     APPEND gs_chapvi to gt_chapvi.
+     CLEAR gs_chapvi.
+
+     gs_chapvi-itext = text-710." g-80D
+     LOOP AT int_s80 WHERE pernr = final_tab-pernr
+                    AND cntr2 = final_tab-cntr2
+                    AND sbsec = '02'.
+      sec80D_conmt = sec80D_conmt + int_s80-coamt.
+      sec80D_dedmt = sec80D_dedmt + int_s80-dedmt.
+     ENDLOOP.
+     gs_chapvi-conmt = sec80d_conmt.
+     gs_chapvi-dedmt = sec80d_dedmt.
+     APPEND gs_chapvi to gt_chapvi.
+     CLEAR: gs_chapvi.
+
+     gs_chapvi-itext = text-711."h-80E
+     READ TABLE int_s80 WITH KEY pernr = final_tab-pernr
+                                cntr2 = final_tab-cntr2
+                                sbsec = '06' sbdiv = '01'.
+     IF sy-subrc EQ 0.
+       gs_chapvi-conmt = int_s80-coamt.
+       gs_chapvi-dedmt = int_s80-dedmt.
+     ENDIF.
+     APPEND gs_chapvi TO gt_chapvi.
+     gt_rebate = gt_chapvi.
+     CLEAR: gs_chapvi, gt_chapvi,
+     gs_deductions, gt_deductions.
+
+     gs_deductions-itext = text-712."i-80G
+     LOOP AT int_s80 WHERE pernr = final_tab-pernr AND
+                          cntr2 = final_tab-cntr2 AND
+                          sbsec = '07'.
+       gs_deductions-conmt = gs_deductions-conmt + int_s80-coamt.
+       gs_deductions-dedmt = gs_deductions-dedmt + int_s80-dedmt.
+       gs_deductions-qlamt = gs_deductions-qlamt + int_s80-qlamt.
+       dedmt_80g = dedmt_80g + int_s80-dedmt.
+     ENDLOOP.
+     gs_deductions-dedmt = dedmt_80g.
+     APPEND gs_deductions TO gt_deductions.
+     CLEAR gs_deductions.
+     gs_deductions-itext = text-713."j-80TTA
+     READ TABLE int_s80 WITH KEY pernr = final_tab-pernr
+                                cntr2 = final_tab-cntr2
+                                sbsec = '18' sbdiv = '01'.
+     IF sy-subrc EQ 0.
+       gs_deductions-conmt = int_s80-coamt.
+       gs_deductions-qlamt = int_s80-qlamt.
+       gs_deductions-dedmt = int_s80-dedmt.
+*      dedmt_80tta = int_s80-dedmt.
+     ENDIF.
+     APPEND gs_deductions TO gt_deductions.
+     CLEAR gs_deductions.
+     gs_deductions-itext = text-714."K-amt ded other sec VI-A
+     gs_deductions-conmt = ''.
+
+     APPEND gs_deductions TO gt_deductions.
+     CLEAR gs_deductions.
+
+     LOOP AT int_s80 WHERE pernr = final_tab-pernr AND
+                                cntr2 = final_tab-cntr2 AND
+                                sbsec <> 01 AND sbsec <> 02 AND
+                                sbsec <> 06 AND sbsec <> 07 AND
+                                sbsec <> 15 AND sbsec <> 17 AND
+                                sbsec <> 18 AND sbsec <> 21 AND
+                                sbsec <> 22.
+        CONCATENATE temp2 temp2 temp2 temp2 'section' int_s80-sbtds+4(15)
+                  INTO gs_deductions-itext SEPARATED BY space.
+        gs_deductions-conmt = int_s80-coamt.
+        gs_deductions-qlamt = int_s80-qlamt.
+        gs_deductions-dedmt = int_s80-dedmt.
+        tot_coamt = tot_coamt + int_s80-coamt.
+        tot_qlamt = tot_qlamt + int_s80-qlamt.
+        tot_dedmt_k = tot_dedmt_k + int_s80-dedmt.
+        APPEND gs_deductions TO gt_deductions.
+        APPEND gs_deductions TO gt_f12k_deductions.
+        CLEAR gs_deductions.
+     ENDLOOP.
+
+     gs_deductions-itext = text-715."l sum of k
+     gs_deductions-conmt = tot_coamt.
+     gs_deductions-qlamt = tot_qlamt.
+     gs_deductions-dedmt = tot_dedmt_k.
+     APPEND gs_deductions to gt_deductions.
+     CLEAR: gs_deductions."tot_coamt, tot_qlamt, tot_dedmt.
+
+     LOOP AT gt_rebate INTO gs_rebate.
+       lv_ded80_dedmt = lv_ded80_dedmt + gs_rebate-dedmt.
+     ENDLOOP.
+*******11. agg Under Chap VI
+     gs_f16data-sec80_ded = final_tab-sec80_ded.
+    ENDIF.
+
+****new f16 layout logic for Chapter VI ends
+* Gross components
+    LOOP AT gross_tab WHERE pernr = final_tab-pernr AND
+                            cntr2 = final_tab-cntr2    .
+********START OF COMMENTING************
+      CLEAR gs_annexure.
+      MOVE : gross_tab-spec_txt TO gs_annexure-spec_text.
+      gross_tab_amount_s = gross_tab-amount.
+      IF gross_tab-sign = -1.
+        CONCATENATE '-' gross_tab_amount_s INTO gross_tab_amount_s.
+      ELSE.
+        CONCATENATE '' gross_tab_amount_s INTO  gross_tab_amount_s.
+      ENDIF.
+      CONDENSE gross_tab_amount_s.
+      CLEAR gross_tab_amount.
+      PERFORM sign_algmnt USING gross_tab_amount_s
+                           CHANGING gross_tab_amount.
+      MOVE : gross_tab_amount TO gs_annexure-amount.
+
+      APPEND gs_annexure TO gt_grosstab.
+********END OF COMMENTING**************
+
+    ENDLOOP.
+
+* Perk components
+
+    LOOP AT perk_tab WHERE pernr = final_tab-pernr AND
+                           cntr2 = final_tab-cntr2.
+**********START OF PDF CODING************
+      CLEAR gs_annexure.
+      MOVE : perk_tab-spec_txt TO gs_annexure-spec_text.
+      perk_tab_amount_s = perk_tab-amount.
+      IF perk_tab-sign = -1.
+        CONCATENATE '-' perk_tab_amount_s INTO perk_tab_amount_s.
+      ELSE.
+        CONCATENATE '' perk_tab_amount_s INTO  perk_tab_amount_s.
+      ENDIF.
+      CONDENSE perk_tab_amount_s.
+      CLEAR perk_tab_amount.
+      PERFORM sign_algmnt USING perk_tab_amount_s
+                           CHANGING perk_tab_amount.
+      MOVE : perk_tab_amount TO gs_annexure-amount.
+
+      APPEND gs_annexure TO gt_perkstab.
+********END OF COMMENTING************
+
+    ENDLOOP.
+
+* Section 10 components
+    IF year ge '2012' AND year LT '2018'.
+    CLEAR: gs_annexure.
+    gs_annexure-spec_text = 'Allowance'.
+    APPEND gs_annexure TO gt_exemptab.
+    CLEAR: gs_annexure.
+    ENDIF.
+
+    IF F16_NEW = 'X'.
+* for section 10 exemps in Annexure
+      CLEAR: gs_annexure.
+      gs_annexure-spec_text = 'Allowance'.
+      APPEND gs_annexure TO gt_annex_exemptab.
+      CLEAR: gs_annexure.
+      LOOP AT sec10_tab WHERE pernr = final_tab-pernr AND
+                              cntr2 = final_tab-cntr2.
+        IF sec10_tab-sign = -1.
+          PERFORM convert_to_scriptvar USING 'sign' '-'.
+        ELSE.
+          PERFORM convert_to_scriptvar USING 'sign' space.
+        ENDIF.
+        CLEAR sec10_tab_amount.
+        PERFORM sign_algmnt USING sec10_tab-amount
+                              CHANGING sec10_tab_amount.
+        PERFORM convert_to_scriptvar USING 'amount' sec10_tab_amount.
+*  *******START OF COMMENTING************
+        CLEAR gs_annexure.
+        MOVE : sec10_tab-spec_txt TO gs_annexure-spec_text.
+        sec10_tab_amount_s = sec10_tab-amount.
+        IF sec10_tab-sign = -1.
+          CONCATENATE '-' sec10_tab_amount_s INTO sec10_tab_amount_s.
+        ELSE.
+          CONCATENATE '' sec10_tab_amount_s INTO  sec10_tab_amount_s.
+        ENDIF.
+        CONDENSE sec10_tab_amount_s.
+        CLEAR sec10_tab_amount.
+        PERFORM sign_algmnt USING sec10_tab_amount_s
+                             CHANGING sec10_tab_amount.
+        MOVE : sec10_tab_amount TO gs_annexure-amount.
+        APPEND gs_annexure TO gt_annex_exemptab.
+        CLEAR gs_annexure.
+      ENDLOOP.
+*  for section 10 exemps in form 16
+      LOOP AT sec10_tab WHERE pernr = final_tab-pernr AND
+                            cntr2 = final_tab-cntr2.
+        CASE SEC10_TAB-EVCLS_SPEC.
+          WHEN '03'.
+           gs_f16data-lta_exem = sec10_tab-amount.
+          WHEN '08'.
+            gs_f16data-gra_exem = sec10_tab-amount.
+          WHEN '07'.
+            gs_f16data-lecas_exem = sec10_tab-amount.
+          WHEN '02'.
+            gs_f16data-hra_exem = sec10_tab-amount.
+          WHEN '11'.
+            gs_f16data-pens_exem = sec10_tab-amount.
+          WHEN OTHERS.
+            MOVE : sec10_tab-spec_txt TO gs_annexure-spec_text.
+            MOVE : sec10_tab-amount TO gs_annexure-amount.
+            gs_f16data-oth_sec10 = gs_f16data-oth_sec10 +
+                                   gs_annexure-amount.
+            APPEND gs_annexure to gt_exemptab.
+            CLEAR gs_annexure.
+        ENDCASE.
+      ENDLOOP.
+    ELSE.
+      LOOP AT sec10_tab WHERE pernr = final_tab-pernr AND
+                            cntr2 = final_tab-cntr2.
+      IF sec10_tab-sign = -1.
+        PERFORM convert_to_scriptvar USING 'sign' '-'.
+      ELSE.
+        PERFORM convert_to_scriptvar USING 'sign' space.
+      ENDIF.
+      CLEAR sec10_tab_amount.
+      PERFORM sign_algmnt USING sec10_tab-amount
+                            CHANGING sec10_tab_amount.
+      PERFORM convert_to_scriptvar USING 'amount' sec10_tab_amount.
+*  *******START OF COMMENTING************
+      CLEAR gs_annexure.
+      MOVE : sec10_tab-spec_txt TO gs_annexure-spec_text.
+      sec10_tab_amount_s = sec10_tab-amount.
+      IF sec10_tab-sign = -1.
+        CONCATENATE '-' sec10_tab_amount_s INTO sec10_tab_amount_s.
+      ELSE.
+        CONCATENATE '' sec10_tab_amount_s INTO  sec10_tab_amount_s.
+      ENDIF.
+      CONDENSE sec10_tab_amount_s.
+      CLEAR sec10_tab_amount.
+      PERFORM sign_algmnt USING sec10_tab_amount_s
+                           CHANGING sec10_tab_amount.
+      MOVE : sec10_tab_amount TO gs_annexure-amount.
+
+      APPEND gs_annexure TO gt_exemptab.
+*  *******END OF COMMENTING***************
+      ENDLOOP.
+    ENDIF.
+*      IFOS components
+    IF year ge '2012'.
+    CLEAR: gs_annexure.
+    gs_annexure-spec_text = 'Income'.
+    APPEND gs_annexure TO gt_ifostab.
+    CLEAR: gs_annexure.
+    ENDIF.
+
+    IF f16_new = 'X'.
+**  pass ifos_tab to gt_ifos_tab in annexure
+      PERFORM fill_ifos TABLES ifos_tab
+                               gt_ifostab
+                        USING  final_tab-pernr
+                               final_tab-cntr2
+                               gs_annexure.
+** as per eval class pass ifos_tab values to form 16
+      LOOP AT ifos_tab WHERE pernr = final_tab-pernr AND
+                           cntr2 = final_tab-cntr2.
+        IF ifos_tab-evcls_spec = '01' OR
+                           ifos_tab-evcls_spec = '02' OR
+                           ifos_tab-evcls_spec = '03' OR
+                           ifos_tab-evcls_spec = '04' OR
+                           ifos_tab-evcls_spec = '05' OR
+                           ifos_tab-evcls_spec = '06' OR
+                           ifos_tab-evcls_spec = '12' OR
+                           ifos_tab-evcls_spec = '13' OR
+                           ifos_tab-evcls_spec = '14' OR
+                           ifos_tab-evcls_spec = '15'.
+          ifos_tab_amount = ifos_tab-amount.
+          IF ifos_tab-sign = -1.
+           CONCATENATE '-' ifos_tab_amount INTO ifos_tab_amount.
+         ELSE.
+           CONCATENATE '' ifos_tab_amount INTO  ifos_tab_amount.
+         ENDIF.
+         CONDENSE ifos_tab_amount.
+         ifos_tab_amount_s = ifos_tab_amount_s + ifos_tab_amount.
+        ENDIF.
+      ENDLOOP.
+** 7(b) Income under oth sources
+      gs_f16data-income_oth = ifos_tab_amount_s.
+      CLEAR ifos_tab_amount_s.
+
+** (9)Gross Total income head_sal + income_oth
+      gs_f16data-gross_tot_income = final_tab-gross_tot_income.
+    ELSE.
+      PERFORM fill_ifos TABLES ifos_tab
+                               gt_ifostab
+                        USING final_tab-pernr
+                              final_tab-cntr2
+                              gs_annexure.
+
+    ENDIF.
+
+*--- Compute for sl. no.6 of form 12BA------------------*
+    IF f16_new = 'X'.
+      f12ba_balance = ( gs_f16data-prev_emp_sal +
+                      sal_sec17 +
+                      prof_f12ba ) - final_tab-sec10_all.
+    ELSE.
+      f12ba_balance = sal_sec17 + prof_f12ba - final_tab-sec10_all.
+    ENDIF.
+
+    sname = '40INDED'.
+    enddate = pendda.
+    PERFORM re596f USING sname final_tab-f16_endda.
+    PERFORM (t596f-modna) IN PROGRAM (t596f-pgmna)
+                         USING f12ba_balance
+                               final_tab-f16_endda
+                               final_tab-ptax
+                         CHANGING f12ba_std_ded.
+    salaries_wo_perk = f12ba_balance - ( f12ba_std_ded + ent_all +
+                                         final_tab-ptax ).
+
+*---------------------------------------------------------*
+
+*  FILLING OF THE MAIN WINDOW.*****************
+*********START OF PDF CHANGE *****************
+    MOVE : salaries_wo_perk TO gs_f16data-sal_wo_work,
+           fin_start TO  gs_f16data-fin_start,
+           fin_end TO  gs_f16data-fin_end.
+*********END OF PDF CHANGE *****************
+    LOOP AT form12ba_tab WHERE pernr = final_tab-pernr AND
+                               cntr2 = final_tab-cntr2.
+      IF form12ba_tab-evcls_spec NE 17.
+        tot_val_perk = tot_val_perk + form12ba_tab-val_perk.
+        tot_eerecvr = tot_eerecvr + form12ba_tab-eerecvr.
+        tot_tax_perk = tot_tax_perk + form12ba_tab-tax_perk.
+      ENDIF.
+*********START OF PDF CHANGE *****************
+      CASE form12ba_tab-evcls_spec.
+        WHEN 1.
+          MOVE : form12ba_tab-val_perk TO gs_f12badetails-val_perk-value1,
+                 form12ba_tab-eerecvr TO gs_f12badetails-eerecvr-value1,
+                 form12ba_tab-tax_perk TO gs_f12badetails-tax_perk-value1.
+        WHEN 2.
+          MOVE : form12ba_tab-val_perk TO gs_f12badetails-val_perk-value2,
+                 form12ba_tab-eerecvr TO gs_f12badetails-eerecvr-value2,
+                 form12ba_tab-tax_perk TO gs_f12badetails-tax_perk-value2.
+
+        WHEN 3.
+          MOVE : form12ba_tab-val_perk TO gs_f12badetails-val_perk-value3,
+                 form12ba_tab-eerecvr TO gs_f12badetails-eerecvr-value3,
+                 form12ba_tab-tax_perk TO gs_f12badetails-tax_perk-value3.
+        WHEN 4.
+          MOVE : form12ba_tab-val_perk TO gs_f12badetails-val_perk-value4,
+                 form12ba_tab-eerecvr TO gs_f12badetails-eerecvr-value4,
+                 form12ba_tab-tax_perk TO gs_f12badetails-tax_perk-value4.
+
+        WHEN 5.
+          MOVE : form12ba_tab-val_perk TO gs_f12badetails-val_perk-value5,
+                 form12ba_tab-eerecvr TO gs_f12badetails-eerecvr-value5,
+                 form12ba_tab-tax_perk TO gs_f12badetails-tax_perk-value5.
+
+        WHEN 6.
+          MOVE : form12ba_tab-val_perk TO gs_f12badetails-val_perk-value6,
+                 form12ba_tab-eerecvr TO gs_f12badetails-eerecvr-value6,
+                 form12ba_tab-tax_perk TO gs_f12badetails-tax_perk-value6.
+
+        WHEN 7.
+          MOVE : form12ba_tab-val_perk TO gs_f12badetails-val_perk-value7,
+                 form12ba_tab-eerecvr TO gs_f12badetails-eerecvr-value7,
+                 form12ba_tab-tax_perk TO gs_f12badetails-tax_perk-value7.
+
+        WHEN 8.
+          MOVE : form12ba_tab-val_perk TO gs_f12badetails-val_perk-value8,
+                 form12ba_tab-eerecvr TO gs_f12badetails-eerecvr-value8,
+                 form12ba_tab-tax_perk TO gs_f12badetails-tax_perk-value8.
+
+        WHEN 9.
+          MOVE : form12ba_tab-val_perk TO gs_f12badetails-val_perk-value9,
+                 form12ba_tab-eerecvr TO gs_f12badetails-eerecvr-value9,
+                 form12ba_tab-tax_perk TO gs_f12badetails-tax_perk-value9.
+
+        WHEN 10.
+          MOVE : form12ba_tab-val_perk TO gs_f12badetails-val_perk-value10,
+                 form12ba_tab-eerecvr TO gs_f12badetails-eerecvr-value10,
+                 form12ba_tab-tax_perk TO gs_f12badetails-tax_perk-value10.
+
+        WHEN 11.
+          MOVE : form12ba_tab-val_perk TO gs_f12badetails-val_perk-value11,
+                 form12ba_tab-eerecvr TO gs_f12badetails-eerecvr-value11,
+                 form12ba_tab-tax_perk TO gs_f12badetails-tax_perk-value11.
+
+        WHEN 12.
+          MOVE : form12ba_tab-val_perk TO gs_f12badetails-val_perk-value12,
+                 form12ba_tab-eerecvr TO gs_f12badetails-eerecvr-value12,
+                 form12ba_tab-tax_perk TO gs_f12badetails-tax_perk-value12.
+
+        WHEN 13.
+          MOVE : form12ba_tab-val_perk TO gs_f12badetails-val_perk-value13,
+                 form12ba_tab-eerecvr TO gs_f12badetails-eerecvr-value13,
+                 form12ba_tab-tax_perk TO gs_f12badetails-tax_perk-value13.
+
+        WHEN 14.
+          MOVE : form12ba_tab-val_perk TO gs_f12badetails-val_perk-value14,
+                 form12ba_tab-eerecvr TO gs_f12badetails-eerecvr-value14,
+                 form12ba_tab-tax_perk TO gs_f12badetails-tax_perk-value14.
+        WHEN 15.
+          IF lv_formname EQ lc_form_2021.
+            MOVE : form12ba_tab-val_perk TO gs_f12badetails-val_perk-value17,
+                   form12ba_tab-eerecvr  TO gs_f12badetails-eerecvr-value17,
+                   form12ba_tab-tax_perk TO gs_f12badetails-tax_perk-value17.
+          ELSE.
+          MOVE : form12ba_tab-val_perk TO gs_f12badetails-val_perk-value15,
+                 form12ba_tab-eerecvr TO gs_f12badetails-eerecvr-value15,
+                 form12ba_tab-tax_perk TO gs_f12badetails-tax_perk-value15.
+          ENDIF.
+        WHEN 16.
+          IF lv_formname EQ lc_form_2021.
+            MOVE : form12ba_tab-val_perk TO gs_f12badetails-val_perk-value20,
+                   form12ba_tab-eerecvr  TO gs_f12badetails-eerecvr-value20,
+                   form12ba_tab-tax_perk TO gs_f12badetails-tax_perk-value20.
+          ELSE.
+          MOVE : form12ba_tab-val_perk TO gs_f12badetails-val_perk-value16,
+                 form12ba_tab-eerecvr TO gs_f12badetails-eerecvr-value16,
+                 form12ba_tab-tax_perk TO gs_f12badetails-tax_perk-value16.
+          ENDIF.
+        WHEN 17.
+          IF lv_formname EQ lc_form_2021.
+            MOVE : form12ba_tab-val_perk TO gs_f12badetails-val_perk-value22,
+                   form12ba_tab-eerecvr  TO gs_f12badetails-eerecvr-value22,
+                   form12ba_tab-tax_perk TO gs_f12badetails-tax_perk-value22.
+          ELSE.
+          MOVE : form12ba_tab-val_perk TO gs_f12badetails-val_perk-value17,
+                 form12ba_tab-eerecvr TO gs_f12badetails-eerecvr-value17,
+                 form12ba_tab-tax_perk TO gs_f12badetails-tax_perk-value17.
+          ENDIF.
+        WHEN 18.
+          IF lv_formname EQ lc_form_2021.
+            MOVE : form12ba_tab-val_perk TO gs_f12badetails-val_perk-value15,
+                   form12ba_tab-eerecvr  TO gs_f12badetails-eerecvr-value15,
+                   form12ba_tab-tax_perk TO gs_f12badetails-tax_perk-value15.
+          ELSE.
+            MOVE : form12ba_tab-val_perk TO gs_f12badetails-val_perk-value18,
+                   form12ba_tab-eerecvr  TO gs_f12badetails-eerecvr-value18,
+                   form12ba_tab-tax_perk TO gs_f12badetails-tax_perk-value18.
+          ENDIF.
+        WHEN 19.
+          MOVE : form12ba_tab-val_perk TO gs_f12badetails-val_perk-value16,
+                 form12ba_tab-eerecvr  TO gs_f12badetails-eerecvr-value16,
+                 form12ba_tab-tax_perk TO gs_f12badetails-tax_perk-value16.
+        WHEN 20.
+          MOVE : form12ba_tab-val_perk TO gs_f12badetails-val_perk-value18,
+                 form12ba_tab-eerecvr TO gs_f12badetails-eerecvr-value18,
+                 form12ba_tab-tax_perk TO gs_f12badetails-tax_perk-value18.
+        WHEN 21.
+          MOVE : form12ba_tab-val_perk TO gs_f12badetails-val_perk-value19,
+                 form12ba_tab-eerecvr  TO gs_f12badetails-eerecvr-value19,
+                 form12ba_tab-tax_perk TO gs_f12badetails-tax_perk-value19.
+      ENDCASE.
+
+      IF lv_formname EQ lc_form_2021.
+        MOVE : tot_val_perk TO gs_f12badetails-val_perk-value21,
+               tot_eerecvr  TO gs_f12badetails-eerecvr-value21,
+               tot_tax_perk TO gs_f12badetails-tax_perk-value21.
+      ELSE.
+      MOVE : tot_val_perk TO gs_f12badetails-val_perk-value19,
+             tot_eerecvr TO gs_f12badetails-eerecvr-value19,
+             tot_tax_perk TO gs_f12badetails-tax_perk-value19.
+      ENDIF.
+      MOVE : final_tab-dirst TO gs_f12badetails-dirstat .
+*********END OF PDF CHANGE *****************
+
+    ENDLOOP.
+    count = 1.
+    SORT ch_det BY chdat.
+    LOOP AT ch_det INTO wa_ch_det WHERE cntr2 = final_tab-cntr2 AND pernr = final_tab-pernr.
+      IF NOT wa_ch_det-chdat EQ '000000'.
+        gs_temsedetails-sl_no = count.
+        gs_temsedetails-incometax = wa_ch_det-mntax.
+        gs_temsedetails-surcharge = wa_ch_det-mnsur.
+        gs_temsedetails-educess = wa_ch_det-mnedu.
+        gs_temsedetails-tottax = wa_ch_det-amont.
+        gs_temsedetails-chkno = wa_ch_det-chkno.
+        gs_temsedetails-br_code = wa_ch_det-brcod.
+        gs_temsedetails-dt_challan = wa_ch_det-chdat.
+        gs_temsedetails-bank_challan = wa_ch_det-chlno.
+        count = count + 1.
+        APPEND gs_temsedetails TO gt_temsedetails.
+      ENDIF.
+    ENDLOOP.
+
+    PERFORM convert_inr_to_words USING gs_f16data-taxdep
+                                 CHANGING tax_deducted_wrds.
+    REPLACE 'Rupees'(238) WITH space INTO tax_deducted_wrds.
+    CONDENSE tax_deducted_wrds.
+    MOVE : gs_f16data-taxdep TO gs_f16data-total,
+           final_tab-tds_petd TO gs_f16data-tds_petd,
+           final_tab-tds_ifos TO gs_f16data-tds_ifos,
+           tax_deducted_wrds TO gs_f16data-amt_in_words,
+           ftext1 TO gs_f16data-ftext1,
+           final_tab-ftext TO gs_f16data-ftext2,
+           rp_name TO gs_f16data-rp_name,
+           rp_sof TO gs_f16data-rp_sof,
+           rp_dsg TO gs_f16data-rp_dsg,
+           repodate TO gs_f16data-repodate,
+           rplace TO gs_f16data-rplace.
+
+    IF p_f12bb EQ ' ' OR pf2f_10k EQ 'X'.
+    TRY.
+        CALL FUNCTION 'FP_FUNCTION_MODULE_NAME'
+          EXPORTING
+            i_name     = lv_formname
+          IMPORTING
+            e_funcname = gv_fmname.
+      CATCH cx_root INTO lv_w_cx_root.
+        lv_mesg = lv_w_cx_root->get_text( ).
+        MESSAGE e201(hrpadin01) WITH lv_formname lv_mesg.
+    ENDTRY.
+    IF dsign = 'X'.
+      gs_fpdocparams-fillable = 'X'.
+    ENDIF.
+    CALL FUNCTION gv_fmname
+      EXPORTING
+        /1bcdwb/docparams = gs_fpdocparams
+        f16_display       = gs_f16data
+        f16_deductions    = gt_deductions
+        f16_rebate        = gt_rebate
+*         F16_BANKDETAILS    = GT_BANKDETAILS
+        challan_details   = gt_temsedetails
+        annexure_gross    = gt_grosstab
+        annexure_perks    = gt_perkstab
+        annexure_ifos     = gt_ifostab
+        annexure_exemps   = gt_exemptab
+          annexure_newexemps = gt_annex_exemptab
+          f12k_deductions   = gt_f12k_deductions
+        f12ba_perquisites = gs_f12badetails
+        challan_details1  = gt_temsedetails
+        print_annexure    = annex
+      IMPORTING
+        /1bcdwb/formoutput = formoutput
+        EXCEPTIONS
+          usage_error       = 1
+          system_error      = 2
+          internal_error    = 3
+          OTHERS            = 4.
+      IF sy-subrc <> 0.
+*   MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*           WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+      ENDIF.
+    ENDIF.
+
+   IF p_f16 EQ ' '.
+      IF layout4 NE ' '.
+        lv_formname4 = layout4.
+      ELSE.
+        sname = '40IN12BB'.
+        PERFORM get_layout_set USING sname enddate
+                               CHANGING lv_formname4.
+      ENDIF.
+      PERFORM fill_form21bb_header TABLES final_tab USING
+                                                   gs_f16data-flextxt
+                                                   gs_f16data-fin_start
+                                                   gs_f16data-fin_end.
+
+      PERFORM fill_form12bb_hra TABLES p0581 USING final_tab-pernr
+                                                   final_tab-f16_begda
+                                                   final_tab-f16_endda.
+
+      PERFORM fill_form12bb_ios TABLES p0584 USING final_tab-pernr
+                                                   final_tab-f16_begda
+                                                   final_tab-f16_endda.
+
+      PERFORM fill_form12bb_lta TABLES p0582 USING final_tab-pernr
+                                                   final_tab-f16_begda
+                                                   final_tab-f16_endda.
+
+      PERFORM fill_form21bb_c6a TABLES p0585 p0586 final_tab
+                                      USING final_tab-pernr
+                                            gs_f16data-sec80_ccc_conmt
+                                            final_tab-f16_begda
+                                            final_tab-f16_endda.
+
+      PERFORM fill_form21bb_verify TABLES final_tab USING
+                                     final_tab-pernr
+                                     final_tab-f16_begda
+                                     final_tab-f16_endda
+                                     gs_f16data-fin_start
+                                     gs_f16data-fin_end.
+
+      CLEAR: gv_s80ccd_evdnc, gv_sec80_ccd.
+
+      IF gs_f16data-sec80_ccd_conmt IS NOT INITIAL.
+        gv_sec80_ccd = gs_f16data-sec80_ccd_conmt.
+        gv_s80ccd_evdnc = 'Deducted directly in the Payroll'.
+      ENDIF.
+
+** Call Form 12BB
+      TRY.
+        CALL FUNCTION 'FP_FUNCTION_MODULE_NAME'
+           EXPORTING
+             i_name     = lv_formname4
+           IMPORTING
+             e_funcname = gv_fmname.
+      CATCH cx_root INTO lv_w_cx_root.
+        lv_mesg = lv_w_cx_root->get_text( ).
+        MESSAGE e201(hrpadin01) WITH lv_formname lv_mesg.
+      ENDTRY.
+
+      IF dsign = 'X'.
+      gs_fpdocparams-fillable = 'X'.
+    ENDIF.
+    READ TABLE final_tab INTO ls_final_tab INDEX lv_index.
+    IF sy-subrc NE 0 OR final_tab-pernr NE ls_final_tab-pernr.
+        CALL FUNCTION gv_fmname
+        EXPORTING
+            /1bcdwb/docparams = gs_fpdocparams
+          f12bb_header        = gs_f12bb_header
+          f12bb_hra           = gt_f12bb_hra
+          f12bb_ios           = gt_f12bb_ios
+          f12bb_s80c          = gt_f12bb_rebate
+          f12bb_s80d          = gt_f12bb_deductions
+          sec80_ccc           = gv_sec80_ccc
+          sec80_ccd           = gv_sec80_ccd
+          f12bb_lta           = gt_f12bb_lta
+          f12bb_verification  = gs_f12bb_verify
+          f12bb_hra_note      = gv_hra_note
+          f12bb_80ccc_evdnc   = gv_s80ccc_evdnc
+          f12bb_80ccd_evdnc   = gv_s80ccd_evdnc
+      IMPORTING
+        /1bcdwb/formoutput = form12bb
+      EXCEPTIONS
+        usage_error       = 1
+        system_error      = 2
+        internal_error    = 3
+        OTHERS            = 4.
+     IF sy-subrc <> 0.
+*   MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*           WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+      ENDIF.
+     ENDIF.
+  ENDIF.
+    IF formname = 'HR_IN_TAXF1600AA'.
+      IF annex = 'X'.
+        lv_formname2 = 'HR_IN_TAXF16NX_Y'.
+      ENDIF.
+      lv_formname3 = 'HR_IN_TAXF16NX_P'.
+    ENDIF.
+
+
+    IF NOT layout1 IS INITIAL OR NOT lv_formname2 IS INITIAL.
+      IF NOT layout1 IS INITIAL.
+        lv_formname2 = layout1.
+      ENDIF.
+      TRY.
+          CALL FUNCTION 'FP_FUNCTION_MODULE_NAME'
+            EXPORTING
+              i_name     = lv_formname2
+            IMPORTING
+              e_funcname = gv_fmname.
+        CATCH cx_root INTO lv_w_cx_root.
+          lv_mesg = lv_w_cx_root->get_text( ).
+          MESSAGE e201(hrpadin01) WITH lv_formname2 lv_mesg.
+      ENDTRY.
+      IF dsign = 'X'.
+        gs_fpdocparams-fillable = 'X'.
+      ENDIF.
+      CALL FUNCTION gv_fmname
+        EXPORTING
+          /1bcdwb/docparams  = gs_fpdocparams
+          f16_display        = gs_f16data
+          annexure_gross     = gt_grosstab
+          annexure_perks     = gt_perkstab
+          annexure_ifos      = gt_ifostab
+          annexure_exemps    = gt_exemptab
+        IMPORTING
+          /1bcdwb/formoutput = formannex
+        EXCEPTIONS
+          usage_error        = 1
+          system_error       = 2
+          internal_error     = 3
+          OTHERS             = 4.
+      IF sy-subrc <> 0.
+*   MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*             WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+      ENDIF.
+    ENDIF.
+
+    IF NOT layout2 IS INITIAL OR NOT lv_formname3 IS INITIAL.
+      IF NOT layout2 IS INITIAL.
+        lv_formname3 = layout2.
+      ENDIF.
+      TRY.
+          CALL FUNCTION 'FP_FUNCTION_MODULE_NAME'
+            EXPORTING
+              i_name     = lv_formname3
+            IMPORTING
+              e_funcname = gv_fmname.
+        CATCH cx_root INTO lv_w_cx_root.
+          lv_mesg = lv_w_cx_root->get_text( ).
+          MESSAGE e201(hrpadin01) WITH lv_formname3 lv_mesg.
+      ENDTRY.
+      IF dsign = 'X'.
+        gs_fpdocparams-fillable = 'X'.
+      ENDIF.
+      CALL FUNCTION gv_fmname
+        EXPORTING
+          /1bcdwb/docparams  = gs_fpdocparams
+          f16_display        = gs_f16data
+          f12ba_perquisites  = gs_f12badetails
+        IMPORTING
+          /1bcdwb/formoutput = form12ba
+        EXCEPTIONS
+          usage_error        = 1
+          system_error       = 2
+          internal_error     = 3
+          OTHERS             = 4.
+      IF sy-subrc <> 0.
+*   MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*             WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+      ENDIF.
+    ENDIF.
+
+    CLEAR: l_f16, l_out.
+    DATA: tmp_mail_id(1) TYPE C.
+    LOOP AT P0105 WHERE INFTY = '0105' AND SUBTY = '0010'.
+     IF P0105-USRID_LONG IS NOT INITIAL.
+      tmp_mail_id = 'X'.
+     ENDIF.
+    ENDLOOP.
+    IF NOT tmp_mail_id IS INITIAL OR NOT ( folpath IS INITIAL ) OR NOT ( pnpesscf IS INITIAL ).
+*   Digitally sign the document and download
+      cntr_rec = final_tab-cntr1.
+*   get FP reference
+      l_fp = cl_fp=>get_reference( ).
+
+      IF p_f12bb EQ ' ' OR pf2f_10k EQ 'X'.
+      TRY.
+*     create PDF Object
+          IF  dsign = 'X'.
+            l_pdfobj = l_fp->create_pdf_object( connection = p_dest ).
+          ELSE.
+            l_pdfobj = l_fp->create_pdf_object( connection = p_dest2 ).
+          ENDIF.
+
+*     set document
+          CALL METHOD l_pdfobj->set_document
+            EXPORTING
+              pdfdata = formoutput-pdf.
+          IF NOT dsign IS INITIAL.
+
+            wa_cont_log-pernr = final_tab-pernr.
+            wa_cont_log-begda = final_tab-f16_begda.
+            wa_cont_log-endda = final_tab-f16_endda.
+            wa_cont_log-date = sy-datum.
+            wa_cont_log-time = sy-uzeit.
+            wa_cont_log-year = year.
+            APPEND wa_cont_log TO control_log.
+
+            IF year GE '2012'.
+*    set signature                               "Form 16 Page 2/3 2012
+              CALL METHOD l_pdfobj->set_signature
+                EXPORTING
+                  keyname   = s_alsign
+                  fieldname = s_field2.
+
+              CALL METHOD l_pdfobj->execute( ).
+
+              ELSE.
+
+*    set signature                                 "Old Form Page 1  2011
+              CALL METHOD l_pdfobj->set_signature
+                EXPORTING
+                  keyname   = s_alsign
+                  fieldname = s_field.
+
+              CALL METHOD l_pdfobj->execute( ).
+
+               ENDIF.
+*    set signature                                 "Form 12 BA
+            CALL METHOD l_pdfobj->set_signature
+              EXPORTING
+                keyname   = s_alsign
+                fieldname = s_field1.
+
+            ELSEIF dsign IS INITIAL.
+*-- To enable control log file for employees without digital signature
+            wa_cont_log-pernr = final_tab-pernr.
+            wa_cont_log-begda = final_tab-f16_begda.
+            wa_cont_log-endda = final_tab-f16_endda.
+            wa_cont_log-date = sy-datum.
+            wa_cont_log-time = sy-uzeit.
+            wa_cont_log-year = year.
+            APPEND wa_cont_log TO control_log.
+
+          ENDIF.
+
+*     execute, call ADS
+          CALL METHOD l_pdfobj->execute( ).
+
+          CALL METHOD l_pdfobj->get_document
+            IMPORTING
+              pdfdata = l_out.
+
+          l_f16 = l_out.
+*EXPORT pdf_string_x TO MEMORY ID 'PDFF'.
+        CATCH cx_fp_runtime_internal INTO l_fpex.
+          PERFORM error USING l_fpex 'INTERNAL ERROR'.
+        CATCH cx_fp_runtime_system INTO l_fpex.
+          PERFORM error USING l_fpex 'SYSTEM ERROR'.
+        CATCH cx_fp_runtime_usage INTO l_fpex.
+          PERFORM error USING l_fpex 'USAGE ERROR'.
+      ENDTRY.
+
+*   download PDF
+      DATA: l_len      TYPE i,
+            l_tab      TYPE tsfixml,
+            l_name     TYPE char30.
+
+ IF NOT ( folpath IS INITIAL ) OR NOT ( pnpesscf IS INITIAL ).
+      CALL FUNCTION 'SCMS_XSTRING_TO_BINARY'
+        EXPORTING
+          buffer        = l_f16
+        IMPORTING
+          output_length = l_len
+        TABLES
+          binary_tab    = l_tab.
+
+      CLEAR l_name.
+      IF cntr_f16 <= 1.
+        IF file2 IS NOT INITIAL AND year GE '2012'.
+*-- Pan wise download. Change in File name with PAN number.
+          IF p_pan IS NOT INITIAL.
+            IF final_tab-icnum IS INITIAL.
+              CONCATENATE 'NP_' final_tab-pernr INTO l_name.
+            ELSE.
+              l_name = final_tab-icnum.
+            ENDIF.
+          ELSE.
+            l_name = final_tab-pernr.
+          ENDIF.
+*          CONCATENATE folpath l_name '_Form 16_PartB.PDF'
+          IF pf2f_10k EQ 'X'.
+            CONCATENATE folpath l_name '_' '2f10k' '_' gs_f16data-assm_start
+            '-' gs_f16data-assm_end+2(2) '.PDF'
+            INTO l_filename_out.
+          ELSE.
+            CONCATENATE folpath l_name '_' gs_f16data-assm_start
+            '-' gs_f16data-assm_end+2(2) '_' 'Part B' '.PDF'
+            INTO l_filename_out.
+          ENDIF.
+
+        ELSE.
+*-- Pan wise download. Change in File name with PAN number.
+          IF p_pan IS NOT INITIAL.
+            IF final_tab-icnum IS INITIAL.
+              CONCATENATE 'NP_' final_tab-pernr INTO l_name.
+            ELSE.
+              l_name = final_tab-icnum.
+            ENDIF.
+          ELSE.
+            l_name = final_tab-pernr.
+          ENDIF.
+*          CONCATENATE folpath l_name '_Form 16.PDF'
+          IF pf2f_10k EQ 'X'.
+            CONCATENATE folpath l_name '_' '2f10k' '_' gs_f16data-assm_start
+            '-' gs_f16data-assm_end+2(2) '.PDF'
+            INTO l_filename_out.
+          ELSE.
+            CONCATENATE folpath l_name '_' gs_f16data-assm_start
+            '-' gs_f16data-assm_end+2(2) '_' 'Part B' '.PDF'
+            INTO l_filename_out.
+          ENDIF.
+        ENDIF.
+      ELSE.
+*-- Pan wise download. Change in File name with PAN number.
+        IF file2 IS NOT INITIAL AND year GE '2012'.
+          IF p_pan IS NOT INITIAL.
+            l_name = final_tab-icnum.
+          ELSE.
+            l_name = final_tab-pernr.
+          ENDIF.
+          IF pf2f_10k EQ 'X'.
+           CONCATENATE folpath l_name '_' '2f10k' '_' gs_f16data-assm_start
+            '-' gs_f16data-assm_end+2(2) '_' cntr_rec '.PDF'
+            INTO l_filename_out.
+          ELSE.
+            CONCATENATE folpath l_name '_' gs_f16data-assm_start
+            '-' gs_f16data-assm_end+2(2) '_' 'Part B' '_' cntr_rec '.PDF'
+*            CONCATENATE folpath l_name '_' cntr_rec '_Form 16_PartB.PDF'
+            INTO l_filename_out.
+          ENDIF.
+        ELSE.
+*-- Pan wise download. Change in File name with PAN number.
+          IF p_pan IS NOT INITIAL.
+            l_name = final_tab-icnum.
+          ELSE.
+            l_name = final_tab-pernr.
+          ENDIF.
+          IF pf2f_10k EQ 'X'.
+             CONCATENATE folpath l_name '_' '2f10k' '_' gs_f16data-assm_start
+            '-' gs_f16data-assm_end+2(2) '_' cntr_rec '.PDF'
+            INTO l_filename_out.
+          ELSE.
+            CONCATENATE folpath l_name '_' gs_f16data-assm_start
+            '-' gs_f16data-assm_end+2(2) '_' 'Part B' '_' cntr_rec '.PDF'
+*            CONCATENATE folpath l_name '_' cntr_rec '_Form 16.PDF'
+            INTO l_filename_out.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+      IF pnpesscf = ' '.
+        CALL METHOD cl_gui_frontend_services=>gui_download
+          EXPORTING
+            bin_filesize = l_len
+            filename     = l_filename_out
+            filetype     = 'BIN'
+          CHANGING
+            data_tab     = l_tab
+          EXCEPTIONS
+            OTHERS       = 1.
+        IF sy-subrc = 0.
+*      write:/ 'Datei erfolgreich geschrieben'(001).
+        ENDIF.
+      ENDIF.
+     ENDIF.
+    pdf_string_x = l_f16.
+    pdf_fsize = l_len.
+    EXPORT pdf_string_x TO MEMORY ID 'PDFF'.
+    EXPORT pdf_string_x TO MEMORY ID 'PDFT'.
+    EXPORT pdf_fsize TO MEMORY ID 'PDSZ'.
+    EXPORT pdf_string_x TO MEMORY ID 'PDFF_IN'.
+    EXPORT pdf_string_x TO MEMORY ID 'PDFT'.
+    EXPORT pdf_string_x TO MEMORY ID 'F16_PDF'.
+    ENDIF.
+  ENDIF.
+**    Form 12BB save in the folder
+  IF ( p_f12bb EQ 'X' OR pf16_12b EQ 'X' ) AND form12bb-pdf IS NOT INITIAL.
+      IF NOT tmp_mail_id IS INITIAL OR NOT ( folpath1 IS INITIAL )
+        OR NOT ( pnpesscf IS INITIAL ).
+        l_fp = cl_fp=>get_reference( ).
+        TRY.
+          IF  dsign = 'X'.
+            l_pdfobj = l_fp->create_pdf_object( connection = p_dest ).
+          ELSE.
+            l_pdfobj = l_fp->create_pdf_object( connection = p_dest2 ).
+          ENDIF.
+
+          CALL METHOD l_pdfobj->set_document
+            EXPORTING
+               pdfdata = form12bb-pdf.
+          CALL METHOD l_pdfobj->execute( ).
+
+        CALL METHOD l_pdfobj->get_document
+          IMPORTING
+            pdfdata = l_out1.
+        l_f12bb = l_out1.
+        CATCH cx_fp_runtime_internal INTO l_fpex.
+           PERFORM error USING l_fpex 'INTERNAL ERROR'.
+        CATCH cx_fp_runtime_system INTO l_fpex.
+           PERFORM error USING l_fpex 'SYSTEM ERROR'.
+        CATCH cx_fp_runtime_usage INTO l_fpex.
+           PERFORM error USING l_fpex 'USAGE ERROR'.
+        ENDTRY.
+
+       pdf_string_x = l_f12bb.
+       EXPORT pdf_string_x TO MEMORY ID 'PDFF'.
+*       CLEAR cl_hr_in_12bb_get_pdf=>at_pdf_string.
+*       cl_hr_in_12bb_get_pdf=>at_pdf_string = pdf_string_x.
+
+       IF NOT ( folpath1 IS INITIAL ) OR NOT ( pnpesscf IS INITIAL ).
+         CALL FUNCTION 'SCMS_XSTRING_TO_BINARY'
+           EXPORTING
+             buffer        = l_f12bb
+           IMPORTING
+             output_length = l_len
+           TABLES
+             binary_tab    = l_tab.
+
+         CLEAR l_name.
+         IF p_pan IS NOT INITIAL.
+            l_name = final_tab-icnum.
+         ELSE.
+            l_name = final_tab-pernr.
+         ENDIF.
+         CONCATENATE folpath1 l_name '_' gs_f16data-fin_start
+           '-' gs_f16data-fin_end+2(2) '_F12BB' '.PDF'
+          INTO l_filename_out.
+
+    IF pnpesscf = ' '.
+        CALL METHOD cl_gui_frontend_services=>gui_download
+          EXPORTING
+            bin_filesize = l_len
+            filename     = l_filename_out
+            filetype     = 'BIN'
+          CHANGING
+            data_tab     = l_tab
+          EXCEPTIONS
+            OTHERS       = 1.
+        IF sy-subrc = 0.
+*      write:/ 'Datei erfolgreich geschrieben'(001).
+        ENDIF.
+      ENDIF.
+    ENDIF.
+   ENDIF.
+   ENDIF.
+    IF dmail = 'X'.
+      PERFORM email_pdf_output USING l_f16
+                                     final_tab-ename 'Form 16' final_tab-icnum gs_f16data-assm_start gs_f16data-assm_end.
+
+    ENDIF.
+
+  ENDLOOP.
+
+  IF NOT dsign IS INITIAL.
+
+    TRY.
+        CALL FUNCTION 'FP_FUNCTION_MODULE_NAME'
+          EXPORTING
+            i_name     = 'HR_IN_CONTRLOG'
+          IMPORTING
+            e_funcname = gv_fmname.
+      CATCH cx_root INTO lv_w_cx_root.
+        lv_mesg = lv_w_cx_root->get_text( ).
+        MESSAGE e201(hrpadin01) WITH lv_formname lv_mesg.
+    ENDTRY.
+
+    CALL FUNCTION gv_fmname
+      EXPORTING
+        /1bcdwb/docparams  = gs_fpdocparams
+        contlog            = control_log
+      IMPORTING
+        /1bcdwb/formoutput = contlogform
+      EXCEPTIONS
+        usage_error        = 1
+        system_error       = 2
+        internal_error     = 3
+        OTHERS             = 4.
+    IF sy-subrc <> 0.
+*         MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*                 WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+    ENDIF.
+    TRY.
+*     create PDF Object
+        l_pdfobj = l_fp->create_pdf_object( connection = p_dest ).
+
+*     set document
+        CALL METHOD l_pdfobj->set_document
+          EXPORTING
+            pdfdata = contlogform-pdf.
+
+**     set signature
+        CALL METHOD l_pdfobj->set_signature
+          EXPORTING
+            keyname   = s_alsign
+            fieldname = s_field10.
+*          reason      = s_reason
+*          location    = s_loc
+*          contactinfo = s_cinfo.
+
+*     execute, call ADS
+        CALL METHOD l_pdfobj->execute( ).
+
+        CALL METHOD l_pdfobj->get_document
+          IMPORTING
+            pdfdata = l_out.
+
+        l_f16 = l_out.
+
+      CATCH cx_fp_runtime_internal INTO l_fpex.
+        PERFORM error USING l_fpex 'INTERNAL ERROR'.
+      CATCH cx_fp_runtime_system INTO l_fpex.
+        PERFORM error USING l_fpex 'SYSTEM ERROR'.
+      CATCH cx_fp_runtime_usage INTO l_fpex.
+        PERFORM error USING l_fpex 'USAGE ERROR'.
+    ENDTRY.
+
+*   download PDF
+*      data: l_len      type i,
+*            l_tab      type tsfixml.
+
+    CALL FUNCTION 'SCMS_XSTRING_TO_BINARY'
+      EXPORTING
+        buffer        = l_out
+      IMPORTING
+        output_length = l_len
+      TABLES
+        binary_tab    = l_tab.
+
+    CONCATENATE folpath sy-datum '_' sy-uzeit '_controllog.PDF'
+    INTO l_filename_out.
+
+    IF NOT folpath IS INITIAL.
+      CALL METHOD cl_gui_frontend_services=>gui_download
+        EXPORTING
+          bin_filesize = l_len
+          filename     = l_filename_out
+          filetype     = 'BIN'
+        CHANGING
+          data_tab     = l_tab
+        EXCEPTIONS
+          OTHERS       = 1.
+      IF sy-subrc = 0.
+*      write:/ 'Datei erfolgreich geschrieben'(001).
+      ENDIF.
+    ENDIF.
+*-- To enable control log file for employees without digital signature
+    ELSEIF dsign IS INITIAL AND folpath IS NOT INITIAL.
+
+    TRY.
+        CALL FUNCTION 'FP_FUNCTION_MODULE_NAME'
+          EXPORTING
+            i_name     = 'HR_IN_CONTRLOG'
+          IMPORTING
+            e_funcname = gv_fmname.
+      CATCH cx_root INTO lv_w_cx_root.
+        lv_mesg = lv_w_cx_root->get_text( ).
+        MESSAGE e201(hrpadin01) WITH lv_formname lv_mesg.
+    ENDTRY.
+
+    CALL FUNCTION gv_fmname
+      EXPORTING
+        /1bcdwb/docparams  = gs_fpdocparams
+        contlog            = control_log
+      IMPORTING
+        /1bcdwb/formoutput = contlogform
+      EXCEPTIONS
+        usage_error        = 1
+        system_error       = 2
+        internal_error     = 3
+        OTHERS             = 4.
+    IF sy-subrc <> 0.
+*         MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*                 WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+    ENDIF.
+
+    CALL FUNCTION 'SCMS_XSTRING_TO_BINARY'
+      EXPORTING
+        buffer        = contlogform-pdf
+      IMPORTING
+        output_length = l_len
+      TABLES
+        binary_tab    = l_tab.
+
+    CONCATENATE folpath sy-datum '_' sy-uzeit '_controllog.PDF'
+    INTO l_filename_out.
+
+      CALL METHOD cl_gui_frontend_services=>gui_download
+        EXPORTING
+          bin_filesize = l_len
+          filename     = l_filename_out
+          filetype     = 'BIN'
+        CHANGING
+          data_tab     = l_tab
+        EXCEPTIONS
+          OTHERS       = 1.
+
+  ENDIF.
+
+
+IF file2 IS NOT INITIAL AND file3 IS INITIAL AND year GE '2012' AND dmail EQ 'X'.
+
+   SORT gt_log_file BY status ASCENDING.
+   mail_counter = 1.
+   LOOP AT gt_log_file INTO gs_log_file.
+     gs_log_file-sl_no    = mail_counter.
+     MODIFY gt_log_file FROM gs_log_file INDEX sy-tabix.
+     ADD 1 TO mail_counter.
+   ENDLOOP.
+
+      TRY.
+          CALL FUNCTION 'FP_FUNCTION_MODULE_NAME'
+            EXPORTING
+              i_name     = 'HR_IN_F16_MAIL_LOG'
+            IMPORTING
+              e_funcname = gv_fmname.
+        CATCH cx_root INTO lv_w_cx_root.
+
+      ENDTRY.
+
+     CALL FUNCTION gv_fmname
+        EXPORTING
+          /1bcdwb/docparams  = gs_fpdocparams
+          log_file           = gt_log_file
+          tan_no             = tan_no
+          comp_cd            = comp_cd
+          assm_start         = gs_f16data-assm_start
+          assm_end           = gs_f16data-assm_end
+          folder_path        = file2
+        IMPORTING
+          /1bcdwb/formoutput = lst_formoutput
+        EXCEPTIONS
+          usage_error        = 1
+          system_error       = 2
+          internal_error     = 3
+          OTHERS             = 4.
+      IF sy-subrc <> 0.
+*   MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*             WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+      ENDIF.
+
+   CALL FUNCTION 'SCMS_XSTRING_TO_BINARY'
+        EXPORTING
+          buffer        = lst_formoutput-pdf
+        IMPORTING
+          output_length = l_length
+        TABLES
+          binary_tab    = l_table.
+
+*    CONCATENATE sy-uzeit+0(2) sy-uzeit+2(2) sy-uzeit+4(2) INTO lv_time SEPARATED BY ':'.
+    CONCATENATE file2 'Form 16 log' '_' sy-uzeit '.PDF' INTO lv_filename_out.
+
+        CALL METHOD cl_gui_frontend_services=>gui_download
+          EXPORTING
+            bin_filesize = l_length
+            filename     = lv_filename_out
+            filetype     = 'BIN'
+          CHANGING
+            data_tab     = l_table
+          EXCEPTIONS
+            OTHERS       = 1.
+        IF sy-subrc = 0.
+
+        ENDIF.
+    ENDIF.
+
+********START OF COMMENTING************
+  CALL FUNCTION 'FP_JOB_CLOSE'
+* IMPORTING
+*   E_RESULT             =
+   EXCEPTIONS
+     usage_error          = 1
+     system_error         = 2
+     internal_error       = 3
+      OTHERS         = 4.
+  IF sy-subrc <> 0.
+* MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*         WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+  ENDIF.
+
+ENDFORM.                    " PRINT_PDF_MODULE
+
+*&---------------------------------------------------------------------*
+*&      Form  FILL_IFOS
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_IFOS_TAB  text
+*      -->P_FINAL_TAB_PERNR  text
+*      -->P_FINAL_TAB_CNTR2  text
+*----------------------------------------------------------------------*
+FORM fill_ifos  TABLES ifos_tab STRUCTURE ifos_tab
+                       gt_ifostab
+                USING  final_tab_pernr
+                       final_tab_cntr2
+                       gs_annexure TYPE hcm_hincf160_annexure_pdf.
+
+  DATA : ifos_tab_amount_s(15) TYPE c,
+         ifos_tab_amount(15) TYPE c.
+  LOOP AT ifos_tab WHERE pernr = final_tab-pernr AND
+                          cntr2 = final_tab-cntr2.
+**  *******START OF COMMENTING************
+        CLEAR gs_annexure.
+        MOVE : ifos_tab-spec_txt TO gs_annexure-spec_text.
+        ifos_tab_amount_s = ifos_tab-amount.
+        IF ifos_tab-sign = -1.
+          CONCATENATE '-' ifos_tab_amount_s INTO ifos_tab_amount_s.
+        ELSE.
+          CONCATENATE '' ifos_tab_amount_s INTO  ifos_tab_amount_s.
+        ENDIF.
+        CONDENSE ifos_tab_amount_s.
+        CLEAR ifos_tab_amount.
+        PERFORM sign_algmnt USING ifos_tab_amount_s
+                             CHANGING ifos_tab_amount.
+        MOVE : ifos_tab_amount TO gs_annexure-amount.
+
+        APPEND gs_annexure TO gt_ifostab.
+*  *******END OF COMMENTING************
+
+   ENDLOOP.
+
+ENDFORM.
+*&--------------------------------------------------------------------*
+*&      Form  job_open_pdf
+*&--------------------------------------------------------------------*
+*       Opening the Spool
+*---------------------------------------------------------------------*
+*      -->IV_LANG    Language
+*---------------------------------------------------------------------*
+FORM job_open_pdf USING iv_lang TYPE sylangu.
+
+  DATA: ls_options TYPE itcpo.
+  DATA: lv_dialog TYPE c.
+  DATA: ls_pri_params TYPE pri_params,
+        gs_fpoutparams TYPE sfpoutputparams.
+
+*  IF PNPESSCF = GC_X.
+**    LS_OPTIONS-TDNOPRINT = GC_X.
+**    LS_OPTIONS-TDPREVIEW = GC_X.
+**    LS_OPTIONS-TDTITLE = SPACE.
+**    LS_OPTIONS-TDGETOTF = GC_X.
+**    LS_OPTIONS-TDPRINTER = 'POSTSCPT'.
+*
+*    LV_DIALOG = GC_X.
+*  ELSE.
+  lv_dialog = gc_x.
+*  ENDIF.
+* END OF ESS CHANGES
+
+  CALL FUNCTION 'GET_PRINT_PARAMETERS'
+    EXPORTING
+      no_dialog      = gc_x
+      mode           = 'CURRENT'
+    IMPORTING
+      out_parameters = ls_pri_params.
+
+  ls_options-tdcopies   = ls_pri_params-prcop.
+  ls_options-tddest     = ls_pri_params-pdest.
+  ls_options-tdnewid    = ls_pri_params-prnew.
+  ls_options-tdimmed    = ls_pri_params-primm.
+  ls_options-tddelete   = ls_pri_params-prrel.
+  ls_options-tdlifetime = ls_pri_params-pexpi.
+  ls_options-tdtitle    = ls_pri_params-prtxt.
+  ls_options-tdcover    = ls_pri_params-prsap.
+  ls_options-tdcovtitle = ls_pri_params-prtxt.
+  ls_options-tdreceiver = ls_pri_params-prrec.
+  ls_options-tddivision = ls_pri_params-prabt.
+  ls_options-tdautority = ls_pri_params-prber.
+
+  PERFORM fill_outputparams USING ls_options
+                            CHANGING gs_fpoutparams.
+  CALL FUNCTION 'FP_JOB_OPEN'
+    CHANGING
+      ie_outputparams = gs_fpoutparams
+    EXCEPTIONS
+      cancel          = 1
+      usage_error     = 2
+      system_error    = 3
+      internal_error  = 4
+      OTHERS          = 5.
+  IF sy-subrc <> 0.
+* MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*         WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+  ENDIF.
+
+
+ENDFORM.                    "job_open_pdf
+*&---------------------------------------------------------------------*
+*&      Form  fill_outputparams
+*&---------------------------------------------------------------------*
+*This form will fill all the print parameters for the form
+*---------------------------------------------------------------------*
+*  -->  IS_ITCPO Print Options of script
+*  <->  XS_OUTPUTPARAMS Out Parameters for PDF .
+*---------------------------------------------------------------------*
+FORM fill_outputparams USING    is_itcpo                 TYPE itcpo
+                                 CHANGING xs_outputparams TYPE sfpoutputparams.
+  IF pnpesscf = ' '.
+    xs_outputparams-device     = is_itcpo-tdprinter.
+*  XS_OUTPUTPARAMS-NODIALOG   = GC_X.
+    xs_outputparams-preview    = is_itcpo-tdpreview.
+    xs_outputparams-dest       = is_itcpo-tddest.
+    xs_outputparams-reqnew     = is_itcpo-tdnewid.
+    xs_outputparams-reqimm     = is_itcpo-tdimmed.
+    xs_outputparams-reqdel     = is_itcpo-tddelete.
+    xs_outputparams-reqfinal   = is_itcpo-tdfinal.
+    xs_outputparams-senddate   = is_itcpo-tdsenddate.
+    xs_outputparams-sendtime   = is_itcpo-tdsendtime.
+    xs_outputparams-schedule   = is_itcpo-tdschedule.
+    xs_outputparams-copies     = is_itcpo-tdcopies.
+    xs_outputparams-dataset    = is_itcpo-tddataset.
+    xs_outputparams-suffix1    = is_itcpo-tdsuffix1.
+    xs_outputparams-suffix2    = is_itcpo-tdsuffix2.
+    xs_outputparams-covtitle   = is_itcpo-tdcovtitle.
+    xs_outputparams-cover      = is_itcpo-tdcover.
+    xs_outputparams-receiver   = is_itcpo-tdreceiver.
+    xs_outputparams-division   = is_itcpo-tddivision.
+    xs_outputparams-lifetime   = is_itcpo-tdlifetime.
+    xs_outputparams-authority  = is_itcpo-tdautority.
+    xs_outputparams-rqposname  = is_itcpo-rqposname.
+    xs_outputparams-arcmode    = is_itcpo-tdarmod.
+    xs_outputparams-noarmch    = is_itcpo-tdnoarmch.
+    xs_outputparams-title      = is_itcpo-tdtitle.
+    xs_outputparams-nopreview  = is_itcpo-tdnoprev.
+    xs_outputparams-noprint    = is_itcpo-tdnoprint.
+*  XS_OUTPUTPARAMS-GETPDF = 'X'.
+    IF dsign = 'X'.
+      xs_outputparams-job_profile = 'Custom/Print/Remove_Annote'.
+    ENDIF.
+
+    IF dsign = 'X'.
+      xs_outputparams-nodialog = 'X'. " suppress printer dialog popup
+      xs_outputparams-getpdf = 'X'. " launch prin'Custom/print/Remove_Annote'.t preview
+*    XS_OUTPUTPARAMS-bumode = 'M'.
+    ENDIF.
+  ELSE.
+    xs_outputparams-nodialog = 'X'. " suppress printer dialog popup
+    xs_outputparams-getpdf = 'X'. " launch print preview
+    xs_outputparams-preview   = 'X'.
+  ENDIF.
+ENDFORM.                    " fill_outputparams
+
+
+*&---------------------------------------------------------------------*
+*&      Form  address
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->$BUKRS         text
+*      -->ADDRESS_VALUE  text
+*----------------------------------------------------------------------*
+FORM address USING $bukrs
+                   address_value.                  "MKINT910704
+  DATA:  aa(1), bb(1), cc(1), dd(1), ee(1),
+         ff(1), gg(1), hh(1), ii(1).
+
+  DATA:  adrnr LIKE hrca_company-address.
+  DATA: sadr1 LIKE sadr OCCURS 10 WITH HEADER LINE.
+
+  DATA:  selection LIKE addr1_sel.
+*         address_value like addr1_val.
+
+  CALL FUNCTION 'HRCA_COMPANYCODE_GETDETAIL'
+         EXPORTING
+               companycode = $bukrs
+               language    = sy-langu
+         IMPORTING
+*            COMP_NAME
+*            CITY
+*            COUNTRY
+*            CURRENCY
+*            LANGU
+*            CHRT_ACCTS
+*            FY_VARIANT
+*            FI_MANAGEMENTAREA
+*            JURISDICTION
+*            VALUE(RATE_DEVIATION) LIKE  HRCA_COMPANY-RATE_DEVIAT
+               address = adrnr
+         EXCEPTIONS
+                not_found.
+
+* To get the address for the company specified.
+
+  selection-addrnumber = adrnr.        "SADR40A (check TVKO-ADRNR)
+
+  CALL FUNCTION 'ADDR_GET'
+    EXPORTING
+      address_selection = selection
+      address_group     = 'CA01' "to read SADR for unchanged
+    IMPORTING                       "data
+      address_value     = address_value  "both structures filled
+      sadr              = sadr  "choose one of them
+    EXCEPTIONS
+      address_not_exist = 1
+      OTHERS            = 2.                                "SADR40A
+
+  IF sadr-name1 IS INITIAL. aa = 'N'. ENDIF.
+  IF sadr-name2 IS INITIAL. bb = 'N'. ENDIF.
+  IF sadr-name3 IS INITIAL. cc = 'N'. ENDIF.
+  IF sadr-name4 IS INITIAL. dd = 'N'. ENDIF.
+  IF sadr-stras IS INITIAL. ee = 'N'. ENDIF.
+  IF sadr-pfach IS INITIAL. ff = 'N'. ENDIF.
+  IF sadr-pstlz IS INITIAL. gg = 'N'. ENDIF.
+  IF sadr-ort01 IS INITIAL. hh = 'N'. ENDIF.
+  IF sadr-ort02 IS INITIAL. ii = 'N'. ENDIF.
+
+  PERFORM convert_to_scriptvar USING 'A' aa.
+  PERFORM convert_to_scriptvar USING 'B' bb.
+  PERFORM convert_to_scriptvar USING 'C' cc.
+  PERFORM convert_to_scriptvar USING 'D' dd.
+  PERFORM convert_to_scriptvar USING 'E' ee.
+  PERFORM convert_to_scriptvar USING 'F' ff.
+  PERFORM convert_to_scriptvar USING 'G' gg.
+  PERFORM convert_to_scriptvar USING 'H' hh.
+  PERFORM convert_to_scriptvar USING 'I' ii.
+ENDFORM.                               " ADDRESS
+*&---------------------------------------------------------------------*
+*&      Form  error
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_FPEX     text
+*      -->P_STR      text
+*----------------------------------------------------------------------*
+FORM error USING p_fpex TYPE REF TO cx_fp_runtime
+                 p_str  TYPE string.
+  DATA: l_errcode  TYPE i,
+        l_errmsg   TYPE string,
+        l_string   TYPE string.
+
+  WRITE:/ '***************************************************'.
+  WRITE:/ '***', p_str.
+  WRITE:/ '***************************************************'.
+  SKIP 2.
+
+  CALL METHOD p_fpex->get_errall
+    IMPORTING
+      errcode = l_errcode
+      errmsg  = l_errmsg.
+
+  WRITE:/ text-236, l_errcode. "'ERROR CODE       : '(236)
+  WRITE:/ text-237, l_errmsg. "'ERROR MESSAGE    : '(237)
+
+  l_string = p_fpex->get_text( ).
+  WRITE:/ l_string.
+
+ENDFORM.                    "error
+
+*&---------------------------------------------------------------------*
+*&      Form  EMAIL_PDF_OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_FINAL_TAB_OTH_INCOME  text
+*      <--P_OTH_INCOME_S  text
+*----------------------------------------------------------------------*
+
+FORM email_pdf_output USING ls_formoutput TYPE xstring
+                            p_ename desc
+                            p_icnum
+                            p_assm_start
+                            p_assm_end.
+
+* email setting's data def
+  DATA: ls_doc_data TYPE sodocchgi1.
+  DATA:
+  lt_receivers       TYPE TABLE OF somlreci1 WITH HEADER LINE,
+  lt_objpack         TYPE TABLE OF sopcklsti1 WITH HEADER LINE,
+  lt_contents        TYPE TABLE OF solix,
+  ls_objpack         TYPE sopcklsti1,
+  l_mail_des(255)    TYPE c.
+
+  DATA  lp_offset TYPE i.
+  DATA  lt_solix TYPE solix_tab.
+  DATA  ls_solix_line TYPE solix.
+  DATA  ls_archive_params TYPE toa_dara.
+  DATA  lp_pdf_string_len TYPE i.
+  DATA  lp_solix_rows TYPE i.
+  DATA  lp_last_row_length TYPE i.
+  DATA  lp_row_length TYPE i.
+  DATA  lp_doc_length TYPE so_obj_len.
+  DATA: lv_tablines_mail TYPE i.
+  DATA: l_mailid TYPE comm_id_long.
+
+******* get mailing data
+
+**TO ADD ANOTHER ATTACHMENT FOR Form 16 Part A.
+
+DATA : lv_date TYPE string.
+DATA : lv_time TYPE string.
+DATA : lv_filename type STRING.
+DATA : lv_trace_file type so_obj_des.
+DATA : lv_part_b type so_obj_des.
+DATA : lv_file_error TYPE flag.
+
+* for uploading PDF
+
+DATA  file_length   type i.
+DATA  file_length1  TYPE i.
+DATA  filename      type string.
+DATA  filename1     TYPE string.
+
+* for sending via BCS
+DATA send_request  TYPE REF TO cl_bcs.
+DATA document      TYPE REF TO cl_document_bcs.
+DATA recipient     TYPE ref to if_recipient_bcs.
+DATA bcs_exception TYPE ref to cx_bcs.
+DATA sent_to_all   TYPE os_boolean.
+DATA pdf_size      TYPE so_obj_len.
+DATA pdf_size1     TYPE so_obj_len.
+DATA pdf_content   TYPE solix_tab.
+DATA pdf_content1  TYPE solix_tab.
+DATA pdf_xstring   TYPE xstring.
+DATA pdf_xstring1  TYPE xstring.
+DATA: mailto       TYPE ad_smtpadr.
+DATA: attch_flag   TYPE flag.
+DATA: is_implemented TYPE flag.
+
+* get document data
+  DATA: lv_description TYPE so_obj_des,
+        l_text(40) TYPE c.
+
+*-- BAdI for email content/attachment declaration
+  DATA: badi_mail     TYPE REF TO HR_IN_F16_MAIL,
+        lt_email_body TYPE soli_tab,
+        lv_length     TYPE so_obj_len,
+        lv_subject    TYPE so_obj_des,
+        lt_attachment TYPE solix_tab.
+
+  CONCATENATE desc 'for ' p_ename
+              INTO lv_description SEPARATED BY space.
+
+  rp-read-infotype final_tab-pernr 0105 p0105 pbegda pendda.
+  rp-provide-from-last p0105 '0010' pbegda pendda.
+
+* * transform xstring to SOLIX table format for the PDF form data
+  DESCRIBE TABLE lt_solix.
+  lp_row_length = sy-tleng.
+  lp_offset = 0.
+
+  lp_pdf_string_len = XSTRLEN( ls_formoutput ).
+
+  lp_solix_rows = lp_pdf_string_len DIV lp_row_length.
+  lp_last_row_length = lp_pdf_string_len MOD lp_row_length.
+  DO lp_solix_rows TIMES.
+    ls_solix_line-line =
+           ls_formoutput+lp_offset(lp_row_length).
+    APPEND ls_solix_line TO lt_contents.
+    ADD lp_row_length TO lp_offset.
+  ENDDO.
+  IF lp_last_row_length > 0.
+    CLEAR ls_solix_line-line.
+    ls_solix_line-line = ls_formoutput+lp_offset(lp_last_row_length).
+    APPEND ls_solix_line TO lt_contents.
+  ENDIF.
+  pdf_size = XSTRLEN( ls_formoutput ).
+
+ IF file2 IS NOT INITIAL AND year GE '2012'.
+  CONCATENATE p_icnum '_' p_assm_start '-' p_assm_end+2(2) '_' 'Part B' '.PDF' into lv_part_b.
+  ls_objpack-obj_descr  = lv_part_b.
+ ELSEIF file2 IS INITIAL AND year GE '2012'.
+  CONCATENATE p_icnum '_' p_assm_start '-' p_assm_end+2(2) '_' 'Part B' '.PDF' into lv_part_b.
+  ls_objpack-obj_descr  = lv_part_b.
+ ELSE.
+  ls_objpack-obj_descr  = desc.
+ ENDIF.
+
+  CLEAR: lv_file_error,gs_log_file.
+ IF file2 IS NOT INITIAL AND year GE '2012'.
+  CONCATENATE file2 p_icnum '_' p_assm_start '-' p_assm_end+2(2) '.PDF' INTO lv_filename.
+  CONCATENATE p_icnum '_' p_assm_start '-' p_assm_end+2(2) '.PDF' INTO lv_trace_file.
+
+* upload the selected PDF to SAP GUI
+  CALL METHOD cl_gui_frontend_services=>gui_upload
+    EXPORTING
+      filename                = lv_filename
+      filetype                = 'BIN'
+      has_field_separator     = space
+      header_length           = 0
+      read_by_line            = 'X'
+      dat_mode                = space
+      codepage                = space
+      ignore_cerr             = abap_true
+      replacement             = '#'
+    IMPORTING
+      filelength              = file_length1
+    CHANGING
+      data_tab                = pdf_content1
+    EXCEPTIONS
+      file_open_error         = 1
+      file_read_error         = 2
+      no_batch                = 3
+      gui_refuse_filetransfer = 4
+      invalid_type            = 5
+      no_authority            = 6
+      unknown_error           = 7
+      bad_data_format         = 8
+      header_not_allowed      = 9
+      separator_not_allowed   = 10
+      header_too_long         = 11
+      unknown_dp_error        = 12
+      access_denied           = 13
+      dp_out_of_memory        = 14
+      disk_full               = 15
+      dp_timeout              = 16
+      not_supported_by_gui    = 17
+      error_no_gui            = 18
+      OTHERS                  = 19.
+
+  IF SY-SUBRC EQ 0.
+attch_flag = 'X'.
+gs_log_file-emp_no   = final_tab-pernr.
+gs_log_file-emp_mail = p0105-usrid_long.
+gs_log_file-emp_pan  = p_icnum.
+gs_log_file-filepath = lv_trace_file.
+
+CONCATENATE sy-datum+6(2) sy-datum+4(2) sy-datum+0(4) INTO lv_date SEPARATED BY '-'.
+CONCATENATE sy-uzeit+0(2) sy-uzeit+2(2) sy-uzeit+4(2) INTO lv_time SEPARATED BY ':'.
+CONCATENATE lv_date lv_time INTO gs_log_file-timestamp SEPARATED BY '/'.
+
+gs_log_file-status   = 'S'.
+APPEND gs_log_file TO gt_log_file.
+
+ELSE.
+lv_file_error = 'X'.
+gs_log_file-emp_no   = final_tab-pernr.
+gs_log_file-emp_mail = p0105-usrid_long.
+gs_log_file-emp_pan  = p_icnum.
+
+CONCATENATE sy-datum+6(2) sy-datum+4(2) sy-datum+0(4) INTO lv_date SEPARATED BY '-'.
+CONCATENATE sy-uzeit+0(2) sy-uzeit+2(2) sy-uzeit+4(2) INTO lv_time SEPARATED BY ':'.
+CONCATENATE lv_date lv_time INTO gs_log_file-timestamp SEPARATED BY '/'.
+
+gs_log_file-status   = 'E'.
+APPEND gs_log_file to gt_log_file.
+
+ ENDIF.
+ENDIF.
+
+  CLEAR p0105.
+  CLEAR lt_receivers.
+  REFRESH lt_receivers.
+* get reciver details
+  SORT p0105 DESCENDING BY endda.
+  READ TABLE p0105 WITH KEY subty = '0010'.
+  IF sy-subrc = 0.
+    mailto = p0105-usrid_long.
+  ENDIF.
+
+  IF NOT mailto IS INITIAL AND lv_file_error IS INITIAL.
+*   send mail
+pdf_size1 = file_length1.
+
+  TRY.
+    GET BADI badi_mail.
+
+     is_implemented = 'X'.
+*-- BAdI method call to attach a pdf document
+    CALL BADI BADI_MAIL->ADD_ATTACHMENT
+      EXPORTING
+        P0001 = P0001
+        file_path = f_path
+      IMPORTING
+        FILE_LENGTH = lv_length
+        PDF_CONTENT = lt_attachment
+        ATTACHMENT_SUB = lv_subject.
+
+*-- BAdI method call to change Email Content
+    CALL BADI BADI_MAIL->SET_EMAIL_TEXT
+      EXPORTING
+        P0001 = P0001
+        PANNO = p_icnum
+        TANNO = final_tab-tanno
+      IMPORTING
+        EMAIL_BODY = lt_email_body
+      CHANGING
+        EMAIL_SUBJECT = lv_description.
+
+      CATCH CX_BADI_NOT_IMPLEMENTED.
+  ENDTRY.
+
+  TRY.
+*     -------- create persistent send request ------------------------
+      send_request = cl_bcs=>create_persistent( ).
+
+*     -------- create and set document -------------------------------
+  document = cl_document_bcs=>create_document(
+            i_type    = 'RAW'
+            i_text    = lt_email_body
+            i_subject = lv_description ).                       "#EC NOTEXT
+
+  CALL METHOD document->add_attachment(
+            i_attachment_type    = 'PDF'
+            i_att_content_hex    =  lt_contents
+            i_attachment_size    =  pdf_size
+            i_attachment_subject =  lv_part_b ).
+
+*-- Attachment from BAdI
+   IF is_implemented IS NOT INITIAL.
+  CALL METHOD document->add_attachment(
+            i_attachment_type    = 'PDF'
+            i_att_content_hex    =  lt_attachment
+            i_attachment_size    =  lv_length
+            i_attachment_subject =  lv_subject ).
+   ENDIF.
+
+  IF NOT attch_flag IS INITIAL.
+  CALL METHOD document->add_attachment(
+            i_attachment_type    = 'PDF'
+            i_att_content_hex    =  pdf_content1
+            i_attachment_size    =  pdf_size1
+            i_attachment_subject =  lv_trace_file ).
+  ENDIF.
+*     add document object to send request
+      send_request->set_document( document ).
+*
+*      send_request->set_document( document1 ).
+*     --------- add recipient (e-mail address) -----------------------
+*     create recipient object
+      recipient = cl_cam_address_bcs=>create_internet_address( mailto ).
+
+*     add recipient object to send request
+      send_request->add_recipient( recipient ).
+
+      send_request->SET_STATUS_ATTRIBUTES( I_REQUESTED_STATUS = 'E'  ).
+
+*     ---------- send document ---------------------------------------
+      sent_to_all = send_request->send( i_with_error_screen = 'X' ).
+
+      COMMIT WORK.
+
+*   ------------ exception handling ----------------------------------
+*   replace this rudimentary exception handling with your own one !!!
+    CATCH cx_bcs INTO bcs_exception.
+      MESSAGE i865(so) WITH bcs_exception->error_type.
+  ENDTRY.
+
+  ENDIF.
+ENDFORM.                    " email_pdf_output

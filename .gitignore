@@ -1,0 +1,9 @@
+# Local tooling / connection config — never commit
+.mcp.json
+.claude/
+*.zip
+
+# OS / editor noise
+Thumbs.db
+desktop.ini
+.DS_Store

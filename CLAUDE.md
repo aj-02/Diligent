@@ -94,6 +94,12 @@ Single line: append `"Changes by Arnav on DD/MM/YY`
 - **Never modify a standard SAP object.** Changes go into a `Z` copy. Create custom includes
   only where an include actually changed — never blanket-Z every include.
 - Build nothing the FS or the issue did not ask for.
+- **Push every code update.** Whenever an object file is written or changed, run
+  `./scripts/sync.sh "<what changed>"` as the last step of that reply — commit, pull, push, in
+  one go — and report the commit hash with the file path. This is a standing instruction, not
+  something to ask about each time. It pushes the *repo* copy only; it does not touch SAP, and
+  it is not sign-off — Arnav still verifies before anything goes into the system. If the script
+  stops on a merge conflict or a dead network, say so in the reply rather than retrying blind.
 
 ## Answering
 

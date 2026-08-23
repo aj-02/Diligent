@@ -38,16 +38,20 @@ It is safe to run when there is nothing to do, and it never force-pushes: if the
 changed here and on GitHub it stops and tells you, leaving your commit intact. `/sync` runs
 it from inside Claude Code.
 
-To have it fire by itself, copy `.claude/settings.sync-hook.example.json` to
-`.claude/settings.json` (merge the `hooks` block in if that file already exists) and reopen
-Claude Code. Two halves, keep either or both:
+To have it fire by itself, run this once per machine:
+
+```
+./scripts/enable-auto-sync.sh          # and --off to undo
+```
+
+It installs two hooks into `.claude/settings.json`, merging with anything already there and
+keeping a `.bak`. Reopen Claude Code afterwards. The two halves:
 
 - **`SessionStart`** pulls from GitHub before work begins, so a session never starts on a
   stale working copy. No downside — keep this one.
 - **`Stop`** commits and pushes whatever changed after every reply, including edits made by
-  hand outside Claude. Auto-written commit messages, verified or not. Delete this block if
-  you would rather the history stayed hand-written; Claude pushes its own code updates
-  either way.
+  hand outside Claude. Auto-written commit messages, verified or not. This is the belt to the
+  braces — Claude pushes its own code updates anyway; this catches everything else.
 
 Hook output goes to `.git/sync-hook.log`, not the chat.
 

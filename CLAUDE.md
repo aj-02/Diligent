@@ -94,9 +94,10 @@ Single line: append `"Changes by Arnav on DD/MM/YY`
 - **Never modify a standard SAP object.** Changes go into a `Z` copy. Create custom includes
   only where an include actually changed — never blanket-Z every include.
 - Build nothing the FS or the issue did not ask for.
-- **Push every code update.** Whenever an object file is written or changed, run
+- **Push every code update, to `main`.** Whenever an object file is written or changed, run
   `./scripts/sync.sh "<what changed>"` as the last step of that reply — commit, pull, push, in
-  one go — and report the commit hash with the file path. This is a standing instruction, not
+  one go — and report the commit hash with the file path. Check you are on `main` first; if a
+  session started you on some other branch, merge it into `main` and push that. This is a standing instruction, not
   something to ask about each time. It pushes the *repo* copy only; it does not touch SAP, and
   it is not sign-off — Arnav still verifies before anything goes into the system. If the script
   stops on a merge conflict or a dead network, say so in the reply rather than retrying blind.
@@ -139,6 +140,19 @@ One folder per object. Every folder has:
 
     <object>/ISSUES.md     running log: issue -> cause -> fix -> TR -> date
     <object>/NOTES.md      what it is, how it ships, gotchas
+    <object>/original/     the source exactly as Arnav supplied it — never edited
+
+**Original and corrected are both kept, in different places.**
+
+- `<object>/original/<NAME>.abap` is the as-supplied SE80 download. It is written once and
+  never overwritten or corrected. File it with
+  `./scripts/save-original.sh <client/object> <file>` before touching anything — if a later
+  download of the same object differs, the script keeps it beside the baseline as
+  `<NAME>.<YYYY-MM-DD>.abap` and prints the drift instead of clobbering either one.
+- The **corrected** object lives in the object folder proper — `src/` for abapGit objects,
+  a loose `.abap` at the folder root for paste-only ones. Each new fix overwrites it, so
+  there is exactly one current version to paste or zip; git history holds every earlier one
+  (`git log -p -- <path>`).
 
 **Only ZIP-shippable objects have `src/` and `.abapgit.xml`** — today that is
 `kpmg/zpp_forecast_v2/`, `kpmg/zmm_po_budget/`, `kpmg/abapgit_pilot/`,
@@ -147,9 +161,11 @@ One folder per object. Every folder has:
 
 `incoming/` is the drop folder for fresh SE80 downloads awaiting triage.
 
-**Single branch: `main`.** No per-topic branches. Paths are client-first, then object —
-`kpmg/<object>/`, `ovl/<project>/`, plus `gail/`, `mwc/`, `rws/`. When naming a path in
-chat, give it from the repo root so it stays clickable.
+**Single branch: `main`.** No per-topic branches — every commit lands on `main` and is
+pushed there, so `git pull origin main` on Arnav's laptop is always enough to have the
+current state locally. Paths are client-first, then object — `kpmg/<object>/`,
+`ovl/<project>/`, plus `gail/`, `mwc/`, `rws/`. When naming a path in chat, give it from
+the repo root so it stays clickable.
 
 ## Shipping method depends on the object type
 

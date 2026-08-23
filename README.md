@@ -41,7 +41,25 @@ in if that file already exists) and reopen Claude Code. Everything Claude writes
 committed and pushed with an auto message, verified or not — turn it off by deleting the
 `Stop` block. Its output goes to `.git/sync-hook.log`, not the chat.
 
-`incoming/` is the drop folder for fresh SE80 downloads awaiting triage.
+`incoming/` is the drop folder for fresh SE80 downloads awaiting triage. File a supplied
+download into its object folder with:
+
+```
+./scripts/save-original.sh kpmg/zmb5b ~/Downloads/ZRM07MLBD.txt
+```
+
+That writes `kpmg/zmb5b/original/ZRM07MLBD.txt` and never overwrites it. A later download of
+the same object that differs is kept beside it as `ZRM07MLBD.<date>.txt` with the drift
+printed. Corrected code does not go in `original/` — it goes in the object folder itself
+(`src/` for abapGit objects, a loose `.abap` at the root for paste-only ones) and is
+overwritten by each new fix. `git log -p -- <path>` gets any earlier version back.
+
+To pull it all down on your own machine:
+
+```
+git clone https://github.com/aj-02/Diligent.git     # first time
+git pull origin main                                # after that
+```
 `COPILOT_CONTEXT_HANDOFF.md` is the deeper cross-project reference behind `CLAUDE.md`.
 
 ## Layout

@@ -6,7 +6,7 @@ description: Remediate ATC (ABAP Test Cockpit) findings on the OVL S/4 readiness
 # Remediate an ATC finding
 
 Shared marker, correction and transfer rules live in
-`C:/Users/ArnavJohri/OneDrive - Diligent Tech India Pvt. Ltd/Desktop/Work/KPMG/CLAUDE.md`.
+`CLAUDE.md` at the repo root.
 Read it. This skill does not repeat it — it adds what is specific to ATC work, and the
 project identity below overrides the default author tag.
 

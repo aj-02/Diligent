@@ -1,6 +1,8 @@
-# KPMG ABAP support work — standing rules
+# Diligent — SAP ABAP work, standing rules
 
-Arnav is an ABAP developer. Issues arrive by mail daily. He supplies the source
+Arnav Johri, Associate Consultant, Diligent Tech India Pvt. Ltd. Two projects run
+concurrently — **OVL** (ONGC Videsh, ECC→S/4) and **KPMG** — alongside `gail/`,
+`mwc/` and `rws/`. Issues arrive by mail daily. He supplies the source
 (SE80 download or the copy in this repo), Claude produces the corrected code, he
 verifies it, and it goes back into SAP via abapGit standalone or by paste.
 

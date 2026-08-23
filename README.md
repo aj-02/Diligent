@@ -31,6 +31,9 @@ One plain command keeps the repo in step with GitHub:
 ./scripts/sync.sh --pull-only         just bring the repo up to date
 ```
 
+From Windows `cmd` or PowerShell, use `scripts\sync.cmd` with the same arguments — it just
+calls the shell script through Git's bash.
+
 It is safe to run when there is nothing to do, and it never force-pushes: if the same file
 changed here and on GitHub it stops and tells you, leaving your commit intact. `/sync` runs
 it from inside Claude Code.

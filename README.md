@@ -23,6 +23,18 @@ Skills in `.claude/skills/` drive the day-to-day work:
 | `/atc-fix` | ATC finding remediation (OVL; author tag `SAP_ABAP`). |
 | `/status` | Factual weekly rollup from commits and `ISSUES.md`, for status mail. |
 
+One plain command keeps the repo in step with GitHub:
+
+```
+./scripts/sync.sh                     commit everything, pull, push — auto commit message
+./scripts/sync.sh "ZMB5B qty fix"     the same, with your own message
+./scripts/sync.sh --pull-only         just bring the repo up to date
+```
+
+It is safe to run when there is nothing to do, and it never force-pushes: if the same file
+changed here and on GitHub it stops and tells you, leaving your commit intact. `/sync` runs
+it from inside Claude Code.
+
 `incoming/` is the drop folder for fresh SE80 downloads awaiting triage.
 `COPILOT_CONTEXT_HANDOFF.md` is the deeper cross-project reference behind `CLAUDE.md`.
 

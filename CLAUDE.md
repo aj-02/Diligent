@@ -94,6 +94,10 @@ Single line: append `"Changes by Arnav on DD/MM/YY`
 - **Never modify a standard SAP object.** Changes go into a `Z` copy. Create custom includes
   only where an include actually changed — never blanket-Z every include.
 - Build nothing the FS or the issue did not ask for.
+- **Pull before you start.** First action in a session that will touch code: run
+  `./scripts/sync.sh --pull-only`. Arnav edits by hand between runs and other sessions push
+  too, so the working copy can be behind. This is the drift check in git terms — it does not
+  replace asking for a fresh SE80 download, which catches changes made in SAP itself.
 - **Push every code update, to `main`.** Whenever an object file is written or changed, run
   `./scripts/sync.sh "<what changed>"` as the last step of that reply — commit, pull, push, in
   one go — and report the commit hash with the file path. Check you are on `main` first; if a

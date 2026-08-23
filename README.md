@@ -38,11 +38,18 @@ It is safe to run when there is nothing to do, and it never force-pushes: if the
 changed here and on GitHub it stops and tells you, leaving your commit intact. `/sync` runs
 it from inside Claude Code.
 
-To have it fire by itself every time Claude finishes a reply, copy
-`.claude/settings.sync-hook.example.json` to `.claude/settings.json` (merge the `hooks` block
-in if that file already exists) and reopen Claude Code. Everything Claude writes is then
-committed and pushed with an auto message, verified or not — turn it off by deleting the
-`Stop` block. Its output goes to `.git/sync-hook.log`, not the chat.
+To have it fire by itself, copy `.claude/settings.sync-hook.example.json` to
+`.claude/settings.json` (merge the `hooks` block in if that file already exists) and reopen
+Claude Code. Two halves, keep either or both:
+
+- **`SessionStart`** pulls from GitHub before work begins, so a session never starts on a
+  stale working copy. No downside — keep this one.
+- **`Stop`** commits and pushes whatever changed after every reply, including edits made by
+  hand outside Claude. Auto-written commit messages, verified or not. Delete this block if
+  you would rather the history stayed hand-written; Claude pushes its own code updates
+  either way.
+
+Hook output goes to `.git/sync-hook.log`, not the chat.
 
 `incoming/` is the drop folder for fresh SE80 downloads awaiting triage. File a supplied
 download into its object folder with:

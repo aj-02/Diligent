@@ -53,7 +53,10 @@ keeping a `.bak`. Reopen Claude Code afterwards. The two halves:
   hand outside Claude. Auto-written commit messages, verified or not. This is the belt to the
   braces — Claude pushes its own code updates anyway; this catches everything else.
 
-Hook output goes to `.git/sync-hook.log`, not the chat.
+Hook output goes to `.git/sync-hook.log`, not the chat. If a reply seems not to have pushed,
+read that log first — `sync: nothing new to commit` means the file was written outside the
+repo (a scratchpad or temp folder), not that the sync failed. Ask for files by repo-relative
+path — `kpmg/zmb5b/src/…` — and they land where git can see them.
 
 `incoming/` is the drop folder for fresh SE80 downloads awaiting triage. File a supplied
 download into its object folder with:

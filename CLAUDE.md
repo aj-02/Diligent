@@ -94,6 +94,13 @@ Single line: append `"Changes by Arnav on DD/MM/YY`
 - **Never modify a standard SAP object.** Changes go into a `Z` copy. Create custom includes
   only where an include actually changed — never blanket-Z every include.
 - Build nothing the FS or the issue did not ask for.
+- **Every file that matters lives in the repo, never in a scratchpad or temp directory.**
+  Claude Code offers a session scratchpad for throwaway working files; corrected objects,
+  originals, ZIPs, patch sheets, TS documents, ISSUES.md and NOTES.md are not throwaway and
+  never go there. Write them under `<client>/<object>/` from the repo root — a file outside
+  the repo is invisible to git, so `sync.sh` will report "nothing to commit" and the work is
+  lost when the session ends. The scratchpad is for scratch: a diff being inspected, an
+  intermediate parse, a file that is deleted before the reply is finished.
 - **Pull before you start.** First action in a session that will touch code: run
   `./scripts/sync.sh --pull-only`. Arnav edits by hand between runs and other sessions push
   too, so the working copy can be behind. This is the drift check in git terms — it does not

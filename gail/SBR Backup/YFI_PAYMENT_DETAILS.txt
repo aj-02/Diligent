@@ -1,0 +1,281 @@
+FUNCTION yfi_payment_details.
+*"----------------------------------------------------------------------
+*"*"Local Interface:
+*"  IMPORTING
+*"     REFERENCE(IT_PAYMENT_DETAILS) TYPE  YFI_ST_ACC_DOC_TT
+*"  EXPORTING
+*"     REFERENCE(ET_PAYMENT_DEATILS) TYPE  YFI_ST_PAYMENT_DETAILS_TT
+*"----------------------------------------------------------------------
+
+  IF it_payment_details IS NOT INITIAL.
+
+    DATA: li_fi_cc  TYPE ytt_fi_cc,
+          et_fi_cc  TYPE ytt_fi_cc,
+          lv_utr_no TYPE y_utr_no.
+
+    SELECT a~belnr,  "Document Number
+           a~bukrs,  "Company Code
+           a~gjahr,  "Fiscal Year
+           a~augbl,  "Clearing Document Number
+           a~auggj,  "Clearing Document Fiscal Year
+           b~blart,  "Document Type
+           b~budat   "Posting Date
+     FROM bsak AS a
+     INNER JOIN bkpf AS b
+     ON a~augbl = b~belnr
+     AND a~bukrs = b~bukrs
+     AND a~auggj = b~gjahr
+     INTO TABLE @DATA(li_bsak)
+     FOR ALL ENTRIES IN @it_payment_details
+     WHERE a~belnr EQ @it_payment_details-belnr
+       AND a~bukrs EQ @it_payment_details-bukrs
+       AND a~gjahr EQ @it_payment_details-gjahr
+       AND a~shkzg EQ 'H'.
+    IF sy-subrc EQ 0.
+
+      LOOP AT li_bsak INTO DATA(ls_bsak).
+
+        IF ls_bsak-blart EQ 'ZP'.
+          DATA(lv_clr_doc) = ls_bsak-augbl.
+          DATA(lv_clr_yr) = ls_bsak-auggj.
+          DATA(lv_clr_cc) = ls_bsak-bukrs.
+          DATA(lv_clr_date) = ls_bsak-budat.
+
+        ELSEIF ls_bsak-blart EQ 'ZV'. "IF document type is not 'ZP' then get ZP document using FM 'YFI_CC_DOC'
+
+          li_fi_cc = VALUE #( ( i_bukrs = ls_bsak-bukrs  i_gjahr = ls_bsak-gjahr i_belnr = ls_bsak-augbl ) ) .
+
+          CALL FUNCTION 'YFI_CC_DOC'
+            EXPORTING
+              i_tab = li_fi_cc
+            IMPORTING
+              e_tab = et_fi_cc.
+          IF sy-subrc EQ 0.
+            READ TABLE et_fi_cc INTO DATA(ls_fi_cc) INDEX 1.
+            IF sy-subrc EQ 0.
+              lv_clr_doc = ls_fi_cc-belnr_cc.
+              lv_clr_yr = ls_fi_cc-gjahr_cc.
+              lv_clr_cc = ls_fi_cc-bukrs_cc.
+            ENDIF.
+          ENDIF.
+
+        ELSE. "if document type is not 'ZP' or 'ZV' then
+
+          SELECT SINGLE a~belnr,
+                        a~bukrs,
+                        a~gjahr,
+                        a~augbl,
+                        a~auggj,
+                        b~blart,
+                        b~budat
+           FROM bsak AS a
+           INNER JOIN bkpf AS b
+           ON a~augbl = b~belnr
+           AND a~bukrs = a~bukrs
+           AND a~auggj = b~gjahr
+           INTO @DATA(ls_bsak1)
+           WHERE a~belnr EQ @ls_bsak-augbl
+             AND a~bukrs EQ @ls_bsak-bukrs
+             AND a~gjahr EQ @ls_bsak-auggj
+**SOC by Rohtash/Brijesh Charm:4000008595 Date:09/08/2024
+             AND a~shkzg EQ 'H'.
+**EOC by Rohtash/Brijesh Charm:4000008595 Date:09/08/2024
+          IF sy-subrc EQ 0.
+
+            IF ls_bsak1-blart EQ 'ZP'.
+              lv_clr_doc = ls_bsak1-augbl.
+              lv_clr_yr = ls_bsak1-auggj.
+              lv_clr_cc = ls_bsak1-bukrs.
+              lv_clr_date = ls_bsak1-budat.
+
+            ELSEIF ls_bsak1-blart EQ 'ZV'.
+
+              li_fi_cc = VALUE #( ( i_bukrs = ls_bsak-bukrs  i_gjahr = ls_bsak-gjahr i_belnr = ls_bsak-augbl ) ) .
+
+              CALL FUNCTION 'YFI_CC_DOC'
+                EXPORTING
+                  i_tab = li_fi_cc
+                IMPORTING
+                  e_tab = et_fi_cc.
+              IF sy-subrc EQ 0.
+                READ TABLE et_fi_cc INTO DATA(ls_fi_cc1) INDEX 1.
+                IF sy-subrc EQ 0.
+                  lv_clr_doc = ls_fi_cc1-belnr_cc.
+                  lv_clr_yr = ls_fi_cc1-gjahr_cc.
+                  lv_clr_cc = ls_fi_cc1-bukrs_cc.
+                ENDIF.
+              ENDIF.
+            ENDIF.
+          ENDIF.
+        ENDIF.
+
+        IF lv_clr_date IS INITIAL.
+          SELECT SINGLE budat FROM bkpf INTO @lv_clr_date WHERE bukrs EQ @lv_clr_cc
+                                                            AND belnr EQ @lv_clr_doc
+                                                            AND gjahr EQ @lv_clr_yr.
+
+        ENDIF.
+
+        IF lv_clr_doc IS NOT INITIAL.  "Payment Document No
+          "HDFC Bank
+** -> Begin of changes by of <Aditi> on <05/11/2024> for ATC
+*          SELECT SINGLE voucher_number,
+*                        company_code,
+*                        bank_ref_number,
+*                        utr_neft_ref_number
+*            FROM yrfa_hdfc_proxy
+*            INTO @DATA(ls_hdfc_proxy)
+*            WHERE voucher_number EQ @lv_clr_doc
+*              AND company_code EQ @lv_clr_cc
+*              AND program_run_date EQ @lv_clr_date
+*              AND transaction_status EQ 'E'.
+          SELECT voucher_number,
+                        company_code,
+                        bank_ref_number,
+                        utr_neft_ref_number
+            FROM yrfa_hdfc_proxy
+            INTO @DATA(ls_hdfc_proxy)
+            UP TO 1 ROWS
+            WHERE voucher_number EQ @lv_clr_doc
+              AND company_code EQ @lv_clr_cc
+              AND program_run_date EQ @lv_clr_date
+              AND transaction_status EQ 'E'
+            ORDER BY PRIMARY KEY.
+          ENDSELECT.
+** -> End of changes by of <Aditi> on <05/11/2024> for ATC
+          IF sy-subrc EQ 0.
+            IF ls_hdfc_proxy-utr_neft_ref_number IS NOT INITIAL.
+              lv_utr_no = ls_hdfc_proxy-utr_neft_ref_number.
+            ELSE.
+              lv_utr_no = ls_hdfc_proxy-bank_ref_number.
+            ENDIF.
+          ELSE.
+            "ICICI Bank
+** -> Begin of changes by of <Aditi> on <05/11/2024> for ATC
+*            SELECT SINGLE belnr,
+*                          bukrs,
+*                          gjahr,
+*                          utr_no
+*              FROM yrfa_icici_proxy
+*              INTO @DATA(ls_icici_proxy)
+*              WHERE belnr EQ @lv_clr_doc
+*              AND bukrs EQ @lv_clr_cc
+*              AND gjahr EQ @lv_clr_yr
+*              AND status EQ '000001'.
+            SELECT belnr,
+                          bukrs,
+                          gjahr,
+                          utr_no
+              FROM yrfa_icici_proxy
+              INTO @DATA(ls_icici_proxy)
+              UP TO 1 ROWS
+              WHERE belnr EQ @lv_clr_doc
+              AND bukrs EQ @lv_clr_cc
+              AND gjahr EQ @lv_clr_yr
+              AND status EQ '000001'
+              ORDER BY PRIMARY KEY.
+            ENDSELECT.
+** -> End of changes by of <Aditi> on <05/11/2024> for ATC
+            IF sy-subrc EQ 0.
+
+              """""""""""""""""""""""""""""""soc mobin/brijesh 23.07.2023"""""""""""""""
+               SELECT SINGLE MESSAGE FROM YRFA_ICICI_PROXY  INTO @DATA(lv_msg) WHERE STATUS = '000001'
+                                                                                  AND BELNR = @ls_icici_proxy-BELNR
+                                                                                  AND BUKRS = @ls_icici_proxy-BUKRS
+                                                                                  AND GJAHR = @ls_icici_proxy-GJAHR.
+                 if sy-subrc eq 0.
+                   IF  lv_msg+0(4) = 'ICIC'.
+                       lv_utr_no    = LV_MSG+0(22).
+                    ENDIF.
+                   endif.
+              """"""""""""""""""""""""""""""eoc mobin/brijesh 23.07.2023""""""""""""""""!
+
+*              lv_utr_no = ls_icici_proxy-utr_no.
+            ELSE.
+              "AXIS Bank
+** -> Begin of changes by of <Aditi> on <05/11/2024> for ATC
+*              SELECT SINGLE belnr,
+*                            bukrs,
+*                            gjahr,
+*                            utr_no
+*                FROM yrfa_axis_proxy
+*                INTO @DATA(ls_axis_proxy)
+*                WHERE belnr EQ @lv_clr_doc
+*                AND bukrs EQ @lv_clr_cc
+*                AND gjahr EQ @lv_clr_yr
+*                AND status EQ '000001'.
+              SELECT belnr,
+                            bukrs,
+                            gjahr,
+                            utr_no
+                FROM yrfa_axis_proxy
+                INTO @DATA(ls_axis_proxy)
+                UP TO 1 ROWS
+                WHERE belnr EQ @lv_clr_doc
+                AND bukrs EQ @lv_clr_cc
+                AND gjahr EQ @lv_clr_yr
+                AND status EQ '000001'
+                ORDER BY PRIMARY KEY.
+              ENDSELECT.
+** -> End of changes by of <Aditi> on <05/11/2024> for ATC
+              IF sy-subrc EQ 0.
+                lv_utr_no = ls_axis_proxy-utr_no.
+              ENDIF.
+            ENDIF.
+          ENDIF.
+          ""BANK Name
+** -> Begin of changes by of <Aditi> on <05/11/2024> for ATC
+*          SELECT SINGLE vblnr,
+*                        laufd,
+*                        zbnkn,
+*                        zbnkl
+*                   FROM reguh
+*            INTO @DATA(ls_reguh)
+*            WHERE vblnr EQ @lv_clr_doc
+*              AND laufd EQ @lv_clr_date.
+          SELECT vblnr,
+                        laufd,
+                        zbnkn,
+                        zbnkl
+                   FROM reguh
+            INTO @DATA(ls_reguh)
+            UP TO 1 ROWS
+            WHERE vblnr EQ @lv_clr_doc
+              AND laufd EQ @lv_clr_date
+            ORDER BY PRIMARY KEY.
+          ENDSELECT.
+** -> End of changes by of <Aditi> on <05/11/2024> for ATC
+          IF sy-subrc EQ 0.
+            SELECT SINGLE banks,
+                          bnklz,
+                          banka
+              FROM bnka
+              INTO @DATA(ls_bnka)
+              WHERE banks EQ 'IN'
+                AND bankl EQ @ls_reguh-zbnkl.
+            IF sy-subrc EQ 0.
+
+            ENDIF.
+
+          ENDIF.
+
+          et_payment_deatils = VALUE #( BASE et_payment_deatils ( document_no     = ls_bsak-belnr
+                                                                  company_code    = ls_bsak-bukrs
+                                                                  fiscal_year     = ls_bsak-gjahr
+                                                                  payment_doc_no  = lv_clr_doc
+                                                                  pay_cc          = lv_clr_cc
+                                                                  pay_year        = lv_clr_yr
+                                                                  payment_date    = lv_clr_date
+                                                                  utr_no          = lv_utr_no
+                                                                  apollo_bnk_name = ls_bnka-banka
+                                                                  apollo_acc_no   = ls_reguh-zbnkn
+                                                                  ifsc_code       = ls_reguh-zbnkl ) ).
+
+        ENDIF.
+        CLEAR: ls_bsak, lv_clr_doc, li_fi_cc, ls_reguh, ls_bnka, et_fi_cc,
+               lv_clr_yr, lv_clr_cc, lv_clr_date, lv_utr_no.
+      ENDLOOP. "LOOP AT li_bsak INTO DATA(ls_bsak).
+    ENDIF. "IF sy-subrc EQ 0.
+  ENDIF. "IF it_payment_details IS NOT INITIAL.
+
+ENDFUNCTION.

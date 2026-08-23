@@ -1,0 +1,303 @@
+*&----------------------------------------------------------------------*
+*& Include          ZIN_M2C_INBOUND_TOP
+*&----------------------------------------------------------------------*
+*& Requirement Id: DID_M2C_138                                          *
+*& Title: Inbound Dunning Activity                                      *
+*& Date Created: 25.03.2025                                             *
+*& Programmer: Vipul Kumar Tamboli (TAMBOLIV)                           *
+*& Program Objective: Upload and Process Dunning Records                *
+*& Orig Request: DS4K901080                                             *
+*&----------------------------------------------------------------------*
+*& Modification History                                                 *
+*&----------------------------------------------------------------------*
+*& Modified By:                                                         *
+*& Date:                                                                *
+*& Modification TR:                                                     *
+*& Reason:                                                              *
+*&----------------------------------------------------------------------*
+
+**********************************************************************
+*** DDIC TABLES
+**********************************************************************
+TABLES: zdt_m2c_dunpath ##NEEDED.
+
+**********************************************************************
+*** GLOBAL TYPES
+**********************************************************************
+TYPES:
+  BEGIN OF gts_dunpath,
+    company_code     TYPE zdt_m2c_dunpath-company_code,
+    service_provider TYPE zdt_m2c_dunpath-service_provider,
+    type             TYPE zdt_m2c_dunpath-type,
+    ob_filepath      TYPE zdt_m2c_dunpath-ob_filepath,
+    ob_filename      TYPE zdt_m2c_dunpath-ob_filename,
+    inb_filepath     TYPE zdt_m2c_dunpath-inb_filepath,
+    inb_filename     TYPE zdt_m2c_dunpath-inb_filename,
+  END OF gts_dunpath,
+
+  BEGIN OF gts_create_file_str,
+    a TYPE string,
+    b TYPE string,
+    c TYPE string,
+    d TYPE string,
+    e TYPE string,
+    f TYPE string,
+    g TYPE string,
+    h TYPE string,
+    i TYPE string,
+    j TYPE string,
+    k TYPE string,
+    l TYPE string,
+    m TYPE string,
+    n TYPE string,
+    o TYPE string,
+    p TYPE string,
+    q TYPE string,
+    r TYPE string,
+    s TYPE string,
+    t TYPE string,
+    u TYPE string,
+    v TYPE string,
+    w TYPE string,
+    x TYPE string,
+    y TYPE string,
+    z TYPE string,
+  END OF gts_create_file_str,
+
+  BEGIN OF gts_create_file,
+    date_id                   TYPE char10,  " sy-tabix = 1
+    runid                     TYPE char6,
+    dunning_type              TYPE char3,
+    service_area              TYPE char4,
+    dmz                       TYPE char8,
+    mru                       TYPE char8,
+    sequence                  TYPE char4,
+    mserial_number            TYPE char18,
+    can                       TYPE vkont_kk,
+    contract                  TYPE char12,
+    name                      TYPE char30,
+    address                   TYPE char100,
+    minimum_payment           TYPE char15,
+    total_ar                  TYPE char15,
+    due_date                  TYPE char10,  " sy-tabix = 15
+    job_generation_date       TYPE char10,  " sy-tabix = 16
+    job_execution_date        TYPE char10,  " sy-tabix = 17     fkkmako-ZZJOB_EXE_DT,
+    job_execution_time        TYPE char8,   " sy-tabix = 18     fkkmako-ZZJOB_EXE_TIME,
+    disconnection_reading     TYPE zdt_m2c_disc-disc_reading,
+    locking_device_used       TYPE zdt_m2c_disc-lock_device,
+    code                      TYPE zdt_m2c_disc-disc_res_cod,
+    received_by               TYPE sy-uname,
+    realtionship_to_the_owner TYPE char20,
+    kind_of_obstruction       TYPE char20,
+    other_remarks             TYPE zdt_m2c_disc-rec_oth_remarks,
+    service_man               TYPE zdt_m2c_disc-rec_serv_man,
+  END OF gts_create_file,
+
+  BEGIN OF gts_dnld_file,
+    date_id                   TYPE char10,  " sy-tabix = 1
+    runid                     TYPE fkkmako-laufi,
+    dunning_type              TYPE fkkmako-zzdun_type,
+    service_area              TYPE fkkmako-zzser_area,
+    dmz                       TYPE ehauisu-regiogroup_perm,
+    mru                       TYPE eablg-ableinh,
+    sequence                  TYPE iloa-eqfnr,
+    mserial_number            TYPE equi-serge,
+    can                       TYPE fkkmako-vkont,
+    contract                  TYPE ever-vertrag,
+    name                      TYPE but000-name_org1,
+    address                   TYPE char100,
+    minimum_payment           TYPE char15,
+    total_ar                  TYPE char15,
+    due_date                  TYPE char10,  " sy-tabix = 15
+    job_generation_date       TYPE char10,  " sy-tabix = 16
+    job_execution_date        TYPE char10,  " sy-tabix = 17     fkkmako-ZZJOB_EXE_DT,
+    job_execution_time        TYPE char8,   " sy-tabix = 18     fkkmako-ZZJOB_EXE_TIME,
+    disconnection_reading     TYPE zdt_m2c_disc-disc_reading,
+    locking_device_used       TYPE zdt_m2c_disc-lock_device,
+    code                      TYPE zdt_m2c_disc-disc_res_cod,
+    received_by               TYPE sy-uname,
+    realtionship_to_the_owner TYPE char20,
+    kind_of_obstruction       TYPE char20,
+    other_remarks             TYPE zdt_m2c_disc-rec_oth_remarks,
+    service_man               TYPE zdt_m2c_disc-rec_serv_man,
+    status                    TYPE char80,
+  END OF gts_dnld_file,
+
+  BEGIN OF gts_crt_file,
+    date_id                   TYPE fkkmako-laufd,
+    run_id                    TYPE fkkmako-laufi,
+    dunn_typ                  TYPE fkkmako-zzdun_type,
+    serv_area                 TYPE fkkmako-zzser_area,
+    dmz                       TYPE ehauisu-regiogroup_perm,
+    mru                       TYPE eablg-ableinh,
+    sequence                  TYPE iloa-eqfnr,
+    manuf_serno               TYPE equi-serge,
+    can                       TYPE fkkmako-vkont,
+    contract                  TYPE ever-vertrag,
+    name                      TYPE but000-name_org1,
+    address                   TYPE char100,
+    minimum_paym              TYPE p LENGTH 13 DECIMALS 2,
+    total_ar                  TYPE p LENGTH 13 DECIMALS 2,
+    due_date                  TYPE fkkmako-zznotice_due_dt,
+    job_gene_date             TYPE fkkmako-zzjob_gen_dt,
+    job_execution_date        TYPE fkkmako-zzjob_exe_dt,
+    job_execution_time        TYPE sy-uzeit,       " fkkmako-zzjob_exe_time
+    disconnection_reading     TYPE zdt_m2c_disc-disc_reading,
+    locking_device_used       TYPE zdt_m2c_disc-lock_device,
+    code                      TYPE zdt_m2c_disc-disc_res_cod,
+    received_by               TYPE sy-uname,
+    realtionship_to_the_owner TYPE char20,
+    kind_of_obstruction       TYPE char20,
+    other_remarks             TYPE zdt_m2c_disc-rec_oth_remarks,
+    service_man               TYPE zdt_m2c_disc-rec_serv_man,
+    status                    TYPE char80,
+    record_type               TYPE c,
+  END OF gts_crt_file,
+
+  BEGIN OF gts_upld_file,
+    date_id                   TYPE char10,
+    run_id                    TYPE fkkmako-laufi,
+    dunn_typ                  TYPE fkkmako-zzdun_type,
+    serv_area                 TYPE fkkmako-zzser_area,
+    dmz                       TYPE ehauisu-regiogroup_perm,
+    mru                       TYPE eablg-ableinh,
+    sequence                  TYPE iloa-eqfnr,
+    manuf_serno               TYPE equi-serge,
+    can                       TYPE fkkmako-vkont,
+    contract                  TYPE ever-vertrag,
+    name                      TYPE but000-name_org1,
+    address                   TYPE char100,
+    minimum_paym              TYPE p LENGTH 13 DECIMALS 2,
+    total_ar                  TYPE p LENGTH 13 DECIMALS 2,
+    due_date                  TYPE char10,
+    job_gene_date             TYPE char10,
+    job_execution_date        TYPE char10,
+    job_execution_time        TYPE char8,   " fkkmako-zzjob_exe_time
+    disconnection_reading     TYPE zdt_m2c_disc-disc_reading,
+    locking_device_used       TYPE zdt_m2c_disc-lock_device,
+    code                      TYPE zdt_m2c_disc-disc_res_cod,
+    received_by               TYPE sy-uname,
+    realtionship_to_the_owner TYPE char20,
+    kind_of_obstruction       TYPE char20,
+    other_remarks             TYPE zdt_m2c_disc-rec_oth_remarks,
+    service_man               TYPE zdt_m2c_disc-rec_serv_man,
+  END OF gts_upld_file,
+
+  BEGIN OF gts_create_file_template,
+    date_id               TYPE string,
+    run_id                TYPE string,
+    dunning               TYPE string,
+    service_area          TYPE string,
+    dmz                   TYPE string,
+    mru                   TYPE string,
+    sequence              TYPE string,
+    mserialnum            TYPE string,
+    can                   TYPE string,
+    contract              TYPE string,
+    name                  TYPE string,
+    address               TYPE string,
+    min_pay               TYPE string,
+    total_ar              TYPE string,
+    notice_due_date       TYPE string,
+    job_generation_date   TYPE string,
+    job_execution_date    TYPE string,
+    job_execution_time    TYPE string,
+    disconnection_reading TYPE string,
+    locking_device        TYPE string,
+    code                  TYPE string,
+    received_by           TYPE string,
+    realtionship_owner    TYPE string,
+    kind_of_obstruction   TYPE string,
+    other_remarks         TYPE string,
+    service_man           TYPE string,
+  END OF gts_create_file_template,
+
+  BEGIN OF gts_output,
+    company_code     TYPE zdt_m2c_dunfile-company_code,
+    service_provider TYPE zdt_m2c_dunfile-service_provider,
+    processed_on     TYPE zdt_m2c_dunfile-processed_on,
+    filename         TYPE zdt_m2c_dunfile-filename,
+    dateofupload     TYPE zdt_m2c_dunfile-dateofupload,
+    timeofupload     TYPE zdt_m2c_dunfile-timeofupload,
+    outbound_file    TYPE zdt_m2c_dunfile-outbound_file,
+    processed_by     TYPE zdt_m2c_dunfile-processed_by,
+    num_of_records   TYPE zdt_m2c_dunfile-num_of_records,
+    last_acc_by      TYPE zdt_m2c_dunfile-last_acc_by,
+    last_acc_on      TYPE zdt_m2c_dunfile-last_acc_on,
+    error_file       TYPE zdt_m2c_dunfile-error_file,
+    timeofupdate     TYPE zde_m2c_timeofupd,
+    sel              TYPE abap_bool,
+  END OF gts_output,
+
+  BEGIN OF gts_tab,
+    text TYPE char255,
+  END OF gts_tab,
+
+  BEGIN OF gts_cline,
+    line TYPE c LENGTH 1024, " Line of type Character
+  END OF gts_cline,
+
+  BEGIN OF gts_download,
+    date_id       TYPE fkkmako-laufd,
+    run_id        TYPE fkkmako-laufi,
+    dunn_typ      TYPE fkkmako-zzdun_type,
+    serv_area     TYPE fkkmako-zzser_area,
+    dmz           TYPE ehauisu-regiogroup_perm,
+    mru           TYPE eablg-ableinh,
+    sequence      TYPE iloa-eqfnr,
+    manuf_serno   TYPE equi-serge,
+    can           TYPE fkkmako-vkont,
+    contract      TYPE ever-vertrag,
+    name          TYPE but000-name_org1,
+    address       TYPE char100,
+    minimum_paym  TYPE char15,
+    total_ar      TYPE char15,
+    due_date      TYPE fkkmako-zznotice_due_dt,
+    job_gene_date TYPE fkkmako-zzjob_gen_dt,
+  END OF gts_download,
+
+  BEGIN OF gts_tvarvc,
+    name TYPE tvarvc-name,
+    type TYPE tvarvc-type,
+    numb TYPE tvarvc-numb,
+    sign TYPE tvarvc-sign,
+    opti TYPE tvarvc-opti,
+    low  TYPE tvarvc-low,
+    high TYPE tvarvc-high,
+  END OF gts_tvarvc.
+
+
+**********************************************************************
+*** GLOBAL TABLES
+**********************************************************************
+DATA: gt_download     TYPE STANDARD TABLE OF gts_download ##NEEDED,
+      gt_create_table TYPE STANDARD TABLE OF gts_create_file ##NEEDED,
+      gt_header_table TYPE STANDARD TABLE OF gts_create_file_template ##NEEDED,
+      gt_output       TYPE STANDARD TABLE OF gts_output ##NEEDED,
+      gt_tab          TYPE STANDARD TABLE OF gts_tab ##NEEDED,
+      gt_tvarvc       TYPE STANDARD TABLE OF gts_tvarvc ##NEEDED,
+      gt_loghandle    TYPE bal_t_logh ##NEEDED.
+
+**********************************************************************
+*** GLOBAL STRUCTURES
+**********************************************************************
+DATA: gs_log          TYPE bal_s_log ##NEEDED,
+      gs_loghandle    TYPE balloghndl ##NEEDED,
+      gs_msg_l        TYPE bal_s_msg ##NEEDED,
+      gs_header_table TYPE gts_create_file_template ##NEEDED,
+      gs_create_table TYPE gts_create_file ##NEEDED.
+
+**********************************************************************
+*** GLOBAL VARIABLES
+**********************************************************************
+DATA: gv_new_lognumbers    TYPE bal_t_lgnm ##NEEDED,
+      gv_second_connection TYPE dbcon_name ##NEEDED.
+
+**********************************************************************
+*** GLOBAL CONSTANTS
+**********************************************************************
+CONSTANTS:
+  gc_inpt    TYPE tvarvc-name VALUE zcl_abap_utility=>zif_m2c_constant~zab_m2c_inbound_dunning-tvavc_name_i,
+  gc_arch    TYPE tvarvc-name VALUE zcl_abap_utility=>zif_m2c_constant~zab_m2c_inbound_dunning-tvavc_name_a,
+  gc_erro    TYPE tvarvc-name VALUE zcl_abap_utility=>zif_m2c_constant~zab_m2c_inbound_dunning-tvavc_name_e,
+  gc_type(4) TYPE c VALUE zcl_abap_utility=>zif_m2c_constant~zab_m2c_inbound_dunning-lc_type.

@@ -1,0 +1,4555 @@
+*&---------------------------------------------------------------------*
+*& Report  YRGA_CBG_REPORT
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+REPORT YRGA_CBG_REPORT.
+
+INCLUDE YRGA_CBG_REPORT_TOP.
+INCLUDE YRGA_CBG_REPORT_S01.
+INCLUDE YRGA_CBG_REPORT_F01.
+
+AT SELECTION-SCREEN OUTPUT.
+
+  IF R1 EQ 'X'.
+    LOOP AT SCREEN.
+      CASE SCREEN-GROUP1.
+        WHEN 'ID1'.
+          SCREEN-INPUT = '1'.
+          SCREEN-INVISIBLE = '0'.
+          MODIFY SCREEN.
+
+        WHEN 'ID2'.
+          SCREEN-INPUT = '0'.
+          SCREEN-INVISIBLE = '1'.
+          MODIFY SCREEN.
+
+        WHEN 'ID3'.
+*          IF SY-UNAME = '00016360' OR SY-UNAME = '00002716' OR SY-UNAME = '00015702'.
+*            SCREEN-INPUT = '1'.
+*            SCREEN-INVISIBLE = '0'.
+*            MODIFY SCREEN.
+*          ELSE.
+            SCREEN-INPUT = '0'.
+            SCREEN-INVISIBLE = '1'.
+            MODIFY SCREEN.
+*          ENDIF.
+        WHEN OTHERS.
+      ENDCASE.
+    ENDLOOP.
+
+
+
+  ELSEIF R2 EQ 'X'.
+    LOOP AT SCREEN.
+      CASE SCREEN-GROUP1.
+        WHEN 'ID1'.
+          SCREEN-INPUT = '0'.
+          SCREEN-INVISIBLE = '1'.
+          MODIFY SCREEN.
+
+        WHEN 'ID2'.
+          SCREEN-INPUT = '1'.
+          SCREEN-INVISIBLE = '0'.
+          MODIFY SCREEN.
+        WHEN OTHERS.
+      ENDCASE.
+
+    ENDLOOP.
+
+  ELSE.
+    LOOP AT SCREEN.
+      CASE SCREEN-GROUP1.
+        WHEN 'ID1'.
+          SCREEN-INPUT = '1'.
+          SCREEN-INVISIBLE = '0'.
+          MODIFY SCREEN.
+
+        WHEN 'ID2'.
+          SCREEN-INPUT = '0'.
+          SCREEN-INVISIBLE = '1'.
+          MODIFY SCREEN.
+        WHEN 'ID3'.
+*          IF SY-UNAME = '00016360' OR SY-UNAME = '00002716' OR SY-UNAME = '00015702'.
+*            SCREEN-INPUT = '1'.
+*            SCREEN-INVISIBLE = '0'.
+*            MODIFY SCREEN.
+*          ELSE.
+            SCREEN-INPUT = '0'.
+            SCREEN-INVISIBLE = '1'.
+            MODIFY SCREEN.
+*          ENDIF.
+        WHEN OTHERS.
+      ENDCASE.
+
+    ENDLOOP.
+
+  ENDIF.
+
+  LOOP AT SCREEN.
+    IF SCREEN-GROUP1 = 'A'.
+      SCREEN-ACTIVE = 0.
+    ENDIF.
+    MODIFY SCREEN.
+  ENDLOOP.
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR P_FILE.
+
+  CALL FUNCTION 'F4_FILENAME'
+    EXPORTING
+      PROGRAM_NAME  = SYST-CPROG
+      DYNPRO_NUMBER = SYST-DYNNR
+      FIELD_NAME    = 'P_FILE'
+    IMPORTING
+      FILE_NAME     = P_FILE.
+*  tv_fname = p_file.
+
+INITIALIZATION.
+
+  S_DATE-LOW = SY-DATUM - 1.
+  APPEND S_DATE.
+
+
+
+
+START-OF-SELECTION.
+
+  IF R1 EQ 'X'.
+
+    PERFORM DISPLAY_CBG_REPORT.
+  ENDIF.
+
+  IF R3 EQ 'X'.
+    PERFORM CBG_DATA.
+  ENDIF.
+
+  IF R2 EQ 'X'.
+    CALL FUNCTION 'TEXT_CONVERT_XLS_TO_SAP'
+      EXPORTING
+*       I_FIELD_SEPERATOR    =
+        I_LINE_HEADER        = 'X'
+        I_TAB_RAW_DATA       = IT_RAW
+        I_FILENAME           = P_FILE
+      TABLES
+** -> Begin of changes by of <Aditi> on <24/10/24> for ATC
+        I_TAB_CONVERTED_DATA = IT_EXCEL_DATA  "#EC CI_FLDEXT_OK[2215424]
+** <- End changes by of <Aditi> on <24/10/24> for ATC
+      EXCEPTIONS
+        CONVERSION_FAILED    = 1
+        OTHERS               = 2.
+    IF SY-SUBRC <> 0.
+* Implement suitable error handling here
+      MESSAGE 'Unable to convert Excel data to SAP' TYPE 'E'.
+    ENDIF.
+*
+    PERFORM VALIDATE_DATA.
+    PERFORM UPDATE_YRHA_CBG.
+    PERFORM DISPLAY_ERROR_ENTRIES.
+  ENDIF.
+
+*&---------------------------------------------------------------------*
+*&  Include           YRGA_CBG_REPORT_TOP
+*&---------------------------------------------------------------------*
+
+TYPE-POOLS : SLIS.
+
+DATA: BEGIN OF ST_EXCEL_DATA,                               "#EC NEEDED
+        YDATE     TYPE SY-DATUM,
+        MATNR     TYPE YRGA_CBG-MATNR,
+        LIFNR     TYPE YRGA_CBG-LIFNR,
+        KUNNR     TYPE YRGA_CBG-KUNNR,
+        YGAID     TYPE YRGA_CBG-YGAID,
+        ROCODE    TYPE YRGA_CBG-ROCODE,
+        KWMENG    TYPE YRGA_CBG-KWMENG,
+        MSEHI     TYPE YRGA_CBG-MSEHI,
+        YYSTRM_SG TYPE STRING,
+        AGCV      TYPE STRING,
+        ANCV      TYPE STRING,
+        YCQMBG    TYPE YRGA_CBG-YCQMBG,
+        YCQMBN    TYPE YRGA_CBG-YCQMBN,
+        YCQKG     TYPE YRGA_CBG-YCQKG,
+        ERROR     TYPE FLAG,
+        ERRMSG    TYPE STRING,
+      END OF ST_EXCEL_DATA.
+
+DATA: BEGIN OF ST_DISPLAY_REP,                              "#EC NEEDED
+        MANDT     TYPE SY-MANDT,
+        YDATE     TYPE SY-DATUM,
+        MATNR     TYPE YRGA_CBG-MATNR,
+        CHARG     TYPE MCHA-CHARG,
+        TIMESTAMP TYPE YRGA_CBG-TIMESTAMP,
+        UNAME     TYPE YRGA_CBG-UNAME,
+        LIFNR     TYPE YRGA_CBG-LIFNR,
+        NAME1_V   TYPE LFA1-NAME1,
+        KUNNR     TYPE YRGA_CBG-KUNNR,
+        NAME1_C   TYPE KNA1-NAME1,
+        YGAID     TYPE YRGA_CBG-YGAID,
+        YGADESC   TYPE BEZEI20,
+        ROCODE    TYPE YRGA_CBG-ROCODE,
+        WERKS     TYPE YRGA_CBG-WERKS,
+        KWMENG    TYPE YRGA_CBG-KWMENG,
+        MSEHI     TYPE YRGA_CBG-MSEHI,
+        YYSTRM_SG TYPE STRING,
+        AGCV      TYPE STRING,
+        ANCV      TYPE STRING,
+        YCQMBG    TYPE YRGA_CBG-YCQMBG,
+        YCQMBN    TYPE YRGA_CBG-YCQMBN,
+        YCQKG     TYPE YRGA_CBG-YCQKG,
+        ERROR     TYPE FLAG,
+        ERRMSG    TYPE STRING,
+        CONTID    TYPE YRGA_CBG-CONTID,
+        YDOVNO    TYPE YRGA_CBG-YDOVNO,
+        EBELN     TYPE YRGA_CBG-EBELN,
+        WEMPF     TYPE YRGA_CBG-WEMPF,
+        VBELN     TYPE YRGA_CBG-VBELN,
+        MBLNR     TYPE YRGA_CBG-MBLNR,
+        YY_MDOTR  TYPE YRGA_CBG-YY_MDOTR,
+        FLAG(1),
+        CELLTAB   TYPE LVC_T_STYL,
+      END OF ST_DISPLAY_REP.
+
+TYPES : BEGIN OF ST_DISPLAY_REP1,
+          MANDT     TYPE SY-MANDT,
+          YDATE     TYPE SY-DATUM,
+          MATNR     TYPE YRGA_CBG-MATNR,
+          CHARG     TYPE YRGA_CBG-CHARG,
+          TIMESTAMP TYPE YRGA_CBG-TIMESTAMP,
+          UNAME     TYPE YRGA_CBG-UNAME,
+          LIFNR     TYPE YRGA_CBG-LIFNR,
+          NAME1_V   TYPE LFA1-NAME1,
+          KUNNR     TYPE YRGA_CBG-KUNNR,
+          NAME1_C   TYPE KNA1-NAME1,
+          YGAID     TYPE YRGA_CBG-YGAID,
+          YGADESC   TYPE BEZEI20,
+          ROCODE    TYPE YRGA_CBG-ROCODE,
+          WERKS     TYPE YRGA_CBG-WERKS,
+          KWMENG    TYPE YRGA_CBG-KWMENG,
+          MSEHI     TYPE YRGA_CBG-MSEHI,
+          YYSTRM_SG TYPE STRING,
+          AGCV      TYPE YRGA_CBG-AGCV,
+          ANCV      TYPE YRGA_CBG-ANCV,
+          YCQMBG    TYPE YRGA_CBG-YCQMBG,
+          YCQMBN    TYPE YRGA_CBG-YCQMBN,
+          YCQKG     TYPE YRGA_CBG-YCQKG,
+          ERROR     TYPE FLAG,
+          ERRMSG    TYPE STRING,
+          CONTID    TYPE YRGA_CBG-CONTID,
+          YDOVNO    TYPE YRGA_CBG-YDOVNO,
+          EBELN     TYPE YRGA_CBG-EBELN,
+          WEMPF     TYPE YRGA_CBG-WEMPF,
+          VBELN     TYPE YRGA_CBG-VBELN,
+          MBLNR     TYPE YRGA_CBG-MBLNR,
+          YY_MDOTR  TYPE YRGA_CBG-YY_MDOTR,
+          FLAG(1),
+        END OF ST_DISPLAY_REP1.
+DATA : SALES_DOCUMENT TYPE YRGA_CBG-EBELN,                  "#EC NEEDED
+*       gr_number      TYPE yrga_cbg-wempf.
+       GR_NUMBER      TYPE BAPI2017_GM_HEAD_RET-MAT_DOC.    "#EC NEEDED
+TYPES : BEGIN OF TY_VBAK,
+          VBELN TYPE VBAK-VBELN,
+          OBJNR TYPE VBAK-OBJNR,
+          KUNNR TYPE VBAK-KUNNR,
+          VKORG TYPE VBAK-VKORG,
+          VTWEG TYPE VBAK-VTWEG,
+          SPART TYPE VBAK-SPART,
+          AUART TYPE VBAK-AUART,
+        END OF TY_VBAK.
+
+TYPES : BEGIN OF TY_VBAP,
+          VBELN TYPE VBAP-VBELN,
+          MATNR TYPE VBAP-MATNR,
+          VSTEL TYPE VBAP-VSTEL,
+          WERKS TYPE VBAP-WERKS,
+          LGORT TYPE VBAP-LGORT,
+          CHARG TYPE VBAP-CHARG,
+        END OF TY_VBAP.
+
+TYPES : BEGIN OF TY_VBPA,
+          VBELN TYPE VBPA-VBELN,
+          ABLAD TYPE YRGA_CBG-ROCODE,
+          KUNNR TYPE YRGA_CBG-KUNNR,
+        END OF TY_VBPA.
+
+TYPES : BEGIN OF TY_VBPA1,
+          VBELN TYPE VBPA-VBELN,
+          ABLAD TYPE YRGA_CBG-ROCODE,
+          KUNNR TYPE YRGA_CBG-KUNNR,
+        END OF TY_VBPA1.
+
+TYPES : BEGIN OF TY_VBKD1,
+          VBELN TYPE VBKD-VBELN,
+*SOC BY MANMOHAN/SHREYOSI CHARM: 4000009322 DATE: 19/03/2025
+          POSNR TYPE VBKD-POSNR,
+*SOC BY MANMOHAN/SHREYOSI CHARM: 4000009322 DATE: 19/03/2025
+          BSTKD TYPE VBKD-BSTKD,
+          ABLAD TYPE YRGA_CBG-ROCODE,
+          BSARK TYPE VBKD-BSARK,
+          ZTERM TYPE VBKD-ZTERM,
+        END OF TY_VBKD1.
+
+TYPES : BEGIN OF TY_VBKD,
+          VBELN TYPE VBKD-VBELN,
+*SOC BY MANMOHAN/SHREYOSI CHARM: 4000009322 DATE: 19/03/2025
+          POSNR TYPE VBKD-POSNR,
+*SOC BY MANMOHAN/SHREYOSI CHARM: 4000009322 DATE: 19/03/2025
+          BSTKD TYPE VBKD-BSTKD,
+          ABLAD TYPE YRGA_CBG-ROCODE,
+          BSARK TYPE VBKD-BSARK,
+          ZTERM TYPE VBKD-ZTERM,
+        END OF TY_VBKD.
+
+TYPES : BEGIN OF TY_VBKD2,
+          VBELN  TYPE VBKD-VBELN,
+*SOC BY MANMOHAN/SHREYOSI CHARM: 4000009322 DATE: 19/03/2025
+          POSNR TYPE VBKD-POSNR,
+*SOC BY MANMOHAN/SHREYOSI CHARM: 4000009322 DATE: 19/03/2025
+          EBELN1 TYPE EKPO-EBELN,
+          ABLAD  TYPE YRGA_CBG-ROCODE,
+          LIFNR  TYPE YRGA_CBG-LIFNR,
+          BSARK  TYPE VBKD-BSARK,
+          KUNNR  TYPE YRGA_CBG-KUNNR,
+          ZTERM  TYPE VBKD-ZTERM,
+        END OF TY_VBKD2.
+
+TYPES : BEGIN OF TY_EKPO,
+          EBELN TYPE EKPO-EBELN,
+          MATNR TYPE EKPO-MATNR,
+          WERKS TYPE EKPO-WERKS,
+          LGORT TYPE EKPO-LGORT,
+          BPRME TYPE EKPO-BPRME,
+        END OF TY_EKPO.
+
+
+TYPES: BEGIN OF TY_EKKO,
+         EBELN TYPE EKKO-EBELN,
+         LIFNR TYPE EKKO-LIFNR,
+       END OF TY_EKKO.
+
+TYPES : BEGIN OF TY_LIKP,
+          VBELN TYPE LIKP-VBELN,
+          VSTEL TYPE LIKP-VSTEL,
+          ABLAD TYPE LIKP-ABLAD,
+          KUNNR TYPE LIKP-KUNNR,
+          BTGEW TYPE LIKP-BTGEW,
+          GEWEI TYPE LIKP-GEWEI,
+        END OF TY_LIKP.                                     "#EC NEEDED
+
+
+
+TYPES : BEGIN OF TY_MCHA,
+          MATNR TYPE MCHA-MATNR,
+          WERKS TYPE MCHA-WERKS,
+          CHARG TYPE MCHA-CHARG,
+        END OF TY_MCHA.                                     "#EC NEEDED
+
+DATA : BEGIN OF ST_LFA1,                                    "#EC NEEDED
+         LIFNR TYPE LFA1-LIFNR,
+         NAME1 TYPE LFA1-NAME1,
+       END OF ST_LFA1.
+
+DATA: BEGIN OF ST_KNA1,                                     "#EC NEEDED
+        KUNNR TYPE KNA1-KUNNR,
+        NAME1 TYPE KNA1-NAME1,
+      END OF ST_KNA1.
+
+TYPES : BEGIN OF TY_EKET,
+          EBELN TYPE EKET-EBELN,
+          CHARG TYPE EKET-CHARG,
+        END OF TY_EKET.
+
+TYPES: BEGIN OF TY_LOG,
+         YDATE        TYPE CHAR10,
+         KUNNR        TYPE YRGA_CBG-KUNNR,
+         ROCODE       TYPE YRGA_CBG-ROCODE,
+         LIFNR        TYPE YRGA_CBG-LIFNR,
+         CONTID       TYPE YRGA_CBG-CONTID,
+         EBELN        TYPE YRGA_CBG-EBELN,
+         MESSAGE(100),
+       END OF TY_LOG.
+
+TYPES : BEGIN OF TY_TVKOL,
+          VSTEL TYPE TVKOL-VSTEL,
+          WERKS TYPE TVKOL-WERKS,
+          LGORT TYPE TVKOL-LGORT,
+        END OF TY_TVKOL.
+
+TYPES : BEGIN OF TY_ESDUS,
+          MANDT   TYPE ESDUS-MANDT,
+          UNAME   TYPE ESDUS-UNAME,
+          ACTION  TYPE ESDUS-ACTION,
+          ELEMENT TYPE ESDUS-ELEMENT,
+          ACTIVE  TYPE ESDUS-ACTIVE,
+        END OF TY_ESDUS.
+
+
+
+DATA: IT_RAW          TYPE TRUXS_T_TEXT_DATA,               "#EC NEEDED
+      IT_EXCEL_DATA   LIKE STANDARD TABLE OF ST_EXCEL_DATA, "#EC NEEDED
+      WA_EXCEL_DATA   LIKE LINE OF IT_EXCEL_DATA,           "#EC NEEDED
+      IT_TAB_CBG      TYPE TABLE OF YRGA_CBG WITH HEADER LINE, "#EC NEEDED
+      WA_TAB_CBG      LIKE LINE OF IT_TAB_CBG,              "#EC NEEDED
+      IT_DISPLAY_REP  LIKE STANDARD TABLE OF ST_DISPLAY_REP WITH HEADER LINE, "#EC NEEDED
+      o_grid TYPE REF TO cl_gui_alv_grid,
+      WA_DISPLAY_REP  LIKE LINE OF IT_DISPLAY_REP,          "#EC NEEDED
+      WA_DISPLAY_REP2 LIKE LINE OF IT_DISPLAY_REP,          "#EC NEEDED
+      IT_DISPLAY_REP1 TYPE STANDARD TABLE OF ST_DISPLAY_REP1, "#EC NEEDED
+      WA_DISPLAY_REP1 TYPE ST_DISPLAY_REP1,                 "#EC NEEDED
+      IT_EXCEL_ERROR  LIKE STANDARD TABLE OF ST_EXCEL_DATA, "#EC NEEDED
+      WA_EXCEL_ERROR  LIKE LINE OF IT_EXCEL_ERROR,          "#EC NEEDED
+      IT_KNA1         LIKE STANDARD TABLE OF ST_KNA1,       "#EC NEEDED
+*      wa_kna1        LIKE LINE OF it_kna1,
+      IT_LFA1         LIKE STANDARD TABLE OF ST_LFA1,       "#EC NEEDED
+*      wa_lfa1        LIKE LINE OF it_lfa1.
+      IT_T176T        TYPE TABLE OF T176T,                  "#EC NEEDED
+      IT_VBAK         TYPE STANDARD TABLE OF TY_VBAK,       "#EC NEEDED
+      WA_VBAK         TYPE TY_VBAK,                         "#EC NEEDED
+      IT_VBAP         TYPE STANDARD TABLE OF TY_VBAP,       "#EC NEEDED
+      WA_VBAP         TYPE TY_VBAP,                         "#EC NEEDED
+      IT_VBPA         TYPE STANDARD TABLE OF TY_VBPA,       "#EC NEEDED
+      WA_VBPA         TYPE TY_VBPA,                         "#EC NEEDED
+      IT_VBPA1        TYPE STANDARD TABLE OF TY_VBPA1,      "#EC NEEDED
+      WA_VBPA1        TYPE TY_VBPA1,                        "#EC NEEDED
+      IT_VBKD         TYPE STANDARD TABLE OF TY_VBKD,       "#EC NEEDED
+      WA_VBKD         TYPE TY_VBKD,                         "#EC NEEDED
+      IT_VBKD1        TYPE STANDARD TABLE OF TY_VBKD1,      "#EC NEEDED
+      WA_VBKD1        TYPE TY_VBKD1,                        "#EC NEEDED
+      IT_VBKD2        TYPE STANDARD TABLE OF TY_VBKD2,      "#EC NEEDED
+      WA_VBKD2        TYPE TY_VBKD2,                        "#EC NEEDED
+      IT_EKPO         TYPE STANDARD TABLE OF TY_EKPO,       "#EC NEEDED
+      WA_EKPO         TYPE TY_EKPO,                         "#EC NEEDED
+      IT_EKKO         TYPE STANDARD TABLE OF TY_EKKO,       "#EC NEEDED
+      WA_EKKO         TYPE TY_EKKO,                         "#EC NEEDED
+      IT_LIKP         TYPE STANDARD TABLE OF TY_LIKP,       "#EC NEEDED
+      WA_LIKP         TYPE TY_LIKP,                         "#EC NEEDED
+      IT_MCHA         TYPE STANDARD TABLE OF TY_MCHA WITH HEADER LINE, "#EC NEEDED
+      WA_MCHA         TYPE  TY_MCHA,                        "#EC NEEDED
+      IT_EKET         TYPE STANDARD TABLE OF TY_EKET WITH HEADER LINE,
+      WA_EKET         TYPE TY_EKET,
+      IT_LOG          TYPE STANDARD TABLE OF TY_LOG WITH HEADER LINE,
+      WA_LOG          TYPE TY_LOG,
+      IT_TVKOL        TYPE STANDARD TABLE OF TY_TVKOL WITH HEADER LINE,
+      WA_TVKOL        TYPE TY_TVKOL,
+      IT_ESDUS        TYPE STANDARD TABLE OF TY_ESDUS WITH HEADER LINE,
+      WA_ESDUS        TYPE TY_ESDUS,
+      TEMP_DATE       TYPE CHAR10.
+
+
+TYPE-POOLS: VRM.
+
+
+DATA: LIST TYPE VRM_VALUES.                                 "#EC NEEDED
+DATA: VALUE LIKE LINE OF LIST.                              "#EC NEEDED
+DATA: NAME TYPE VRM_ID.                                     "#EC NEEDED
+
+
+DATA : LT_CELLTAB TYPE LVC_T_STYL,                          "#EC NEEDED
+       L_INDEX    TYPE I.                                   "#EC NEEDED
+DATA:
+*      fieldcat type slis_t_fieldcat_alv WITH HEADER LINE,
+*  it_layout  TYPE slis_layout_alv,
+  IT_LAYOUT      TYPE   slis_layout_alv,"LVC_S_LAYO,                            "#EC NEEDED
+*  ls_fcat    TYPE slis_t_fieldcat_alv  WITH HEADER LINE,
+  LS_FCAT       TYPE slis_t_fieldcat_alv with HEADER LINE,"TYPE LVC_T_FCAT  WITH HEADER LINE,          "#EC NEEDED
+*  LS_FCAT       TYPE LVC_T_FCAT with HEADER LINE,"TYPE LVC_T_FCAT  WITH HEADER LINE,          "#EC NEEDED
+** -> Begin of changes by of Aditi on 10.06.2025 12:37:32
+*  LS_ERROR_FCAT TYPE LVC_T_FCAT WITH HEADER LINE,           "#EC NEEDED
+  LS_ERROR_FCAT TYPE slis_t_fieldcat_alv WITH HEADER LINE,           "#EC NEEDED
+** <- End changes by of Aditi on 10.06.2025 12:37:38
+  LT_F4         TYPE LVC_T_F4 WITH HEADER LINE,             "#EC NEEDED
+*  gt_fieldcatalog TYPE lvc_t_fcat,
+*      gw_fieldcatalog TYPE lvc_s_fcat,
+*      fieldcat1 type slis_t_fieldcat_alv WITH HEADER LINE,
+  IT_LAYOUT1    TYPE LVC_S_LAYO,                            "#EC NEEDED
+  LS_FCAT1      TYPE LVC_T_FCAT  WITH HEADER LINE,          "#EC NEEDED
+*  it_dropdown TYPE lvc_t_drop,
+*       gr_alvgrid TYPE REF TO cl_gui_alv_grid,
+*      fieldcat   TYPE lvc_t_fcat,
+*      ls_fcat    TYPE lvc_s_fcat,
+*      it_layout  TYPE lvc_s_layo,
+*      fieldcat1  TYPE lvc_t_fcat,
+*      ls_fcat1   TYPE lvc_s_fcat,
+*      it_layout1 TYPE lvc_s_layo.
+  IT_FCAT       TYPE SLIS_T_FIELDCAT_ALV,                   "#EC NEEDED
+  WA_FCAT       TYPE SLIS_FIELDCAT_ALV,                     "#EC NEEDED
+  GT_EVENTS     TYPE SLIS_T_EVENT,                          "#EC NEEDED
+  GS_EVENTS     TYPE SLIS_ALV_EVENT.                        "#EC NEEDED
+
+FIELD-SYMBOLS : <L_FIELD_VALUE> TYPE ANY.                   "#EC NEEDED
+
+DATA : HELP_VALUE TYPE HELP_INFO-FLDVALUE.                  "#EC NEEDED
+
+DATA: I_ALV      TYPE  SLIS_T_FIELDCAT_ALV,                 "#EC NEEDED
+      LV_COL_POS TYPE I.                                    "#EC NEEDED
+
+DATA : REF_GRID TYPE REF TO CL_GUI_ALV_GRID.                "#EC NEEDED
+
+DATA(C_KCAL) = '3.968254'.                                  "#EC NEEDED
+DATA(C_ERR) = '0.001'.                                      "#EC NEEDED
+DATA: VAR2 TYPE STRING.                                     "#EC NEEDED
+
+CONSTANTS : C_CHECK(1) VALUE 'X'.
+
+DATA: BDC_DISPLAY_MODE TYPE CHAR1.
+
+DATA :ORDER_HEADER_IN   LIKE  BAPISDHEAD1,                  "#EC NEEDED
+      ORDER_HEADER_INX  LIKE  BAPISDHEAD1X OCCURS 10 WITH HEADER LINE, "#EC NEEDED
+      ITEM_IN           LIKE  BAPISDITEM OCCURS 10 WITH HEADER LINE, "#EC NEEDED
+      ITEM_INX          LIKE  BAPISDITEMX OCCURS 10 WITH HEADER LINE, "#EC NEEDED
+      SALESDOCUMENT     LIKE  BAPIVBELN-VBELN,              "#EC NEEDED
+      RETURN            LIKE  BAPIRET2 OCCURS 10 WITH HEADER LINE, "#EC NEEDED
+      ORDER_ITEMS_IN    LIKE  BAPIITEMIN OCCURS 0 WITH HEADER LINE, "#EC NEEDED
+      ORDER_PARTNERS    LIKE  BAPIPARTNR OCCURS 0 WITH HEADER LINE, "#EC NEEDED
+      ORDER_ITEMS_OUT   LIKE  BAPIITEMEX OCCURS 0 WITH HEADER LINE, "#EC NEEDED
+      ORDER_SCHEDULE_EX LIKE  BAPISDHEDU OCCURS 0 WITH HEADER LINE. "#EC NEEDED
+
+DATA : GOODSMVT_HEADER       LIKE  BAPI2017_GM_HEAD_01,     "#EC NEEDED
+       GOODSMVT_CODE         LIKE  BAPI2017_GM_CODE,        "#EC NEEDED
+       GOODSMVT_ITEM         LIKE  BAPI2017_GM_ITEM_CREATE OCCURS 100 WITH HEADER LINE, "#EC NEEDED
+       GOODSMVT_SERIALNUMBER LIKE  BAPI2017_GM_SERIALNUMBER OCCURS 0 WITH HEADER LINE, "#EC NEEDED
+       RETURN_GR             LIKE  BAPIRET2 OCCURS 10 WITH HEADER LINE. "#EC NEEDED
+
+DATA : DELIVERY          TYPE LIKP-VBELN,                   "#EC NEEDED
+       PGI_NUMBER        LIKE BAPISHPDELIVNUMB-DELIV_NUMB,  "#EC NEEDED
+       SALES_ORDER_ITEMS LIKE  BAPIDLVREFTOSALESORDER OCCURS 0 WITH HEADER LINE, "#EC NEEDED
+       RETURN_DEL        LIKE BAPIRET2 OCCURS 10 WITH HEADER LINE. "#EC NEEDED
+
+DATA: GT_BDCDATA TYPE TABLE OF BDCDATA,                     "#EC NEEDED
+      GS_BDCDATA TYPE BDCDATA.                              "#EC NEEDED
+
+
+DATA: I_BDCDATA  TYPE TABLE OF BDCDATA,                     "#EC NEEDED
+      WA_BDCDATA TYPE BDCDATA.                              "#EC NEEDED
+DATA: IT_MESSAGE TYPE TABLE OF BDCMSGCOLL,                  "#EC NEEDED
+      WA_MESSAGE TYPE BDCMSGCOLL.                           "#EC NEEDED
+DATA : LV_BDCRUN TYPE C.                                    "#EC NEEDED
+
+
+DATA: LT_DROPDOWN TYPE LVC_T_DROP,                          "#EC NEEDED
+      LS_DROPDOWN TYPE LVC_S_DROP.                          "#EC NEEDED
+
+DATA: LT_DRAL TYPE LVC_T_DRAL,                              "#EC NEEDED
+      LS_DRAL TYPE LVC_S_DRAL.                              "#EC NEEDED
+
+DATA: BEGIN OF GS_F4VALUE,                                  "#EC NEEDED
+        CHARG TYPE MCHA-CHARG,
+      END OF GS_F4VALUE,
+      GT_F4VALUE LIKE TABLE OF GS_F4VALUE.                  "#EC NEEDED
+
+DATA: E_FIELDNAME TYPE LVC_FNAME,                           "#EC NEEDED
+      ES_ROW_NO   TYPE LVC_S_ROID,                          "#EC NEEDED
+      GT_F4       TYPE LVC_T_F4,                            "#EC NEEDED
+      GS_F4       TYPE LVC_S_F4,                            "#EC NEEDED
+      GS_EVENT    TYPE SLIS_ALV_EVENT,                      "#EC NEEDED
+      GT_EVENT    TYPE SLIS_T_EVENT,                        "#EC NEEDED
+      GS_GLAY     TYPE LVC_S_GLAY.                          "#EC NEEDED
+
+
+TYPES: BEGIN OF TY_CBG,
+         YDATE     TYPE  YRGA_CBG-YDATE,
+         TIMESTAMP TYPE  YRGA_CBG-TIMESTAMP,
+         LIFNR     TYPE  YRGA_CBG-LIFNR,
+         L_NAME    TYPE  LFA1-NAME1,
+         KUNNR     TYPE  YRGA_CBG-KUNNR,
+         K_NAME    TYPE  KNA1-NAME1,
+         ROCODE    TYPE  YRGA_CBG-ROCODE,
+         WERKS     TYPE  YRGA_CBG-WERKS,
+         UNAME     TYPE  YRGA_CBG-UNAME,
+         MATNR     TYPE  YRGA_CBG-MATNR,
+         YGAID     TYPE  YRGA_CBG-YGAID,
+         KWMENG    TYPE  YRGA_CBG-KWMENG,
+         MSEHI     TYPE  YRGA_CBG-MSEHI,
+         YYSTRM_SG TYPE  YRGA_CBG-YYSTRM_SG,
+         AGCV      TYPE  YRGA_CBG-AGCV,
+         ANCV      TYPE  YRGA_CBG-ANCV,
+         YCQMBG    TYPE  YRGA_CBG-YCQMBG,
+         YCQMBN    TYPE  YRGA_CBG-YCQMBN,
+         YCQKG     TYPE  YRGA_CBG-YCQKG,
+         CONTID    TYPE  YRGA_CBG-CONTID,
+         YDOVNO    TYPE  YRGA_CBG-YDOVNO,
+         EBELN     TYPE  YRGA_CBG-EBELN,
+         WEMPF     TYPE  YRGA_CBG-WEMPF,
+         VBELN     TYPE  YRGA_CBG-VBELN,
+         MBLNR     TYPE  YRGA_CBG-MBLNR,
+         CHARG     TYPE  YRGA_CBG-CHARG,
+         YY_MDOTR  TYPE  YRGA_CBG-YY_MDOTR,
+
+       END OF TY_CBG.
+
+
+DATA: IT_CBG TYPE STANDARD TABLE OF TY_CBG,
+      WA_CBG TYPE TY_CBG.
+
+DATA:IT_FCAT1 TYPE SLIS_T_FIELDCAT_ALV,
+     WA_FCAT1 TYPE SLIS_FIELDCAT_ALV.
+
+DATA: LT_JEST TYPE STANDARD TABLE OF JEST WITH HEADER LINE.
+
+CONSTANTS: C_NUM_CHAR(11) TYPE C VALUE '1234567890 '.
+
+SELECTION-SCREEN BEGIN OF BLOCK p2 WITH FRAME.
+
+SELECT-OPTIONS: s_lifnr FOR yrga_cbg-lifnr MODIF ID id1,
+            s_kunnr FOR   yrga_cbg-kunnr MODIF ID id1,
+            s_rocode FOR yrga_cbg-rocode MODIF ID id1,
+            s_gaid FOR yrga_cbg-ygaid MODIF ID id1,
+            s_werks FOR t001w-werks MODIF ID id1,
+            s_date FOR yrga_cbg-ydate MODIF ID id1 OBLIGATORY.
+
+*PARAMETERS : s_werks as LISTBOX VISIBLE LENGTH 10.
+SELECTION-SCREEN END OF BLOCK p2.
+
+SELECTION-SCREEN BEGIN OF BLOCK p3 WITH FRAME.
+
+PARAMETERS: p_file TYPE rlgrap-filename MODIF ID id2.
+SELECTION-SCREEN END OF BLOCK p3.
+
+SELECTION-SCREEN BEGIN OF BLOCK p4 WITH FRAME.
+
+SELECTION-SCREEN COMMENT 1(10) TEXT-002 MODIF ID id3.
+
+PARAMETERS : r_mode1 RADIOBUTTON GROUP rg2  USER-COMMAND radio MODIF ID id3.
+PARAMETERS : r_mode2 RADIOBUTTON GROUP rg2  MODIF ID id3 DEFAULT 'X'.
+
+SELECTION-SCREEN END OF BLOCK p4.
+
+
+*&---------------------------------------------------------------------*
+*&  Include           YRGA_CBG_REPORT_F01
+*&---------------------------------------------------------------------*
+
+FORM display_error_entries .
+
+  IF it_excel_error[] IS INITIAL.
+    MESSAGE: TEXT-001 TYPE 'I'.
+    LEAVE LIST-PROCESSING.
+  ENDIF.
+
+  PERFORM prepare_fieldat_err.
+
+*  CREATE OBJECT gr_alvgrid
+*    EXPORTING
+*      i_parent          = cl_gui_container=>default_screen
+*    EXCEPTIONS
+*      error_cntl_create = 1
+*      error_cntl_init   = 2
+*      error_cntl_link   = 3
+*      error_dp_create   = 4
+*      OTHERS            = 5.
+*  IF sy-subrc <> 0.
+*    MESSAGE 'sy-subrc not 0 while creating object for ALV Class' TYPE 'E'.
+*  ENDIF.
+*
+*  CALL METHOD gr_alvgrid->set_table_for_first_display
+*    EXPORTING
+*      is_layout                     = it_layout
+*    CHANGING
+*      it_outtab                     = it_excel_error
+*      it_fieldcatalog               = fieldcat
+*    EXCEPTIONS
+*      invalid_parameter_combination = 1
+*      program_error                 = 2
+*      too_many_lines                = 3
+*      OTHERS                        = 4.
+*  IF sy-subrc <> 0.
+*    MESSAGE 'Error while Display ALV' TYPE 'E'.
+*  ENDIF.
+*  CALL SELECTION-SCREEN 1000.
+
+ENDFORM.
+
+FORM prepare_fieldat_cbg.
+
+  CLEAR ls_fcat.
+
+  DATA l_row TYPE i VALUE 1.
+
+  ls_fcat-col_pos  = l_row.
+  l_row = l_row + 1.
+  ls_fcat-seltext_l = ''.
+*  ls_fcat-seltext = ''.
+  ls_fcat-fieldname = 'FLAG'.
+  ls_fcat-tabname = 'IT_TAB_CBG'.
+  ls_fcat-checkbox = c_check.   " print as checkbox
+  ls_fcat-edit = c_check.
+  ls_fcat-outputlen = '2'.
+  APPEND ls_fcat .
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos  = l_row.
+  l_row = l_row + 1.
+  ls_fcat-seltext_l = 'DATE'.
+  ls_fcat-fieldname = 'YDATE'.
+  ls_fcat-datatype  = 'DATS'.
+  ls_fcat-tabname = 'IT_TAB_CBG'.
+  ls_fcat-outputlen = '10'.
+  APPEND ls_fcat .
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos  = l_row.
+  l_row = l_row + 1.
+  ls_fcat-seltext_l = 'MATERIAL_NUMBER'.
+  ls_fcat-fieldname = 'MATNR'.
+  ls_fcat-tabname = 'IT_TAB_CBG'.
+  ls_fcat-outputlen = '18'.
+  APPEND ls_fcat .
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos  = l_row.
+  l_row = l_row + 1.
+  ls_fcat-seltext_l = 'BATCH'.
+  ls_fcat-fieldname = 'charg'.
+  ls_fcat-tabname = 'IT_TAB_CBG'.
+  ls_fcat1-drdn_hndl = '1'.
+  ls_fcat1-checktable = '!'.
+  ls_fcat-edit    = 'X'.
+  ls_fcat-outputlen = '15'.
+  APPEND ls_fcat.
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos  = l_row.
+  l_row = l_row + 1.
+  ls_fcat-seltext_l = 'VENDOR_CODE'.
+  ls_fcat-fieldname = 'LIFNR'.
+  ls_fcat-tabname = 'IT_TAB_CBG'.
+  ls_fcat-outputlen = '25'.
+  APPEND ls_fcat .
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos  = l_row.
+  l_row = l_row + 1.
+  ls_fcat-seltext_l = 'VENDOR_DESCRIPTION'.
+  ls_fcat-fieldname = 'NAME1_V'.
+  ls_fcat-tabname = 'IT_TAB_CBG'.
+  ls_fcat-outputlen = '15'.
+  APPEND ls_fcat .
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos  = l_row.
+  l_row = l_row + 1.
+  ls_fcat-seltext_l = 'CUSTOMER_CODE'.
+  ls_fcat-fieldname = 'KUNNR'.
+  ls_fcat-tabname = 'IT_TAB_CBG'.
+  ls_fcat-outputlen = '15'.
+  APPEND ls_fcat .
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos  = l_row.
+  l_row = l_row + 1.
+  ls_fcat-seltext_l = 'CUSTOMER_DESCRIPTION'.
+  ls_fcat-fieldname = 'NAME1_C'.
+  ls_fcat-tabname = 'IT_TAB_CBG'.
+  ls_fcat-outputlen = '25'.
+  APPEND ls_fcat .
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos  = l_row.
+  l_row = l_row + 1.
+  ls_fcat-seltext_l = 'GEOGRAPHICAL_AREA_ID'.
+  ls_fcat-fieldname = 'YGAID'.
+  ls_fcat-tabname = 'IT_TAB_CBG'.
+  ls_fcat-outputlen = '15'.
+  APPEND ls_fcat .
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos  = l_row.
+  l_row = l_row + 1.
+  ls_fcat-seltext_l = 'GEOGRAPHICAL_AREA_DESC'.
+  ls_fcat-fieldname = 'YGADESC'.
+  ls_fcat-tabname = 'IT_TAB_CBG'.
+  ls_fcat-outputlen = '15'.
+  APPEND ls_fcat .
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos  = l_row.
+  l_row = l_row + 1.
+  ls_fcat-seltext_l = 'PLANT'.
+  ls_fcat-fieldname = 'werks'.
+  ls_fcat-tabname = 'IT_TAB_CBG'.
+  ls_fcat-outputlen = '10'.
+  APPEND ls_fcat.
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos  = l_row.
+  l_row = l_row + 1.
+  ls_fcat-seltext_l = 'RO_CODE'.
+  ls_fcat-fieldname = 'ROCODE'.
+  ls_fcat-tabname = 'IT_TAB_CBG'.
+  ls_fcat-outputlen = '15'.
+  APPEND ls_fcat .
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos  = l_row.
+  l_row = l_row + 1.
+  ls_fcat-seltext_l = 'DENSITY_IN_KG/SCM'.
+  ls_fcat-fieldname = 'YYSTRM_SG'.
+  ls_fcat-tabname = 'IT_TAB_CBG'.
+  ls_fcat-outputlen = '25'.
+  APPEND ls_fcat .
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos  = l_row.
+  l_row = l_row + 1.
+  ls_fcat-seltext_l = 'GROSS_CALORIFIC_VALUE'.
+  ls_fcat-fieldname = 'AGCV'.
+  ls_fcat-tabname = 'IT_TAB_CBG'.
+  ls_fcat-outputlen = '25'.
+  APPEND ls_fcat .
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos  = l_row.
+  l_row = l_row + 1.
+  ls_fcat-seltext_l = 'NET_CALORIFIC_VALUE'.
+  ls_fcat-fieldname = 'ANCV'.
+  ls_fcat-tabname = 'IT_TAB_CBG'.
+  ls_fcat-outputlen = '25'.
+  APPEND ls_fcat .
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos  = l_row.
+  l_row = l_row + 1.
+  ls_fcat-seltext_l = 'QUANTITY_IN_SM3'.
+  ls_fcat-fieldname = 'KWMENG'.
+  ls_fcat-tabname = 'IT_TAB_CBG'.
+  ls_fcat-outputlen = '15'.
+  APPEND ls_fcat .
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos  = l_row.
+  l_row = l_row + 1.
+  ls_fcat-seltext_l = 'QUANTITY_IN_MBG'.
+  ls_fcat-fieldname = 'YCQMBG'.
+  ls_fcat-tabname = 'IT_TAB_CBG'.
+  ls_fcat-outputlen = '15'.
+  APPEND ls_fcat .
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos  = l_row.
+  l_row = l_row + 1.
+  ls_fcat-seltext_l = 'QUANTITY_IN_MBN'.
+  ls_fcat-fieldname = 'YCQMBN'.
+  ls_fcat-tabname = 'IT_TAB_CBG'.
+  ls_fcat-outputlen = '15'.
+  APPEND ls_fcat .
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos  = l_row.
+  l_row = l_row + 1.
+  ls_fcat-seltext_l = 'QUANTITY_IN_KG'.
+  ls_fcat-fieldname = 'YCQKG'.
+  ls_fcat-tabname = 'IT_TAB_CBG'.
+  ls_fcat-outputlen = '15'.
+  APPEND ls_fcat .
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos  = l_row.
+  l_row = l_row + 1.
+  ls_fcat-seltext_l = 'TIMESTAMP'.
+  ls_fcat-fieldname = 'TIMESTAMP'.
+  ls_fcat-tabname = 'IT_TAB_CBG'.
+  ls_fcat-outputlen = '15'.
+  APPEND ls_fcat .
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos  = l_row.
+  l_row = l_row + 1.
+  ls_fcat-seltext_l = 'LAST_UPDATED_BY'.
+  ls_fcat-fieldname = 'UNAME'.
+  ls_fcat-tabname = 'IT_TAB_CBG'.
+  ls_fcat-outputlen = '12'.
+  APPEND ls_fcat .
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos  = l_row.
+  l_row = l_row + 1.
+  ls_fcat-seltext_l = 'CONTRACT_ID'.
+  ls_fcat-fieldname = 'CONTID'.
+  ls_fcat-tabname = 'IT_TAB_CBG'.
+  ls_fcat-outputlen = '15'.
+  APPEND ls_fcat .
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos  = l_row.
+  l_row = l_row + 1.
+  ls_fcat-seltext_l = 'PURCHASE_ORDER_NO.'.
+  ls_fcat-fieldname = 'EBELN'.
+  ls_fcat-tabname = 'IT_TAB_CBG'.
+  ls_fcat-outputlen = '15'.
+  APPEND ls_fcat .
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos  = l_row.
+  l_row = l_row + 1.
+  ls_fcat-seltext_l = 'SALES_ORDER'.
+  ls_fcat-fieldname = 'YDOVNO'.
+  ls_fcat-tabname = 'IT_TAB_CBG'.
+  ls_fcat-outputlen = '15'.
+  APPEND ls_fcat .
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos  = l_row.
+  l_row = l_row + 1.
+  ls_fcat-seltext_l = 'GOODS_RECIEPT'.
+  ls_fcat-fieldname = 'WEMPF'.
+  ls_fcat-tabname = 'IT_TAB_CBG'.
+  ls_fcat-outputlen = '15'.
+  APPEND ls_fcat .
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos  = l_row.
+  l_row = l_row + 1.
+  ls_fcat-seltext_l = 'DELIVERY'.
+  ls_fcat-fieldname = 'vbeln'.
+  ls_fcat-tabname = 'IT_TAB_CBG'.
+  ls_fcat-outputlen = '15'.
+  APPEND ls_fcat .
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos  = l_row.
+  l_row = l_row + 1.
+  ls_fcat-seltext_l = 'PGI'.
+  ls_fcat-fieldname = 'mblnr'.
+  ls_fcat-tabname = 'IT_TAB_CBG'.
+  ls_fcat-outputlen = '15'.
+  APPEND ls_fcat .
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos  = l_row.
+  l_row = l_row + 1.
+  ls_fcat-seltext_l = 'MODE_OF_TRANSPORT'.
+  ls_fcat-fieldname = 'YY_MDOTR'.
+  ls_fcat-tabname = 'IT_TAB_CBG'.
+  ls_fcat-outputlen = '20'.
+  APPEND ls_fcat .
+  CLEAR ls_fcat.
+
+*  it_layout-colwidth_optimize = 'X'.
+*  it_layout-cwidth_opt = 'X'.
+  it_layout-zebra = 'X'.
+  it_layout1-stylefname = 'CELLTAB'.
+
+  PERFORM set_drdn_table.
+** -> Begin of changes by of Sarfraz Ali on 07.11.2024 10:41:39 for ATC
+  EXPORT it_display_rep[] TO MEMORY ID 'ME1'. "#EC CI_FLDEXT_OK[2215424]
+** <- End changes by of Sarfraz Ali on 07.11.2024 10:41:39 for ATC
+** -> Begin of changes by Shobhit on 13.03.2025 bug fix
+  DATA : lv_flag TYPE flag.
+  IMPORT lv_flag FROM MEMORY ID 'EXCHECK'.   "#EC CI_FLDEXT_OK[2215424]
+
+  IF lv_flag IS INITIAL.
+** <- End changes by by Shobhit on 13.03.2025 bug fix
+*    CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY_LVC'
+*      EXPORTING
+*        i_callback_program       = sy-repid
+*        i_callback_pf_status_set = 'PF'
+*        i_callback_user_command  = 'USER_COMMAND'
+*        is_layout_lvc            = it_layout
+*        it_fieldcat_lvc          = ls_fcat[]
+*      TABLES
+*        t_outtab                 = it_display_rep
+*      EXCEPTIONS
+*        program_error            = 1
+*        OTHERS                   = 2.
+*    IF sy-subrc NE 0.
+*      MESSAGE 'Error while Display ALV' TYPE 'E'.
+*    ENDIF.
+
+    CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+      EXPORTING
+        i_callback_program       = sy-repid
+        i_callback_user_command  = 'USER_COMMAND'
+        i_callback_pf_status_set = 'PF'
+        i_callback_top_of_page   = 'TOP_OF_PAGE1'
+        is_layout                = it_layout
+*       it_fieldcat              = it_fcat[]
+        it_fieldcat              = ls_fcat[]
+*       it_sort                  = git_sort
+        i_save                   = 'A'
+      TABLES
+        t_outtab                 = it_display_rep
+      EXCEPTIONS
+        program_error            = 1
+        OTHERS                   = 2.
+    IF sy-subrc NE 0.
+    ENDIF.
+
+** -> Begin of changes by Shobhit on 13.03.2025 bug fix
+  ENDIF.
+** <- End changes by by Shobhit on 13.03.2025 bug fix
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  top_of_page
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->HEADER     text
+*----------------------------------------------------------------------*
+FORM top_of_page1 ."USING header TYPE REF TO cl_dd_document.
+  DATA: ls_text  TYPE sdydo_text_element,
+        meth(20) TYPE c VALUE 'SET_FRONTEND_LAYOUT'.
+
+  DATA: layout TYPE lvc_s_layo.
+
+  IF o_grid IS INITIAL.
+    CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
+      IMPORTING
+        e_grid = o_grid.
+
+    layout-stylefname = 'CELLTAB'.
+
+    CALL METHOD o_grid->(meth)
+      EXPORTING
+        is_layout = layout.
+
+    CALL METHOD o_grid->refresh_table_display.
+
+  ENDIF.
+
+ENDFORM.                    "top_of_page
+
+
+FORM set_drdn_table.
+
+  REFRESH lt_dropdown.
+  SORT it_mcha.
+  CLEAR wa_mcha.
+  LOOP AT it_mcha INTO wa_mcha.
+    ls_dropdown-handle = '1'.
+    CONDENSE wa_mcha-charg.
+    ls_dropdown-value = wa_mcha-charg.
+    APPEND ls_dropdown TO lt_dropdown.
+  ENDLOOP.
+
+ENDFORM.
+
+
+FORM prepare_fieldat_cbg1.
+
+  CLEAR ls_fcat1.
+
+*  ls_fcat1-seltext_l = 'DATE'.
+  ls_fcat1-seltext = 'DATE'.
+  ls_fcat1-fieldname = 'YDATE'.
+  ls_fcat1-datatype  = 'DATS'.
+  ls_fcat1-tabname = 'IT_TAB_CBG'.
+  ls_fcat1-outputlen = '10'.
+  APPEND ls_fcat1.
+  CLEAR ls_fcat1.
+
+*  ls_fcat1-seltext_l = 'Material_Number'.
+  ls_fcat1-seltext = 'Material_Number'.
+  ls_fcat1-fieldname = 'MATNR'.
+  ls_fcat1-tabname = 'IT_TAB_CBG'.
+  ls_fcat1-outputlen = '18'.
+  APPEND ls_fcat1.
+  CLEAR ls_fcat1.
+
+*  ls_fcat1-seltext_l = 'BATCH'.
+  ls_fcat1-seltext = 'BATCH'.
+  ls_fcat1-fieldname = 'charg'.
+** -> Begin of changes by of Sarfraz Ali on 07.11.2024 10:42:03 for ATC
+  ls_fcat1-tabname = 'MCHA'.                  "#EC CI_USAGE_OK[2370131]
+** <- End changes by of Sarfraz Ali on 07.11.2024 10:42:03 for ATC
+  ls_fcat1-outputlen = '15'.
+  APPEND ls_fcat1.
+  CLEAR ls_fcat1.
+
+*  ls_fcat1-seltext_l = 'Vendor_Code'.
+  ls_fcat1-seltext = 'Vendor_Code'.
+  ls_fcat1-fieldname = 'LIFNR'.
+  ls_fcat1-tabname = 'IT_TAB_CBG'.
+  ls_fcat1-outputlen = '15'.
+  APPEND ls_fcat1.
+  CLEAR ls_fcat1.
+
+*  ls_fcat1-seltext_l = 'Vendor_Description'.
+  ls_fcat1-seltext = 'Vendor_Description'.
+  ls_fcat1-fieldname = 'NAME1_V'.
+  ls_fcat1-tabname = 'IT_TAB_CBG'.
+  ls_fcat1-outputlen = '15'.
+  APPEND ls_fcat1.
+  CLEAR ls_fcat1.
+
+*  ls_fcat1-seltext_l = 'Customer_Code'.
+  ls_fcat1-seltext = 'Customer_Code'.
+  ls_fcat1-fieldname = 'KUNNR'.
+  ls_fcat1-tabname = 'IT_TAB_CBG'.
+  ls_fcat1-outputlen = '15'.
+  APPEND ls_fcat1.
+  CLEAR ls_fcat1.
+
+*  ls_fcat1-seltext_l = 'Customer_Description'.
+  ls_fcat1-seltext = 'Customer_Description'.
+  ls_fcat1-fieldname = 'NAME1_C'.
+  ls_fcat1-tabname = 'IT_TAB_CBG'.
+  ls_fcat1-outputlen = '25'.
+  APPEND ls_fcat1.
+  CLEAR ls_fcat1.
+
+*  ls_fcat1-seltext_l = 'Geographical_Area ID'.
+  ls_fcat1-seltext = 'Geographical_Area ID'.
+  ls_fcat1-fieldname = 'YGAID'.
+  ls_fcat1-tabname = 'IT_TAB_CBG'.
+  ls_fcat1-outputlen = '10'.
+  APPEND ls_fcat1.
+  CLEAR ls_fcat1.
+
+*  ls_fcat1-seltext_l = 'Geographical_Area_Desc'.
+  ls_fcat1-seltext = 'Geographical_Area_Desc'.
+  ls_fcat1-fieldname = 'YGADESC'.
+  ls_fcat1-tabname = 'IT_TAB_CBG'.
+  ls_fcat1-outputlen = '10'.
+  APPEND ls_fcat1.
+  CLEAR ls_fcat1.
+
+*  ls_fcat1-seltext_l = 'Plant'.
+  ls_fcat1-seltext = 'Plant'.
+  ls_fcat1-fieldname = 'werks'.
+  ls_fcat1-tabname = 'IT_TAB_CBG'.
+  ls_fcat1-outputlen = '10'.
+  APPEND ls_fcat1.
+  CLEAR ls_fcat1.
+
+*  ls_fcat1-seltext_l = 'Ro_Code'.
+  ls_fcat1-seltext = 'Ro_Code'.
+  ls_fcat1-fieldname = 'ROCODE'.
+  ls_fcat1-tabname = 'IT_TAB_CBG'.
+  ls_fcat1-outputlen = '15'.
+  APPEND ls_fcat1.
+  CLEAR ls_fcat1.
+
+*  ls_fcat1-seltext_l = 'Density_in_KG/SCM'.
+  ls_fcat1-seltext = 'Density_in_KG/SCM'.
+  ls_fcat1-fieldname = 'YYSTRM_SG'.
+  ls_fcat1-tabname = 'IT_TAB_CBG'.
+  ls_fcat1-outputlen = '25'.
+  APPEND ls_fcat1.
+  CLEAR ls_fcat1.
+
+*  ls_fcat1-seltext_l = 'Gross_Calorific_Value'.
+  ls_fcat1-seltext = 'Gross_Calorific_Value'.
+  ls_fcat1-fieldname = 'AGCV'.
+  ls_fcat1-tabname = 'IT_TAB_CBG'.
+  ls_fcat1-outputlen = '25'.
+  APPEND ls_fcat1.
+  CLEAR ls_fcat1.
+
+*  ls_fcat1-seltext_l = 'Net_Calorific_Value'.
+  ls_fcat1-seltext = 'Net_Calorific_Value'.
+  ls_fcat1-fieldname = 'ANCV'.
+  ls_fcat1-tabname = 'IT_TAB_CBG'.
+  ls_fcat1-outputlen = '25'.
+  APPEND ls_fcat1.
+  CLEAR ls_fcat1.
+
+*  ls_fcat1-seltext_l = 'Quantity_in_SM3'.
+  ls_fcat1-seltext = 'Quantity_in_SM3'.
+  ls_fcat1-fieldname = 'KWMENG'.
+  ls_fcat1-tabname = 'IT_TAB_CBG'.
+  ls_fcat1-outputlen = '10'.
+  APPEND ls_fcat1.
+  CLEAR ls_fcat1.
+
+*  ls_fcat1-seltext_l = 'Quantity_In_MBG'.
+  ls_fcat1-seltext = 'Quantity_In_MBG'.
+  ls_fcat1-fieldname = 'YCQMBG'.
+  ls_fcat1-tabname = 'YRGA_CBG'.
+  ls_fcat1-outputlen = '10'.
+  APPEND ls_fcat1.
+  CLEAR ls_fcat1.
+
+*  ls_fcat1-seltext_l = 'Quantity_in_MBN'.
+  ls_fcat1-seltext = 'Quantity_in_MBN'.
+  ls_fcat1-fieldname = 'YCQMBN'.
+  ls_fcat1-tabname = 'YRGA_CBG'.
+  ls_fcat1-outputlen = '10'.
+  APPEND ls_fcat1.
+  CLEAR ls_fcat1.
+
+*  ls_fcat1-seltext_l = 'Quantity_in_KG'.
+  ls_fcat1-seltext = 'Quantity_in_KG'.
+  ls_fcat1-fieldname = 'YCQKG'.
+  ls_fcat1-tabname = 'YRGA_CBG'.
+  ls_fcat1-outputlen = '10'.
+  APPEND ls_fcat1.
+  CLEAR ls_fcat1.
+
+*  ls_fcat1-seltext_l = 'TIMESTAMP'.
+  ls_fcat1-seltext = 'TIMESTAMP'.
+  ls_fcat1-fieldname = 'TIMESTAMP'.
+  ls_fcat1-tabname = 'IT_TAB_CBG'.
+  ls_fcat1-outputlen = '15'.
+  APPEND ls_fcat1.
+  CLEAR ls_fcat1.
+
+*  ls_fcat1-seltext_l = 'Last_Updated_By'.
+  ls_fcat1-seltext = 'Last_Updated_By'.
+  ls_fcat1-fieldname = 'UNAME'.
+  ls_fcat1-tabname = 'IT_TAB_CBG'.
+  ls_fcat1-outputlen = '12'.
+  APPEND ls_fcat1.
+  CLEAR ls_fcat1.
+
+*  ls_fcat1-seltext_l = 'Contract_Id'.
+  ls_fcat1-seltext = 'Contract_Id'.
+  ls_fcat1-fieldname = 'CONTID'.
+  ls_fcat1-tabname = 'IT_TAB_CBG'.
+  ls_fcat1-outputlen = '15'.
+  APPEND ls_fcat1.
+  CLEAR ls_fcat1.
+
+*  ls_fcat1-seltext_l = 'Purchase_Order_No.'.
+  ls_fcat1-seltext = 'Purchase_Order_No.'.
+  ls_fcat1-fieldname = 'EBELN'.
+  ls_fcat1-tabname = 'IT_TAB_CBG'.
+  ls_fcat1-outputlen = '15'.
+  APPEND ls_fcat1.
+  CLEAR ls_fcat1.
+
+*  ls_fcat1-seltext_l = 'Sales_Order'.
+  ls_fcat1-seltext = 'Sales_Order'.
+  ls_fcat1-fieldname = 'YDOVNO'.
+  ls_fcat1-tabname = 'IT_TAB_CBG'.
+  ls_fcat1-outputlen = '15'.
+  APPEND ls_fcat1.
+  CLEAR ls_fcat1.
+
+*  ls_fcat1-seltext_l = 'Goods_Receipt'.
+  ls_fcat1-seltext = 'Goods_Receipt'.
+  ls_fcat1-fieldname = 'WEMPF'.
+  ls_fcat1-tabname = 'IT_TAB_CBG'.
+  ls_fcat1-outputlen = '15'.
+  APPEND ls_fcat1.
+  CLEAR ls_fcat1.
+
+*  ls_fcat1-seltext_l = 'Delivery'.
+  ls_fcat1-seltext = 'Delivery'.
+  ls_fcat1-fieldname = 'vbeln'.
+  ls_fcat1-tabname = 'IT_TAB_CBG'.
+  ls_fcat1-outputlen = '15'.
+  APPEND ls_fcat1.
+  CLEAR ls_fcat1.
+
+*  ls_fcat1-seltext_l = 'PGI'.
+  ls_fcat1-seltext = 'PGI'.
+  ls_fcat1-fieldname = 'mblnr'.
+  ls_fcat1-tabname = 'IT_TAB_CBG'.
+  ls_fcat1-outputlen = '15'.
+  APPEND ls_fcat1.
+  CLEAR ls_fcat1.
+
+*  ls_fcat1-seltext_l = 'MODE_OF_TRANSPORT'.
+  ls_fcat1-seltext = 'MODE_OF_TRANSPORT'.
+  ls_fcat1-fieldname = 'YY_MDOTR'.
+  ls_fcat1-tabname = 'IT_TAB_CBG'.
+  ls_fcat1-outputlen = '20'.
+  APPEND ls_fcat1 .
+  CLEAR ls_fcat1.
+
+*  it_layout-colwidth_optimize = 'X'.
+*  it_layout1-cwidth_opt = 'X'.
+  it_layout1-zebra = 'X'.
+
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY_LVC'
+    EXPORTING
+      i_callback_program       = sy-repid
+      i_callback_pf_status_set = 'PF'
+      i_callback_user_command  = 'USER_COMMAND'
+      is_layout_lvc            = it_layout1
+      it_fieldcat_lvc          = ls_fcat1[]
+    TABLES
+      t_outtab                 = it_display_rep1
+    EXCEPTIONS
+      program_error            = 1
+      OTHERS                   = 2.
+  IF sy-subrc NE 0.
+    MESSAGE 'Error while Display ALV' TYPE 'E'.
+  ENDIF.
+
+ENDFORM.
+
+
+FORM prepare_fieldat_err.
+
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos =  1.
+*  ls_fcat-seltext  = 'DATE'.
+  ls_fcat-seltext_l  = 'DATE'.
+  ls_fcat-fieldname = 'YDATE'.
+  ls_fcat-datatype  = 'DATS'.
+  ls_fcat-tabname =  'IT_EXCEL_ERROR'.
+  ls_fcat-outputlen = '10'.
+  APPEND ls_fcat.
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos = 2.
+*  ls_fcat-seltext = 'Material_Number'.
+  ls_fcat-seltext_l = 'Material_Number'.
+  ls_fcat-fieldname = 'MATNR'.
+  ls_fcat-tabname = 'IT_EXCEL_ERROR'.
+  ls_fcat-outputlen = '18'.
+  APPEND ls_fcat.
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos = 3.
+*  ls_fcat1-seltext_l = 'BATCH'.
+  ls_fcat1-seltext = 'BATCH'.
+  ls_fcat1-fieldname = 'charg'.
+  ls_fcat1-tabname = 'IT_EXCEL_ERROR'.
+  ls_fcat1-outputlen = '15'.
+  APPEND ls_fcat1.
+  CLEAR ls_fcat1.
+
+  ls_fcat-col_pos = 4.
+*  ls_fcat-seltext = 'Vendor_Code'.
+  ls_fcat-seltext_l = 'Vendor_Code'.
+  ls_fcat-fieldname = 'LIFNR'.
+  ls_fcat-tabname = 'IT_EXCEL_ERROR'.
+  ls_fcat-outputlen = '25'.
+  APPEND ls_fcat.
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos = 5.
+*  ls_fcat-seltext = 'Customer_Code'.
+  ls_fcat-seltext_l = 'Customer_Code'.
+  ls_fcat-fieldname = 'KUNNR'.
+  ls_fcat-tabname = 'IT_EXCEL_ERROR'.
+  ls_fcat-outputlen = '25'.
+  APPEND ls_fcat.
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos = 6.
+*  ls_fcat-seltext = 'Geographical_Area_ID'.
+  ls_fcat-seltext_l = 'Geographical_Area_ID'.
+  ls_fcat-fieldname = 'YGAID'.
+  ls_fcat-tabname = 'IT_EXCEL_ERROR'.
+  ls_fcat-outputlen = '15'.
+  APPEND ls_fcat.
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos = 7.
+*  ls_fcat-seltext = 'Ro_Code'.
+  ls_fcat-seltext_l = 'Ro_Code'.
+  ls_fcat-fieldname = 'ROCODE'.
+  ls_fcat-tabname = 'IT_EXCEL_ERROR'.
+  ls_fcat-outputlen = '15'.
+  APPEND ls_fcat.
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos = 8.
+*  ls_fcat-seltext = 'Density_in_KG/SCM'.
+  ls_fcat-seltext_l = 'Density_in_KG/SCM'.
+  ls_fcat-fieldname = 'YYSTRM_SG'.
+  ls_fcat-tabname = 'IT_EXCEL_ERROR'.
+  ls_fcat-outputlen = '25'.
+  APPEND ls_fcat.
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos = 9.
+*  ls_fcat-seltext = 'Gross_Calorific_Value'.
+  ls_fcat-seltext_l = 'Gross_Calorific_Value'.
+  ls_fcat-fieldname = 'AGCV'.
+  ls_fcat-tabname = 'IT_EXCEL_ERROR'.
+  ls_fcat-outputlen = '25'.
+  APPEND ls_fcat.
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos = 10.
+*  ls_fcat-seltext = 'Net_Calorific_Value'.
+  ls_fcat-seltext_l = 'Net_Calorific_Value'.
+  ls_fcat-fieldname = 'ANCV'.
+  ls_fcat-tabname = 'IT_EXCEL_ERROR'.
+  ls_fcat-outputlen = '25'.
+  APPEND ls_fcat.
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos = '11'.
+*  ls_fcat-seltext = 'Quantity_in_SM3'.
+  ls_fcat-seltext_l = 'Quantity_in_SM3'.
+  ls_fcat-fieldname = 'KWMENG'.
+  ls_fcat-tabname = 'IT_EXCEL_ERROR'.
+  ls_fcat-outputlen = '25'.
+  APPEND ls_fcat.
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos = '12'.
+*  ls_fcat-seltext = 'Quantity_In_MBG'.
+  ls_fcat-seltext_l = 'Quantity_In_MBG'.
+  ls_fcat-fieldname = 'YCQMBG'.
+  ls_fcat-tabname = 'IT_EXCEL_ERROR'.
+  ls_fcat-outputlen = '15'.
+  APPEND ls_fcat.
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos = '13'.
+*  ls_fcat-seltext = 'Quantity_in_MBN'.
+  ls_fcat-seltext_l = 'Quantity_in_MBN'.
+  ls_fcat-fieldname = 'YCQMBN'.
+  ls_fcat-tabname = 'IT_EXCEL_ERROR'.
+  ls_fcat-outputlen = '15'.
+  APPEND ls_fcat.
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos = '14'.
+*  ls_fcat-seltext = 'Quantity_in_KG'.
+  ls_fcat-seltext_l = 'Quantity_in_KG'.
+  ls_fcat-fieldname = 'YCQKG'.
+  ls_fcat-tabname = 'IT_EXCEL_ERROR'.
+  ls_fcat-outputlen = '15'.
+  APPEND ls_fcat.
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos = '15'.
+*  ls_fcat-seltext = 'Error_Flag'.
+  ls_fcat-seltext_l = 'Error_Flag'.
+  ls_fcat-fieldname = 'ERROR'.
+  ls_fcat-tabname = 'IT_EXCEL_ERROR'.
+  ls_fcat-outputlen = '10'.
+  APPEND ls_fcat.
+  CLEAR ls_fcat.
+
+  ls_fcat-col_pos = '16'.
+*  ls_fcat-seltext = 'Error_Message'.
+  ls_fcat-seltext_l = 'Error_Message'.
+  ls_fcat-fieldname = 'ERRMSG'.
+  ls_fcat-tabname = 'IT_EXCEL_ERROR'.
+  ls_fcat-outputlen = '50'.
+  APPEND ls_fcat.
+  CLEAR ls_fcat.
+
+*  it_layout-colwidth_optimize = 'X'.
+*  it_layout-cwidth_opt = 'X'.
+  it_layout-zebra = 'X'.
+
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY_LVC'
+    EXPORTING
+      i_callback_program       = sy-repid
+      i_callback_pf_status_set = 'PF'
+      i_callback_user_command  = 'USER_COMMAND'
+      is_layout_lvc            = it_layout
+      it_fieldcat_lvc          = ls_fcat[]
+    TABLES
+      t_outtab                 = it_excel_error
+    EXCEPTIONS
+      program_error            = 1
+      OTHERS                   = 2.
+  IF sy-subrc NE 0.
+    MESSAGE 'Error while Display ALV' TYPE 'E'.
+  ENDIF.
+
+ENDFORM.
+
+
+FORM validate_data .
+
+  IF it_excel_data IS NOT INITIAL.
+
+    REFRESH: it_kna1,it_lfa1,it_t176t.
+
+    LOOP AT it_excel_data INTO wa_excel_data.
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+        EXPORTING
+          input  = wa_excel_data-kunnr
+        IMPORTING
+          output = wa_excel_data-kunnr.
+
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+        EXPORTING
+          input  = wa_excel_data-lifnr
+        IMPORTING
+          output = wa_excel_data-lifnr.
+
+      MODIFY it_excel_data FROM wa_excel_data TRANSPORTING kunnr lifnr.
+    ENDLOOP.
+
+    SELECT kunnr FROM kna1 INTO CORRESPONDING FIELDS OF TABLE it_kna1
+      FOR ALL ENTRIES IN it_excel_data
+      WHERE kunnr EQ it_excel_data-kunnr.
+
+    IF sy-subrc NE 0.
+      MESSAGE : TEXT-003 TYPE 'E' DISPLAY LIKE 'E'.
+    ENDIF.
+
+    SELECT lifnr FROM lfa1 INTO CORRESPONDING FIELDS OF TABLE it_lfa1
+      FOR ALL ENTRIES IN it_excel_data
+      WHERE lifnr = it_excel_data-lifnr.
+
+    IF sy-subrc NE 0.
+      MESSAGE : TEXT-003 TYPE 'E' DISPLAY LIKE 'E'.
+    ENDIF.
+
+    SELECT bsark FROM t176t INTO CORRESPONDING FIELDS OF TABLE it_t176t
+      FOR ALL ENTRIES IN it_excel_data
+      WHERE bsark = it_excel_data-ygaid.
+
+    IF sy-subrc NE 0.
+      MESSAGE : TEXT-003 TYPE 'E' DISPLAY LIKE 'E'.
+    ENDIF.
+  ELSE.
+    MESSAGE 'it_excel_data in INITIAL' TYPE 'E'.
+  ENDIF.
+
+
+  LOOP AT it_excel_data INTO wa_excel_data .
+
+    IF  wa_excel_data-ydate GE sy-datum.
+      CONCATENATE wa_excel_data-errmsg 'Data for current/ future date cannot be uploaded' INTO wa_excel_data-errmsg.
+      wa_excel_data-error = 'X'.
+    ENDIF.
+
+    READ TABLE it_kna1 INTO DATA(tmp1) WITH KEY kunnr = wa_excel_data-kunnr  .
+    IF sy-subrc NE 0.
+      CONCATENATE wa_excel_data-errmsg 'Customer does not exist,' INTO wa_excel_data-errmsg.
+      wa_excel_data-error = 'X'.
+    ENDIF.
+
+    READ TABLE it_lfa1 INTO DATA(tmp2) WITH KEY lifnr = wa_excel_data-lifnr.
+    IF sy-subrc NE 0.
+      CONCATENATE wa_excel_data-errmsg 'Vendor does not exist,' INTO wa_excel_data-errmsg.
+      wa_excel_data-error = 'X'.
+    ENDIF.
+
+    READ TABLE it_t176t INTO DATA(tmp3) WITH KEY bsark = wa_excel_data-ygaid.
+    IF sy-subrc NE 0.
+      CONCATENATE wa_excel_data-errmsg 'GAID does not exist,' INTO wa_excel_data-errmsg.
+      wa_excel_data-error = 'X'.
+    ENDIF.
+*
+*    SELECT SINGLE * FROM T176T INTO @DATA(tmp3)
+*      WHERE BSARK = @wa_excel_data-ygaid.
+*    IF sy-subrc NE 0.
+*      CONCATENATE wa_excel_data-errmsg 'GAID does not exist,' INTO wa_excel_data-errmsg.
+*      wa_excel_data-error = 'X'.
+*    ENDIF.
+
+    IF wa_excel_data-ydate IS INITIAL.
+      CONCATENATE wa_excel_data-errmsg 'DATE is null, ' INTO wa_excel_data-errmsg.
+      wa_excel_data-error = 'X'.
+    ENDIF.
+
+    IF wa_excel_data-matnr IS INITIAL.
+      CONCATENATE wa_excel_data-errmsg 'Material num is null, ' INTO wa_excel_data-errmsg.
+      wa_excel_data-error = 'X'.
+    ENDIF.
+
+    IF wa_excel_data-lifnr IS INITIAL.
+      CONCATENATE wa_excel_data-errmsg 'Vendor is null, ' INTO wa_excel_data-errmsg.
+      wa_excel_data-error = 'X'.
+    ENDIF.
+
+    IF wa_excel_data-kunnr IS INITIAL.
+      CONCATENATE wa_excel_data-errmsg 'Customer is null, ' INTO wa_excel_data-errmsg.
+      wa_excel_data-error = 'X'.
+    ENDIF.
+
+    IF wa_excel_data-ygaid IS INITIAL.
+      CONCATENATE wa_excel_data-errmsg 'GAIL ID is null, ' INTO wa_excel_data-errmsg.
+      wa_excel_data-error = 'X'.
+    ENDIF.
+
+    IF wa_excel_data-rocode IS INITIAL.
+      CONCATENATE wa_excel_data-errmsg 'RO Code is null, ' INTO wa_excel_data-errmsg.
+      wa_excel_data-error = 'X'.
+    ENDIF.
+*** SOC BY ASHISH/SHREYOSI for CHARM 4000004497
+*    IF wa_excel_data-kwmeng IS INITIAL.
+*      CONCATENATE wa_excel_data-errmsg 'Measured Qty is null, ' INTO wa_excel_data-errmsg.
+*      wa_excel_data-error = 'X'.
+*    ENDIF.
+*** EOC BY ASHISH/SHREYOSI for CHARM 4000004497
+    IF wa_excel_data-msehi IS INITIAL.
+      CONCATENATE wa_excel_data-errmsg 'UOM is null, ' INTO wa_excel_data-errmsg.
+      wa_excel_data-error = 'X'.
+    ENDIF.
+
+    IF wa_excel_data-yystrm_sg IS INITIAL.
+      CONCATENATE wa_excel_data-errmsg 'Density is null, ' INTO wa_excel_data-errmsg.
+      wa_excel_data-error = 'X'.
+    ENDIF.
+
+    IF wa_excel_data-agcv IS INITIAL.
+      CONCATENATE wa_excel_data-errmsg 'GCV is null, ' INTO wa_excel_data-errmsg.
+      wa_excel_data-error = 'X'.
+    ENDIF.
+
+    IF wa_excel_data-ancv IS INITIAL.
+      CONCATENATE wa_excel_data-errmsg 'NCV is null, ' INTO wa_excel_data-errmsg.
+      wa_excel_data-error = 'X'.
+    ENDIF.
+
+    IF wa_excel_data-msehi CS 'SCM' AND wa_excel_data-ycqkg IS INITIAL.
+      CLEAR var2.
+      var2 = wa_excel_data-kwmeng * wa_excel_data-yystrm_sg.
+      wa_excel_data-ycqkg = var2.
+    ENDIF.
+
+    IF wa_excel_data-msehi CS 'SCM' AND wa_excel_data-ycqkg IS NOT INITIAL.
+      CLEAR var2.
+      var2 = wa_excel_data-kwmeng * wa_excel_data-yystrm_sg.
+      IF var2 NE wa_excel_data-ycqkg.
+        CONCATENATE wa_excel_data-errmsg 'Invalid Qty-KG, ' INTO wa_excel_data-errmsg.
+        wa_excel_data-error = 'X'.
+      ENDIF.
+      wa_excel_data-ycqkg = var2.
+    ENDIF.
+
+    IF wa_excel_data-msehi CS 'KG' AND wa_excel_data-ycqkg IS INITIAL.
+      wa_excel_data-ycqkg = wa_excel_data-kwmeng.
+    ENDIF.
+
+    IF wa_excel_data-msehi CS 'KG' AND wa_excel_data-ycqkg IS NOT INITIAL.
+      wa_excel_data-ycqkg = wa_excel_data-kwmeng.
+    ENDIF.
+
+    CLEAR var2.
+    var2 = ( wa_excel_data-ycqkg / wa_excel_data-yystrm_sg ) * ( wa_excel_data-agcv / 1000000 ) * ( c_kcal ).
+
+*** SOC BY ASHISH/SHREYOSI for CHARM 4000004497
+*    IF wa_excel_data-ycqmbg IS INITIAL.
+*      CONCATENATE wa_excel_data-errmsg 'Qty MBG is null, ' INTO wa_excel_data-errmsg.
+*      wa_excel_data-error = 'X'.
+    IF ( wa_excel_data-ycqmbg - var2 ) GE ( + c_err ).
+      CONCATENATE wa_excel_data-errmsg 'Error in Qty-MBG, ' INTO wa_excel_data-errmsg.
+      wa_excel_data-error = 'X'.
+    ENDIF.
+*** EOC BY ASHISH/SHREYOSI for CHARM 4000004497
+
+    CLEAR var2.
+    var2 = (  wa_excel_data-ycqkg / wa_excel_data-yystrm_sg ) * ( wa_excel_data-ancv / 1000000 ) * ( c_kcal ).
+
+*** SOC BY ASHISH/SHREYOSI for CHARM 4000004497
+*    IF wa_excel_data-ycqmbn IS INITIAL.
+*      CONCATENATE wa_excel_data-errmsg 'Qty MBN is null, ' INTO wa_excel_data-errmsg.
+*      wa_excel_data-error = 'X'.
+*** EOC BY ASHISH/SHREYOSI for CHARM 4000004497
+
+    IF ( wa_excel_data-ycqmbn - var2 ) GE ( + c_err ).
+      CONCATENATE wa_excel_data-errmsg 'Error in Qty-MBN, ' INTO wa_excel_data-errmsg.
+      wa_excel_data-error = 'X'.
+    ENDIF.
+
+    MODIFY it_excel_data FROM wa_excel_data TRANSPORTING error ycqkg.
+
+    IF wa_excel_data-error NE 'X'.
+      CLEAR  wa_tab_cbg.
+      MOVE-CORRESPONDING wa_excel_data TO wa_tab_cbg.
+      GET TIME STAMP FIELD wa_tab_cbg-timestamp.
+      wa_tab_cbg-uname = sy-uname.
+      APPEND wa_tab_cbg TO it_tab_cbg.
+    ELSE.
+      APPEND wa_excel_data TO it_excel_error.
+    ENDIF.
+
+    CLEAR wa_excel_data.
+  ENDLOOP.
+
+ENDFORM.
+
+
+FORM display_cbg_report .
+
+  REFRESH ls_fcat.
+
+**SOC BY RAVI/SHREYOSI ON 05.10.2023 CHARM: 4000007119, KRC:GMS: YRGA005_PGLS Issues
+  CLEAR bdc_display_mode.
+  SELECT SINGLE * FROM yrx_bdc_frnt_all INTO @DATA(it_bdc_display) WHERE yuname = @sy-uname AND ytcode = @sy-tcode.
+  IF sy-subrc = 0.
+    bdc_display_mode = 'X'.
+  ENDIF.
+**EOC BY RAVI/SHREYOSI ON 05.10.2023 CHARM: 4000007119, KRC:GMS: YRGA005_PGLS Issues
+
+*SOC BY RAVI/SHREYOSI ON 05.12.2022 CHARM : 4000005619, GMS: YRGA005_GR Tooltip issue
+  PERFORM remove_default_screen.
+*EOC BY RAVI/SHREYOSI ON 05.12.2022 CHARM : 4000005619, GMS: YRGA005_GR Tooltip issue
+
+  SELECT * FROM yrga_cbg INTO CORRESPONDING FIELDS OF TABLE it_tab_cbg
+    WHERE ydate IN s_date
+    AND kunnr IN s_kunnr
+    AND lifnr IN s_lifnr
+    AND rocode IN s_rocode
+    AND ygaid IN s_gaid .
+
+**SOC BY RAVI/SHREYOSI ON 12.10.2023 CHARM: 4000007188, GMS: YRGA005_PGLS2_error mesg
+  IF sy-subrc NE 0.
+    MESSAGE : TEXT-007 TYPE 'E' DISPLAY LIKE 'E'.
+    EXIT.
+  ENDIF.
+**EOC BY RAVI/SHREYOSI ON 12.10.2023 CHARM: 4000007188, GMS: YRGA005_PGLS2_error mesg
+
+  SORT it_tab_cbg BY ydate lifnr kunnr rocode timestamp DESCENDING.
+  DELETE ADJACENT DUPLICATES FROM it_tab_cbg COMPARING ydate lifnr kunnr rocode.
+
+
+  SELECT vbeln objnr kunnr vkorg vtweg spart auart FROM vbak INTO CORRESPONDING FIELDS OF TABLE it_vbak
+    FOR ALL ENTRIES IN it_tab_cbg
+    WHERE auart = 'ZCBG' AND kunnr EQ it_tab_cbg-kunnr
+    AND guebg LE it_tab_cbg-ydate AND gueen GE it_tab_cbg-ydate.
+
+**SOC BY RAVI/SHREYOSI ON 12.10.2023 CHARM: 4000007188, GMS: YRGA005_PGLS2_error mesg
+  IF sy-subrc NE 0.
+    MESSAGE : TEXT-009 TYPE 'E' DISPLAY LIKE 'E'.
+  ENDIF.
+**EOC BY RAVI/SHREYOSI ON 12.10.2023 CHARM: 4000007188, GMS: YRGA005_PGLS2_error mesg
+
+**SOC BY RAVI/SHREYOSI ON 05.10.2023 CHARM: 4000007119, KRC:GMS: YRGA005_PGLS Issues
+  SELECT * FROM jest INTO TABLE lt_jest FOR ALL ENTRIES IN it_vbak
+  WHERE objnr = it_vbak-objnr AND stat = 'E0004' AND inact = ' '.
+**EOC BY RAVI/SHREYOSI ON 05.10.2023 CHARM: 4000007119, KRC:GMS: YRGA005_PGLS Issues
+
+  SELECT vbeln ablad kunnr FROM vbpa INTO CORRESPONDING FIELDS OF TABLE it_vbpa
+   FOR ALL ENTRIES IN it_vbak
+   WHERE vbeln = it_vbak-vbeln.
+
+  IF sy-subrc NE 0.
+    MESSAGE : TEXT-003 TYPE 'E' DISPLAY LIKE 'E'.
+  ENDIF.
+
+  DELETE it_vbpa WHERE ablad IS INITIAL.
+  it_vbpa1[] = it_vbpa[].
+
+**SOC BY RAVI/SHREYOSI ON 09.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_error mesg
+  CLEAR: wa_vbpa1.
+  LOOP AT it_vbpa1 INTO wa_vbpa1.
+    READ TABLE it_tab_cbg WITH KEY rocode = wa_vbpa1-ablad TRANSPORTING NO FIELDS.
+    IF sy-subrc NE 0.
+      DELETE it_vbpa1 WHERE ablad EQ wa_vbpa1-ablad.
+    ENDIF.
+    CLEAR: wa_vbpa1.
+  ENDLOOP.
+**EOC BY RAVI/SHREYOSI ON 09.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_error mesg
+
+**SOC BY RAVI/SHREYOSI ON 12.10.2023 CHARM: 4000007188, GMS: YRGA005_PGLS2_error mesg
+  IF it_vbpa1[] IS INITIAL.
+    MESSAGE : TEXT-009 TYPE 'E' DISPLAY LIKE 'E'.
+  ENDIF.
+**EOC BY RAVI/SHREYOSI ON 12.10.2023 CHARM: 4000007188, GMS: YRGA005_PGLS2_error mesg
+
+*  SELECT vbeln bstkd bsark zterm FROM vbkd INTO CORRESPONDING FIELDS OF TABLE it_vbkd1
+*  FOR ALL ENTRIES IN it_vbpa1 WHERE vbeln = it_vbpa1-vbeln AND posnr = '000010' AND bstkd BETWEEN '0000000000' AND '9999999999'.
+
+  SELECT vbeln posnr bstkd bsark zterm
+       FROM vbkd
+       INTO CORRESPONDING FIELDS OF TABLE it_vbkd1
+       FOR ALL ENTRIES IN it_vbpa1
+       WHERE vbeln = it_vbpa1-vbeln
+       AND  ( posnr = '000000' OR posnr = '000010' )
+       AND bstkd BETWEEN '0000000000' AND '9999999999'.
+
+  IF sy-subrc EQ 0.
+    SORT it_vbkd1 BY vbeln ASCENDING posnr DESCENDING.
+    DELETE ADJACENT DUPLICATES FROM it_vbkd1 COMPARING vbeln.
+  ENDIF.
+**SOC BY RAVI/SHREYOSI ON 14.11.2023 CHARM: 4000007188, GMS: YRGA005_PGLS2_error mesg
+*  IF sy-subrc NE 0.
+*    MESSAGE : TEXT-014 TYPE 'E' DISPLAY LIKE 'E'.
+*  ENDIF.
+  IF it_vbkd1 IS INITIAL.
+    MESSAGE : TEXT-014 TYPE 'E' DISPLAY LIKE 'E'.
+  ENDIF.
+**SOC BY RAVI/SHREYOSI ON 14.11.2023 CHARM: 4000007188, GMS: YRGA005_PGLS2_error mesg
+
+  LOOP AT it_vbkd1 INTO DATA(wa_vbkd1).
+    wa_vbpa1 = VALUE #( it_vbpa[ vbeln = wa_vbkd1-vbeln ] OPTIONAL ).
+    wa_vbkd1-ablad = wa_vbpa1-ablad.
+    IF wa_vbpa1 IS NOT INITIAL.
+      INSERT wa_vbkd1 INTO TABLE it_vbkd.
+    ENDIF.
+    CLEAR wa_vbpa1.
+    CLEAR wa_vbkd1.
+  ENDLOOP.
+
+  LOOP AT it_vbkd INTO DATA(wa_vbkd).
+    CLEAR wa_vbak.
+    wa_vbkd2-vbeln = wa_vbkd-vbeln.
+    wa_vbkd2-ebeln1 = wa_vbkd-bstkd.
+    wa_vbkd2-ablad  = wa_vbkd-ablad.
+    wa_vbkd2-bsark  = wa_vbkd-bsark.
+    wa_vbkd2-zterm  = wa_vbkd-zterm.
+
+    wa_vbak = VALUE #( it_vbak[ vbeln = wa_vbkd-vbeln ] OPTIONAL ).
+    wa_vbkd2-kunnr = wa_vbak-kunnr.
+
+    INSERT wa_vbkd2 INTO TABLE it_vbkd2.
+    CLEAR wa_vbkd.
+    CLEAR wa_vbkd2.
+    CLEAR wa_vbak.
+  ENDLOOP.
+
+**SOC BY RAVI/SHREYOSI ON 09.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+  IF it_vbkd2[] IS NOT INITIAL.
+    SELECT vbeln matnr vstel werks lgort charg FROM vbap INTO CORRESPONDING FIELDS OF TABLE it_vbap
+      FOR ALL ENTRIES IN it_vbkd2
+      WHERE vbeln = it_vbkd2-vbeln.
+  ENDIF.
+**EOC BY RAVI/SHREYOSI ON 09.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+
+  IF sy-subrc NE 0.
+    MESSAGE : TEXT-003 TYPE 'E' DISPLAY LIKE 'E'.
+  ENDIF.
+
+  IF it_vbpa[] IS NOT INITIAL.
+    SELECT vstel werks lgort FROM tvkol INTO CORRESPONDING FIELDS OF TABLE it_tvkol
+    FOR ALL ENTRIES IN it_vbap
+    WHERE vstel = it_vbap-vstel.
+  ENDIF.
+
+*SOC BY RAVI/SHREYOSI ON 05.12.2022 CHARM : 4000005619, GMS: YRGA005_GR Tooltip issue
+  IF sy-subrc NE 0.
+    MESSAGE : TEXT-006 TYPE 'E' DISPLAY LIKE 'E'.
+  ENDIF.
+*EOC BY RAVI/SHREYOSI ON 05.12.2022 CHARM : 4000005619, GMS: YRGA005_GR Tooltip issue
+
+**SOC BY RAVI/SHREYOSI ON 09.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+  IF it_vbpa[] IS NOT INITIAL.
+    SELECT matnr werks charg FROM mcha
+    INTO CORRESPONDING FIELDS OF TABLE it_mcha
+      FOR ALL ENTRIES IN it_vbap
+    WHERE matnr = it_vbap-matnr AND werks = it_vbap-werks.
+  ENDIF.
+**EOC BY RAVI/SHREYOSI ON 09.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+
+**SOC BY RAVI/SHREYOSI ON 12.10.2023 CHARM: 4000007188, GMS: YRGA005_PGLS2_error mesg
+  IF sy-subrc NE 0.
+    MESSAGE : TEXT-010 TYPE 'E' DISPLAY LIKE 'E'.
+  ENDIF.
+**EOC BY RAVI/SHREYOSI ON 12.10.2023 CHARM: 4000007188, GMS: YRGA005_PGLS2_error mesg
+
+  IF it_vbkd2[] IS NOT INITIAL.
+    SELECT ebeln matnr werks lgort bprme FROM ekpo INTO CORRESPONDING FIELDS OF TABLE it_ekpo
+         FOR ALL ENTRIES IN it_vbkd2
+         WHERE ebeln = it_vbkd2-ebeln1.
+  ENDIF.
+**SOC BY RAVI/SHREYOSI ON 12.10.2023 CHARM: 4000007188, GMS: YRGA005_PGLS2_error mesg
+  IF sy-subrc NE 0.
+    MESSAGE : TEXT-011 TYPE 'E' DISPLAY LIKE 'E'.
+  ENDIF.
+**EOC BY RAVI/SHREYOSI ON 12.10.2023 CHARM: 4000007188, GMS: YRGA005_PGLS2_error mesg
+
+**SOC BY RAVI/ SHREYOSI ON 05.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+  IF it_vbkd2[] IS NOT INITIAL.
+    SELECT ebeln lifnr FROM ekko INTO CORRESPONDING FIELDS OF TABLE it_ekko
+    FOR ALL ENTRIES IN it_vbkd2 WHERE ebeln = it_vbkd2-ebeln1.
+  ENDIF.
+**EOC BY RAVI/ SHREYOSI ON 05.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_error mesg
+
+**SOC BY RAVI/SHREYOSI ON 15.04.2024 CHARM:4000008075, KRC:GMS: YRGA005: CBG PGLS
+  IF it_ekko[] IS NOT INITIAL.
+    CLEAR: wa_ekko,wa_vbkd2.
+    LOOP AT it_vbkd2 INTO wa_vbkd2.
+      wa_ekko = VALUE #( it_ekko[ ebeln = wa_vbkd2-ebeln1 ] OPTIONAL ).
+      IF wa_ekko IS NOT INITIAL.
+        wa_vbkd2-lifnr = wa_ekko-lifnr.
+        MODIFY it_vbkd2 FROM wa_vbkd2.
+      ENDIF.
+      CLEAR: wa_vbkd2,wa_ekko.
+    ENDLOOP.
+  ENDIF.
+**EOC BY RAVI/SHREYOSI ON 15.04.2024 CHARM:4000008075, KRC:GMS: YRGA005: CBG PGLS
+
+** SOC BY RAVI/SHREYOSI ON 20.09.2022 CHARM : 4000005125, YRGA005: PGLS_Batch/ Storage loc issue
+  IF it_vbkd2[] IS NOT INITIAL.
+    SELECT ebeln charg FROM eket INTO CORRESPONDING FIELDS OF TABLE it_eket
+    FOR ALL ENTRIES IN it_vbkd2
+    WHERE ebeln = it_vbkd2-ebeln1.
+  ENDIF.
+** EOC BY RAVI/SHREYOSI ON 20.09.2022 CHARM : 4000005125, YRGA005: PGLS_Batch/ Storage loc issue
+
+  IF it_tab_cbg[] IS NOT INITIAL.
+    SELECT * INTO TABLE @DATA(it_likp)
+      FROM likp
+      FOR ALL ENTRIES IN @it_tab_cbg
+      WHERE
+      vbeln = @it_tab_cbg-vbeln.
+  ENDIF.
+
+  CLEAR: wa_ekko.
+  LOOP AT it_tab_cbg INTO wa_tab_cbg.
+    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+      EXPORTING
+        input  = wa_tab_cbg-lifnr
+      IMPORTING
+        output = wa_tab_cbg-lifnr.
+
+    wa_vbkd2 = VALUE #( it_vbkd2[ ablad = wa_tab_cbg-rocode kunnr = wa_tab_cbg-kunnr lifnr = wa_tab_cbg-lifnr ] OPTIONAL ).
+    IF wa_vbkd2 IS NOT INITIAL.
+      wa_tab_cbg-ygaid = wa_vbkd2-bsark.
+      wa_tab_cbg-contid = wa_vbkd2-vbeln.
+      wa_tab_cbg-ebeln = wa_vbkd2-ebeln1.
+
+**SOC BY RAVI/SHREYOSI ON 09.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+*      WA_TAB_CBG-MATNR = 'GMS_NGCBG'.
+      wa_ekpo = VALUE #( it_ekpo[ ebeln = wa_vbkd2-ebeln1 ] OPTIONAL ).
+      IF wa_ekpo IS NOT INITIAL.
+        wa_tab_cbg-werks = wa_ekpo-werks.
+      ENDIF.
+      wa_vbap = VALUE #( it_vbap[ vbeln = wa_vbkd2-vbeln ] OPTIONAL ).
+      IF wa_vbap IS NOT INITIAL.
+**SOC BY RAVI/ SHREYOSI ON 11.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+        IF wa_tab_cbg-charg IS INITIAL.
+          wa_tab_cbg-charg = wa_vbap-charg.
+        ENDIF.
+**EOC BY RAVI/ SHREYOSI ON 11.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+        wa_tab_cbg-matnr = wa_vbap-matnr.
+      ENDIF.
+    ENDIF.
+    READ TABLE it_likp INTO DATA(wa_likp) WITH KEY vbeln = wa_tab_cbg-vbeln.
+    IF sy-subrc <> 0.
+      CLEAR wa_tab_cbg-vbeln.
+    ENDIF.
+**EOC BY RAVI/SHREYOSI ON 09.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+    MODIFY it_tab_cbg FROM wa_tab_cbg.
+    CLEAR wa_vbkd2.
+    CLEAR wa_tab_cbg.
+    CLEAR: wa_ekpo.
+  ENDLOOP.
+
+  IF it_tab_cbg[] IS NOT INITIAL.
+    SELECT kunnr name1 FROM kna1 INTO CORRESPONDING FIELDS OF TABLE it_kna1
+    FOR ALL ENTRIES IN it_tab_cbg
+    WHERE kunnr EQ it_tab_cbg-kunnr.
+
+    IF sy-subrc NE 0.
+      MESSAGE : TEXT-003 TYPE 'E' DISPLAY LIKE 'E'.
+    ENDIF.
+
+    SELECT lifnr name1 FROM lfa1 INTO CORRESPONDING FIELDS OF TABLE it_lfa1
+      FOR ALL ENTRIES IN it_tab_cbg
+      WHERE lifnr EQ it_tab_cbg-lifnr.
+
+    IF sy-subrc NE 0.
+      MESSAGE : TEXT-003 TYPE 'E' DISPLAY LIKE 'E'.
+    ENDIF.
+
+    SELECT * FROM t176t INTO TABLE @DATA(it_t176t)
+      FOR ALL ENTRIES IN @it_tab_cbg
+      WHERE bsark EQ @it_tab_cbg-ygaid.
+
+**SOC BY RAVI/SHREYOSI ON 12.10.2023 CHARM: 4000007188, GMS: YRGA005_PGLS2_error mesg
+    IF sy-subrc NE 0.
+      MESSAGE : TEXT-012 TYPE 'E' DISPLAY LIKE 'E'.
+    ENDIF.
+**EOC BY RAVI/SHREYOSI ON 12.10.2023 CHARM: 4000007188, MS: YRGA005_PGLS2_error mesg
+
+  ENDIF.
+
+  LOOP AT it_tab_cbg INTO wa_tab_cbg.
+    MOVE wa_tab_cbg-mandt     TO wa_display_rep-mandt.
+    MOVE wa_tab_cbg-ydate     TO wa_display_rep-ydate .
+    MOVE wa_tab_cbg-matnr         TO wa_display_rep-matnr   .
+    MOVE wa_tab_cbg-timestamp TO wa_display_rep-timestamp.
+    MOVE wa_tab_cbg-uname     TO wa_display_rep-uname   .
+    MOVE wa_tab_cbg-lifnr     TO wa_display_rep-lifnr    .
+    MOVE wa_tab_cbg-kunnr     TO wa_display_rep-kunnr   .
+    MOVE wa_tab_cbg-ygaid     TO wa_display_rep-ygaid    .
+    MOVE wa_tab_cbg-rocode    TO wa_display_rep-rocode   .
+    MOVE wa_tab_cbg-kwmeng    TO wa_display_rep-kwmeng   .
+    MOVE wa_tab_cbg-msehi     TO wa_display_rep-msehi    .
+    MOVE wa_tab_cbg-yystrm_sg TO wa_display_rep-yystrm_sg.
+    MOVE wa_tab_cbg-agcv      TO wa_display_rep-agcv     .
+    MOVE wa_tab_cbg-ancv      TO wa_display_rep-ancv     .
+    MOVE wa_tab_cbg-ycqmbg    TO wa_display_rep-ycqmbg   .
+    MOVE wa_tab_cbg-ycqmbn    TO wa_display_rep-ycqmbn   .
+    MOVE wa_tab_cbg-ycqkg     TO wa_display_rep-ycqkg    .
+    MOVE wa_tab_cbg-contid      TO wa_display_rep-contid     .
+    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+      EXPORTING
+        input  = wa_tab_cbg-ydovno
+      IMPORTING
+        output = wa_tab_cbg-ydovno.
+
+
+    SELECT SINGLE * INTO @DATA(l_vbak)
+      FROM vbak
+      WHERE
+      vbeln = @wa_tab_cbg-ydovno.
+    IF sy-subrc = 0.
+      MOVE wa_tab_cbg-ydovno      TO wa_display_rep-ydovno     .
+    ENDIF.
+    MOVE wa_tab_cbg-ebeln    TO wa_display_rep-ebeln   .
+*    MOVE wa_tab_cbg-wempf    TO wa_display_rep-wempf   .
+    SELECT SINGLE * INTO @DATA(l_lips)
+      FROM lips
+      WHERE
+      vbeln = @wa_tab_cbg-vbeln.
+    IF sy-subrc = 0.
+      MOVE wa_tab_cbg-vbeln     TO wa_display_rep-vbeln    .
+    ENDIF.
+*    READ TABLE lt_matdoc TRANSPORTING NO FIELDS WITH KEY smbln = wa_tab_cbg-mblnr.
+*  IF it_tab_cbg[] is not INITIAL.
+    SELECT SINGLE * INTO @DATA(l_matdoc)
+    FROM matdoc
+*    FOR ALL ENTRIES IN @it_tab_cbg
+    WHERE
+    smbln = @wa_tab_cbg-mblnr.
+*  ENDIF.
+    IF sy-subrc <> 0.
+      MOVE wa_tab_cbg-mblnr    TO wa_display_rep-mblnr   .
+    ENDIF.
+
+    SELECT SINGLE * INTO l_matdoc
+      FROM matdoc
+      WHERE
+      smbln = wa_tab_cbg-wempf.
+    IF sy-subrc <> 0.
+      MOVE wa_tab_cbg-wempf    TO wa_display_rep-wempf   .
+    ENDIF.
+
+    MOVE wa_tab_cbg-charg     TO wa_display_rep-charg    .
+    MOVE wa_tab_cbg-werks    TO wa_display_rep-werks.
+    MOVE wa_tab_cbg-contid TO   wa_display_rep-contid.
+    MOVE wa_tab_cbg-ebeln TO wa_display_rep-ebeln.
+    MOVE wa_tab_cbg-yy_mdotr TO wa_display_rep-yy_mdotr.
+
+
+    READ TABLE it_lfa1 TRANSPORTING name1 INTO DATA(tmp1) WITH KEY lifnr = wa_tab_cbg-lifnr .
+    MOVE tmp1-name1 TO wa_display_rep-name1_v.
+
+    READ TABLE it_kna1 TRANSPORTING name1 INTO DATA(tmp2) WITH KEY kunnr = wa_tab_cbg-kunnr.
+    MOVE tmp2-name1 TO wa_display_rep-name1_c.
+
+    READ TABLE it_t176t INTO DATA(tmp3) WITH KEY bsark = wa_tab_cbg-ygaid.
+    MOVE tmp3-vtext TO wa_display_rep-ygadesc.
+
+    APPEND wa_display_rep TO it_display_rep.
+    CLEAR wa_display_rep.
+  ENDLOOP.
+
+  SORT it_display_rep BY ydate lifnr kunnr rocode timestamp DESCENDING.
+  DELETE ADJACENT DUPLICATES FROM it_display_rep COMPARING ydate lifnr kunnr rocode.
+  IF s_werks IS NOT INITIAL.
+    DELETE it_display_rep WHERE werks NOT IN s_werks.
+  ENDIF.
+
+**SOC BY RAVI/SHREYOSI ON 12.10.2023 CHARM: 4000007188, GMS: YRGA005_PGLS2_error mesg
+  IF it_display_rep[] IS INITIAL.
+    MESSAGE : TEXT-013 TYPE 'E' DISPLAY LIKE 'E'.
+  ENDIF.
+**EOC BY RAVI/SHREYOSI ON 12.10.2023 CHARM: 4000007188, GMS: YRGA005_PGLS2_error mesg
+
+  CLEAR l_index.
+
+  LOOP AT it_display_rep.
+    l_index = sy-tabix.
+    REFRESH lt_celltab.
+**SOC BY RAVI/ SHREYOSI ON 11.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+*    IF IT_DISPLAY_REP-CONTID IS NOT INITIAL AND
+*      IT_DISPLAY_REP-YDOVNO IS NOT INITIAL AND
+*      IT_DISPLAY_REP-WEMPF IS NOT INITIAL AND
+*      IT_DISPLAY_REP-VBELN IS NOT INITIAL AND
+*      IT_DISPLAY_REP-MBLNR IS NOT INITIAL AND
+*      IT_DISPLAY_REP-CHARG IS NOT INITIAL.
+
+    IF it_display_rep-ydovno IS NOT INITIAL AND
+    it_display_rep-wempf IS NOT INITIAL AND
+    it_display_rep-vbeln IS NOT INITIAL AND
+    it_display_rep-mblnr IS NOT INITIAL.
+**EOC BY RAVI/ SHREYOSI ON 11.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+      PERFORM fill_celltab USING 'RO' 'FLAG'
+                           CHANGING lt_celltab.
+    ELSE.
+      PERFORM fill_celltab USING 'RW' 'FLAG'
+                           CHANGING lt_celltab.
+    ENDIF.
+
+    IF  it_display_rep-charg IS NOT INITIAL.
+      PERFORM fill_celltab USING 'RO' 'charg'
+                           CHANGING lt_celltab.
+    ENDIF.
+*§2c.Copy your celltab to the celltab of the current row of gt_outtab.
+    INSERT LINES OF lt_celltab INTO TABLE it_display_rep-celltab.
+    MODIFY it_display_rep INDEX l_index.
+  ENDLOOP.
+
+  PERFORM prepare_fieldat_cbg.
+
+ENDFORM.
+
+FORM user_command USING lv_okcode  LIKE sy-ucomm
+                        l_selfield TYPE slis_selfield.
+
+  lv_okcode = sy-ucomm.
+
+  DATA l_qty_i TYPE msego2-adqnt.
+  DATA l_ncv TYPE oib_par_fltp.
+  DATA l_gcv TYPE oib_par_fltp.
+  DATA l_qty TYPE msego2-adqnt.
+
+  DATA : ref_grid TYPE REF TO cl_gui_alv_grid.
+
+  CASE lv_okcode.
+    WHEN 'ONLI'.
+      REFRESH it_display_rep1.
+
+      IF ref_grid IS INITIAL.
+        CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
+          IMPORTING
+            e_grid = ref_grid.
+      ENDIF.
+      IF NOT ref_grid IS INITIAL.
+        CALL METHOD ref_grid->check_changed_data.
+      ENDIF.
+      DATA : check1 TYPE i.
+      check1 = 1.
+      SORT it_display_rep BY flag DESCENDING.
+*      LOOP AT it_tab_cbg INTO wa_tab_cbg.
+*      PERFORM USER_AUTHORISATION.
+
+**SOC BY RAVI & SHREYOSI ON 19.09.2023 CHARM: 4000005876, GMS: YRGA005_workflow/double GR
+      l_selfield-refresh = c_check.
+**EOC BY RAVI & SHREYOSI ON 19.09.2023 CHARM: 4000005876, GMS: YRGA005_workflow/double GR
+      CLEAR it_log[].
+*      DATA l_qty TYPE oib_adqnt.
+*      DATA l_qty_i TYPE oib_adqnt.
+*      DATA l_gcv TYPE oib_par_fltp.
+*      DATA l_ncv TYPE oib_par_fltp.
+      LOOP AT it_display_rep INTO wa_display_rep WHERE flag = 'X'.
+*        CLEAR l_qty.
+        CLEAR wa_vbak.
+        CLEAR wa_vbkd2.
+        CLEAR wa_ekpo.
+        CLEAR wa_vbap.
+        CLEAR gr_number.
+        CLEAR sales_document.
+        CLEAR delivery.
+        CLEAR pgi_number.
+        CLEAR: wa_tab_cbg,wa_display_rep1."wa_display_rep.
+
+        wa_display_rep1-mandt = wa_display_rep-mandt.
+        wa_display_rep1-ydate = wa_display_rep-ydate.
+        wa_display_rep1-matnr = wa_display_rep-matnr.
+        wa_display_rep1-timestamp = wa_display_rep-timestamp.
+        wa_display_rep1-uname = wa_display_rep-uname.
+        wa_display_rep1-lifnr = wa_display_rep-lifnr.
+        wa_display_rep1-name1_v = wa_display_rep-name1_v.
+        wa_display_rep1-kunnr = wa_display_rep-kunnr.
+        wa_display_rep1-name1_c = wa_display_rep-name1_c.
+        wa_display_rep1-ygaid = wa_display_rep-ygaid.
+        wa_display_rep1-ygadesc = wa_display_rep-ygadesc.
+        wa_display_rep1-rocode = wa_display_rep-rocode.
+        wa_display_rep1-kwmeng = wa_display_rep-kwmeng.
+        wa_display_rep1-msehi = wa_display_rep-msehi.
+        wa_display_rep1-yystrm_sg = wa_display_rep-yystrm_sg.
+        wa_display_rep1-agcv = wa_display_rep-agcv.
+        wa_display_rep1-ancv = wa_display_rep-ancv.
+        wa_display_rep1-ycqmbg = wa_display_rep-ycqmbg.
+        wa_display_rep1-ycqmbn = wa_display_rep-ycqmbn.
+        wa_display_rep1-ycqkg = wa_display_rep-ycqkg.
+        wa_display_rep1-werks  = wa_display_rep-werks.
+        wa_display_rep1-contid  = wa_display_rep-contid.
+        wa_display_rep1-ebeln = wa_display_rep-ebeln.
+        wa_display_rep1-yy_mdotr = wa_display_rep-yy_mdotr.
+
+        CLEAR l_index.
+        l_index = sy-tabix.
+
+        IF wa_display_rep-contid IS INITIAL.
+          CLEAR : wa_log,temp_date.
+          CONCATENATE wa_display_rep-ydate+6(2) '.' wa_display_rep-ydate+4(2) '.' wa_display_rep-ydate+0(4) INTO temp_date.
+**SOC BY RAVI/SHREYOSI ON 10.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+          wa_log-ydate = temp_date.
+          wa_log-kunnr = wa_display_rep-kunnr.
+          wa_log-rocode =  wa_display_rep-rocode.
+          wa_log-lifnr = wa_display_rep-lifnr.
+          wa_log-contid = wa_display_rep-contid.
+          wa_log-ebeln = wa_display_rep-ebeln.
+          wa_log-message = 'No Valid Contract ID/ PO found'.
+*          CONCATENATE 'No Valid Contract ID found for' WA_DISPLAY_REP-KUNNR ',' WA_DISPLAY_REP-ROCODE 'with PO of' WA_DISPLAY_REP-LIFNR 'and' TEMP_DATE  INTO WA_LOG-MESSAGE SEPARATED BY SPACE.
+**EOC BY RAVI/SHREYOSI ON 10.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+          APPEND wa_log TO it_log.
+          CONTINUE.
+        ENDIF.
+
+        SELECT SINGLE meins INTO @DATA(l_meins)
+          FROM mara
+          WHERE
+          matnr = @wa_display_rep-matnr.
+        IF sy-subrc = 0.
+          CLEAR l_qty.
+          l_qty_i = wa_display_rep-ycqmbg.
+          l_gcv = wa_display_rep-agcv.
+          l_ncv = wa_display_rep-ancv.
+          CALL FUNCTION 'YRX_QTY_UOM_TO_QTY_UOM'
+            EXPORTING
+              i_trqty = l_qty_i
+              i_truom = 'MBG'
+              i_tguom = l_meins "'MCN'
+              lv_gcv  = l_gcv
+              lv_ncv  = l_ncv
+            CHANGING
+              c_tgqty = l_qty
+*             CT_RETURN       =
+            .
+          IF l_qty = 0.
+            CLEAR : wa_log,temp_date.
+            CONCATENATE wa_display_rep-ydate+6(2) '.' wa_display_rep-ydate+4(2) '.' wa_display_rep-ydate+0(4) INTO temp_date.
+**SOC BY RAVI/SHREYOSI ON 10.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+            wa_log-ydate = temp_date.
+            wa_log-kunnr = wa_display_rep-kunnr.
+            wa_log-rocode =  wa_display_rep-rocode.
+            wa_log-lifnr = wa_display_rep-lifnr.
+            wa_log-contid = wa_display_rep-contid.
+            wa_log-ebeln = wa_display_rep-ebeln.
+            CONCATENATE
+         'Documents not posted as the quantity is 0 in Base Unit ' l_meins
+         INTO     wa_log-message SEPARATED BY space..
+*          CONCATENATE 'No Valid Contract ID found for' WA_DISPLAY_REP-KUNNR ',' WA_DISPLAY_REP-ROCODE 'with PO of' WA_DISPLAY_REP-LIFNR 'and' TEMP_DATE  INTO WA_LOG-MESSAGE SEPARATED BY SPACE.
+**EOC BY RAVI/SHREYOSI ON 10.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+            APPEND wa_log TO it_log.
+            CONTINUE.
+          ENDIF.
+        ENDIF.
+
+**SOC BY RAVI/SHREYOSI ON 12.10.2023 CHARM: 4000007188, GMS: YRGA005_PGLS2_error mesg
+        PERFORM user_authorisation USING check1 wa_display_rep.
+**EOC BY RAVI/SHREYOSI ON 12.10.2023 CHARM: 4000007188, GMS: YRGA005_PGLS2_error mesg
+
+        PERFORM validate_batch USING check1 wa_display_rep.
+
+**SOC BY RAVI/SHREYOSI ON 05.10.2023 CHARM: 4000007119, KRC:GMS: YRGA005_PGLS Issues
+        PERFORM vld_contr_wrkflw_and_matnr USING check1 wa_display_rep.
+**EOC BY RAVI/SHREYOSI ON 05.10.2023 CHARM: 4000007119, KRC:GMS: YRGA005_PGLS Issues
+        IF check1 = 1.
+          wa_display_rep1-charg  = wa_display_rep-charg.
+          DATA(wa_vbkd2) = VALUE #( it_vbkd2[ ablad = wa_display_rep-rocode kunnr = wa_display_rep-kunnr ] OPTIONAL ).
+
+          DATA(wa_ekpo) = VALUE #( it_ekpo[ ebeln = wa_vbkd2-ebeln1 ] OPTIONAL ).
+
+          wa_vbap = VALUE #( it_vbap[ vbeln = wa_vbkd2-vbeln ] OPTIONAL ).
+
+          CLEAR wa_eket.
+          wa_eket = VALUE #( it_eket[ ebeln = wa_vbkd2-ebeln1 ] OPTIONAL ).
+
+          IF wa_display_rep1-ebeln IS NOT INITIAL.
+            IF wa_display_rep-wempf IS INITIAL.
+              PERFORM bdc_gr USING gr_number wa_display_rep1 wa_ekpo wa_eket.
+*        PERFORM bapi_goods_receipt USING gr_number wa_vbkd2-bstkd wa_display_rep-lifnr wa_display_rep-rocode wa_display_rep-kunnr wa_vbpa1-vbeln.
+
+              CONDENSE gr_number.
+              IF gr_number CO c_num_char AND gr_number IS NOT INITIAL.
+                wa_display_rep1-wempf = gr_number.
+                wa_display_rep-wempf = gr_number.
+              ELSE.
+**SOC BY RAVI/SHREYOSI ON 12.10.2023 CHARM: 4000007188, GMS: YRGA005_PGLS2_error mesg
+                CLEAR : wa_log,temp_date.
+                CONCATENATE wa_display_rep-ydate+6(2) '.' wa_display_rep-ydate+4(2) '.' wa_display_rep-ydate+0(4) INTO temp_date.
+**SOC BY RAVI/SHREYOSI ON 10.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+                wa_log-ydate = temp_date.
+                wa_log-kunnr = wa_display_rep-kunnr.
+                wa_log-rocode =  wa_display_rep-rocode.
+                wa_log-lifnr = wa_display_rep-lifnr.
+                wa_log-contid = wa_display_rep-contid.
+                wa_log-ebeln = wa_display_rep-ebeln.
+                wa_log-message = 'GR not created against PO'.
+**EOC BY RAVI/SHREYOSI ON 10.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+*                CONCATENATE 'GR not created against PO' WA_DISPLAY_REP-EBELN 'for' TEMP_DATE  INTO WA_LOG-MESSAGE SEPARATED BY SPACE.
+                APPEND wa_log TO it_log.
+**EOC BY RAVI/SHREYOSI ON 12.10.2023 CHARM: 4000007188, GMS: YRGA005_PGLS2_error mesg
+              ENDIF.
+
+              CLEAR wa_tab_cbg.
+              wa_tab_cbg = CORRESPONDING #( wa_display_rep1 ).
+              MODIFY it_tab_cbg FROM wa_tab_cbg INDEX l_index.
+**SOC BY RAVI & SHREYOSI ON 19.09.2023 CHARM: 4000005876, GMS: YRGA005_workflow/double GR
+              MODIFY it_display_rep FROM wa_display_rep.
+              MODIFY yrga_cbg FROM wa_tab_cbg.
+              COMMIT WORK.
+**EOC BY RAVI & SHREYOSI ON 19.09.2023 CHARM: 4000005876, GMS: YRGA005_workflow/double GR
+            ELSE.
+              wa_display_rep1-wempf = wa_display_rep-wempf.
+              gr_number = wa_display_rep-wempf.
+            ENDIF.
+          ELSE.
+**SOC BY RAVI/SHREYOSI ON 12.10.2023 CHARM: 4000007188, GMS: YRGA005_PGLS2_error mesg
+            CLEAR : wa_log,temp_date.
+            CONCATENATE wa_display_rep-ydate+6(2) '.' wa_display_rep-ydate+4(2) '.' wa_display_rep-ydate+0(4) INTO temp_date.
+**SOC BY RAVI/SHREYOSI ON 10.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+            wa_log-ydate = temp_date.
+            wa_log-kunnr = wa_display_rep-kunnr.
+            wa_log-rocode =  wa_display_rep-rocode.
+            wa_log-lifnr = wa_display_rep-lifnr.
+            wa_log-contid = wa_display_rep-contid.
+            wa_log-ebeln = wa_display_rep-ebeln.
+            wa_log-message = 'No PO against contract. GR not created'.
+*           CONCATENATE 'No PO found for contract' WA_DISPLAY_REP-CONTID 'and' TEMP_DATE '.GR not posted' INTO WA_LOG-MESSAGE SEPARATED BY SPACE.
+**EOC BY RAVI/SHREYOSI ON 10.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+            APPEND wa_log TO it_log.
+**EOC BY RAVI/SHREYOSI ON 12.10.2023 CHARM: 4000007188, GMS: YRGA005_PGLS2_error mesg
+          ENDIF.
+
+          IF wa_display_rep-ydovno IS INITIAL.
+*            PERFORM bapi_salesorder USING sales_document wa_vbkd2-vbeln.
+            PERFORM bdc_salesorder USING sales_document wa_display_rep1 wa_ekpo wa_vbkd2.
+
+            CONDENSE sales_document.
+            IF sales_document CO c_num_char AND sales_document IS NOT INITIAL.
+              wa_display_rep1-ydovno = sales_document.
+              wa_display_rep-ydovno = sales_document.
+            ELSE.
+**SOC BY RAVI/SHREYOSI ON 12.10.2023 CHARM: 4000007188, GMS: YRGA005_PGLS2_error mesg
+              CLEAR : wa_log,temp_date.
+              CONCATENATE wa_display_rep-ydate+6(2) '.' wa_display_rep-ydate+4(2) '.' wa_display_rep-ydate+0(4) INTO temp_date.
+**SOC BY RAVI/SHREYOSI ON 10.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+              wa_log-ydate = temp_date.
+              wa_log-kunnr = wa_display_rep-kunnr.
+              wa_log-rocode =  wa_display_rep-rocode.
+              wa_log-lifnr = wa_display_rep-lifnr.
+              wa_log-contid = wa_display_rep-contid.
+              wa_log-ebeln = wa_display_rep-ebeln.
+              wa_log-message = 'Sales Order not created against contract'.
+*              CONCATENATE 'Sales Order not created against contract' WA_DISPLAY_REP-CONTID 'for' TEMP_DATE  INTO WA_LOG-MESSAGE SEPARATED BY SPACE.
+**EOC BY RAVI/SHREYOSI ON 10.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+              APPEND wa_log TO it_log.
+              CONTINUE.
+**EOC BY RAVI/SHREYOSI ON 12.10.2023 CHARM: 4000007188, GMS: YRGA005_PGLS2_error mesg
+            ENDIF.
+
+            CLEAR wa_tab_cbg.
+            wa_tab_cbg = CORRESPONDING #( wa_display_rep1 ).
+            MODIFY it_tab_cbg FROM wa_tab_cbg INDEX l_index.
+**SOC BY RAVI & SHREYOSI ON 19.09.2023 CHARM: 4000005876, GMS: YRGA005_workflow/double GR
+            MODIFY it_display_rep FROM wa_display_rep.
+            MODIFY yrga_cbg FROM wa_tab_cbg.
+            COMMIT WORK.
+**EOC BY RAVI & SHREYOSI ON 19.09.2023 CHARM: 4000005876, GMS: YRGA005_workflow/double GR
+          ELSE.
+            wa_display_rep1-ydovno = wa_display_rep-ydovno.
+            sales_document = wa_display_rep-ydovno.
+          ENDIF.
+
+          wa_tvkol = VALUE #( it_tvkol[ vstel = wa_vbap-vstel werks = wa_ekpo-werks ] OPTIONAL ).
+
+          IF wa_display_rep-vbeln IS INITIAL.
+*            PERFORM bapi_delivery USING delivery sales_document wa_vbap wa_display_rep1.
+            PERFORM bdc_delivery USING delivery sales_document wa_vbap wa_display_rep1 wa_tvkol.
+            CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+              EXPORTING
+                input  = delivery
+              IMPORTING
+                output = delivery.
+            "Start of change by XSAP_AB on 17th Oct,2024
+            CALL FUNCTION 'YRGA_UPDATE_LIPS02'
+              EXPORTING
+                i_char     = wa_display_rep1-ycqkg
+                i_delivery = delivery.
+            IF sy-subrc IS NOT INITIAL.
+              "Error Handling
+            ENDIF.
+*            DATA : l_ycqkg TYPE f,
+*                   l_ycqton TYPE yrga_cbg-ycqkg.
+*
+*            CALL FUNCTION 'RRBA_CONVERT_PACKED_NUMBER'
+*              EXPORTING
+*                i_char                     = wa_display_rep1-ycqkg
+*                i_decimals                 = rrsi_c_sid-not_exist
+*              IMPORTING
+*                e_value_float              = l_ycqkg
+*              EXCEPTIONS
+*                too_big                    = 1
+*                input_not_legal            = 2
+*                illegal_sign_prsnt         = 3
+*                illegal_decimal_mark       = 4
+*                OTHERS                     = 5.
+*Update table lipso2 in order to update right KG quantity in Delivery
+*            UPDATE lipso2 SET adqnt = l_ycqkg
+*                             adqntp = wa_display_rep1-ycqkg
+*                          WHERE vbeln EQ delivery
+*                          AND   msehi EQ 'KG'.
+*            IF sy-subrc IS INITIAL.
+*              COMMIT WORK.
+*            ENDIF.
+*            l_ycqton = wa_display_rep1-ycqkg / 1000.
+*
+*            CALL FUNCTION 'RRBA_CONVERT_PACKED_NUMBER'
+*              EXPORTING
+*                i_char                     = l_ycqton
+*                i_decimals                 = rrsi_c_sid-not_exist
+*              IMPORTING
+*                e_value_float              = l_ycqkg
+*              EXCEPTIONS
+*                too_big                    = 1
+*                input_not_legal            = 2
+*                illegal_sign_prsnt         = 3
+*                illegal_decimal_mark       = 4
+*                OTHERS                     = 5.
+*update table lipso2 in order to update right TON quantity in Delivery
+*            UPDATE lipso2 SET adqnt = l_ycqkg
+*                             adqntp = l_ycqton
+*                          WHERE vbeln EQ delivery
+*                          AND   msehi EQ 'TO'.
+*            IF sy-subrc IS INITIAL.
+*              COMMIT WORK.
+*            ENDIF.
+            "End of change by XSAP_AB on 17th Oct,2024
+            CONDENSE delivery.
+            IF delivery CO c_num_char AND delivery IS NOT INITIAL.
+              wa_display_rep1-vbeln = delivery.
+              wa_display_rep-vbeln = delivery.
+            ELSE.
+**SOC BY RAVI/SHREYOSI ON 12.10.2023 CHARM: 4000007188, GMS: YRGA005_PGLS2_error mesg
+              CLEAR : wa_log,temp_date.
+              CONCATENATE wa_display_rep-ydate+6(2) '.' wa_display_rep-ydate+4(2) '.' wa_display_rep-ydate+0(4) INTO temp_date.
+**SOC BY RAVI/SHREYOSI ON 10.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+              wa_log-ydate = temp_date.
+              wa_log-kunnr = wa_display_rep-kunnr.
+              wa_log-rocode =  wa_display_rep-rocode.
+              wa_log-lifnr = wa_display_rep-lifnr.
+              wa_log-contid = wa_display_rep-contid.
+              wa_log-ebeln = wa_display_rep-ebeln.
+              wa_log-message = 'Delivery not created against contract'.
+*             CONCATENATE 'Delivery not created against contract' WA_DISPLAY_REP-CONTID 'for' TEMP_DATE  INTO WA_LOG-MESSAGE SEPARATED BY SPACE.
+**EOC BY RAVI/SHREYOSI ON 10.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+              APPEND wa_log TO it_log.
+
+              CONTINUE.
+**EOC BY RAVI/SHREYOSI ON 12.10.2023 CHARM: 4000007188, GMS: YRGA005_PGLS2_error mesg
+            ENDIF.
+
+            CLEAR wa_tab_cbg.
+            wa_tab_cbg = CORRESPONDING #( wa_display_rep1 ).
+            MODIFY it_tab_cbg FROM wa_tab_cbg INDEX l_index.
+**SOC BY RAVI & SHREYOSI ON 19.09.2023 CHARM: 4000005876, GMS: YRGA005_workflow/double GR
+            MODIFY it_display_rep FROM wa_display_rep.
+            MODIFY yrga_cbg FROM wa_tab_cbg.
+            COMMIT WORK.
+**EOC BY RAVI & SHREYOSI ON 19.09.2023 CHARM: 4000005876, GMS: YRGA005_workflow/double GR
+          ELSE.
+            wa_display_rep1-vbeln = wa_display_rep-vbeln.
+            delivery = wa_display_rep-vbeln.
+          ENDIF.
+
+          SELECT vbeln vstel ablad kunnr btgew gewei FROM likp
+          INTO CORRESPONDING FIELDS OF TABLE it_likp
+          WHERE vbeln = delivery.
+
+          DATA(wa_likp) = VALUE #( it_likp[ vbeln = delivery ] OPTIONAL ).
+          IF wa_display_rep-mblnr IS INITIAL.
+            PERFORM bdc_pgi USING delivery pgi_number wa_display_rep1 wa_ekpo wa_likp.
+            CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+              EXPORTING
+                input  = delivery
+              IMPORTING
+                output = delivery.
+            "Start of change by XSAP_AB on 17th Oct,2024
+            CALL FUNCTION 'YRGA_UPDATE_LIPS02'
+              EXPORTING
+                i_char     = wa_display_rep1-ycqkg
+                i_delivery = delivery.
+            IF sy-subrc IS NOT INITIAL.
+              "Error Handling
+            ENDIF.
+
+** -> Begin of changes by of <Aditi> on <08/11/24> for ATC
+            SELECT  vbeln FROM vbfa INTO pgi_number UP TO 1 ROWS WHERE vbelv = delivery  AND vbtyp_n = 'R'
+ORDER BY ruuid DESCENDING.ENDSELECT.                    "#EC CI_NOORDER
+** <- End changes by of <Aditi> on <08/11/24> for ATC
+            IF sy-subrc NE 0.
+
+**SOC BY RAVI/SHREYOSI ON 12.10.2023 CHARM: 4000007188, GMS: YRGA005_PGLS2_error mesg
+              CLEAR : wa_log,temp_date.
+              CONCATENATE wa_display_rep-ydate+6(2) '.' wa_display_rep-ydate+4(2) '.' wa_display_rep-ydate+0(4) INTO temp_date.
+**SOC BY RAVI/SHREYOSI ON 10.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+              wa_log-ydate = temp_date.
+              wa_log-kunnr = wa_display_rep-kunnr.
+              wa_log-rocode =  wa_display_rep-rocode.
+              wa_log-lifnr = wa_display_rep-lifnr.
+              wa_log-contid = wa_display_rep-contid.
+              wa_log-ebeln = wa_display_rep-ebeln.
+              wa_log-message = 'PGI not created for contract'.
+*             CONCATENATE 'PGI document not created against contract' WA_DISPLAY_REP-CONTID 'for' TEMP_DATE  INTO WA_LOG-MESSAGE SEPARATED BY SPACE.
+**EOC BY RAVI/SHREYOSI ON 10.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+              APPEND wa_log TO it_log.
+**EOC BY RAVI/SHREYOSI ON 12.10.2023 CHARM: 4000007188, GMS: YRGA005_PGLS2_error mesg
+*              ENDIF.
+            ELSE.
+              SELECT SINGLE * INTO @DATA(l_matdoc)
+          FROM matdoc
+          WHERE
+          smbln = @pgi_number.
+              IF sy-subrc = 0.
+                CLEAR pgi_number.
+**SOC BY RAVI/SHREYOSI ON 12.10.2023 CHARM: 4000007188, GMS: YRGA005_PGLS2_error mesg
+                CLEAR : wa_log,temp_date.
+                CONCATENATE wa_display_rep-ydate+6(2) '.' wa_display_rep-ydate+4(2) '.' wa_display_rep-ydate+0(4) INTO temp_date.
+**SOC BY RAVI/SHREYOSI ON 10.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+                wa_log-ydate = temp_date.
+                wa_log-kunnr = wa_display_rep-kunnr.
+                wa_log-rocode =  wa_display_rep-rocode.
+                wa_log-lifnr = wa_display_rep-lifnr.
+                wa_log-contid = wa_display_rep-contid.
+                wa_log-ebeln = wa_display_rep-ebeln.
+                wa_log-message = 'PGI not created for contract'.
+*             CONCATENATE 'PGI document not created against contract' WA_DISPLAY_REP-CONTID 'for' TEMP_DATE  INTO WA_LOG-MESSAGE SEPARATED BY SPACE.
+**EOC BY RAVI/SHREYOSI ON 10.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+                APPEND wa_log TO it_log.
+              ENDIF.
+            ENDIF.
+            CONDENSE pgi_number.
+            IF pgi_number CO c_num_char AND pgi_number IS NOT INITIAL.
+              wa_display_rep1-mblnr = pgi_number.
+              wa_display_rep-mblnr = pgi_number.
+            ENDIF.
+
+            CLEAR wa_tab_cbg.
+            wa_tab_cbg = CORRESPONDING #( wa_display_rep1 ).
+            MODIFY it_tab_cbg FROM wa_tab_cbg INDEX l_index.
+**SOC BY RAVI & SHREYOSI ON 19.09.2023 CHARM: 4000005876, GMS: YRGA005_workflow/double GR
+            MODIFY it_display_rep FROM wa_display_rep.
+            MODIFY yrga_cbg FROM wa_tab_cbg.
+            COMMIT WORK.
+**EOC BY RAVI & SHREYOSI ON 19.09.2023 CHARM: 4000005876, GMS: YRGA005_workflow/double GR
+          ELSE.
+            wa_display_rep1-mblnr = wa_display_rep-mblnr.
+            pgi_number = wa_display_rep-mblnr.
+          ENDIF.
+
+          APPEND wa_display_rep1 TO it_display_rep1.
+          MODIFY it_display_rep FROM wa_display_rep.
+*        ENDLOOP.
+          CLEAR wa_tab_cbg.
+          wa_tab_cbg = CORRESPONDING #( wa_display_rep1 ).
+          MODIFY it_tab_cbg FROM wa_tab_cbg INDEX l_index.
+          MODIFY yrga_cbg FROM wa_tab_cbg.
+**SOC BY RAVI & SHREYOSI ON 19.09.2023 CHARM: 4000005876, GMS: YRGA005_workflow/double GR
+          COMMIT WORK.
+**EOC BY RAVI & SHREYOSI ON 19.09.2023 CHARM: 4000005876, GMS: YRGA005_workflow/double GR
+          IF sy-subrc = 0.
+            MESSAGE : 'Record Modified Back to the Table' TYPE 'S' DISPLAY LIKE 'S'.
+          ELSE.
+            MESSAGE : 'Record not Modified back to the Table' TYPE 'E' DISPLAY LIKE 'E'.
+          ENDIF.
+          CLEAR wa_vbak.
+          CLEAR wa_vbkd2.
+          CLEAR wa_ekpo.
+          CLEAR wa_vbap.
+          CLEAR gr_number.
+          CLEAR sales_document.
+          CLEAR delivery.
+          CLEAR pgi_number.
+          CLEAR: wa_tab_cbg,wa_display_rep1,wa_display_rep.
+        ENDIF.
+      ENDLOOP.
+
+**SOC BY RAVI/SHREYOSI ON 12.10.2023 CHARM: 4000007188, GMS: YRGA005_PGLS2_error mesg
+      IF it_log[] IS NOT INITIAL.
+        MESSAGE : 'Click on Error Icon or press (Shift + F1) for details' TYPE 'E' DISPLAY LIKE 'E'.
+      ENDIF.
+**EOC BY RAVI/SHREYOSI ON 12.10.2023 CHARM: 4000007188, GMS: YRGA005_PGLS2_error mesg
+      l_selfield-refresh = c_check.
+
+
+      DATA : line_count1 TYPE i.
+
+      DESCRIBE TABLE it_display_rep1
+      LINES line_count1.
+      IF line_count1 GE 1.
+*        PERFORM user_action.
+      ELSE.
+**SOC BY RAVI/SHREYOSI ON 10.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_error mesg
+*     MESSAGE :'Click on Error Icon or press (Shift + F1) for details' TYPE 'E' DISPLAY LIKE 'E'.
+        MESSAGE :'Please select at least one line item to process further' TYPE 'E' DISPLAY LIKE 'E'.
+**EOC BY RAVI/SHREYOSI ON 10.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_error mesg
+      ENDIF.
+*
+    WHEN '&ALLSEL'.
+      IF ref_grid IS INITIAL.
+        CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
+          IMPORTING
+            e_grid = ref_grid.
+      ENDIF.
+      IF NOT ref_grid IS INITIAL.
+        CALL METHOD ref_grid->check_changed_data.
+      ENDIF.
+
+      LOOP AT it_display_rep INTO wa_display_rep.
+       IF ( wa_display_rep-ydovno IS INITIAL OR
+           wa_display_rep-wempf IS INITIAL OR
+           wa_display_rep-vbeln IS INITIAL OR
+           wa_display_rep-mblnr IS INITIAL ).
+        wa_display_rep-flag = 'X'.
+       ENDIF.
+        MODIFY it_display_rep FROM wa_display_rep.
+      ENDLOOP.
+*
+*
+        l_selfield-refresh = c_check.
+    WHEN '&SALSEL'.
+
+      IF ref_grid IS INITIAL.
+        CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
+          IMPORTING
+            e_grid = ref_grid.
+      ENDIF.
+      IF NOT ref_grid IS INITIAL.
+        CALL METHOD ref_grid->check_changed_data.
+      ENDIF.
+
+      LOOP AT it_display_rep INTO wa_display_rep.
+        wa_display_rep-flag = ' '.
+        MODIFY it_display_rep FROM wa_display_rep.
+      ENDLOOP.
+      l_selfield-refresh = c_check.
+
+    WHEN 'E'.
+
+      CLEAR l_index.
+      LOOP AT it_display_rep WHERE flag = 'X'.
+        it_display_rep-flag = ' '.
+        l_index = sy-tabix.
+        REFRESH lt_celltab.
+        CLEAR it_display_rep-celltab.
+**SOC BY RAVI/ SHREYOSI ON 11.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+*        IF IT_DISPLAY_REP-CONTID IS NOT INITIAL AND
+*          IT_DISPLAY_REP-YDOVNO IS NOT INITIAL AND
+*          IT_DISPLAY_REP-WEMPF IS NOT INITIAL AND
+*          IT_DISPLAY_REP-VBELN IS NOT INITIAL AND
+*          IT_DISPLAY_REP-MBLNR IS NOT INITIAL AND
+*          IT_DISPLAY_REP-CHARG IS NOT INITIAL.
+
+        IF it_display_rep-ydovno IS NOT INITIAL AND
+           it_display_rep-wempf IS NOT INITIAL AND
+           it_display_rep-vbeln IS NOT INITIAL AND
+           it_display_rep-mblnr IS NOT INITIAL.
+**EOC BY RAVI/ SHREYOSI ON 11.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+          PERFORM fill_celltab USING 'RO' 'FLAG'
+                               CHANGING lt_celltab.
+        ELSE.
+          PERFORM fill_celltab USING 'RW' 'FLAG'
+                               CHANGING lt_celltab.
+        ENDIF.
+
+        IF  it_display_rep-charg IS NOT INITIAL.
+          PERFORM fill_celltab USING 'RO' 'charg'
+                               CHANGING lt_celltab.
+        ENDIF.
+*§2c.Copy your celltab to the celltab of the current row of gt_outtab.
+        INSERT LINES OF lt_celltab INTO TABLE it_display_rep-celltab.
+        MODIFY it_display_rep INDEX l_index.
+      ENDLOOP.
+      CLEAR it_log[].
+
+      LEAVE TO SCREEN 'ZSTANDARD'.
+    WHEN 'ERR'.
+      PERFORM display_error_log.
+  ENDCASE.
+ENDFORM.
+
+FORM display_error_log.
+  PERFORM fieldcat_error_log.
+  PERFORM error_display.
+ENDFORM.
+
+FORM fieldcat_error_log.
+
+  CLEAR ls_error_fcat[].
+  DATA: sno TYPE i VALUE 0.
+
+  sno = sno + 1.
+  ls_error_fcat-col_pos = sno.
+  ls_error_fcat-seltext_l = 'Gas Day'.
+*  ls_error_fcat-seltext = 'Gas Day'.
+  ls_error_fcat-fieldname = 'YDATE'.
+  ls_error_fcat-tabname = 'IT_LOG'.
+  ls_error_fcat-outputlen = '10'.
+  APPEND ls_error_fcat.
+  CLEAR ls_error_fcat.
+
+  sno = sno + 1.
+  ls_error_fcat-col_pos = sno.
+  ls_error_fcat-seltext_l = 'Customer Code'.
+*  ls_error_fcat-seltext = 'Customer Code'.
+  ls_error_fcat-fieldname = 'KUNNR'.
+  ls_error_fcat-tabname = 'IT_LOG'.
+  ls_error_fcat-outputlen = '10'.
+  APPEND ls_error_fcat.
+  CLEAR ls_error_fcat.
+
+  sno = sno + 1.
+  ls_error_fcat-col_pos = sno.
+  ls_error_fcat-seltext_l = 'RO Code'.
+*  ls_error_fcat-seltext = 'RO Code'.
+  ls_error_fcat-fieldname = 'ROCODE'.
+  ls_error_fcat-tabname = 'IT_LOG'.
+  ls_error_fcat-outputlen = '25'.
+  APPEND ls_error_fcat.
+  CLEAR ls_error_fcat.
+
+  sno = sno + 1.
+  ls_error_fcat-col_pos = sno.
+  ls_error_fcat-seltext_l = 'Vendor Code'.
+*  ls_error_fcat-seltext = 'Vendor Code'.
+  ls_error_fcat-fieldname = 'LIFNR'.
+  ls_error_fcat-tabname = 'IT_LOG'.
+  ls_error_fcat-outputlen = '10'.
+  APPEND ls_error_fcat.
+  CLEAR ls_error_fcat.
+
+  sno = sno + 1.
+  ls_error_fcat-col_pos = sno.
+  ls_error_fcat-seltext_l = 'Contract ID'.
+*  ls_error_fcat-seltext = 'Contract ID'.
+  ls_error_fcat-fieldname = 'CONTID'.
+  ls_error_fcat-tabname = 'IT_LOG'.
+  ls_error_fcat-outputlen = '10'.
+  APPEND ls_error_fcat.
+  CLEAR ls_error_fcat.
+
+  sno = sno + 1.
+  ls_error_fcat-col_pos = sno.
+  ls_error_fcat-seltext_l = 'PO No'.
+*  ls_error_fcat-seltext = 'PO No'.
+  ls_error_fcat-fieldname = 'EBELN'.
+  ls_error_fcat-tabname = 'IT_LOG'.
+  ls_error_fcat-outputlen = '10'.
+  APPEND ls_error_fcat.
+  CLEAR ls_error_fcat.
+
+  sno = sno + 1.
+  ls_error_fcat-col_pos = sno.
+  ls_error_fcat-seltext_l = 'Error_Message'.
+*  ls_error_fcat-seltext = 'Error_Message'.
+  ls_error_fcat-fieldname = 'message'.
+  ls_error_fcat-tabname = 'IT_LOG'.
+  ls_error_fcat-outputlen = '50'.
+  APPEND ls_error_fcat.
+  CLEAR ls_error_fcat.
+
+ENDFORM.
+
+FORM error_display.
+
+** -> Begin of changes by of Aditi on 10.06.2025 12:38:32
+*  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY_LVC'
+*    EXPORTING
+*      i_callback_program = sy-repid
+*      it_fieldcat_lvc    = ls_error_fcat[]
+*    TABLES
+*      t_outtab           = it_log[]
+*    EXCEPTIONS
+*      program_error      = 1
+*      OTHERS             = 2.
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      i_callback_program = sy-repid
+      it_fieldcat        = ls_error_fcat[]
+    TABLES
+      t_outtab           = it_log[]
+    EXCEPTIONS
+      program_error      = 1
+      OTHERS             = 2.
+  IF sy-subrc <> 0.
+* Implement suitable error handling here
+  ENDIF.
+
+** <- End changes by of Aditi on 10.06.2025 12:38:40 for ATC
+  IF sy-subrc NE 0.
+    MESSAGE 'Error while Display ALV' TYPE 'E'.
+  ENDIF.
+
+ENDFORM.
+
+
+FORM remove_default_screen.
+
+*SOC BY RAVI/SHREYOSI ON 05.12.2022 CHARM : 4000005619, GMS: YRGA005_GR Tooltip issue
+  SELECT * FROM esdus INTO CORRESPONDING FIELDS OF TABLE it_esdus
+  WHERE uname = sy-uname AND action = 'MIGO_TIPS' AND active NE 'X'.
+
+  IF sy-subrc EQ 0.
+
+    LOOP AT it_esdus INTO wa_esdus.
+      wa_esdus-active = 'X'.
+      MODIFY it_esdus FROM wa_esdus.
+    ENDLOOP.
+
+    MODIFY esdus FROM TABLE it_esdus.
+  ENDIF.
+*EOC BY RAVI/SHREYOSI ON 05.12.2022 CHARM : 4000005619, GMS: YRGA005_GR Tooltip issue
+
+ENDFORM.
+
+FORM validate_batch USING check1 TYPE i
+                          wa_display_rep LIKE LINE OF it_display_rep.
+  check1 = 0.
+  DATA(wa_vbkd2) = VALUE #( it_vbkd2[ ablad = wa_display_rep-rocode kunnr = wa_display_rep-kunnr ] OPTIONAL ).
+  DATA(wa_vbap) = VALUE #( it_vbap[ vbeln = wa_vbkd2-vbeln ] OPTIONAL ).
+
+  LOOP AT it_mcha INTO wa_mcha WHERE werks = wa_vbap-werks.
+    IF wa_mcha-charg = wa_display_rep-charg.
+      check1 = 1.
+      EXIT.
+    ENDIF.
+  ENDLOOP.
+
+  IF wa_display_rep-ebeln IS NOT INITIAL.
+    wa_eket = VALUE #( it_eket[ ebeln = wa_display_rep-ebeln ] OPTIONAL ).
+
+    IF wa_eket-charg IS NOT INITIAL.
+      IF wa_eket-charg NE wa_display_rep-charg.
+        check1 = 2.
+**SOC BY RAVI/SHREYOSI ON 10.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+        CLEAR : wa_log,temp_date.
+        CONCATENATE wa_display_rep-ydate+6(2) '.' wa_display_rep-ydate+4(2) '.' wa_display_rep-ydate+0(4) INTO temp_date.
+        wa_log-ydate = temp_date.
+        wa_log-kunnr = wa_display_rep-kunnr.
+        wa_log-rocode =  wa_display_rep-rocode.
+        wa_log-lifnr = wa_display_rep-lifnr.
+        wa_log-contid = wa_display_rep-contid.
+        wa_log-ebeln = wa_display_rep-ebeln.
+        CONCATENATE  'Different Batch maintained in PO (Batch-' wa_eket-charg ')' INTO wa_log-message SEPARATED BY space.
+*       CONCATENATE  'Batch in PO no ' WA_DISPLAY_REP-EBELN 'is different' INTO WA_LOG-MESSAGE SEPARATED BY SPACE.
+**EOC BY RAVI/SHREYOSI ON 10.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+        APPEND wa_log TO it_log.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+
+**SOC BY RAVI/SHREYOSI ON 10.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+  IF wa_display_rep-charg IS INITIAL.
+    check1 = 2.
+    CLEAR : wa_log,temp_date.
+    CONCATENATE wa_display_rep-ydate+6(2) '.' wa_display_rep-ydate+4(2) '.' wa_display_rep-ydate+0(4) INTO temp_date.
+    wa_log-ydate = temp_date.
+    wa_log-kunnr = wa_display_rep-kunnr.
+    wa_log-rocode =  wa_display_rep-rocode.
+    wa_log-lifnr = wa_display_rep-lifnr.
+    wa_log-contid = wa_display_rep-contid.
+    wa_log-ebeln = wa_display_rep-ebeln.
+    wa_log-message = 'Batch Not Selected'.
+    APPEND wa_log TO it_log.
+  ENDIF.
+**EOC BY RAVI/SHREYOSI ON 10.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+
+ENDFORM.
+
+**SOC BY RAVI/SHREYOSI ON 05.10.2023 CHARM: 4000007119, KRC:GMS: YRGA005_PGLS Issues
+FORM vld_contr_wrkflw_and_matnr USING check1 TYPE i wa_display_rep LIKE LINE OF it_display_rep.
+
+  CLEAR wa_vbak.
+  READ TABLE it_vbak INTO wa_vbak WITH KEY vbeln = wa_display_rep-contid.
+  IF sy-subrc = 0.
+    READ TABLE lt_jest INTO DATA(ls_jest) WITH KEY objnr = wa_vbak-objnr.
+    IF sy-subrc EQ 0.
+**SOC BY RAVI/SHREYOSI ON 10.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+      CLEAR : wa_log,temp_date.
+      CONCATENATE wa_display_rep-ydate+6(2) '.' wa_display_rep-ydate+4(2) '.' wa_display_rep-ydate+0(4) INTO temp_date.
+      wa_log-ydate = temp_date.
+      wa_log-kunnr = wa_display_rep-kunnr.
+      wa_log-rocode =  wa_display_rep-rocode.
+      wa_log-lifnr = wa_display_rep-lifnr.
+      wa_log-contid = wa_display_rep-contid.
+      wa_log-ebeln = wa_display_rep-ebeln.
+      wa_log-message = 'Contract is in workflow'.
+*     CONCATENATE 'Contract' WA_VBAK-VBELN 'of Customer' WA_VBAK-KUNNR  'is in workflow' INTO WA_LOG-MESSAGE SEPARATED BY SPACE.
+**EOC BY RAVI/SHREYOSI ON 10.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+      check1 = 3.
+      APPEND wa_log TO it_log.
+    ENDIF.
+  ENDIF.
+
+**SOC BY RAVI/SHREYOSI ON 09.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+  IF NOT wa_display_rep-matnr CP '*CBG*'.
+**SOC BY RAVI/SHREYOSI ON 10.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+    CLEAR : wa_log,temp_date.
+    CONCATENATE wa_display_rep-ydate+6(2) '.' wa_display_rep-ydate+4(2) '.' wa_display_rep-ydate+0(4) INTO temp_date.
+    wa_log-ydate = temp_date.
+    wa_log-kunnr = wa_display_rep-kunnr.
+    wa_log-rocode =  wa_display_rep-rocode.
+    wa_log-lifnr = wa_display_rep-lifnr.
+    wa_log-contid = wa_display_rep-contid.
+    wa_log-ebeln = wa_display_rep-ebeln.
+    CONCATENATE 'Material in contract (' wa_display_rep-matnr ') is not CBG material' INTO wa_log-message SEPARATED BY space.
+*   CONCATENATE 'Material in Contract' WA_DISPLAY_REP-CONTID 'is not GMS_NGCBG' INTO WA_LOG-MESSAGE SEPARATED BY SPACE.
+**EOC BY RAVI/SHREYOSI ON 10.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+    check1 = 3.
+    APPEND wa_log TO it_log.
+  ENDIF.
+**EOC BY RAVI/SHREYOSI ON 09.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+
+ENDFORM.
+**EOC BY RAVI/SHREYOSI ON 05.10.2023 CHARM: 4000007119, KRC:GMS: YRGA005_PGLS Issues
+
+FORM user_authorisation USING check1 TYPE i wa_display_rep LIKE LINE OF it_display_rep.
+
+*  LOOP AT IT_DISPLAY_REP INTO WA_DISPLAY_REP WHERE FLAG = 'X'.
+*    AUTHORITY-CHECK OBJECT 'YGMS_PLANT'
+*                   ID 'WERKS' FIELD WA_DISPLAY_REP-WERKS.
+*    IF SY-SUBRC <> 0.
+*      MESSAGE : 'You are not authorised for this plant' TYPE 'E' DISPLAY LIKE 'E'.
+*      LEAVE TO SCREEN 'ZSTANDARD'.
+*    ENDIF.
+*  ENDLOOP.
+
+  AUTHORITY-CHECK OBJECT 'YGMS_PLANT'
+                 ID 'WERKS' FIELD wa_display_rep-werks.
+  IF sy-subrc <> 0.
+**SOC BY RAVI/SHREYOSI ON 10.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+    CLEAR : wa_log,temp_date.
+    CONCATENATE wa_display_rep-ydate+6(2) '.' wa_display_rep-ydate+4(2) '.' wa_display_rep-ydate+0(4) INTO temp_date.
+    wa_log-ydate = temp_date.
+    wa_log-kunnr = wa_display_rep-kunnr.
+    wa_log-rocode =  wa_display_rep-rocode.
+    wa_log-lifnr = wa_display_rep-lifnr.
+    wa_log-contid = wa_display_rep-contid.
+    wa_log-ebeln = wa_display_rep-ebeln.
+    CONCATENATE 'You are not authorised for' wa_display_rep-werks 'plant' INTO wa_log-message SEPARATED BY space.
+**EOC BY RAVI/SHREYOSI ON 10.04.2024 CHARM:4000007188, GMS: YRGA005_PGLS2_ERROR MESG
+    check1 = 4.
+    APPEND wa_log TO it_log.
+  ENDIF.
+
+
+ENDFORM.
+
+FORM user_action.
+
+  REFRESH ls_fcat1.
+  PERFORM prepare_fieldat_cbg1.
+
+ENDFORM.
+
+FORM pf USING rt_extab TYPE slis_t_extab.
+  SET PF-STATUS 'ZSTANDARD'.
+  DATA : first_f4 TYPE c.
+
+  DATA : ref_grid TYPE REF TO cl_gui_alv_grid.
+
+  CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
+    IMPORTING
+      e_grid = ref_grid.
+  CALL METHOD ref_grid->check_changed_data.
+
+  CALL METHOD ref_grid->set_drop_down_table
+    EXPORTING
+      it_drop_down = lt_dropdown.
+** -> Begin of changes by of Aditi on 13.06.2025 11:55:38
+*  CALL METHOD ref_grid->refresh_table_display.
+** <- End changes by of Aditi on 13.06.2025 11:55:43
+
+ENDFORM.
+
+FORM update_yrha_cbg .
+
+  LOOP AT it_tab_cbg INTO wa_tab_cbg.
+
+    INSERT INTO yrga_cbg VALUES wa_tab_cbg.
+
+    IF sy-subrc NE 0.
+      MOVE-CORRESPONDING wa_tab_cbg TO wa_excel_error.
+      CONCATENATE wa_excel_data-errmsg 'Entry upload failed' INTO wa_excel_data-errmsg.
+      wa_excel_data-error = 'X'.
+      APPEND wa_excel_error TO it_excel_error.
+    ENDIF.
+
+  ENDLOOP.
+ENDFORM.
+
+*FORM bapi_goods_receipt USING gr_number TYPE bapi2017_gm_head_ret-mat_doc
+*                              bstkd1 TYPE vbkd-bstkd
+*                              lifnr1 TYPE yrga_cbg-lifnr
+*                              rocode1 TYPE yrga_cbg-rocode
+*                              kunnr1 TYPE yrga_cbg-kunnr
+*                              vbeln1 TYPE vbap-vbeln.
+**
+**       goodsmvt_item         LIKE  bapi2017_gm_item_create OCCURS 0 WITH HEADER LINE,
+**       goodsmvt_serialnumber LIKE  bapi2017_gm_serialnumber OCCURS 0 WITH HEADER LINE,
+**       return_gr                LIKE  bapiret2 OCCURS 0 WITH HEADER LINE.
+*  CLEAR wa_display_rep.
+*  CLEAR wa_display_rep2.
+*  CLEAR wa_vbap.
+*
+*  READ TABLE it_display_rep INTO wa_display_rep INDEX 1.
+**gr header details
+*  goodsmvt_header-pstng_date = sy-datum.
+*  goodsmvt_header-doc_date = sy-datum.
+*  goodsmvt_header-ref_doc_no = 'NA'.
+*  goodsmvt_header-bill_of_lading = 'NA'.
+*  goodsmvt_header-header_txt = 'NA'.
+*  goodsmvt_header-ref_doc_no_long = 'NA'.
+*  goodsmvt_header-bill_of_lading_long = 'NA'.
+*
+**gr_code
+*  goodsmvt_code-gm_code = '01'.
+** DATA(wa_vbkd2) = VALUE #( it_vbkd[ ablad = wa_display_rep-rocode ] OPTIONAL ).
+*  DATA(wa_display_rep2) = VALUE #( it_display_rep[ kunnr  = kunnr1 lifnr = lifnr1 rocode = rocode1  flag = 'X' ]  OPTIONAL ).
+***read TABLE it_display_rep into wa_display_rep2 WITH KEY flag = 'x' kunnr = kunnr1 BINARY SEARCH.
+*  goodsmvt_item-material = wa_display_rep2-matnr.
+*  DATA(wa_vbap)  = VALUE #( it_vbap[ vbeln = vbeln1 ] OPTIONAL ).
+*  goodsmvt_item-plant = wa_vbap-werks.
+*  goodsmvt_item-stge_loc = wa_vbap-lgort.
+*  goodsmvt_item-po_number = bstkd1.
+*  goodsmvt_item-po_item = '1'.
+*  goodsmvt_item-entry_qnt = wa_display_rep2-ycqmbg.
+**  goodsmvt_item-entry_uom = wa_display_rep2-msehi.
+*  goodsmvt_item-entry_uom = 'MBG'.
+*  goodsmvt_item-move_type = '101'.
+*  DATA : r1 TYPE f,
+*         r2 TYPE f.
+*  r1 = CONV string( wa_display_rep2-agcv ).
+*  r2 = CONV string( wa_display_rep2-ancv ).
+**  goodsmvt_item-po_pr_qnt = r1  + r2.
+*  goodsmvt_item-entry_uom_iso = 'KG'.
+*  goodsmvt_item-st_un_qtyy_1 = r1.
+*  goodsmvt_item-st_un_qtyy_1_iso = 'KG'.
+*  goodsmvt_item-st_un_qtyy_2 = r2.
+*  goodsmvt_item-st_un_qtyy_2_iso = 'KG'.
+*  goodsmvt_item-mvt_ind = 'B'.
+*
+*  APPEND goodsmvt_item.
+*  CLEAR goodsmvt_item.
+*  CLEAR wa_display_rep.
+*  CLEAR wa_display_rep2.
+*  CLEAR wa_vbap.
+**  endloop.
+*
+*  CALL FUNCTION 'BAPI_GOODSMVT_CREATE'
+*    EXPORTING
+*      goodsmvt_header  = goodsmvt_header
+*      goodsmvt_code    = goodsmvt_code
+**     TESTRUN          = ' '
+**     GOODSMVT_REF_EWM =
+*    IMPORTING
+**     GOODSMVT_HEADRET =
+*      materialdocument = gr_number
+**     MATDOCUMENTYEAR  =
+*    TABLES
+*      goodsmvt_item    = goodsmvt_item
+**     GOODSMVT_SERIALNUMBER         =
+*      return           = return_gr
+**     GOODSMVT_SERV_PART_DATA       =
+**     EXTENSIONIN      =
+*    .
+*  IF gr_number IS NOT INITIAL.
+*    CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+*      EXPORTING
+*        wait = 'X'
+**   IMPORTING
+**       RETURN        =
+*      .
+*  ELSE.
+*    MESSAGE :'Error while creating goods receipt'(001) TYPE 'S' DISPLAY LIKE 'E'.
+*  ENDIF.
+*
+*ENDFORM.
+
+FORM bdc_gr USING gr_number TYPE bapi2017_gm_head_ret-mat_doc
+                  wa_display_rep1 TYPE st_display_rep1
+                  wa_ekpo TYPE ty_ekpo
+                  wa_eket TYPE ty_eket.
+
+  PERFORM bdc_dynpro      USING 'SAPLMIGO' '0001'.
+  PERFORM bdc_field       USING 'BDC_OKCODE'
+                                '=OK_GO'.
+  PERFORM bdc_field       USING 'GODYNPRO-ACTION'
+                                'A01'.
+  PERFORM bdc_field       USING 'GODYNPRO-REFDOC'
+                                'R01'.
+  PERFORM bdc_field       USING 'GODEFAULT_TV-BWART'
+                                '101'.
+  PERFORM bdc_field       USING 'BDC_CURSOR'
+                                'GODYNPRO-PO_NUMBER'.
+  PERFORM bdc_field       USING 'GODYNPRO-PO_NUMBER'
+                                wa_display_rep1-ebeln.
+
+  DATA : docdat TYPE char10,
+         posdat TYPE  char10,
+         time   TYPE char5.
+
+  CONCATENATE sy-datum+6(2) '.' sy-datum+4(2) '.' sy-datum+0(4) INTO docdat.
+  CONCATENATE wa_display_rep1-ydate+6(2) '.' wa_display_rep1-ydate+4(2) '.' wa_display_rep1-ydate+0(4) INTO posdat.
+  CONCATENATE sy-uzeit+0(2) ':' sy-uzeit+2(2)  INTO time.
+
+  PERFORM bdc_field       USING 'GOHEAD-BLDAT'
+                                docdat.
+  PERFORM bdc_field       USING 'GOHEAD-BUDAT'
+                                posdat.
+  PERFORM bdc_field       USING 'GOHEAD-OIB_BLTIME'
+                                time.
+  PERFORM bdc_field       USING 'GOHEAD-WEVER'
+                                '1'.
+  PERFORM bdc_dynpro      USING 'SAPLMIGO' '0001'.
+  PERFORM bdc_field       USING 'BDC_OKCODE'
+                                '=OK_GO'.
+  PERFORM bdc_field       USING 'GODEFAULT_TV-BWART'
+                                '101'.
+  PERFORM bdc_field       USING 'BDC_CURSOR'
+                                'GOHEAD-BKTXT'.
+  PERFORM bdc_field       USING 'GOHEAD-BLDAT'
+                                docdat.
+  PERFORM bdc_field       USING 'GOHEAD-LFSNR'
+                                'na'.
+  PERFORM bdc_field       USING 'GOHEAD-BUDAT'
+                                posdat.
+  PERFORM bdc_field       USING 'GOHEAD-OIB_BLTIME'
+                                time.
+  PERFORM bdc_field       USING 'GOHEAD-FRBNR'
+                                'NA'.
+  PERFORM bdc_field       USING 'GOHEAD-BKTXT'
+                                'na'.
+  PERFORM bdc_field       USING 'GOHEAD-WEVER'
+                                '1'.
+  PERFORM bdc_field       USING 'GODYNPRO-DETAIL_ZEILE'
+                                '1'.
+  PERFORM bdc_field       USING 'GOITEM-ERFME'
+                                wa_ekpo-bprme.
+
+  DATA : value TYPE char15.
+  IF wa_ekpo-bprme = 'MBG'.
+    value = wa_display_rep1-ycqmbg.
+  ENDIF.
+
+  IF wa_ekpo-bprme = 'MBN'.
+    value = wa_display_rep1-ycqmbn.
+  ENDIF.
+
+  IF wa_ekpo-bprme = 'KG'.
+    value = wa_display_rep1-ycqkg.
+  ENDIF.
+
+  IF wa_ekpo-bprme = 'SM3'.
+    value = wa_display_rep1-kwmeng.
+  ENDIF.
+  CONDENSE value.
+
+
+  PERFORM bdc_field       USING 'GOITEM-ERFMG'
+                                value.
+  PERFORM bdc_field       USING 'GOITEM-MIGO_ELIKZ'
+                                '1'.
+  PERFORM bdc_field       USING 'GOITEM-BWART'
+                                '101'.
+  PERFORM bdc_field       USING 'GOITEM-LGOBE'
+                                'PIPE'.
+  PERFORM bdc_field       USING 'GODYNPRO-DETAIL_TAKE'
+                                'X'.
+  PERFORM bdc_field       USING 'YRMA_MIGO_BADI_H-BADI_NUMMER' " LR DATE AND ACTUAL RECEIPT DATE IS NECESSARY HERE OTHERWISE PROBLEM WILL BE FACED IN QUALITY CLIENT
+                                 posdat.
+  PERFORM bdc_field       USING 'YRMA_MIGO_BADI_I-BADI_ADDAT'
+                                 posdat.
+  PERFORM bdc_dynpro      USING 'SAPLMIGO' '0001'.
+  PERFORM bdc_field       USING 'BDC_OKCODE'
+                                '=OK_GO'.
+  PERFORM bdc_field       USING 'GODEFAULT_TV-BWART'
+                                '101'.
+  PERFORM bdc_field       USING 'GOHEAD-BLDAT'
+                                docdat.
+  PERFORM bdc_field       USING 'GOHEAD-LFSNR'
+                                'NA'.
+  PERFORM bdc_field       USING 'GOHEAD-BUDAT'
+                                posdat.
+  PERFORM bdc_field       USING 'GOHEAD-OIB_BLTIME'
+                                time.
+  PERFORM bdc_field       USING 'GOHEAD-FRBNR'
+                                'NA'.
+  PERFORM bdc_field       USING 'GOHEAD-BKTXT'
+                                'na'.
+  PERFORM bdc_field       USING 'GOHEAD-WEVER'
+                                '1'.
+  PERFORM bdc_field       USING 'GODYNPRO-DETAIL_ZEILE'
+                                '1'.
+  PERFORM bdc_field       USING 'BDC_CURSOR'
+                                'GOITEM-LSMEH'.
+  PERFORM bdc_field       USING 'GOITEM-ERFME'
+                                wa_ekpo-bprme.
+  PERFORM bdc_field       USING 'GOITEM-ERFMG'
+                                value.
+  PERFORM bdc_field       USING 'GOITEM-LSMNG'
+                                value.
+  PERFORM bdc_field       USING 'GOITEM-LSMEH'
+                                wa_ekpo-bprme.
+  PERFORM bdc_field       USING 'GOITEM-MIGO_ELIKZ'
+                                '1'.
+  PERFORM bdc_field       USING 'GOITEM-BWART'
+                                '101'.
+  PERFORM bdc_field       USING 'GOITEM-LGOBE'
+                                'PIPE'.
+  PERFORM bdc_field       USING 'GODYNPRO-DETAIL_TAKE'
+                                'X'.
+  PERFORM bdc_dynpro      USING 'SAPLMIGO' '0001'.
+  PERFORM bdc_field       USING 'BDC_OKCODE'
+                                '=OK_GO'.
+  PERFORM bdc_field       USING 'GODEFAULT_TV-BWART'
+                                '101'.
+  PERFORM bdc_field       USING 'GOHEAD-BLDAT'
+                                docdat.
+  PERFORM bdc_field       USING 'GOHEAD-LFSNR'
+                                'NA'.
+  PERFORM bdc_field       USING 'GOHEAD-BUDAT'
+                                posdat.
+  PERFORM bdc_field       USING 'GOHEAD-OIB_BLTIME'
+                                time.
+  PERFORM bdc_field       USING 'GOHEAD-FRBNR'
+                                'NA'.
+  PERFORM bdc_field       USING 'GOHEAD-BKTXT'
+                                'na'.
+  PERFORM bdc_field       USING 'GOHEAD-WEVER'
+                                '1'.
+  PERFORM bdc_field       USING 'GODYNPRO-DETAIL_ZEILE'
+                                '1'.
+  PERFORM bdc_field       USING 'GOITEM-ERFME'
+                                wa_ekpo-bprme.
+  PERFORM bdc_field       USING 'GOITEM-ERFMG'
+                                value.
+  PERFORM bdc_field       USING 'GOITEM-LSMNG'
+                                value.
+  PERFORM bdc_field       USING 'GOITEM-LSMEH'
+                                wa_ekpo-bprme.
+  PERFORM bdc_field       USING 'GOITEM-MIGO_ELIKZ'
+                                '1'.
+  PERFORM bdc_field       USING 'GOITEM-BWART'
+                                '101'.
+  PERFORM bdc_field       USING 'GOITEM-LGOBE'
+                                'PIPE'.
+  PERFORM bdc_field       USING 'BDC_CURSOR'
+                                'GOITEM-CHARG'.
+
+  IF wa_eket-charg IS INITIAL.
+    PERFORM bdc_field       USING 'GOITEM-CHARG'
+                                   wa_display_rep1-charg.
+  ENDIF.
+
+  PERFORM bdc_field       USING 'GODYNPRO-DETAIL_TAKE'
+                                'X'.
+  PERFORM bdc_dynpro      USING 'SAPLMIGO' '0001'.
+  PERFORM bdc_field       USING 'BDC_OKCODE'
+                                '=OK_GO'.
+  PERFORM bdc_field       USING 'GODEFAULT_TV-BWART'
+                                '101'.
+  PERFORM bdc_field       USING 'GOHEAD-BLDAT'
+                                docdat.
+  PERFORM bdc_field       USING 'GOHEAD-LFSNR'
+                                'NA'.
+  PERFORM bdc_field       USING 'GOHEAD-BUDAT'
+                                posdat.
+  PERFORM bdc_field       USING 'GOHEAD-OIB_BLTIME'
+                                time.
+  PERFORM bdc_field       USING 'GOHEAD-FRBNR'
+                                'NA'.
+  PERFORM bdc_field       USING 'GOHEAD-BKTXT'
+                                'na'.
+  PERFORM bdc_field       USING 'GOHEAD-WEVER'
+                                '1'.
+  PERFORM bdc_field       USING 'GODYNPRO-DETAIL_ZEILE'
+                                '1'.
+  PERFORM bdc_field       USING 'GOITEM-ERFME'
+                                wa_ekpo-bprme.
+  PERFORM bdc_field       USING 'GOITEM-ERFMG'
+                                value.
+  PERFORM bdc_field       USING 'GOITEM-LSMNG'
+                                value.
+  PERFORM bdc_field       USING 'GOITEM-LSMEH'
+                                wa_ekpo-bprme.
+  PERFORM bdc_field       USING 'GOITEM-MIGO_ELIKZ'
+                                '1'.
+  PERFORM bdc_field       USING 'GOITEM-BWART'
+                                '101'.
+  PERFORM bdc_field       USING 'GOITEM-LGOBE'
+                                'PIPE'.
+
+  IF wa_eket-charg IS INITIAL.
+    PERFORM bdc_field       USING 'GOITEM-CHARG'
+                                  wa_display_rep1-charg.
+  ENDIF.
+
+  PERFORM bdc_field       USING 'BDC_CURSOR'
+                                'GT_PARAM_SCREEN-VALUE(02)'.
+
+  DATA : ncv TYPE char15,
+         gcv TYPE char15.
+  ncv = wa_display_rep1-ancv.
+  gcv = wa_display_rep1-agcv.
+  CONDENSE ncv.
+  CONDENSE gcv.
+
+  PERFORM bdc_field       USING 'GT_PARAM_SCREEN-VALUE(01)'
+                                ncv.
+  PERFORM bdc_field       USING 'GT_PARAM_SCREEN-VALUE(02)'
+                                gcv.
+  PERFORM bdc_field       USING 'GODYNPRO-DETAIL_TAKE'
+                                'X'.
+  PERFORM bdc_dynpro      USING 'SAPLMIGO' '0001'.
+  PERFORM bdc_field       USING 'BDC_OKCODE'
+                                '=OK_GO'.
+  PERFORM bdc_field       USING 'GODEFAULT_TV-BWART'
+                                '101'.
+  PERFORM bdc_field       USING 'GOHEAD-BLDAT'
+                                docdat.
+  PERFORM bdc_field       USING 'GOHEAD-LFSNR'
+                                'NA'.
+  PERFORM bdc_field       USING 'GOHEAD-BUDAT'
+                                posdat.
+  PERFORM bdc_field       USING 'GOHEAD-OIB_BLTIME'
+                                time.
+  PERFORM bdc_field       USING 'GOHEAD-FRBNR'
+                                'NA'.
+  PERFORM bdc_field       USING 'GOHEAD-BKTXT'
+                                'na'.
+  PERFORM bdc_field       USING 'GOHEAD-WEVER'
+                                '1'.
+  PERFORM bdc_field       USING 'GODYNPRO-DETAIL_ZEILE'
+                                '1'.
+  PERFORM bdc_field       USING 'GOITEM-ERFME'
+                                wa_ekpo-bprme.
+  PERFORM bdc_field       USING 'GOITEM-ERFMG'
+                                value.
+  PERFORM bdc_field       USING 'GOITEM-LSMNG'
+                                value.
+  PERFORM bdc_field       USING 'GOITEM-LSMEH'
+                                wa_ekpo-bprme.
+  PERFORM bdc_field       USING 'GOITEM-MIGO_ELIKZ'
+                                '1'.
+  PERFORM bdc_field       USING 'GOITEM-BWART'
+                                '101'.
+  PERFORM bdc_field       USING 'GOITEM-LGOBE'
+                                'PIPE'.
+
+  IF wa_eket-charg IS INITIAL.
+    PERFORM bdc_field       USING 'GOITEM-CHARG'
+                                  wa_display_rep1-charg.
+  ENDIF.
+
+  PERFORM bdc_field       USING 'BDC_CURSOR'
+                                'GT_ADQTY_SCREEN-ADQNT_CHAR(01)'.
+
+  DATA : ycqkg TYPE char17.
+
+  ycqkg = wa_display_rep1-ycqkg.
+  CONDENSE ycqkg.
+
+  PERFORM bdc_field       USING 'GT_ADQTY_SCREEN-ADQNT_CHAR(01)'
+                                ycqkg.
+  PERFORM bdc_field       USING 'GODYNPRO-DETAIL_TAKE'
+                                'X'.
+  PERFORM bdc_dynpro      USING 'SAPLMIGO' '0001'.
+  PERFORM bdc_field       USING 'BDC_OKCODE'
+                                '=OK_GO'.
+  PERFORM bdc_field       USING 'GODEFAULT_TV-BWART'
+                                '101'.
+  PERFORM bdc_field       USING 'GOHEAD-BLDAT'
+                                docdat.
+  PERFORM bdc_field       USING 'GOHEAD-LFSNR'
+                                'NA'.
+  PERFORM bdc_field       USING 'GOHEAD-BUDAT'
+                                posdat.
+  PERFORM bdc_field       USING 'GOHEAD-OIB_BLTIME'
+                                time.
+  PERFORM bdc_field       USING 'GOHEAD-FRBNR'
+                                'NA'.
+  PERFORM bdc_field       USING 'GOHEAD-BKTXT'
+                                'na'.
+  PERFORM bdc_field       USING 'GOHEAD-WEVER'
+                                '1'.
+  PERFORM bdc_field       USING 'GODYNPRO-DETAIL_ZEILE'
+                                '1'.
+  PERFORM bdc_field       USING 'GOITEM-ERFME'
+                                wa_ekpo-bprme.
+  PERFORM bdc_field       USING 'GOITEM-ERFMG'
+                                value.
+  PERFORM bdc_field       USING 'GOITEM-LSMNG'
+                                value.
+  PERFORM bdc_field       USING 'GOITEM-LSMEH'
+                                wa_ekpo-bprme.
+  PERFORM bdc_field       USING 'GOITEM-MIGO_ELIKZ'
+                                '1'.
+  PERFORM bdc_field       USING 'GOITEM-BWART'
+                                '101'.
+  PERFORM bdc_field       USING 'GOITEM-LGOBE'
+                                'PIPE'.
+
+  IF wa_eket-charg IS INITIAL.
+    PERFORM bdc_field       USING 'GOITEM-CHARG'
+                                  wa_display_rep1-charg.
+  ENDIF.
+
+  PERFORM bdc_field       USING 'BDC_CURSOR'
+                                'GT_ADQTY_SCREEN-ADQNT_CHAR(06)'.
+
+*  DATA : YCQMBN TYPE CHAR17.
+*
+*  YCQMBN = WA_DISPLAY_REP1-YCQMBN.
+*  CONDENSE YCQMBN.
+*
+*  PERFORM BDC_FIELD       USING 'GT_ADQTY_SCREEN-ADQNT_CHAR(03)'
+*                                YCQMBN.
+
+  DATA : kwmeng TYPE char17.
+
+  kwmeng = wa_display_rep1-kwmeng.
+  CONDENSE kwmeng.
+
+  PERFORM bdc_field       USING 'GT_ADQTY_SCREEN-ADQNT_CHAR(06)'
+                                kwmeng.
+  PERFORM bdc_field       USING 'GODYNPRO-DETAIL_TAKE'
+                                'X'.
+  PERFORM bdc_dynpro      USING 'SAPLMIGO' '0001'.
+  PERFORM bdc_field       USING 'BDC_OKCODE'
+                                '=OK_CHECK'.
+  PERFORM bdc_field       USING 'GODEFAULT_TV-BWART'
+                                '101'.
+  PERFORM bdc_field       USING 'GOHEAD-BLDAT'
+                                docdat.
+  PERFORM bdc_field       USING 'GOHEAD-LFSNR'
+                                'NA'.
+  PERFORM bdc_field       USING 'GOHEAD-BUDAT'
+                                posdat.
+  PERFORM bdc_field       USING 'GOHEAD-OIB_BLTIME'
+                                time.
+  PERFORM bdc_field       USING 'GOHEAD-FRBNR'
+                                'NA'.
+  PERFORM bdc_field       USING 'GOHEAD-BKTXT'
+                                'na'.
+  PERFORM bdc_field       USING 'GOHEAD-WEVER'
+                                '1'.
+  PERFORM bdc_field       USING 'YRMA_MIGO_BADI_H-BADI_NUMMER'
+                                posdat.
+  PERFORM bdc_field       USING 'GODYNPRO-DETAIL_ZEILE'
+                                '1'.
+  PERFORM bdc_field       USING 'GOITEM-ERFME'
+                                wa_ekpo-bprme.
+  PERFORM bdc_field       USING 'GOITEM-ERFMG'
+                                value.
+  PERFORM bdc_field       USING 'GOITEM-LSMNG'
+                                value.
+  PERFORM bdc_field       USING 'GOITEM-LSMEH'
+                                wa_ekpo-bprme.
+  PERFORM bdc_field       USING 'GOITEM-MIGO_ELIKZ'
+                                '1'.
+  PERFORM bdc_field       USING 'GOITEM-BWART'
+                                '101'.
+  PERFORM bdc_field       USING 'GOITEM-LGOBE'
+                                'PIPE'.
+
+  IF wa_eket-charg IS INITIAL.
+    PERFORM bdc_field       USING 'GOITEM-CHARG'
+                                  wa_display_rep1-charg.
+  ENDIF.
+
+  PERFORM bdc_field       USING 'BDC_CURSOR'
+                                'YRMA_MIGO_BADI_I-BADI_ADDAT'.
+  PERFORM bdc_field       USING 'YRMA_MIGO_BADI_I-BADI_ADDAT'
+                                posdat.
+  PERFORM bdc_field       USING 'GODYNPRO-DETAIL_TAKE'
+                                'X'.
+  PERFORM bdc_dynpro      USING 'SAPMSSY0' '0120'.
+  PERFORM bdc_field       USING 'BDC_OKCODE'
+                                '=&ONT'.
+  PERFORM bdc_dynpro      USING 'SAPLMIGO' '0001'.
+  PERFORM bdc_field       USING 'BDC_OKCODE'
+                                '=OK_POST1'.
+  PERFORM bdc_field       USING 'GODEFAULT_TV-BWART'
+                                '101'.
+  PERFORM bdc_field       USING 'BDC_CURSOR'
+                                'GODYNPRO-PO_NUMBER'.
+  PERFORM bdc_field       USING 'GOHEAD-BLDAT'
+                                 docdat.
+  PERFORM bdc_field       USING 'GOHEAD-LFSNR'
+                                'NA'.
+  PERFORM bdc_field       USING 'GOHEAD-BUDAT'
+                                posdat.
+  PERFORM bdc_field       USING 'GOHEAD-OIB_BLTIME'
+                                time.
+  PERFORM bdc_field       USING 'GOHEAD-FRBNR'
+                                'NA'.
+  PERFORM bdc_field       USING 'GOHEAD-BKTXT'
+                                'na'.
+  PERFORM bdc_field       USING 'GOHEAD-WEVER'
+                                '1'.
+  PERFORM bdc_field       USING 'YRMA_MIGO_BADI_H-BADI_NUMMER'
+                                posdat.
+  PERFORM bdc_field       USING 'GODYNPRO-DETAIL_ZEILE'
+                                '1'.
+  PERFORM bdc_field       USING 'GOITEM-ERFME'
+                                 wa_ekpo-bprme.
+  PERFORM bdc_field       USING 'GOITEM-ERFMG'
+                                value.
+  PERFORM bdc_field       USING 'GOITEM-LSMNG'
+                                value.
+  PERFORM bdc_field       USING 'GOITEM-LSMEH'
+                                wa_ekpo-bprme.
+  PERFORM bdc_field       USING 'GOITEM-MIGO_ELIKZ'
+                                '1'.
+  PERFORM bdc_field       USING 'GOITEM-BWART'
+                                '101'.
+  PERFORM bdc_field       USING 'GOITEM-LGOBE'
+                                'PIPE'.
+
+  IF wa_eket-charg IS INITIAL.
+    PERFORM bdc_field       USING 'GOITEM-CHARG'
+                                  wa_display_rep1-charg.
+  ENDIF.
+
+  PERFORM bdc_field       USING 'YRMA_MIGO_BADI_I-BADI_ADDAT'
+                                posdat.
+  PERFORM bdc_field       USING 'GODYNPRO-DETAIL_TAKE'
+                                'X'.
+
+  DATA : bdc_mode TYPE c LENGTH 2.
+
+  IF bdc_display_mode EQ 'X'.
+    bdc_mode = 'A'.
+  ELSE.
+    bdc_mode = 'E'.
+  ENDIF.
+
+  REFRESH: it_message[].
+  CALL TRANSACTION 'MIGO_GR' USING gt_bdcdata
+        MODE bdc_mode UPDATE 'S' MESSAGES INTO it_message.
+
+  CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+    EXPORTING
+      wait = 'X'.
+  WAIT UP TO 2 SECONDS.
+  CLEAR: wa_message.
+
+  LOOP AT it_message INTO wa_message WHERE msgtyp = 'S' AND tcode = 'MIGO_GR'.
+    IF wa_message IS NOT INITIAL.
+*    lv_so = wa_message-msgv2 .
+      gr_number = wa_message-msgv1.
+    ENDIF.
+  ENDLOOP.
+  REFRESH:gt_bdcdata[].
+
+  SELECT SINGLE mblnr INTO @DATA(l_mblnr)
+    FROM matdoc
+    WHERE
+    mblnr = @gr_number.
+  IF sy-subrc <> 0.
+    CLEAR gr_number.
+  ENDIF.
+
+ENDFORM.
+
+*FORM bapi_salesorder USING sales_document TYPE yrga_cbg-ebeln
+*                           vbeln1 TYPE vbak-vbeln.
+**  CLEAR wa_display_rep.
+**  CLEAR wa_display_rep2.
+**  CLEAR wa_vbak.
+**  CLEAR wa_vbap.
+**  READ TABLE it_display_rep INTO wa_display_rep INDEX 1.
+**  CLEAR : order_header_in.
+**
+***order_header  details
+**  DATA(wa_vbak)  = VALUE #( it_vbak[ vbeln = vbeln1 ] OPTIONAL ).
+**  order_header_in-doc_type = 'ZSCP'.
+**  order_header_in-sales_org = wa_vbak-vkorg.
+**  order_header_in-distr_chan = wa_vbak-vtweg.
+**  order_header_in-division = wa_vbak-spart.
+**  order_header_in-currency = 'INR'.
+**
+***partner
+**  order_partners-partn_role = 'AG'.
+**  order_partners-partn_numb = kunnr1.
+**  APPEND order_partners.
+**  CLEAR order_partners.
+***
+***  order_partners-partn_role = 'RE'.
+***  order_partners-partn_numb = '80005'.
+***  APPEND order_partners.
+***  CLEAR order_partners.
+***
+***  order_partners-partn_role = 'RG'.
+***  order_partners-partn_numb = kunnr1.
+***  APPEND order_partners.
+***  CLEAR order_partners.
+***
+***  order_partners-partn_role = 'WE'.
+***  order_partners-partn_numb = kunnr1.
+***  APPEND order_partners.
+***  CLEAR order_partners.
+**
+***order_items
+***  READ TABLE it_display_rep INTO wa_display_rep2 WITH KEY flag = 'x' kunnr = kunnr1.
+**  DATA(wa_display_rep2) = VALUE #( it_display_rep[ kunnr  = kunnr1 lifnr = lifnr1 rocode = rocode1  flag = 'X' ]  OPTIONAL ).
+**  DATA(wa_vbap)  = VALUE #( it_vbap[ vbeln = vbeln1 ] OPTIONAL ).
+**  order_items_in-material = wa_display_rep2-matnr.
+**  order_items_in-plant = wa_vbap-werks.
+**  order_items_in-store_loc = wa_vbap-lgort.
+**  order_items_in-req_qty = '10'.
+**  order_items_in-sales_unit = 'TO'.
+**  order_items_in-cond_val1 = '100'.
+**  order_items_in-currency = 'INR'.
+***    condense wa_display_rep2-ycqmbg.
+***  order_items_in-target_qty = wa_display_rep2-ycqmbg.
+***  order_items_in-target_qu = wa_display_rep2-ygaid.
+***    DATA(wa_vbak) = VALUE #( it_vbak[ kunnr = wa_display_rep2-kunnr ] OPTIONAL ).
+***    order_items_in-itm_number = wa_vbak-vbeln.
+**  APPEND order_items_in.
+**  CLEAR order_items_in.
+**
+***    order_schedule_ex-itm_number = wa_vbak-vbeln.
+**  order_schedule_ex-req_qty = wa_display_rep2-ycqmbg.
+**  APPEND order_schedule_ex.
+**  CLEAR order_schedule_ex.
+**  CLEAR wa_display_rep.
+**  CLEAR wa_display_rep2.
+**  CLEAR wa_vbap.
+**  CLEAR wa_vbak.
+***  ENDLOOP.
+**
+**  CALL FUNCTION 'BAPI_SALESORDER_CREATEFROMDAT1'
+**    EXPORTING
+**      order_header_in = order_header_in
+***     WITHOUT_COMMIT  = ' '
+***     CONVERT_PARVW_AUART       = ' '
+***     REFRESH_V45I    = 'X'
+**    IMPORTING
+**      salesdocument   = sales_document
+***     SOLD_TO_PARTY   =
+***     SHIP_TO_PARTY   =
+***     BILLING_PARTY   =
+**      return          = return
+**    TABLES
+**      order_items_in  = order_items_in
+**      order_partners  = order_partners
+***     ORDER_ITEMS_OUT =
+***     ORDER_CFGS_REF  =
+***     ORDER_CFGS_INST =
+***     ORDER_CFGS_PART_OF        =
+***     ORDER_CFGS_VALUE          =
+***     ORDER_CCARD     =
+***     ORDER_CFGS_BLOB =
+***     ORDER_SCHEDULE_EX         =
+**    .
+*
+*  CALL FUNCTION 'BAPI_SALESDOCUMENT_COPY'
+*    EXPORTING
+*      salesdocument    = vbeln1
+*      documenttype     = 'ZCG1'
+**     TESTRUN          = ' '
+*    IMPORTING
+*      salesdocument_ex = sales_document
+*    TABLES
+*      return           = return.
+*
+*  IF sales_document IS NOT INITIAL.
+*    CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+*      EXPORTING
+*        wait = 'X'
+**   IMPORTING
+**       RETURN        =
+*      .
+*  ELSE.
+*    MESSAGE :'Error while creating sales order'(001) TYPE 'E' DISPLAY LIKE 'E'.
+*  ENDIF.
+*
+*  order_header_inx-updateflag = 'U'.
+*  APPEND order_header_inx.
+*
+*  item_in-itm_number = '10'.
+*  item_in-material = 'GMS_NGCBG'.
+*  item_in-target_qty = '2.835'.
+*  APPEND item_in.
+*
+*  item_inx-itm_number = '10'.
+*  item_inx-material = 'X'.
+*  item_inx-target_qty = 'X'.
+*  APPEND item_inx.
+*
+*  CALL FUNCTION 'BAPI_SALESDOCUMENT_CHANGE'
+*    EXPORTING
+*      salesdocument    = sales_document
+*     order_header_in  = order_header_in
+*      order_header_inx = order_header_inx
+**     SIMULATION       = ' '
+*    TABLES
+*      return           = return
+*     ITEM_IN          = item_in
+*     ITEM_INX         = item_inx
+**     SCHEDULE_IN      =
+**     SCHEDULE_INX     =
+**     SALES_CFGS_REF   =
+**     SALES_CFGS_INST  =
+**     SALES_CFGS_PART_OF       =
+**     SALES_CFGS_VALUE =
+**     SALES_CFGS_BLOB  =
+*    .
+*
+*  CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+*   EXPORTING
+*     WAIT          = 'X'
+**   IMPORTING
+**     RETURN        =
+*            .
+*
+*
+*
+*
+*ENDFORM.
+
+
+FORM bdc_salesorder USING sales_document TYPE yrga_cbg-ebeln
+                          wa_display_rep1 TYPE st_display_rep1
+                          wa_ekpo TYPE ty_ekpo
+                          wa_vbkd2 TYPE ty_vbkd2.
+
+  PERFORM bdc_dynpro      USING 'SAPMV45A' '0101'.
+  PERFORM bdc_field       USING 'BDC_CURSOR'
+                                'VBAK-AUART'.
+  PERFORM bdc_field       USING 'BDC_OKCODE'
+                                '=COPY'.
+  PERFORM bdc_field       USING 'VBAK-AUART'
+                                'ZCG1'.
+  PERFORM bdc_dynpro      USING 'SAPLV45C' '0100'.
+  PERFORM bdc_field       USING 'BDC_OKCODE'
+                                '=RKON'.
+  PERFORM bdc_field       USING 'BDC_CURSOR'
+                                'LV45C-VBELN'.
+  PERFORM bdc_dynpro      USING 'SAPLV45C' '0100'.
+  PERFORM bdc_field       USING 'BDC_OKCODE'
+                                '=UEBR'.
+  PERFORM bdc_field       USING 'BDC_CURSOR'
+                                'LV45C-VBELN'.
+  PERFORM bdc_field       USING 'LV45C-VBELN'
+                                wa_display_rep1-contid.
+
+  DATA : docdat TYPE char10,
+         posdat TYPE  char10,
+         time   TYPE char5.
+
+*  CONCATENATE sy-datum+6(2) '.' sy-datum+4(2) '.' sy-datum+0(4) INTO docdat.
+  CONCATENATE wa_display_rep1-ydate+6(2) '.' wa_display_rep1-ydate+4(2) '.' wa_display_rep1-ydate+0(4) INTO docdat.
+  CONCATENATE wa_display_rep1-ydate+6(2) '.' wa_display_rep1-ydate+4(2) '.' wa_display_rep1-ydate+0(4) INTO posdat.
+  CONCATENATE sy-uzeit+0(2) ':' sy-uzeit+2(2)  INTO time.
+
+  PERFORM bdc_field       USING 'LV45C-KETDAT'
+                                docdat.
+  PERFORM bdc_field       USING 'LV45C-KPRGBZ'
+                                'D'.
+  PERFORM bdc_dynpro      USING 'SAPMV45A' '4001'.
+  PERFORM bdc_field       USING 'BDC_OKCODE'
+                                '/00'.
+  PERFORM bdc_field       USING 'KUAGV-KUNNR'
+                                wa_display_rep1-kunnr.
+  PERFORM bdc_field       USING 'KUWEV-KUNNR'
+                                wa_display_rep1-kunnr.
+  PERFORM bdc_field       USING 'RV45A-KETDAT'
+                                docdat.
+  PERFORM bdc_field       USING 'RV45A-KPRGBZ'
+                                'D'.
+  PERFORM bdc_field       USING 'VBKD-PRSDT'
+                                docdat.
+  PERFORM bdc_field       USING 'VBKD-OIC_TIME'
+                                time.
+*SOC BY RAVI/SHREYOSI ON 05.12.2022 CHARM : 4000005619, GMS: YRGA005_GR Tooltip issue
+  PERFORM bdc_field       USING 'VBKD-ZTERM'
+                                wa_vbkd2-zterm.
+*SOC BY RAVI/SHREYOSI ON 05.12.2022 CHARM : 4000005619, GMS: YRGA005_GR Tooltip issue
+  PERFORM bdc_field       USING 'VBKD-INCO1'
+                                'EXW'.
+*  PERFORM bdc_field       USING 'VBKD-INCO2'
+*                                'plant'.
+
+  DATA : value TYPE char15.
+  IF wa_ekpo-bprme = 'MBG'.
+    value = wa_display_rep1-ycqmbg.
+  ENDIF.
+
+  IF wa_ekpo-bprme = 'MBN'.
+    value = wa_display_rep1-ycqmbn.
+  ENDIF.
+
+  IF wa_ekpo-bprme = 'KG'.
+    value = wa_display_rep1-ycqkg.
+  ENDIF.
+
+  IF wa_ekpo-bprme = 'SM3'.
+    value = wa_display_rep1-kwmeng.
+  ENDIF.
+  CONDENSE value.
+
+  PERFORM bdc_field       USING 'BDC_CURSOR'
+                                'VBAP-CHARG(01)'.
+  PERFORM bdc_field       USING 'RV45A-KWMENG(01)'
+                                value.
+  PERFORM bdc_field       USING 'VBAP-CHARG(01)'
+                                wa_display_rep1-charg.
+  PERFORM bdc_dynpro      USING 'SAPMV45A' '4001'.
+  PERFORM bdc_field       USING 'BDC_OKCODE'
+                                '=ITEM'.
+  PERFORM bdc_field       USING 'KUAGV-KUNNR'
+                                wa_display_rep1-kunnr.
+  PERFORM bdc_field       USING 'KUWEV-KUNNR'
+                                wa_display_rep1-kunnr.
+  PERFORM bdc_field       USING 'RV45A-KETDAT'
+                                docdat.
+  PERFORM bdc_field       USING 'RV45A-KPRGBZ'
+                                'D'.
+  PERFORM bdc_field       USING 'VBKD-PRSDT'
+                                docdat.
+  PERFORM bdc_field       USING 'VBKD-OIC_TIME'
+                                time.
+*SOC BY RAVI/SHREYOSI ON 05.12.2022 CHARM : 4000005619, GMS: YRGA005_GR Tooltip issue
+  PERFORM bdc_field       USING 'VBKD-ZTERM'
+                                wa_vbkd2-zterm.
+*SOC BY RAVI/SHREYOSI ON 05.12.2022 CHARM : 4000005619, GMS: YRGA005_GR Tooltip issue
+  PERFORM bdc_field       USING 'VBKD-INCO1'
+                                'EXW'.
+*  PERFORM bdc_field       USING 'VBKD-INCO2'
+*                                'plant'.
+  PERFORM bdc_field       USING 'BDC_CURSOR'
+                                'RV45A-MABNR(01)'.
+  PERFORM bdc_dynpro      USING 'SAPMV45A' '4003'.
+  PERFORM bdc_field       USING 'BDC_OKCODE'
+                                '=T\16'.
+  PERFORM bdc_field       USING 'BDC_CURSOR'
+                                'RV45A-KWMENG'.
+  PERFORM bdc_field       USING 'RV45A-KWMENG'
+                                value.
+  PERFORM bdc_field       USING 'VBAP-VRKME'
+                                wa_ekpo-bprme.
+  PERFORM bdc_field       USING 'RV45A-ETDAT'
+                                docdat.
+  PERFORM bdc_field       USING 'RV45A-PRGBZ'
+                                'D'.
+  PERFORM bdc_field       USING 'VBKD-PRSDT'
+                                docdat.
+  PERFORM bdc_field       USING 'VBKD-OIC_TIME'
+                                time.
+  PERFORM bdc_field       USING 'VBAP-CHARG'
+                                wa_display_rep1-charg.
+  PERFORM bdc_dynpro      USING 'SAPMV45A' '4003'.
+  PERFORM bdc_field       USING 'BDC_OKCODE'
+                                '/00'.
+  PERFORM bdc_field       USING 'BDC_CURSOR'
+                                'WA_ZCONTRCLS-YYZIEME(01)'.
+  PERFORM bdc_field       USING 'WA_ZCONTRCLS-YYCLAUSE_ID(01)'
+                                '99'.
+
+  DATA : ycqkg TYPE char17.
+
+  ycqkg = wa_display_rep1-ycqkg.
+  CONDENSE ycqkg.
+
+  PERFORM bdc_field       USING 'WA_ZCONTRCLS-YYZMENG(01)'
+                                ycqkg.
+  PERFORM bdc_field       USING 'WA_ZCONTRCLS-YYZIEME(01)'
+                                'KG'.
+  PERFORM bdc_dynpro      USING 'SAPMV45A' '4003'.
+  PERFORM bdc_field       USING 'BDC_OKCODE'
+                                '=SICH'.
+  PERFORM bdc_field       USING 'BDC_CURSOR'
+                                'WA_ZCONTRCLS-YYZIEME(01)'.
+
+  DATA : bdc_mode TYPE c LENGTH 2.
+
+  IF bdc_display_mode EQ 'X'.
+    bdc_mode = 'A'.
+  ELSE.
+    bdc_mode = 'E'.
+  ENDIF.
+
+  CLEAR it_message[].
+  CALL TRANSACTION 'VA01' USING gt_bdcdata
+         MODE bdc_mode UPDATE 'S' MESSAGES INTO it_message.
+
+  CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+    EXPORTING
+      wait = 'X'.
+  WAIT UP TO 2 SECONDS.
+
+  CLEAR: wa_message.
+
+  LOOP AT it_message INTO wa_message WHERE msgtyp = 'S' AND msgid = 'V1'.
+    IF wa_message IS NOT INITIAL.
+      sales_document = wa_message-msgv2.
+    ENDIF.
+  ENDLOOP.
+  REFRESH:gt_bdcdata[].
+
+ENDFORM.
+
+*FORM bapi_delivery USING delivery TYPE bapishpdelivnumb-deliv_numb
+*                         sales_document TYPE yrga_cbg-ebeln
+*                         wa_vbap TYPE ty_vbap.
+*  sales_order_items-ref_doc = sales_document.
+*  APPEND sales_order_items.
+*  CLEAR sales_order_items.
+*  CALL FUNCTION 'BAPI_OUTB_DELIVERY_CREATE_SLS'
+*    EXPORTING
+*      ship_point        = wa_vbap-vstel
+**     DUE_DATE          =
+**     DEBUG_FLG         =
+**     NO_DEQUEUE        = ' '
+*    IMPORTING
+*      delivery          = delivery
+**     NUM_DELIVERIES    =
+*    TABLES
+*      sales_order_items = sales_order_items
+**     SERIAL_NUMBERS    =
+**     EXTENSION_IN      =
+**     DELIVERIES        =
+**     CREATED_ITEMS     =
+**     EXTENSION_OUT     =
+*      return            = return_del.
+*
+*
+*  IF delivery IS NOT INITIAL.
+*    CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+*      EXPORTING
+*        wait = 'X'
+**   IMPORTING
+**       RETURN        =
+*      .
+*  ELSE.
+*    MESSAGE :'Error while creating delivery'(001) TYPE 'E' DISPLAY LIKE 'E'.
+*  ENDIF.
+*
+*ENDFORM.
+
+FORM bdc_delivery USING delivery TYPE bapishpdelivnumb-deliv_numb
+                         sales_document TYPE yrga_cbg-ebeln
+                         wa_vbap TYPE ty_vbap
+                         wa_display_rep1 TYPE st_display_rep1
+                         wa_tvkol TYPE ty_tvkol.
+
+  PERFORM bdc_dynpro      USING 'SAPMV50A' '4001'.
+  PERFORM bdc_field       USING 'BDC_CURSOR'
+                                'LIKP-VSTEL'.
+  PERFORM bdc_field       USING 'BDC_OKCODE'
+                                '/00'.
+  PERFORM bdc_field       USING 'LIKP-VSTEL'
+                                wa_vbap-vstel.
+
+  DATA : docdat TYPE char10,
+         posdat TYPE char10,
+         time   TYPE char5.
+
+  CONCATENATE sy-datum+6(2) '.' sy-datum+4(2) '.' sy-datum+0(4) INTO docdat.
+  CONCATENATE wa_display_rep1-ydate+6(2) '.' wa_display_rep1-ydate+4(2) '.' wa_display_rep1-ydate+0(4) INTO posdat.
+  CONCATENATE sy-uzeit+0(2) ':' sy-uzeit+2(2)  INTO time.
+
+  PERFORM bdc_field       USING 'LV50C-DATBI'
+                                docdat.
+  PERFORM bdc_field       USING 'LV50C-VBELN'
+                                sales_document.
+  PERFORM bdc_dynpro      USING 'SAPMV50A' '1000'.
+  PERFORM bdc_field       USING 'BDC_OKCODE'
+                                '=OIBE_T'.
+  PERFORM bdc_field       USING 'LIKP-BLDAT'
+                                docdat.
+  PERFORM bdc_field       USING 'BDC_CURSOR'
+                                'LIKP-WADAT_IST'.
+  PERFORM bdc_field       USING 'LIKP-WADAT'
+                                docdat.
+  PERFORM bdc_field       USING 'LIKP-WAUHR'
+                                '00:00:00'.
+
+  IF wa_tvkol-lgort IS INITIAL.
+    PERFORM bdc_field       USING 'LIPS-LGORT(01)'
+                                   'PIPE'.
+  ENDIF.
+
+  DATA : btgew1 TYPE p DECIMALS 3.
+  DATA : btgew TYPE char15.
+  btgew1 = wa_display_rep1-ycqmbg * '3'.
+  btgew = btgew1.
+  CONDENSE btgew.
+
+  PERFORM bdc_field       USING 'LIKP-BTGEW'
+                                btgew.
+  PERFORM bdc_field       USING 'LIKP-GEWEI'
+                                'TO'.
+  PERFORM bdc_field       USING 'LIKP-WADAT_IST'
+                                posdat.
+  PERFORM bdc_field       USING 'LIKP-SPE_WAUHR_IST'
+                                '00:00'.
+  PERFORM bdc_field       USING 'LIPS-CHARG(01)'
+                              wa_display_rep1-charg.
+  PERFORM bdc_dynpro      USING 'SAPMV50A' '3000'.
+  PERFORM bdc_field       USING 'BDC_OKCODE'
+                                '/00'.
+  PERFORM bdc_field       USING 'BDC_CURSOR'
+                                'GT_ADQTY_SCREEN-ADQNT_CHAR(01)'.
+
+  DATA : ncv TYPE char15,
+         gcv TYPE char15.
+  ncv = wa_display_rep1-ancv.
+  gcv = wa_display_rep1-agcv.
+  CONDENSE ncv.
+  CONDENSE gcv.
+
+  PERFORM bdc_field       USING 'GT_PARAM_SCREEN-VALUE(01)'
+                                ncv.
+*  PERFORM BDC_FIELD       USING 'GT_PARAM_SCREEN-VALUE(02)'
+*                                GCV.
+  DATA : ycqkg TYPE char17.
+
+  ycqkg = wa_display_rep1-ycqkg.
+  CONDENSE ycqkg.
+
+  PERFORM bdc_field       USING 'GT_ADQTY_SCREEN-ADQNT_CHAR(01)'
+                                ycqkg.
+
+  """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+*  PERFORM bdc_dynpro      USING 'SAPMV50A' '3000'.
+  PERFORM bdc_field       USING 'BDC_OKCODE'
+                                '/00'.
+  """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+**SOC BY RAVI/SHREYOSI ON 12.10.2023 CHARM: 4000007188, GMS: YRGA005_PGLS2_error mesg
+*  DATA: YMBN TYPE CHAR17.
+*
+*  YMBN = WA_DISPLAY_REP1-YCQMBN.
+*  CONDENSE YMBN.
+*
+*  PERFORM BDC_FIELD       USING 'GT_ADQTY_SCREEN-ADQNT_CHAR(03)'
+*                              YMBN.
+  """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+  PERFORM bdc_field       USING 'GT_PARAM_SCREEN-VALUE(02)'
+                                gcv.
+  """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+  DATA: ysm3 TYPE char17.
+
+  ysm3 = wa_display_rep1-kwmeng.
+  CONDENSE ysm3.
+
+  PERFORM bdc_field       USING 'GT_ADQTY_SCREEN-ADQNT_CHAR(06)'
+                              ysm3.
+
+  """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+*  PERFORM bdc_dynpro      USING 'SAPMV50A' '3000'.
+  PERFORM bdc_field       USING 'BDC_OKCODE'
+                                '/00'.
+  """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+**EOC BY RAVI/SHREYOSI ON 12.10.2023 CHARM: 4000007188, GMS: YRGA005_PGLS2_error mesg
+  PERFORM bdc_dynpro      USING 'SAPMV50A' '3000'.
+  PERFORM bdc_field       USING 'BDC_OKCODE'
+                                '=SICH_T'.
+*  PERFORM bdc_field       USING 'BDC_CURSOR'
+*                                'GT_ADQTY_SCREEN-ADQNT_CHAR(01)'.
+
+  DATA : bdc_mode TYPE c LENGTH 2.
+
+  IF bdc_display_mode EQ 'X'.
+    bdc_mode = 'A'.
+  ELSE.
+    bdc_mode = 'E'.
+  ENDIF.
+
+  CLEAR it_message.
+  CALL TRANSACTION 'VL01N' USING gt_bdcdata
+         MODE bdc_mode UPDATE 'S' MESSAGES INTO it_message.
+
+  CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+    EXPORTING
+      wait = 'X'.
+  WAIT UP TO 2 SECONDS.
+
+  CLEAR: wa_message.
+
+  LOOP AT it_message INTO wa_message WHERE msgtyp = 'S' AND msgid = 'VL'.
+    IF wa_message IS NOT INITIAL.
+      delivery = wa_message-msgv2.
+    ENDIF.
+  ENDLOOP.
+  REFRESH:gt_bdcdata[].
+
+
+ENDFORM.
+
+
+
+
+FORM bdc_pgi USING delivery TYPE likp-vbeln
+                   pgi_number LIKE bapishpdelivnumb-deliv_numb
+                   wa_display_rep1 TYPE st_display_rep1
+                   wa_ekpo TYPE ty_ekpo
+                   wa_likp TYPE ty_likp.
+
+  PERFORM bdc_dynpro      USING 'SAPMV50A' '4004'.
+  PERFORM bdc_field       USING 'BDC_CURSOR'
+                                'LIKP-VBELN'.
+  PERFORM bdc_field       USING 'BDC_OKCODE'
+                                '/00'.
+  PERFORM bdc_field       USING 'LIKP-VBELN'
+                                delivery.
+  PERFORM bdc_dynpro      USING 'SAPMV50A' '1000'.
+  PERFORM bdc_field       USING 'BDC_OKCODE'
+                                '=OIBE_T'.
+
+  DATA : docdat TYPE char10,
+         posdat TYPE char10,
+         time   TYPE char5.
+
+  CONCATENATE sy-datum+6(2) '.' sy-datum+4(2) '.' sy-datum+0(4) INTO docdat.
+  CONCATENATE wa_display_rep1-ydate+6(2) '.' wa_display_rep1-ydate+4(2) '.' wa_display_rep1-ydate+0(4) INTO posdat.
+  CONCATENATE sy-uzeit+0(2) ':' sy-uzeit+2(2)  INTO time.
+
+  PERFORM bdc_field       USING 'LIKP-BLDAT'
+                                docdat.
+  PERFORM bdc_field       USING 'BDC_CURSOR'
+                                'LIPS-MATNR(02)'.
+  PERFORM bdc_field       USING 'LIKP-WADAT'
+                                docdat.
+  PERFORM bdc_field       USING 'LIKP-WAUHR'
+                                '00:00:00'.
+
+  DATA : btgew TYPE char15.
+  btgew = wa_likp-btgew.
+  CONDENSE btgew.
+
+  PERFORM bdc_field       USING 'LIKP-BTGEW'
+                                btgew.
+  PERFORM bdc_field       USING 'LIKP-GEWEI'
+                                'TO'.
+  PERFORM bdc_field       USING 'LIKP-WADAT_IST'
+                                posdat.
+  PERFORM bdc_field       USING 'LIKP-SPE_WAUHR_IST'
+                                '00:00'.
+  PERFORM bdc_field       USING 'LIPS-CHARG(01)'
+                              wa_display_rep1-charg.
+*  PERFORM bdc_dynpro      USING 'SAPMV50A' '3000'.
+*  PERFORM bdc_field       USING 'BDC_OKCODE'
+*                                '=BACK_T'.
+*  PERFORM bdc_field       USING 'BDC_CURSOR'
+*                                'GT_ADQTY_SCREEN-ADQNT_CHAR(01)'.
+*  PERFORM bdc_dynpro      USING 'SAPMV50A' '1000'.
+*  perform bdc_field       using 'BDC_OKCODE'
+*                              '=OIBE_T'.
+*  PERFORM bdc_field       USING 'BDC_OKCODE'
+*                                '=WABU_T'.
+  PERFORM bdc_field       USING 'LIKP-BLDAT'
+                                docdat.
+  PERFORM bdc_field       USING 'BDC_CURSOR'
+                                'LIPS-MATNR(02)'.
+  PERFORM bdc_field       USING 'LIKP-WADAT'
+                                docdat.
+  PERFORM bdc_field        USING 'LIKP-WAUHR'
+                                '00:00:00'.
+  PERFORM bdc_field       USING 'LIKP-BTGEW'
+                                btgew.
+  PERFORM bdc_field       USING 'LIKP-GEWEI'
+                                wa_likp-gewei.
+  PERFORM bdc_field       USING 'LIKP-WADAT_IST'
+                                posdat.
+  PERFORM bdc_field       USING 'LIKP-SPE_WAUHR_IST'
+                                '00:00'.
+  PERFORM bdc_dynpro      USING 'SAPMV50A' '3000'.
+*  PERFORM bdc_field       USING 'BDC_OKCODE'
+*                                '/00'.
+*  PERFORM bdc_field       USING 'BDC_CURSOR'
+*                                'GT_PARAM_SCREEN-VALUE(02)'.
+  DATA : ncv TYPE char15,
+         gcv TYPE char15.
+  ncv = wa_display_rep1-ancv.
+  gcv = wa_display_rep1-agcv.
+  CONDENSE ncv.
+  CONDENSE gcv.
+  PERFORM bdc_field       USING 'BDC_OKCODE'
+                                '=BACK_T'.
+  PERFORM bdc_field       USING 'BDC_CURSOR'
+                                'GT_PARAM_SCREEN-VALUE(02)'.
+  PERFORM bdc_field       USING 'GT_PARAM_SCREEN-VALUE(01)'
+                                ncv.
+  PERFORM bdc_field       USING 'GT_PARAM_SCREEN-VALUE(02)'
+                                gcv.
+  DATA : ycqkg TYPE char17.
+
+  ycqkg = wa_display_rep1-ycqkg.
+  CONDENSE ycqkg.
+
+  PERFORM bdc_field       USING 'GT_ADQTY_SCREEN-ADQNT_CHAR(01)'
+                                ycqkg.
+  DATA: ysm3 TYPE char17.
+
+  ysm3 = wa_display_rep1-kwmeng.
+  CONDENSE ysm3.
+  PERFORM bdc_field       USING 'GT_ADQTY_SCREEN-ADQNT_CHAR(06)'
+                              ysm3.
+
+*  PERFORM bdc_field       USING 'GT_PARAM_SCREEN-VALUE(01)'
+*                                 ncv.
+*  PERFORM bdc_field       USING 'GT_PARAM_SCREEN-VALUE(02)'
+*                                gcv.
+*  PERFORM bdc_dynpro      USING 'SAPMV50A' '3000'.
+*  PERFORM bdc_field       USING 'BDC_OKCODE'
+*                                '=WABU_T'.
+  PERFORM bdc_dynpro      USING 'SAPMV50A' '1000'.
+  PERFORM bdc_field       USING 'BDC_OKCODE'
+                              '=OIBE_T'.
+  PERFORM bdc_field       USING 'BDC_OKCODE'
+                                '=WABU_T'.
+*  PERFORM bdc_field       USING 'BDC_CURSOR'
+*                                'GT_PARAM_SCREEN-VALUE(02)'.
+
+  DATA : bdc_mode TYPE c LENGTH 2.
+
+  IF bdc_display_mode EQ 'X'.
+    bdc_mode = 'A'.
+  ELSE.
+    bdc_mode = 'E'.
+  ENDIF.
+
+  CLEAR it_message.
+  CALL TRANSACTION 'VL02N' USING gt_bdcdata
+         MODE bdc_mode UPDATE 'S' MESSAGES INTO it_message.
+
+  CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+    EXPORTING
+      wait = 'X'.
+  WAIT UP TO 2 SECONDS.
+  CLEAR: wa_message.
+  LOOP AT it_message INTO wa_message WHERE msgtyp = 'S' AND msgid = 'VL'.
+    IF wa_message IS NOT INITIAL.
+      pgi_number = wa_message-msgv1.
+    ENDIF.
+  ENDLOOP.
+  REFRESH:gt_bdcdata[].
+
+  SELECT SINGLE mblnr INTO @DATA(l_mblnr)
+  FROM matdoc
+  WHERE
+  mblnr = @pgi_number.
+  IF sy-subrc <> 0.
+    CLEAR pgi_number.
+  ENDIF.
+
+ENDFORM.
+
+FORM bdc_dynpro USING program dynpro.
+  CLEAR gs_bdcdata.
+  gs_bdcdata-program  = program.
+  gs_bdcdata-dynpro   = dynpro.
+  gs_bdcdata-dynbegin = 'X'.
+  APPEND gs_bdcdata TO gt_bdcdata.
+ENDFORM.
+
+*----------------------------------------------------------------------*
+*        Insert field                                                  *
+*----------------------------------------------------------------------*
+FORM bdc_field USING fnam fval.
+  CLEAR gs_bdcdata.
+  gs_bdcdata-fnam = fnam.
+  gs_bdcdata-fval = fval.
+  APPEND gs_bdcdata TO gt_bdcdata.
+ENDFORM.
+
+
+FORM fill_celltab USING VALUE(p_mode) e_fieldname TYPE lvc_fname
+                  CHANGING pt_celltab TYPE lvc_t_styl.
+  DATA: ls_celltab TYPE lvc_s_styl,
+        l_mode     TYPE raw4.
+
+  IF p_mode EQ 'RW'.
+*§2a.Use attribute CL_GUI_ALV_GRID=>MC_STYLE_ENABLED to set a cell
+*    to status "editable".
+    l_mode = cl_gui_alv_grid=>mc_style_enabled.
+  ELSE. "p_mode eq 'RO'
+*§2b.Use attribute CL_GUI_ALV_GRID=>MC_STYLE_DISABLED to set a cell
+*    to status "non-editable".
+    l_mode = cl_gui_alv_grid=>mc_style_disabled.
+  ENDIF.
+
+  ls_celltab-fieldname = e_fieldname.
+  ls_celltab-style = l_mode.
+  INSERT ls_celltab INTO TABLE pt_celltab.
+
+ENDFORM.                               " FILL_CELLTAB
+*&---------------------------------------------------------------------*
+*&      Form  CBG_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM cbg_data .
+
+  DATA: sno TYPE i.
+
+  SELECT * FROM yrga_cbg INTO CORRESPONDING FIELDS OF TABLE it_cbg
+      WHERE ydate IN s_date
+      AND   lifnr IN s_lifnr
+      AND kunnr IN s_kunnr
+      AND lifnr IN s_lifnr
+      AND rocode IN s_rocode
+      AND ygaid IN s_gaid
+      AND kunnr LIKE 'ZC%'.
+
+
+  IF it_cbg IS INITIAL.
+    MESSAGE 'No Data Found For given Selection' TYPE 'I'.
+  ENDIF.
+
+
+
+  IF it_cbg IS NOT INITIAL.
+
+    LOOP AT it_cbg INTO wa_cbg.
+      DATA(tb)  = sy-tabix.
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+        EXPORTING
+          input  = wa_cbg-lifnr
+        IMPORTING
+          output = wa_cbg-lifnr.
+
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+        EXPORTING
+          input  = wa_cbg-kunnr
+        IMPORTING
+          output = wa_cbg-kunnr.
+
+      SELECT SINGLE name1 FROM lfa1 INTO wa_cbg-l_name  WHERE lifnr = wa_cbg-lifnr.
+      SELECT SINGLE name1  FROM kna1 INTO wa_cbg-k_name WHERE kunnr = wa_cbg-kunnr.
+      MODIFY it_cbg FROM wa_cbg INDEX tb TRANSPORTING l_name  k_name.
+      CLEAR: wa_cbg.
+    ENDLOOP.
+
+
+
+    CLEAR wa_fcat1.
+    wa_fcat1-col_pos = sno + 1.
+    wa_fcat1-fieldname = 'YDATE'.
+    wa_fcat1-tabname = 'IT_CBG'.
+    wa_fcat1-seltext_l = 'Date'.
+    wa_fcat1-outputlen = 15.
+    APPEND wa_fcat1 TO it_fcat1.
+
+
+    CLEAR wa_fcat1.
+    wa_fcat1-col_pos = sno + 1.
+    wa_fcat1-fieldname = 'TIMESTAMP'.
+    wa_fcat1-tabname = 'IT_CBG'.
+    wa_fcat1-seltext_l = 'Time Stamp'.
+    wa_fcat1-outputlen = 15.
+    APPEND wa_fcat1 TO it_fcat1.
+
+    CLEAR wa_fcat1.
+    wa_fcat1-col_pos = sno + 1.
+    wa_fcat1-fieldname = 'LIFNR'.
+    wa_fcat1-tabname = 'IT_CBG'.
+    wa_fcat1-seltext_l = 'Vendor No'.
+    wa_fcat1-outputlen = 15.
+    APPEND wa_fcat1 TO it_fcat1.
+
+
+
+    CLEAR wa_fcat1.
+    wa_fcat1-col_pos = sno + 1.
+    wa_fcat1-fieldname = 'L_NAME'.
+    wa_fcat1-tabname = 'IT_CBG'.
+    wa_fcat1-seltext_l = 'Vendor Name'.
+    wa_fcat1-outputlen = 15.
+    APPEND wa_fcat1 TO it_fcat1.
+
+
+    CLEAR wa_fcat1.
+    wa_fcat1-col_pos = sno + 1.
+    wa_fcat1-fieldname = 'KUNNR'.
+    wa_fcat1-tabname = 'IT_CBG'.
+    wa_fcat1-seltext_l = 'Customer'.
+    wa_fcat1-outputlen = 15.
+    APPEND wa_fcat1 TO it_fcat1.
+
+    CLEAR wa_fcat1.
+    wa_fcat1-col_pos = sno + 1.
+    wa_fcat1-fieldname = 'K_NAME'.
+    wa_fcat1-tabname = 'IT_CBG'.
+    wa_fcat1-seltext_l = 'Customer Name'.
+    wa_fcat1-outputlen = 15.
+    APPEND wa_fcat1 TO it_fcat1.
+
+    CLEAR wa_fcat1.
+    wa_fcat1-col_pos = sno + 1.
+    wa_fcat1-fieldname = 'ROCODE'.
+    wa_fcat1-tabname = 'IT_CBG'.
+    wa_fcat1-seltext_l = 'RO Code'.
+    wa_fcat1-outputlen = 15.
+    APPEND wa_fcat1 TO it_fcat1.
+
+
+    CLEAR wa_fcat1.
+    wa_fcat1-col_pos = sno + 1.
+    wa_fcat1-fieldname = 'WERKS'.
+    wa_fcat1-tabname = 'IT_CBG'.
+    wa_fcat1-seltext_l = 'Plant'.
+    wa_fcat1-outputlen = 15.
+    APPEND wa_fcat1 TO it_fcat1.
+
+    CLEAR wa_fcat1.
+    wa_fcat1-col_pos = sno + 1.
+    wa_fcat1-fieldname = 'UNAME'.
+    wa_fcat1-tabname = 'IT_CBG'.
+    wa_fcat1-seltext_l = 'User Name'.
+    wa_fcat1-outputlen = 15.
+    APPEND wa_fcat1 TO it_fcat1.
+
+    CLEAR wa_fcat1.
+    wa_fcat1-col_pos = sno + 1.
+    wa_fcat1-fieldname = 'MATNR'.
+    wa_fcat1-tabname = 'IT_CBG'.
+    wa_fcat1-seltext_l = 'Material'.
+    wa_fcat1-outputlen = 15.
+    APPEND wa_fcat1 TO it_fcat1.
+
+    CLEAR wa_fcat1.
+    wa_fcat1-col_pos = sno + 1.
+    wa_fcat1-fieldname = 'YGAID'.
+    wa_fcat1-tabname = 'IT_CBG'.
+    wa_fcat1-seltext_l = 'Geographical Area ID'.
+    wa_fcat1-outputlen = 15.
+    APPEND wa_fcat1 TO it_fcat1.
+
+
+    CLEAR wa_fcat1.
+    wa_fcat1-col_pos = sno + 1.
+    wa_fcat1-fieldname = 'KWMENG'.
+    wa_fcat1-tabname = 'IT_CBG'.
+    wa_fcat1-seltext_l = 'Quantity in SM3'.
+    wa_fcat1-outputlen = 15.
+    APPEND wa_fcat1 TO it_fcat1.
+
+
+    CLEAR wa_fcat1.
+    wa_fcat1-col_pos = sno + 1.
+    wa_fcat1-fieldname = 'MSEHI'.
+    wa_fcat1-tabname = 'IT_CBG'.
+    wa_fcat1-seltext_l = 'UOM'.
+    wa_fcat1-outputlen = 15.
+    APPEND wa_fcat1 TO it_fcat1.
+
+
+    CLEAR wa_fcat1.
+    wa_fcat1-col_pos = sno + 1.
+    wa_fcat1-fieldname = 'YYSTRM_SG'.
+    wa_fcat1-tabname = 'IT_CBG'.
+    wa_fcat1-seltext_l = 'Fixed Density'.
+    wa_fcat1-outputlen = 15.
+    APPEND wa_fcat1 TO it_fcat1.
+
+
+    CLEAR wa_fcat1.
+    wa_fcat1-col_pos = sno + 1.
+    wa_fcat1-fieldname = 'AGCV'.
+    wa_fcat1-tabname = 'IT_CBG'.
+    wa_fcat1-seltext_l = 'Gross Calorific Value'.
+    wa_fcat1-outputlen = 15.
+    APPEND wa_fcat1 TO it_fcat1.
+
+
+    CLEAR wa_fcat1.
+    wa_fcat1-col_pos = sno + 1.
+    wa_fcat1-fieldname = 'ANCV'.
+    wa_fcat1-tabname = 'IT_CBG'.
+    wa_fcat1-seltext_l = 'Net Calorific Value'.
+    wa_fcat1-outputlen = 15.
+    APPEND wa_fcat1 TO it_fcat1.
+
+
+    CLEAR wa_fcat1.
+    wa_fcat1-col_pos = sno + 1.
+    wa_fcat1-fieldname = 'YCQMBG'.
+    wa_fcat1-tabname = 'IT_CBG'.
+    wa_fcat1-seltext_l = 'Quantity Value In MBG Unit'.
+    wa_fcat1-outputlen = 15.
+    APPEND wa_fcat1 TO it_fcat1.
+
+
+    CLEAR wa_fcat1.
+    wa_fcat1-col_pos = sno + 1.
+    wa_fcat1-fieldname = 'YCQMBN'.
+    wa_fcat1-tabname = 'IT_CBG'.
+    wa_fcat1-seltext_l = 'Quantity in MBN unit of Measurement'.
+    wa_fcat1-outputlen = 15.
+    APPEND wa_fcat1 TO it_fcat1.
+
+
+    CLEAR wa_fcat1.
+    wa_fcat1-col_pos = sno + 1.
+    wa_fcat1-fieldname = 'YCQKG'.
+    wa_fcat1-tabname = 'IT_CBG'.
+    wa_fcat1-seltext_l = 'Quantity in KG unit of measurement'.
+    wa_fcat1-outputlen = 15.
+    APPEND wa_fcat1 TO it_fcat1.
+
+
+    CLEAR wa_fcat1.
+    wa_fcat1-col_pos = sno + 1.
+    wa_fcat1-fieldname = 'CONTID'.
+    wa_fcat1-tabname = 'IT_CBG'.
+    wa_fcat1-seltext_l = 'Contract Number'.
+    wa_fcat1-outputlen = 15.
+    APPEND wa_fcat1 TO it_fcat1.
+
+    CLEAR wa_fcat1.
+    wa_fcat1-col_pos = sno + 1.
+    wa_fcat1-fieldname = 'YDOVNO'.
+    wa_fcat1-tabname = 'IT_CBG'.
+    wa_fcat1-seltext_l = 'Sales order'.
+    wa_fcat1-outputlen = 15.
+    APPEND wa_fcat1 TO it_fcat1.
+
+    CLEAR wa_fcat1.
+    wa_fcat1-col_pos = sno + 1.
+    wa_fcat1-fieldname = 'EBELN'.
+    wa_fcat1-tabname = 'IT_CBG'.
+    wa_fcat1-seltext_l = 'Purchasing Document Number'.
+    wa_fcat1-outputlen = 15.
+    APPEND wa_fcat1 TO it_fcat1.
+
+
+    CLEAR wa_fcat1.
+    wa_fcat1-col_pos = sno + 1.
+    wa_fcat1-fieldname = 'WEMPF'.
+    wa_fcat1-tabname = 'IT_CBG'.
+    wa_fcat1-seltext_l = 'Goods Receipt Doc.'.
+    wa_fcat1-outputlen = 15.
+    APPEND wa_fcat1 TO it_fcat1.
+
+
+    CLEAR wa_fcat1.
+    wa_fcat1-col_pos = sno + 1.
+    wa_fcat1-fieldname = 'VBELN'.
+    wa_fcat1-tabname = 'IT_CBG'.
+    wa_fcat1-seltext_l = 'Delivery No'.
+    wa_fcat1-outputlen = 15.
+    APPEND wa_fcat1 TO it_fcat1.
+
+
+    CLEAR wa_fcat1.
+    wa_fcat1-col_pos = sno + 1.
+    wa_fcat1-fieldname = 'MBLNR'.
+    wa_fcat1-tabname = 'IT_CBG'.
+    wa_fcat1-seltext_l = 'Material Doc No'.
+    wa_fcat1-outputlen = 15.
+    APPEND wa_fcat1 TO it_fcat1.
+
+    CLEAR wa_fcat1.
+    wa_fcat1-col_pos = sno + 1.
+    wa_fcat1-fieldname = 'CHARG'.
+    wa_fcat1-tabname = 'IT_CBG'.
+    wa_fcat1-seltext_l = 'Batch No'.
+    wa_fcat1-outputlen = 15.
+    APPEND wa_fcat1 TO it_fcat1.
+
+
+    CLEAR wa_fcat1.
+    wa_fcat1-col_pos = sno + 1.
+    wa_fcat1-fieldname = 'YY_MDOTR'.
+    wa_fcat1-tabname = 'IT_CBG'.
+    wa_fcat1-seltext_l = 'Mode Of Transport'.
+    wa_fcat1-outputlen = 15.
+    APPEND wa_fcat1 TO it_fcat1.
+
+
+    DATA: v_repid TYPE sy-repid.
+
+    CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+      EXPORTING
+*       I_INTERFACE_CHECK  = ' '
+*       I_BYPASSING_BUFFER = ' '
+*       I_BUFFER_ACTIVE    = ' '
+        i_callback_program = v_repid
+        it_fieldcat        = it_fcat1
+      TABLES
+        t_outtab           = it_cbg[]
+      EXCEPTIONS
+        program_error      = 1
+        OTHERS             = 2.
+    .
+    IF sy-subrc <> 0.
+* Implement suitable error handling here
+    ENDIF.
+  ENDIF.
+ENDFORM.

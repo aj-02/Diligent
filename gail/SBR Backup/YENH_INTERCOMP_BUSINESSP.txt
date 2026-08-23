@@ -1,0 +1,244 @@
+ENHANCEMENT 1  YENH_INTERCOMP_BUSINESSP.    "active version
+data : wa_bset type ACCBSET .
+if YCLSTO_TRANFER=>ms_inter_comp is not INITIAL.
+
+      DATA(lt_cond_type) = yclsto_tranfer=>mt_cond_type.
+      DELETE lt_cond_type WHERE kwert is INITIAL.
+
+   LOOP AT T_ACCIT REFERENCE INTO data(lr_accit).
+     lr_accit->bupla = YCLSTO_TRANFER=>ms_inter_comp.
+     if lr_accit->hkont = '0002013801'.
+       lr_accit->kschl = 'JOCG'.
+       lr_accit->taxit = abap_true.
+     endif.
+     if lr_accit->hkont = '0002013802'.
+       lr_accit->kschl = 'JOSG'.
+       lr_accit->taxit = abap_true.
+     endif.
+
+     if lr_accit->hkont = '0002013803'.
+       lr_accit->kschl = 'JOIG'.
+       lr_accit->taxit = abap_true.
+
+     endif.
+     if lr_accit->taxit is INITIAL.
+       CONTINUE.
+     endif.
+     wa_bset-bukrs = lr_accit->bukrs.
+     wa_bset-gjahr = lr_accit->gjahr.
+     wa_bset-monat = lr_accit->monat.
+     wa_bset-kschl = lr_accit->kschl.
+     wa_bset-hwbas  = lr_accit->pswbt.
+     wa_bset-fwste = lr_accit->pswbt.
+     wa_bset-fwste = lr_accit->pswbt.
+     wa_bset-hkont = lr_accit->hkont.
+     wa_bset-shkzg = lr_accit->shkzg.
+     wa_bset-knumh = lr_accit->knumh.
+     wa_bset-mwskz = lr_accit->mwskz.
+     READ TABLE lt_cond_type REFERENCE INTO data(lr_cond) with key knumh = lr_accit->knumh.
+     if sy-subrc = 0.
+     wa_bset-FWBAS = lr_cond->kawrt.
+     wa_bset-ktosl = lr_cond->KVSL1.
+      endif.
+      wa_bset-kbetr = lr_accit->kbetr.
+     APPEND wa_bset to T_ACCTX.
+     clear wa_bset.
+   ENDLOOP.
+    clear yclsto_tranfer=>mt_cond_type.
+
+  endif.
+
+*** Start Of Changes** Gaurav Chugh 8**Req: Chandresh: Date 22-Nov-2018***** 2 Step STO GL assignment*********
+  read table t_accit REFERENCE INTO lr_accit INDEX 1.
+  if sy-subrc = 0.
+    select single bsart into @data(lv_bsart) from ekko where ebeln = @lr_accit->ebeln.
+    if sy-subrc = 0.
+      if lv_bsart = 'ZMIT' OR lv_bsart = 'ZMZM' OR
+         lv_bsart = 'ZMNI' OR lv_bsart = 'ZMIP'.
+        loop at t_accit ASSIGNING FIELD-SYMBOL(<fs_acc>) where bwart = '68A'.
+
+          if <fs_acc>-shkzg = 'S'.
+
+          select single hkont from YRFA_GL_ACCOUNT where gl_acc = 'INTRN' into @<fs_acc>-hkont.
+          select single werks from ekpo into @data(lv_werks) where ebeln = @<fs_acc>-ebeln AND ebelp = @<fs_acc>-ebelp.
+          if sy-subrc = 0.
+
+* Quick Fix Replace this statement by a SELECT statement with ORDER BY
+* 07.10.2024 17:24:51 AB_GAIL
+* Transport SBRK900012 SAP: S4C: ATC: 03.10.2024 : 1
+* Replaced Code:
+*  *  BEGIN OF CHANGES BY OF Vipul ON 04Feb25 FOR ATC
+            select gsber from T134G into @data(lv_gsber) UP TO 1 ROWS
+              where werks = @lv_werks ORDER BY PRIMARY KEY .
+ENDSELECT.
+* *End of changes by of VIPUL on 04Feb25  for ATC
+
+*SELECT GSBER FROM T134G INTO @DATA(LV_GSBER) UP TO 1 ROWS WHERE WERKS = @LV_WERKS
+* ORDER BY PRIMARY KEY .
+* ENDSELECT.
+
+* End of Quick Fix
+
+            if sy-subrc = 0.
+              <fs_acc>-werks = lv_werks.
+              <fs_acc>-gsber = lv_gsber.
+              select single PRCTR into <fs_acc>-prctr from marc where matnr = <fs_acc>-matnr AND WERKS = <fs_acc>-werks.
+              <fs_acc>-pprctr = <fs_acc>-prctr.
+** -> Begin of changes by of Sarfraz Ali on 13.01.2025 12:28:47
+*              <fs_acc>-bwkey = lv_werks.
+** <- End changes by of Sarfraz Ali on 13.01.2025 12:28:47
+              <fs_acc>-umwrk = lv_werks.
+            endif.
+          endif.
+          else.
+            select single werks from ekpo into lv_werks where ebeln = <fs_acc>-ebeln AND ebelp = <fs_acc>-ebelp.
+            <fs_acc>-pargb = lv_werks.
+*****SOC by Archana/Manas on 06.01.2020 to pick correct buisness area where plant is different from buisness area.Charm-4000001442*****
+            select single gsber FROM t134g INTO @data(lv_gsber1) WHERE werks = @<fs_acc>-pargb AND spart = '10'.
+              <fs_acc>-pargb = lv_gsber1.
+*****SOC by Archana/Manas on 06.01.2020 to pick correct buisness area where plant is different from buisness area.Charm-4000001442*****
+          endif.
+        endloop.
+        loop at t_accit ASSIGNING <fs_acc> where bwart = '68I' and ( ktosl = 'BSX' OR ktosl = 'ZIV' ).
+          if <fs_acc>-shkzg = 'H'.
+*** Start Of Changes** Gaurav Chugh 8**Req: Chandresh: Date 20-02-2019***** 2 Step STO GL GST
+          if <fs_acc>-ktosl = 'BSX'.
+***************end of Changes****************************************************************
+          select single hkont from YRFA_GL_ACCOUNT where gl_acc = 'INTRN' into @<fs_acc>-hkont..
+          endif.
+          select single werks from ekpo into lv_werks where ebeln = <fs_acc>-ebeln AND ebelp = <fs_acc>-ebelp.
+          if sy-subrc = 0.
+
+* Quick Fix Replace this statement by a SELECT statement with ORDER BY
+* 07.10.2024 17:24:51 AB_GAIL
+* Transport SBRK900012 SAP: S4C: ATC: 03.10.2024 : 1
+* Replaced Code:
+*          if sy-subrc = 0.
+*  *  BEGIN OF CHANGES BY OF Vipul ON 04Feb25 FOR ATC
+            select gsber from T134G into lv_gsber UP TO 1 ROWS
+              where werks = lv_werks ORDER BY PRIMARY KEY .
+ENDSELECT.
+* *End of changes by of VIPUL on 04Feb25  for ATC
+
+*SELECT GSBER FROM T134G INTO LV_GSBER UP TO 1 ROWS WHERE WERKS = LV_WERKS
+* ORDER BY PRIMARY KEY .
+* ENDSELECT.
+
+* End of Quick Fix
+
+            if sy-subrc = 0.
+              <fs_acc>-werks = lv_werks.
+              <fs_acc>-gsber = lv_gsber.
+*****SOC by Archana/Manas on 06.01.2020 to pick correct buisness area where plant is different from buisness area.Charm-4000001442*****
+*              <fs_acc>-pargb = lv_werks.
+           select single gsber from T134G into lv_gsber1 where werks = lv_werks AND spart = '10'.
+              <fs_acc>-pargb = lv_gsber1.
+*****EOC by Archana/Manas on 06.01.2020 to pick correct buisness area where plant is different from buisness area.Charm-4000001442*****
+              select single PRCTR into <fs_acc>-prctr from marc where matnr = <fs_acc>-matnr AND WERKS = <fs_acc>-werks.
+              <fs_acc>-pprctr = <fs_acc>-prctr.
+              <fs_acc>-bwkey = lv_werks.
+              <fs_acc>-umwrk = lv_werks.
+            endif.
+          endif.
+          else.
+*****SOC by Archana/Manas on 06.01.2020 to pick correct buisness area where plant is different from buisness area.Charm-4000001442*****
+*             <fs_acc>-pargb = lv_werks.
+                        select single gsber from T134G into lv_gsber1 where werks = lv_werks AND spart = '10'.
+            <fs_acc>-pargb = lv_gsber1.
+*****EOC by Archana/Manas on 06.01.2020 to pick correct buisness area where plant is different from buisness area.Charm-4000001442*****
+          endif.
+        endloop.
+        loop at t_accit ASSIGNING <fs_acc> where bwart = '68B'.
+        if <fs_acc>-shkzg = 'H'.
+          select single hkont from YRFA_GL_ACCOUNT where gl_acc = 'INTRN' into @<fs_acc>-hkont..
+          select single werks from ekpo into lv_werks where ebeln = <fs_acc>-ebeln AND ebelp = <fs_acc>-ebelp.
+          if sy-subrc = 0.
+
+* Quick Fix Replace this statement by a SELECT statement with ORDER BY
+* 07.10.2024 17:24:51 AB_GAIL
+* Transport SBRK900012 SAP: S4C: ATC: 03.10.2024 : 1
+* Replaced Code:
+*  *  BEGIN OF CHANGES BY OF Vipul ON 04Feb25 FOR ATC
+            select gsber from T134G into lv_gsber UP TO 1 ROWS
+               where werks = lv_werks ORDER BY PRIMARY KEY .
+ENDSELECT.
+* *End of changes by of VIPUL on 04Feb25  for ATC
+
+*SELECT GSBER FROM T134G INTO LV_GSBER UP TO 1 ROWS WHERE WERKS = LV_WERKS
+* ORDER BY PRIMARY KEY .
+* ENDSELECT.
+
+* End of Quick Fix
+
+            if sy-subrc = 0.
+              <fs_acc>-werks = lv_werks.
+              <fs_acc>-gsber = lv_gsber.
+              select single PRCTR into <fs_acc>-prctr from marc where matnr = <fs_acc>-matnr AND WERKS = <fs_acc>-werks.
+              <fs_acc>-pprctr = <fs_acc>-prctr.
+              <fs_acc>-bwkey = lv_werks.
+              <fs_acc>-umwrk = lv_werks.
+            endif.
+          endif.
+          else.
+           select single werks from ekpo into lv_werks where ebeln = <fs_acc>-ebeln AND ebelp = <fs_acc>-ebelp.
+*****SOC by Archana/Manas on 06.01.2020 to pick correct buisness area where plant is different from buisness area.Charm-4000001442*****
+*            <fs_acc>-pargb = lv_werks.
+                         select single gsber from T134G into lv_gsber1 where werks = lv_werks AND spart = '10'.
+             <fs_acc>-pargb = lv_gsber1.
+*****EOC by Archana/Manas on 06.01.2020 to pick correct buisness area where plant is different from buisness area.Charm-4000001442*****
+         endif.
+        endloop.
+        loop at t_accit ASSIGNING <fs_acc> where bwart = '68J' and ( ktosl = 'BSX' OR ktosl = 'ZIV' ).
+          if <fs_acc>-shkzg = 'S'.
+*** Start Of Changes** Gaurav Chugh 8**Req: Chandresh: Date 20-02-2019***** 2 Step STO GL GST
+          if <fs_acc>-ktosl = 'BSX'.
+***************end of Changes****************************************************************
+          select single hkont from YRFA_GL_ACCOUNT where gl_acc = 'INTRN' into @<fs_acc>-hkont.
+          endif.
+          select single werks from ekpo into lv_werks where ebeln = <fs_acc>-ebeln AND ebelp = <fs_acc>-ebelp.
+          if sy-subrc = 0.
+
+* Quick Fix Replace this statement by a SELECT statement with ORDER BY
+* 07.10.2024 17:24:51 AB_GAIL
+* Transport SBRK900012 SAP: S4C: ATC: 03.10.2024 : 1
+* Replaced Code:
+*  *  BEGIN OF CHANGES BY OF Vipul ON 04Feb25 FOR ATC
+            select  gsber from T134G into lv_gsber UP TO 1 rows
+              where werks = lv_werks ORDER BY PRIMARY KEY .
+ENDSELECT.
+* *End of changes by of VIPUL on 04Feb25  for ATC
+
+
+*SELECT GSBER FROM T134G INTO LV_GSBER UP TO 1 ROWS WHERE WERKS = LV_WERKS
+* ORDER BY PRIMARY KEY .
+* ENDSELECT.
+
+* End of Quick Fix
+
+            if sy-subrc = 0.
+              <fs_acc>-werks = lv_werks.
+              <fs_acc>-gsber = lv_gsber.
+*              <fs_acc>-pargb = lv_werks.
+*****SOC by Archana/Manas on 06.01.2020 to pick correct buisness area where plant is different from buisness area.Charm-4000001442*****
+                          select single gsber from T134G into lv_gsber1 where werks = lv_werks AND spart = '10'.
+              <fs_acc>-pargb = lv_gsber1.
+*****EOC by Archana/Manas on 06.01.2020 to pick correct buisness area where plant is different from buisness area.Charm-4000001442*****
+              select single PRCTR into <fs_acc>-prctr from marc where matnr = <fs_acc>-matnr AND WERKS = <fs_acc>-werks.
+              <fs_acc>-pprctr = <fs_acc>-prctr.
+              <fs_acc>-bwkey = lv_werks.
+              <fs_acc>-umwrk = lv_werks.
+            endif.
+          endif.
+          else.
+*****SOC by Archana/Manas on 06.01.2020 to pick correct buisness area where plant is different from buisness area.Charm-4000001442*****
+*             <fs_acc>-pargb = lv_werks.
+                        select single gsber from T134G into lv_gsber1 where werks = lv_werks AND spart = '10'.
+            <fs_acc>-pargb = lv_gsber1.
+*****EOC by Archana/Manas on 06.01.2020 to pick correct buisness area where plant is different from buisness area.Charm-4000001442*****
+          endif.
+        endloop.
+    endif.
+  endif.
+  endif.
+***************End Of Changes******************************************
+ENDENHANCEMENT.s

@@ -1,0 +1,2435 @@
+*&----------------------------------------------------------------------*
+*& Include          ZIN_M2C_INBOUND_F01
+*&----------------------------------------------------------------------*
+*& Requirement Id: DID_M2C_138                                          *
+*& Title: Inbound Dunning Activity                                      *
+*& Date Created: 25.03.2025                                             *
+*& Programmer: Vipul Kumar Tamboli (TAMBOLIV)                           *
+*& Program Objective: Upload and Process Dunning Records                *
+*& Orig Request: DS4K901080                                             *
+*&----------------------------------------------------------------------*
+*& Modification History                                                 *
+*&----------------------------------------------------------------------*
+*& Modified By:                                                         *
+*& Date:                                                                *
+*& Modification TR:                                                     *
+*& Reason:                                                              *
+*&----------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*& Form f_modify_screen
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM f_modify_screen .
+  LOOP AT SCREEN .
+    IF screen-group1 = TEXT-009.   "Target screen group
+      IF rb3 <> abap_true.
+        screen-active = 0.          "Hide/disable field
+      ELSE.
+        screen-active = 1.         "Show/enable field
+      ENDIF.
+      MODIFY SCREEN.               "Apply changes
+    ENDIF.
+    IF screen-group1 = 'MD2' OR screen-group1 = 'MD1'.
+      screen-active = '0'.
+      MODIFY SCREEN.
+    ELSE.
+      screen-active = '1'.
+      MODIFY SCREEN.
+    ENDIF.
+    IF screen-name = 'S_SCP-LOW'.
+      IF p_bukrs IS INITIAL.
+        screen-input = '0'.  " disable field
+      ELSE.
+        screen-input = '1'.  " enable field
+      ENDIF.
+      MODIFY SCREEN.
+    ENDIF.
+  ENDLOOP.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form f_initialization
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM f_initialization .
+
+  gs_log-object    = TEXT-107. "'ZINDUNNINTERFACE'.           " Object name
+  gs_log-subobject = TEXT-108. "'ZINDUNNINTERFACE_SUB'.       " Sub-Object name
+  gs_log-aluser    = sy-uname. " Username
+  gs_log-alprog    = sy-repid. " Report name
+  gs_log-alchdate  = sy-datum. " Date
+  gs_log-alchtime  = sy-uzeit. " Time
+  CALL FUNCTION 'BAL_LOG_CREATE'
+    EXPORTING
+      i_s_log                 = gs_log
+    IMPORTING
+      e_log_handle            = gs_loghandle
+    EXCEPTIONS ##FM_SUBRC_OK
+      log_header_inconsistent = 1
+      OTHERS                  = 2.
+
+  " Select TVARVC filter values for different names into GT_TVARVC
+  SELECT name, type, numb, sign, opti, low, high
+    FROM tvarvc
+    WHERE name = @gc_inpt
+       OR name = @gc_arch
+       OR name = @gc_erro
+    INTO TABLE @gt_tvarvc.
+  IF sy-subrc <> 0.
+    gs_msg_l-msgty = zcl_abap_utility=>zif_m2c_constant~zab_m2c_inbound_dunning-error.
+    gs_msg_l-msgid = zcl_abap_utility=>zif_m2c_constant~zab_m2c_inbound_dunning-msgid.
+    gs_msg_l-msgno = zcl_abap_utility=>zif_m2c_constant~zab_m2c_inbound_dunning-msgno_78.
+    CALL FUNCTION 'BAL_LOG_MSG_ADD'
+      EXPORTING
+        i_log_handle     = gs_loghandle
+        i_s_msg          = gs_msg_l
+      EXCEPTIONS
+        log_not_found    = 1
+        msg_inconsistent = 2
+        log_is_full      = 3
+        OTHERS           = 4.
+    IF sy-subrc = 0.
+      APPEND gs_loghandle TO gt_loghandle.
+    ENDIF.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form f_f4_help_serv_provd
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM f_f4_help_serv_provd .
+
+  "Define constants for F4 help parameters using global interface constants
+  CONSTANTS : lc_retfield    TYPE dfies-fieldname VALUE zcl_abap_utility=>zif_m2c_constant~zab_m2c_inbound_dunning-lc_retfield,
+              lc_value_org   TYPE ddbool_d VALUE zcl_abap_utility=>zif_m2c_constant~zab_m2c_inbound_dunning-lc_value_org,
+              lc_dynprofield TYPE help_info-dynprofld VALUE zcl_abap_utility=>zif_m2c_constant~zab_m2c_inbound_dunning-lc_dynprofield.
+
+* Fetch service providers for the given company code
+  SELECT DISTINCT company_code, service_provider
+    FROM zdt_m2c_dunpath
+    WHERE type = 'DUNN'
+    INTO TABLE @DATA(lt_dunpath).
+  IF sy-subrc IS INITIAL.
+    SORT lt_dunpath BY company_code service_provider.
+    IF p_bukrs IS NOT INITIAL.
+      DELETE lt_dunpath WHERE company_code <> p_bukrs.
+    ENDIF.
+*Trigger F4 help using internal table values
+    CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
+      EXPORTING
+        retfield        = lc_retfield            " Field to return from F4 help
+        value_org       = lc_value_org            " Value origin (internal table)
+        dynpprog        = sy-cprog                  " Current program
+        dynpnr          = sy-dynnr                     " Current screen number
+        dynprofield     = lc_dynprofield            " Field on screen to receive value
+      TABLES
+        value_tab       = lt_dunpath                 " List of service providers
+      EXCEPTIONS
+        parameter_error = 1
+        no_values_found = 2
+        OTHERS          = 3.
+    IF sy-subrc <> 0.
+      "Display error message if F4 help fails
+      MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+                   WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+    ENDIF.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form f_f4_help_file
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM f_f4_help_file .
+  CALL FUNCTION 'F4_FILENAME'
+    EXPORTING
+      program_name  = syst-cprog
+      dynpro_number = syst-dynnr
+      field_name    = ' '
+    IMPORTING
+      file_name     = p_file.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form f_selection_screen
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM f_selection_screen .
+  IF sy-ucomm = TEXT-010.
+    IF p_scp IS INITIAL.
+      MESSAGE: i057(zmc_m2c_fica) DISPLAY LIKE 'E'(e00).      " Please Enter service provider
+    ELSE.
+      PERFORM download_template.
+    ENDIF.
+  ELSEIF sy-ucomm = 'SJOB'(197) AND rb2 = abap_true.
+    rb1 = abap_true. rb2 = abap_false.
+    MESSAGE i059(zmc_m2c_fica) DISPLAY LIKE TEXT-e00.         " Please Run in Foreground
+    LEAVE TO LIST-PROCESSING.
+  ELSEIF sy-ucomm = TEXT-197 AND rb3 = abap_true.
+    rb1 = abap_true. rb3 = abap_false.
+    MESSAGE i059(zmc_m2c_fica) DISPLAY LIKE TEXT-e00.         " Please Run in Foreground
+    LEAVE TO LIST-PROCESSING.
+  ENDIF.
+  IF sy-ucomm = 'ONLI'.
+    IF rb3 = abap_true AND p_scp IS INITIAL.
+      MESSAGE i060(zmc_m2c_fica) DISPLAY LIKE TEXT-e00.       " Please provide the Service Provider
+      LEAVE TO LIST-PROCESSING.
+    ENDIF.
+  ENDIF.
+  IF sy-ucomm IS INITIAL AND rb1 = abap_true.
+    IF p_scp IS NOT INITIAL.
+      SELECT company_code ,service_provider, type, ob_filepath, ob_filename, inb_filepath, inb_filename ##NEEDED
+        FROM zdt_m2c_dunpath
+        WHERE company_code = @p_bukrs
+          AND service_provider = @p_scp
+          AND type = @gc_type
+        INTO TABLE @DATA(lt_file_dunpath).
+      IF sy-subrc IS NOT INITIAL.
+        MESSAGE i070(zmc_m2c_fica) DISPLAY LIKE TEXT-e00.       " Please enter valid Service Provider
+        LEAVE TO LIST-PROCESSING.
+      ENDIF.
+    ENDIF.
+    IF p_bukrs IS NOT INITIAL.
+      SELECT SINGLE company_code ##NEEDED ##WARN_OK
+        FROM zdt_m2c_dunpath
+        WHERE company_code = @p_bukrs
+        INTO @DATA(lv_bukrs).
+      IF sy-subrc <> 0.
+        MESSAGE i013(zmc_m2c_fica) DISPLAY LIKE TEXT-e00.       " Please enter valid Service Provider
+        LEAVE TO LIST-PROCESSING.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form f_start_of_selection
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM f_start_of_selection .
+  "Option 1 selected: Process Dunning Data
+  IF rb1 = abap_true.
+    "Run only in background mode
+    IF sy-batch = abap_true.
+      IF gt_tvarvc IS NOT INITIAL.
+        "Execute main processing logic
+        PERFORM processing_data.
+      ENDIF.
+      "Check if log handle exists
+      IF gt_loghandle IS NOT INITIAL.
+        "Save application log to database
+        CALL FUNCTION 'BAL_DB_SAVE'
+          EXPORTING
+            i_t_log_handle   = gt_loghandle
+          EXCEPTIONS
+            log_not_found    = 1
+            save_not_allowed = 2
+            numbering_error  = 3
+            OTHERS           = 4.
+        IF sy-subrc = 0.
+          "Log saved successfully
+          "Display standard SAP message
+          MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+          WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+        ENDIF.
+      ENDIF.
+    ELSE.
+      "Process Mode needs to be run in background
+      MESSAGE i058(zmc_m2c_fica) DISPLAY LIKE TEXT-e00.
+    ENDIF.
+    "Option 2 selected: View Dunning Data
+  ELSEIF rb2 = abap_true.
+    "Allow only in foreground
+    IF sy-batch = ' '.
+      "Display existing data
+      PERFORM f_get_viewdata.
+    ELSE.
+      "Inform user: run in foreground
+      MESSAGE i059(zmc_m2c_fica) DISPLAY LIKE TEXT-e00.
+    ENDIF.
+    "Option 3 selected: Upload Dunning File
+  ELSEIF rb3 = abap_true.
+    "Check if service provider is provided
+    IF p_scp IS NOT INITIAL.
+      "Read and upload file content
+      PERFORM f_upload_data.
+    ELSE.
+      "Service provider is mandatory
+      MESSAGE i060(zmc_m2c_fica) DISPLAY LIKE TEXT-e00.
+    ENDIF.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form download_template
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM download_template .
+  DATA: lv_len       TYPE i ##NEEDED,
+        lt_len       TYPE i ##NEEDED,
+        lv_file_xlsx TYPE string ##NEEDED,
+        lv_filename  TYPE string ##NEEDED,
+        lv_path      TYPE string ##NEEDED,
+        lv_fullpath  TYPE string ##NEEDED,
+        lv_xml       TYPE xstring ##NEEDED,
+        lv_xstring   TYPE xstring ##NEEDED,
+        lv_xml_type  TYPE salv_bs_constant ##NEEDED.
+  DATA: lt_srctab   TYPE STANDARD TABLE OF solix ##NEEDED,
+        lo_data_ref TYPE REF TO data ##NEEDED,
+        lr_table    TYPE REF TO cl_salv_table ##NEEDED,
+        lo_columns  TYPE REF TO cl_salv_columns_table ##NEEDED,
+        lo_column   TYPE REF TO cl_salv_column ##NEEDED.
+
+  " Clear header table before appending new entries
+  CLEAR: gt_header_table.
+
+  SELECT SINGLE company_code, service_provider, type, ob_filepath, ob_filename, inb_filepath, inb_filename
+    FROM zdt_m2c_dunpath
+    WHERE company_code = @p_bukrs
+      AND service_provider = @p_scp
+      AND type = @gc_type
+    INTO @DATA(ls_file_dunpath).
+  IF sy-subrc = 0.
+    DATA(lv_cfilename) = strlen( ls_file_dunpath-inb_filename ).
+    DATA(lv_length) = lv_cfilename - 6.
+    ls_file_dunpath-inb_filename = ls_file_dunpath-inb_filename+0(lv_length).
+    " Append date string (YYMMDD) to filename
+    CONCATENATE ls_file_dunpath-inb_filename p_date+2(6) INTO ls_file_dunpath-inb_filename.
+
+    CONCATENATE ls_file_dunpath-inb_filename TEXT-109 INTO DATA(lv_input_path).
+  ELSE.
+    MESSAGE: 'Please enter valid service provider' TYPE 'I' DISPLAY LIKE 'E' ##NO_TEXT.
+  ENDIF.
+
+  " Open folder selection popup to choose download path
+  CALL METHOD cl_gui_frontend_services=>file_save_dialog
+    EXPORTING
+      window_title      = 'File Directory' ##NO_TEXT
+      default_extension = 'xlsx'
+      default_file_name = lv_input_path
+    CHANGING
+      filename          = lv_filename
+      path              = lv_path
+      fullpath          = lv_fullpath.
+
+  lv_file_xlsx = lv_fullpath.
+**FIle template structure
+*  CONCATENATE lv_file_xlsx lv_input_path INTO lv_file_xlsx SEPARATED BY '\'.
+
+  GET REFERENCE OF gt_header_table INTO lo_data_ref.
+  DATA(lt_fieldcat) = VALUE lvc_t_fcat( ( col_pos = 1  fieldname = 'DATE_ID'(200) coltext = 'Date ID'(226) ) ##NUMBER_OK
+                                        ( col_pos = 2  fieldname = 'RUN_ID'(201) coltext = 'Run ID'(227) ) ##NUMBER_OK
+                                        ( col_pos = 3  fieldname = 'DUNNING'(202) coltext = 'Dunning Type'(228) ) ##NUMBER_OK
+                                        ( col_pos = 4  fieldname = 'SERVICE_AREA'(203) coltext = 'Service Area'(229) ) ##NUMBER_OK
+                                        ( col_pos = 5  fieldname = 'DMZ'(204) coltext = 'DMZ'(230) ) ##TEXT_DUP
+                                        ( col_pos = 6  fieldname = 'MRU'(205) coltext = 'MRU'(231) ) ##TEXT_DUP
+                                        ( col_pos = 7  fieldname = 'SEQUENCE'(206) coltext = 'Sequence No'(232) ) ##NUMBER_OK
+                                        ( col_pos = 8  fieldname = 'MSERIALNUM'(207) coltext = 'ManfuSerial Number'(233) ) ##NUMBER_OK
+                                        ( col_pos = 9  fieldname = 'CAN'(208) coltext = 'CAN'(234) ) ##TEXT_DUP
+                                        ( col_pos = 10 fieldname = 'CONTRACT'(209) coltext = 'Contract'(235) ) ##NUMBER_OK
+                                        ( col_pos = 11 fieldname = 'NAME'(210) coltext = 'Name'(236) ) ##NUMBER_OK
+                                        ( col_pos = 12 fieldname = 'ADDRESS'(211) coltext = 'Address'(237) ) ##NUMBER_OK
+                                        ( col_pos = 13 fieldname = 'MIN_PAY'(212) coltext = 'Minimum Payment'(238) ) ##NUMBER_OK
+                                        ( col_pos = 14 fieldname = 'TOTAL_AR'(213) coltext = 'Total AR'(239) ) ##NUMBER_OK
+                                        ( col_pos = 15 fieldname = 'NOTICE_DUE_DATE'(214) coltext = 'Due Date'(240) ) ##NUMBER_OK
+                                        ( col_pos = 16 fieldname = 'JOB_GENERATION_DATE'(215) coltext = 'Job Generation Date'(241) ) ##NUMBER_OK
+                                        ( col_pos = 16 fieldname = 'JOB_EXECUTION_DATE'(216) coltext = 'Job Execution Date'(242) ) ##NUMBER_OK
+                                        ( col_pos = 16 fieldname = 'JOB_EXECUTION_TIME'(217) coltext = 'Job Execution Time'(243) ) ##NUMBER_OK
+                                        ( col_pos = 16 fieldname = 'DISCONNECTION_READING'(218) coltext = 'Disconnection Reading'(244) ) ##NUMBER_OK
+                                        ( col_pos = 16 fieldname = 'LOCKING_DEVICE'(219) coltext = 'Locking Device Used'(245) ) ##NUMBER_OK
+                                        ( col_pos = 16 fieldname = 'CODE'(220) coltext = 'Code'(246) )
+                                        ( col_pos = 16 fieldname = 'RECEIVED_BY'(221) coltext = 'Recieved By'(247) )
+                                        ( col_pos = 16 fieldname = 'REALTIONSHIP_OWNER'(222) coltext = 'Relationship to the other'(248) )
+                                        ( col_pos = 16 fieldname = 'KIND_OF_OBSTRUCTION'(223) coltext = 'Kind of Obstruction'(249) )
+                                        ( col_pos = 16 fieldname = 'OTHER_REMARKS'(224) coltext = 'Other Remarks'(250) )
+                                        ( col_pos = 16 fieldname = 'SERVICE_MAN'(225) coltext = 'Service Man'(251) ) ).
+
+  DATA(lo_result_data) = cl_salv_ex_util=>factory_result_data_table(
+                                       r_data         = lo_data_ref
+                                       t_fieldcatalog = lt_fieldcat ).
+
+  CASE cl_salv_bs_a_xml_base=>get_version( ).
+    WHEN if_salv_bs_xml=>version_25.
+      DATA(lv_version) = if_salv_bs_xml=>version_25.
+    WHEN if_salv_bs_xml=>version_26.
+      lv_version = if_salv_bs_xml=>version_26.
+  ENDCASE.
+
+  "Transformation of data to excel
+  CALL METHOD cl_salv_bs_tt_util=>if_salv_bs_tt_util~transform
+    EXPORTING
+      xml_type      = if_salv_bs_xml=>c_type_xlsx
+      xml_version   = lv_version
+      r_result_data = lo_result_data
+      xml_flavour   = if_salv_bs_c_tt=>c_tt_xml_flavour_export
+      gui_type      = if_salv_bs_xml=>c_gui_type_gui
+    IMPORTING
+      xml           = lv_xstring.
+
+  CALL FUNCTION 'SCMS_XSTRING_TO_BINARY'
+    EXPORTING
+      buffer        = lv_xstring
+    IMPORTING
+      output_length = lt_len
+    TABLES
+      binary_tab    = lt_srctab.
+
+*"file download
+  CALL METHOD cl_gui_frontend_services=>gui_download
+    EXPORTING
+      bin_filesize            = lt_len
+      filename                = lv_file_xlsx
+      filetype                = 'BIN'
+    CHANGING
+      data_tab                = lt_srctab
+    EXCEPTIONS
+      file_write_error        = 1
+      no_batch                = 2
+      gui_refuse_filetransfer = 3
+      invalid_type            = 4
+      no_authority            = 5
+      unknown_error           = 6
+      header_not_allowed      = 7
+      separator_not_allowed   = 8
+      filesize_not_allowed    = 9
+      header_too_long         = 10
+      dp_error_create         = 11
+      dp_error_send           = 12
+      dp_error_write          = 13
+      unknown_dp_error        = 14
+      access_denied           = 15
+      dp_out_of_memory        = 16
+      disk_full               = 17
+      dp_timeout              = 18
+      file_not_found          = 19
+      dataprovider_exception  = 20
+      control_flush_error     = 21
+      not_supported_by_gui    = 22
+      error_no_gui            = 23
+      OTHERS                  = 24.
+  IF sy-subrc <> 0.
+* Implement suitable error handling here
+    DATA(lv_mesg) = |{ sy-msgv1 } { sy-msgv2 } { sy-msgv3 } { sy-msgv4 }|.
+    MESSAGE lv_mesg TYPE 'I' DISPLAY LIKE 'E'.
+    LEAVE TO LIST-PROCESSING.
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form processing_data
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM processing_data .
+
+  DATA: lv_msgno           TYPE symsgno ##NEEDED,
+        lv_msgv1           TYPE symsgv ##NEEDED,
+        lv_msgv2           TYPE symsgv ##NEEDED,
+        lv_msgv3           TYPE symsgv ##NEEDED,
+        lv_msgv4           TYPE symsgv ##NEEDED,
+        lv_flag1           TYPE c ##NEEDED,                                 " Flag 1
+        lv_flag2           TYPE c ##NEEDED,                                 " Flag 2
+        lv_len             TYPE i ##NEEDED,
+        lv_transfer        TYPE c ##NEEDED,
+        lv_ero_rcrd        TYPE char50 ##NEEDED,
+        ls_users           TYPE usdef ##NEEDED,
+        lv_records         TYPE int4             ##NEEDED,
+        lv_raw             TYPE x255 ##NEEDED,                               " Raw data buffer
+        lv_value           TYPE string ##NEEDED,                             " Temp string
+        lv_data            TYPE string ##NEEDED,                             " Data accumulator
+        lv_fullpath        TYPE string ##NEEDED,
+        lv_xls_xstr        TYPE xstring ##NEEDED,                            " XLS binary data
+        lv_xtring          TYPE xstring          ##NEEDED,
+        lv_xstring         TYPE xstring ##NEEDED,
+        lv_folder          TYPE eps2filnam ##NEEDED,
+        lv_sourcepath      TYPE sapb-sappfad ##NEEDED,
+        lv_targetpath      TYPE sapb-sappfad ##NEEDED,
+        ls_error           TYPE gts_create_file ##NEEDED,                    " Error records workarea
+        ls_dunfile         TYPE zdt_m2c_dunfile  ##NEEDED,          " Dunfile work area
+        ls_unformated_data TYPE gts_create_file ##NEEDED,
+        ls_formated_data   TYPE gts_crt_file ##NEEDED,
+        ir_data_ref        TYPE REF TO data ##NEEDED,
+        lo_xls             TYPE REF TO cl_fdt_xl_spreadsheet ##NEEDED,
+        lt_valid_records   TYPE STANDARD TABLE OF gts_dnld_file ##NEEDED,
+        lt_unformated_data TYPE STANDARD TABLE OF gts_create_file ##NEEDED,
+        lt_formated_data   TYPE STANDARD TABLE OF gts_crt_file ##NEEDED,
+        lt_invl_data       TYPE STANDARD TABLE OF gts_dnld_file ##NEEDED,
+        lt_users           TYPE STANDARD TABLE OF usdef ##NEEDED ##NEEDED,
+        lt_files           TYPE STANDARD TABLE OF eps2fili ##NEEDED,
+        lt_binary          TYPE STANDARD TABLE OF string ##NEEDED,
+        lt_fields1         TYPE STANDARD TABLE OF gts_create_file_str ##NEEDED,
+        lt_sheets          TYPE STANDARD TABLE OF string ##NEEDED,
+        lt_rawdata         TYPE STANDARD TABLE OF x255 ##NEEDED,            " Raw data table
+        lt_data            TYPE STANDARD TABLE OF string ##NEEDED, " String table
+        lt_srctab          TYPE STANDARD TABLE OF gts_cline ##NEEDED,
+        lt_archive         TYPE STANDARD TABLE OF gts_create_file ##NEEDED,  " Archive records
+        lt_error           TYPE STANDARD TABLE OF gts_create_file ##NEEDED,  " Error records
+        lt_file_dunpath_2  TYPE STANDARD TABLE OF gts_dunpath ##NEEDED.
+
+  DATA: lo_table_descr  TYPE REF TO cl_abap_tabledescr,
+        lo_struct_descr TYPE REF TO cl_abap_structdescr.
+
+  FIELD-SYMBOLS:
+    <lfs_data_tab> TYPE STANDARD TABLE,
+    <ls_row>       TYPE any.
+
+  " Select dunpath records for given company, providers, and type
+  SELECT company_code ,service_provider, type, inb_filepath, inb_filename
+    FROM zdt_m2c_dunpath
+    WHERE company_code = @p_bukrs
+      AND type = @gc_type
+    INTO TABLE @DATA(lt_file_dunpath) .
+  IF sy-subrc = 0.
+    IF p_scp IS NOT INITIAL.
+      DELETE lt_file_dunpath WHERE service_provider <> p_scp.
+    ENDIF.
+    IF lt_file_dunpath IS NOT INITIAL.
+      LOOP AT lt_file_dunpath ASSIGNING FIELD-SYMBOL(<ls_file_dunpath>).
+
+*** SECTION 1 - Filling local variables to store Input, Archive and Error folder paths
+        READ TABLE gt_tvarvc INTO DATA(ls_tvarvc) WITH KEY name = gc_inpt.
+        IF sy-subrc = 0.
+          lv_folder = |{ ls_tvarvc-low }{ <ls_file_dunpath>-inb_filepath }|.
+        ENDIF.
+        READ TABLE gt_tvarvc INTO ls_tvarvc WITH KEY name = gc_arch.
+        IF sy-subrc = 0.
+          DATA(lv_arch_folder) = |{ ls_tvarvc-low }{ <ls_file_dunpath>-inb_filepath }|.
+        ENDIF.
+        READ TABLE gt_tvarvc INTO ls_tvarvc WITH KEY name = gc_erro.
+        IF sy-subrc = 0.
+          DATA(lv_eror_folder) = |{ ls_tvarvc-low }{ <ls_file_dunpath>-inb_filepath }|.
+        ENDIF.
+*** SECTION 1
+
+*** SECTION 2 - Reading files from Input folder
+        CALL FUNCTION 'EPS2_GET_DIRECTORY_LISTING'
+          EXPORTING
+            iv_dir_name            = lv_folder
+          TABLES
+            dir_list               = lt_files
+          EXCEPTIONS
+            invalid_eps_subdir     = 1
+            sapgparam_failed       = 2
+            build_directory_failed = 3
+            no_authorization       = 4
+            read_directory_failed  = 5
+            too_many_read_errors   = 6
+            empty_directory_list   = 7
+            OTHERS                 = 8.
+        IF sy-subrc <> 0.
+          CLEAR: lv_msgno, lv_msgv1, lv_msgv2, lv_msgv3, lv_msgv4.
+          lv_msgno = '051'.
+          lv_msgv1 = COND #( WHEN sy-subrc = 1 THEN 'Invalid EPS Sub-directory' ##NO_TEXT
+                             WHEN sy-subrc = 2 THEN 'Sapgparam Failed' ##NO_TEXT
+                             WHEN sy-subrc = 3 THEN 'Build Directory Failed' ##NO_TEXT
+                             WHEN sy-subrc = 4 THEN 'No Authorization' ##NO_TEXT
+                             WHEN sy-subrc = 5 THEN 'Read Directory Failed'
+                             WHEN sy-subrc = 6 THEN 'Too Many Read Errors'
+                             WHEN sy-subrc = 7 THEN 'Empty Directory List' ).
+          PERFORM f_create_slg_logs USING lv_msgno lv_msgv1 lv_msgv2 lv_msgv3 lv_msgv4.
+          CONTINUE.   " STOP PROCESSING
+        ENDIF.
+*** SECTION 2
+
+*** SECTION 3 - LOOPING OVER THE FILENAMES
+        LOOP AT lt_files ASSIGNING FIELD-SYMBOL(<ls_files>).
+          " Trim last 6 chars from inbound filename
+          DATA(lv_cfilename) = strlen( <ls_file_dunpath>-inb_filename ).
+          DATA(lv_length) = lv_cfilename - 6.
+          DATA(lv_filename) = |{ <ls_file_dunpath>-inb_filename+0(lv_length) }{ p_date+2(2) }{ p_date+4(2) }{ p_date+6(2) }{ TEXT-109 }|.
+          DATA(lv_file) = |{ <ls_file_dunpath>-inb_filename+0(lv_length) }{ p_date+2(2) }{ p_date+4(2) }{ p_date+6(2) }|.
+          DATA(lv_prsc_date) = |{ p_date+2(2) }{ p_date+4(2) }{ p_date+6(2) }| ##NEEDED.
+*** SUB-SECTION 3.1 - ONLY PROCESSING FILES WHICH VALIDATE THE SELECTION SCREEN INPUT
+          IF <ls_files>-name = lv_filename.
+            DATA(lv_input_path) = |{ lv_folder }{ <ls_files>-name }|.
+            DATA(lv_error_path) = |{ lv_eror_folder }{ <ls_files>-name }|.
+            DATA(lv_archv_path) = |{ lv_arch_folder }{ <ls_files>-name }|.
+            IF <ls_files>-size = 0.     " LOGGING ERROR MESSAGE
+              CLEAR: lv_msgno, lv_msgv1, lv_msgv2, lv_msgv3, lv_msgv4.
+              lv_msgno = '022'.
+              lv_msgv1 = <ls_files>-name.
+              PERFORM f_create_slg_logs USING lv_msgno lv_msgv1 lv_msgv2 lv_msgv3 lv_msgv4.
+              CONTINUE.   " STOP PROCESSING
+            ENDIF.
+
+            TRY.
+                OPEN DATASET lv_input_path FOR INPUT IN BINARY MODE.    " OPENING FILE FROM INPUT FOLDER
+              CATCH:
+                cx_sy_file_open INTO DATA(lv_excp1) ##NO_HANDLER,
+                cx_sy_pipes_not_supported INTO DATA(lv_excp2) ##NO_HANDLER,
+                cx_sy_file_authority INTO DATA(lv_excp3) ##NO_HANDLER,
+                cx_sy_conversion_codepage INTO DATA(lv_excp4) ##NO_HANDLER,
+                cx_sy_codepage_converter_init INTO DATA(lv_excp5) ##NO_HANDLER.
+                CLEAR: lv_msgno, lv_msgv1, lv_msgv2, lv_msgv3, lv_msgv4.
+                lv_msgno = '077'.     " LOGGING ERROR MESSAGE
+                lv_msgv1 = COND #( WHEN lv_excp1 IS NOT INITIAL THEN lv_excp1->get_text( )
+                                   WHEN lv_excp2 IS NOT INITIAL THEN lv_excp2->get_text( )
+                                   WHEN lv_excp3 IS NOT INITIAL THEN lv_excp3->get_text( )
+                                   WHEN lv_excp4 IS NOT INITIAL THEN lv_excp4->get_text( )
+                                   WHEN lv_excp5 IS NOT INITIAL THEN lv_excp5->get_text( ) ).
+                PERFORM f_create_slg_logs USING lv_msgno lv_msgv1 lv_msgv2 lv_msgv3 lv_msgv4.
+                CONTINUE.     " STOP PROCESSING
+            ENDTRY.
+            IF sy-subrc = 0.
+              DO.
+                IF sy-subrc <> 0.
+                  EXIT.
+                ENDIF.
+                TRY.
+                    READ DATASET lv_input_path INTO lv_raw.
+                  CATCH:
+                    cx_sy_codepage_converter_init INTO DATA(lv_read_excp1) ##NO_HANDLER,
+                    cx_sy_conversion_codepage INTO DATA(lv_read_excp2) ##NO_HANDLER,
+                    cx_sy_file_authority INTO DATA(lv_read_excp3) ##NO_HANDLER,
+                    cx_sy_file_io INTO DATA(lv_read_excp4) ##NO_HANDLER,
+                    cx_sy_file_open INTO DATA(lv_read_excp5) ##NO_HANDLER,
+                    cx_sy_file_open_mode INTO DATA(lv_read_excp6) ##NO_HANDLER,
+                    cx_sy_pipe_reopen INTO DATA(lv_read_excp7) ##NO_HANDLER.
+                    CLEAR: lv_msgno, lv_msgv1, lv_msgv2, lv_msgv3, lv_msgv4.
+                    lv_msgno = '077'.
+                    lv_msgv1 = COND #( WHEN lv_read_excp1 IS NOT INITIAL THEN lv_read_excp1->get_text( )
+                                       WHEN lv_read_excp2 IS NOT INITIAL THEN lv_read_excp2->get_text( )
+                                       WHEN lv_read_excp3 IS NOT INITIAL THEN lv_read_excp3->get_text( )
+                                       WHEN lv_read_excp4 IS NOT INITIAL THEN lv_read_excp4->get_text( )
+                                       WHEN lv_read_excp5 IS NOT INITIAL THEN lv_read_excp5->get_text( )
+                                       WHEN lv_read_excp6 IS NOT INITIAL THEN lv_read_excp6->get_text( )
+                                       WHEN lv_read_excp7 IS NOT INITIAL THEN lv_read_excp7->get_text( ) ).
+                    PERFORM f_create_slg_logs USING lv_msgno lv_msgv1 lv_msgv2 lv_msgv3 lv_msgv4.
+                    CONTINUE.
+                ENDTRY.
+                IF sy-subrc = 0.
+                  APPEND lv_raw TO lt_rawdata.
+                  CLEAR lv_raw.
+                ENDIF.
+              ENDDO.
+            ENDIF.    " END OF SY_SUBRC CHECK FOR OPEN DATASET
+            TRY.
+                CLOSE DATASET lv_input_path.
+              CATCH cx_sy_file_close INTO DATA(lv_clos_excp).
+                CLEAR: lv_msgno, lv_msgv1, lv_msgv2, lv_msgv3, lv_msgv4.
+                lv_msgno = '077'.
+                lv_msgv1 = lv_clos_excp->get_text( ).
+                PERFORM f_create_slg_logs USING lv_msgno lv_msgv1 lv_msgv2 lv_msgv3 lv_msgv4.
+                CONTINUE.
+            ENDTRY.
+*** END OF SECTION 3
+
+*** START OF SECTION 4
+            IF lt_rawdata[] IS NOT INITIAL.
+              lv_len = <ls_files>-size.
+              CALL FUNCTION 'SCMS_BINARY_TO_XSTRING'    " --- Step 1: Convert binary to xstring
+                EXPORTING
+                  input_length = lv_len
+                IMPORTING
+                  buffer       = lv_xls_xstr
+                TABLES
+                  binary_tab   = lt_rawdata.
+              TRY.
+                  lo_xls = NEW cl_fdt_xl_spreadsheet(        " --- Step 2: Load Excel content
+                  document_name = lv_input_path
+                  xdocument     = lv_xls_xstr
+                ).
+                CATCH cx_fdt_excel_core.
+                  CLEAR: lo_xls.
+              ENDTRY.
+
+              lo_xls->if_fdt_doc_spreadsheet~get_worksheet_names(        " --- Step 3: Get worksheet names
+                IMPORTING
+                  worksheet_names = lt_sheets
+              ).
+
+              READ TABLE lt_sheets INTO DATA(ls_last_sheet) INDEX lines( lt_sheets ).       " --- Step 4: Read last worksheet
+              IF sy-subrc = 0.
+                ir_data_ref = lo_xls->if_fdt_doc_spreadsheet~get_itab_from_worksheet( ls_last_sheet ).        " --- Step 5: Get data table from sheet
+                ASSIGN ir_data_ref->* TO <lfs_data_tab>.
+                DELETE <lfs_data_tab> INDEX 1.
+                TRY.
+*               RTTI services to describe table variable
+                    lo_table_descr ?= cl_abap_tabledescr=>describe_by_data( p_data = <lfs_data_tab> ).
+*               RTTI services to describe table structure
+                    lo_struct_descr ?= lo_table_descr->get_table_line_type( ).
+*               Count number of columns in structure
+                    DATA(lv_number_of_columns) = lines( lo_struct_descr->components ).
+                  CATCH cx_sy_move_cast_error INTO DATA(lv_cast_excp).
+                    CLEAR: lv_msgno, lv_msgv1, lv_msgv2, lv_msgv3, lv_msgv4.
+                    lv_msgno = '077'.
+                    lv_msgv1 = lv_cast_excp->get_text( ).
+                    PERFORM f_create_slg_logs USING lv_msgno lv_msgv1 lv_msgv2 lv_msgv3 lv_msgv4.
+                    CONTINUE.
+                ENDTRY.
+
+                CLEAR: lo_table_descr, lo_struct_descr.
+                TRY.
+* RTTI services to describe table variable
+                    lo_table_descr ?= cl_abap_tabledescr=>describe_by_data( p_data = lt_unformated_data ).
+* RTTI services to describe table structure
+                    lo_struct_descr ?= lo_table_descr->get_table_line_type( ).
+* Count number of columns in structure
+                    DATA(lv_columns) = lines( lo_struct_descr->components ).
+                  CATCH cx_sy_move_cast_error INTO lv_cast_excp.
+                    CLEAR: lv_msgno, lv_msgv1, lv_msgv2, lv_msgv3, lv_msgv4.
+                    lv_msgno = '077'.
+                    lv_msgv1 = lv_cast_excp->get_text( ).
+                    PERFORM f_create_slg_logs USING lv_msgno lv_msgv1 lv_msgv2 lv_msgv3 lv_msgv4.
+                    CONTINUE.
+                ENDTRY.
+
+                CLEAR: lo_table_descr, lo_struct_descr.
+                TRY.
+                    lo_struct_descr ?= cl_abap_typedescr=>describe_by_data( ls_unformated_data ).
+                    DATA(lt_components) = lo_struct_descr->get_components( ).
+                  CATCH cx_sy_move_cast_error ##NO_HANDLER.
+                ENDTRY.
+
+                IF lv_columns = lv_number_of_columns.
+                  CLEAR: lt_formated_data, lt_unformated_data.
+                  LOOP AT <lfs_data_tab> ASSIGNING <ls_row>.
+                    APPEND INITIAL LINE TO lt_unformated_data ASSIGNING FIELD-SYMBOL(<ls_imp_data>).
+                    DO lv_number_of_columns TIMES.
+                      ASSIGN COMPONENT sy-index OF STRUCTURE <ls_row> TO FIELD-SYMBOL(<lv_value>).
+                      IF sy-subrc = 0.
+                        ASSIGN COMPONENT sy-index OF STRUCTURE <ls_imp_data> TO FIELD-SYMBOL(<lv_field>).
+                        IF sy-subrc = 0.
+                          <lv_field> = <lv_value>.
+                        ENDIF.
+                      ENDIF.
+                      UNASSIGN: <lv_field>, <lv_value>.
+                    ENDDO.
+                    UNASSIGN <ls_imp_data>.
+                  ENDLOOP.
+                  CLEAR: lv_number_of_columns.
+                  UNASSIGN: <lfs_data_tab>, <ls_row>.
+                ELSE.
+                  TRY.
+                      OPEN DATASET lv_error_path FOR OUTPUT IN BINARY MODE.
+                    CATCH:
+                      cx_sy_file_open INTO lv_excp1 ##NO_HANDLER,
+                      cx_sy_pipes_not_supported INTO lv_excp2 ##NO_HANDLER,
+                      cx_sy_file_authority INTO lv_excp3 ##NO_HANDLER,
+                      cx_sy_conversion_codepage INTO lv_excp4 ##NO_HANDLER,
+                      cx_sy_codepage_converter_init INTO lv_excp5 ##NO_HANDLER.
+                      CLEAR: lv_msgno, lv_msgv1, lv_msgv2, lv_msgv3, lv_msgv4.
+                      lv_msgno = '077'.
+                      lv_msgv1 = COND #( WHEN lv_excp1 IS NOT INITIAL THEN lv_excp1->get_text( )
+                                         WHEN lv_excp2 IS NOT INITIAL THEN lv_excp2->get_text( )
+                                         WHEN lv_excp3 IS NOT INITIAL THEN lv_excp3->get_text( )
+                                         WHEN lv_excp4 IS NOT INITIAL THEN lv_excp4->get_text( )
+                                         WHEN lv_excp5 IS NOT INITIAL THEN lv_excp5->get_text( ) ).
+                      PERFORM f_create_slg_logs USING lv_msgno lv_msgv1 lv_msgv2 lv_msgv3 lv_msgv4.
+                      CONTINUE.
+                  ENDTRY.
+                  IF sy-subrc = 0.
+                    TRY.
+                        OPEN DATASET lv_input_path FOR INPUT IN BINARY MODE.
+                      CATCH:
+                        cx_sy_file_open INTO lv_excp1 ##NO_HANDLER,
+                        cx_sy_pipes_not_supported INTO lv_excp2 ##NO_HANDLER,
+                        cx_sy_file_authority INTO lv_excp3 ##NO_HANDLER,
+                        cx_sy_conversion_codepage INTO lv_excp4 ##NO_HANDLER,
+                        cx_sy_codepage_converter_init INTO lv_excp5 ##NO_HANDLER.
+                    ENDTRY.
+                    IF sy-subrc = 0.
+                      DO .
+                        READ DATASET lv_input_path INTO lv_raw.
+                        IF sy-subrc <> 0.
+                          EXIT.
+                        ELSE.
+                          TRANSFER lv_raw TO lv_error_path.
+                          CLEAR lv_raw.
+                          lv_transfer = abap_true.
+                        ENDIF.
+                      ENDDO.
+                    ENDIF.
+                    CLOSE DATASET: lv_input_path, lv_error_path.
+                    IF lv_transfer IS NOT INITIAL.
+                      " DELETING FILE IF FILE FORMAT INVALID
+                      DELETE DATASET lv_input_path.
+                    ENDIF.
+                    CLEAR: lv_msgno, lv_msgv1, lv_msgv2, lv_msgv3, lv_msgv4.
+                    lv_msgno = '000' ##NO_TEXT.
+                    lv_msgv1 = 'Invalid number of columns in Application Server file.' ##NO_TEXT.
+                    lv_msgv2 = lv_input_path.
+                    lv_msgv3 = 'File Moved to Error Folder.' ##NO_TEXT.
+                    lv_msgv4 = lv_error_path.
+                    PERFORM f_create_slg_logs USING lv_msgno lv_msgv1 lv_msgv2 lv_msgv3 lv_msgv4.
+                    CONTINUE.
+                  ENDIF.    " END OF SY-SUBRC CHECK FOR ERROR PATH
+                ENDIF.  " END OF CHECK FOR COMPARING COLUMNS
+
+                TRY.
+                    lo_struct_descr ?= cl_abap_typedescr=>describe_by_data( ls_formated_data ).
+                    lt_components = lo_struct_descr->get_components( ).
+                  CATCH cx_sy_move_cast_error ##NO_HANDLER.
+                ENDTRY.
+
+                IF lt_unformated_data[] IS NOT INITIAL.
+                  DELETE lt_unformated_data WHERE can IS INITIAL AND dunning_type IS INITIAL.
+                  LOOP AT lt_unformated_data INTO ls_unformated_data.
+                    APPEND INITIAL LINE TO lt_formated_data ASSIGNING FIELD-SYMBOL(<ls_formated_data>).
+                    DO lv_columns TIMES.
+                      IF <ls_formated_data> IS ASSIGNED.
+                        ASSIGN COMPONENT sy-index OF STRUCTURE ls_unformated_data TO FIELD-SYMBOL(<lv_unformated_value>).
+                        IF <lv_unformated_value> IS ASSIGNED AND <lv_unformated_value> IS NOT INITIAL.
+                          ASSIGN COMPONENT sy-index OF STRUCTURE <ls_formated_data> TO FIELD-SYMBOL(<lv_formated_value>).
+                          IF <lv_formated_value> IS ASSIGNED.
+                            DATA(lv_comp) = lt_components[ sy-index ]-type->type_kind.
+                            CASE lv_comp.
+                              WHEN cl_abap_datadescr=>typekind_date.  " DATS
+                                IF <lv_unformated_value> CO '0123456789.-/'.
+                                  FIND REGEX '^(0[1-9]|[12][0-9]|3[01])-(0[1-9]|1[0-2])-(?!0000)\d{4}$' IN <lv_unformated_value> ##REGEX_POSIX.
+                                  IF sy-subrc = 0.
+                                    TRY.
+                                        <lv_formated_value> = |{ <lv_unformated_value>+6(4) }{ <lv_unformated_value>+3(2) }{ <lv_unformated_value>(2) }|.
+                                      CATCH cx_sy_range_out_of_bounds INTO DATA(lv_range_excp) ##NEEDED ##NO_HANDLER.
+                                        " SLG LOGS TO BE ADDED
+                                    ENDTRY.
+                                  ELSE.
+                                    FIND REGEX '^(?!0000)\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$' IN <lv_unformated_value> ##REGEX_POSIX.
+                                    IF sy-subrc = 0.
+                                      TRY.
+                                          <lv_formated_value> = |{ <lv_unformated_value>(4) }{ <lv_unformated_value>+5(2) }{ <lv_unformated_value>+8(2) }|.
+                                        CATCH cx_sy_range_out_of_bounds INTO lv_range_excp ##NEEDED ##NO_HANDLER.
+                                      ENDTRY.
+                                    ELSE.
+                                      <ls_formated_data>-status = |{ <ls_formated_data>-status }| && 'Date field invalid : ' && |{ <lv_unformated_value> }| ##NO_TEXT.
+                                      CONDENSE <ls_formated_data>-status.
+                                      <ls_formated_data>-record_type = 'E'.
+                                    ENDIF.
+                                  ENDIF.
+                                ENDIF.
+                              WHEN cl_abap_datadescr=>typekind_packed.
+                                IF <lv_unformated_value> CO '1234567890 .,'.
+                                  TRY.
+                                      <lv_formated_value> = <lv_unformated_value>.    " directly pass the character X
+                                    CATCH:
+                                      cx_sy_conversion_no_number INTO DATA(lv_no_num_excp) ##NO_HANDLER ##NEEDED,
+                                      cx_sy_conversion_error INTO DATA(lv_conv_excp) ##NO_HANDLER ##NEEDED.
+                                      " SLG LOGS TO BE ADDED
+                                  ENDTRY.
+                                ENDIF.
+                              WHEN cl_abap_datadescr=>typekind_time.
+*                                FIND REGEX '^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d$' IN <lv_unformated_value> ##REGEX_POSIX.
+*                                IF sy-subrc = 0.
+*                                  <lv_formated_value> = <lv_unformated_value>.
+                                <lv_formated_value> = sy-uzeit.
+*                                ELSE.
+*                                  <ls_formated_data>-status = |{ <ls_formated_data>-status }| && 'Time field invalid : ' && |{ <lv_unformated_value> }|.
+*                                  CONDENSE <ls_formated_data>-status.
+*                                  <ls_formated_data>-record_type = 'E'.
+*                                ENDIF.
+                              WHEN OTHERS.
+                                IF <lv_unformated_value> CS ':'.
+                                  <lv_formated_value> = sy-uzeit.
+                                ELSE.
+                                  IF <lv_unformated_value> CS ''''.
+                                    REPLACE ALL OCCURRENCES OF '''' IN <lv_unformated_value> WITH ''.
+                                  ENDIF.
+                                  <lv_formated_value> = |{ <lv_unformated_value> ALPHA = IN }|.
+                                  CONDENSE <lv_formated_value>.
+                                ENDIF.
+                            ENDCASE.
+                          ENDIF.
+                        ENDIF.
+                      ENDIF.
+                    ENDDO.
+                  ENDLOOP.    " END OF LOOP FOR UNFORMATED TABLE TRANSFERING VALUES TO FORMATED TABLE
+*** START OF VALIDATING FILE
+                  " Select relevant fields from FKKMAKO into internal table
+                  SELECT vkont, laufd, laufi, gpart, zzjob_gen_dt, zzjob_exe_dt,
+                         zzjob_exe_time, zzjob_res_code, zzref_id, stdbk,
+                         zzchange_dt, zzchange_by, step "#EC CI_ALL_FIELDS_NEEDED
+                      FROM fkkmako
+                      FOR ALL ENTRIES IN @lt_formated_data
+                      WHERE vkont = @lt_formated_data-can
+                        AND laufd = @lt_formated_data-date_id
+                        AND laufi = @lt_formated_data-run_id
+                      INTO TABLE @DATA(lt_fkkmako).     "#EC CI_NOWHERE
+                  IF sy-subrc = 0.
+                    SORT lt_fkkmako BY vkont laufd laufi.
+                  ENDIF.
+
+                  " Select relevant fields from zdt_m2c_disc into internal table
+                  SELECT laufi, laufd, gpart, vkont, discno "#EC CI_ALL_FIELDS_NEEDED
+                    FROM fkkmakt
+                    FOR ALL ENTRIES IN @lt_formated_data
+                    WHERE vkont = @lt_formated_data-can
+                      AND laufd = @lt_formated_data-date_id
+                      AND laufi = @lt_formated_data-run_id
+                    INTO TABLE @DATA(lt_fkkmakt) .      "#EC CI_NOWHERE
+                  IF sy-subrc = 0.
+                    SORT lt_fkkmakt BY vkont laufi laufd gpart.
+                    " Select relevant fields from zdt_m2c_disc into internal table
+                    SELECT discn_doc_num, contract_acc_no, contract_no, disc_exec_date,
+                           disc_exec_time, disc_reading, lock_device, disc_res_cod,
+                           obstruction, gen_remarks, service_man "#EC CI_ALL_FIELDS_NEEDED
+                      FROM zdt_m2c_disc
+                      FOR ALL ENTRIES IN @lt_fkkmakt
+                      WHERE discn_doc_num = @lt_fkkmakt-discno
+                      INTO TABLE @DATA(lt_disc).
+                    IF sy-subrc = 0.
+                      SORT lt_disc BY discn_doc_num contract_acc_no contract_no.
+                    ENDIF.
+                  ENDIF.
+
+                  LOOP AT lt_formated_data ASSIGNING <ls_formated_data>.
+                    IF <ls_formated_data>-run_id IS NOT INITIAL.
+*                      CLEAR: lv_ero_rcrd.
+*                      lv_ero_rcrd = COND #( WHEN <ls_formated_data>-date_id IS INITIAL THEN 'Field Date ID is missing'(282)
+*                                            WHEN <ls_formated_data>-run_id IS INITIAL THEN 'Field Run ID is missing'(283)
+*                                            WHEN <ls_formated_data>-dunn_typ IS INITIAL THEN 'Field Dunning Type is missing'(284)
+*                                            WHEN <ls_formated_data>-serv_area IS INITIAL THEN 'Field Service Area is missing'(285)
+*                                            WHEN <ls_formated_data>-dmz IS INITIAL THEN 'Field DMZ is missing'(286)
+*                                            WHEN <ls_formated_data>-mru IS INITIAL THEN 'Field MRU is missing'(287)
+**                                            WHEN <ls_formated_data>-sequence IS INITIAL THEN 'Field Sequence is missing'(288)
+*                                            WHEN <ls_formated_data>-manuf_serno IS INITIAL THEN 'Field Manufature Serial No. is missing'(289)
+*                                            WHEN <ls_formated_data>-can IS INITIAL THEN 'Field CAN is missing'(290)
+*                                            WHEN <ls_formated_data>-contract IS INITIAL THEN 'Field Contract No. is missing'(291)
+*                                            WHEN <ls_formated_data>-name IS INITIAL THEN 'Field Name is missing'(292)
+*                                            WHEN <ls_formated_data>-address IS INITIAL THEN 'Field Address is missing'(293)
+*                                            WHEN <ls_formated_data>-minimum_paym IS INITIAL THEN 'Field Minimum Payment is missing'(294)
+*                                            WHEN <ls_formated_data>-total_ar IS INITIAL THEN 'Field Total AR is missing'(295)
+*                                            WHEN <ls_formated_data>-due_date IS INITIAL THEN 'Field Due Date is missing'(296)
+*                                            WHEN <ls_formated_data>-job_gene_date IS INITIAL THEN 'Field Job Generation Date is missing'(297)
+*                                            WHEN <ls_formated_data>-job_execution_date IS INITIAL THEN 'Field Job Execution Date is missing'(298)
+**                                            WHEN <ls_formated_data>-job_execution_time IS INITIAL THEN 'Field Job Execution Time is missing'(299)
+*                                            WHEN <ls_formated_data>-disconnection_reading IS INITIAL THEN 'Field Disconnection Reading is missing'(300)
+*                                            WHEN <ls_formated_data>-locking_device_used IS INITIAL THEN 'Field Locking Device used is missing'(301)
+*                                            WHEN <ls_formated_data>-code IS INITIAL THEN 'Field Code is missing'(302)
+*                                            WHEN <ls_formated_data>-received_by IS INITIAL THEN 'Field Received by is missing'(303)
+*                                            WHEN <ls_formated_data>-realtionship_to_the_owner IS INITIAL THEN 'Field Relationship to the owner is missing'(304)
+*                                            WHEN <ls_formated_data>-kind_of_obstruction IS INITIAL THEN 'Field Kind of Obstruction is missing'(305)
+*                                            WHEN <ls_formated_data>-other_remarks IS INITIAL THEN 'Field Other Remarks is missing'(306)
+*                                            WHEN <ls_formated_data>-service_man IS INITIAL THEN 'Field Service Man is missing'(307) ).
+*                      IF lv_ero_rcrd IS NOT INITIAL.
+*                        <ls_formated_data>-status = lv_ero_rcrd.
+*                        <ls_formated_data>-record_type = 'E'.
+*                      ENDIF.
+                      DATA(ls_fkkmako) = VALUE #( lt_fkkmako[ vkont = <ls_formated_data>-can laufd = <ls_formated_data>-date_id laufi = <ls_formated_data>-run_id ] OPTIONAL ).
+                      IF ls_fkkmako IS NOT INITIAL AND <ls_formated_data>-record_type <> 'E'.
+
+                        " Validate dunning_type against allowed values
+                        IF <ls_formated_data>-dunn_typ = TEXT-114 OR
+                           <ls_formated_data>-dunn_typ = TEXT-115 OR
+                           <ls_formated_data>-dunn_typ = TEXT-116 OR
+                           <ls_formated_data>-dunn_typ = TEXT-117 OR
+                           <ls_formated_data>-dunn_typ = TEXT-118 OR
+                           <ls_formated_data>-dunn_typ = TEXT-119 OR
+                           <ls_formated_data>-dunn_typ = TEXT-120 OR
+                           <ls_formated_data>-dunn_typ = TEXT-121.
+                        ELSE.
+                          <ls_formated_data>-status = |{ <ls_formated_data>-status } Invalid Dunning Type: { <ls_formated_data>-dunn_typ }| ##NO_TEXT.
+                          CONDENSE <ls_formated_data>-status.
+                          <ls_formated_data>-record_type = 'E'.
+                        ENDIF.
+                        IF <ls_formated_data>-dunn_typ = TEXT-118.
+                          IF <ls_formated_data>-contract IS INITIAL.
+                            <ls_formated_data>-status = |{ <ls_formated_data>-status }| && 'Contract is Mandatory when DUNN TYPE = TCD' ##NO_TEXT.
+                            CONDENSE <ls_formated_data>-status.
+                            <ls_formated_data>-record_type = 'E'.
+                          ENDIF.
+                          IF <ls_formated_data>-mru IS INITIAL.
+                            <ls_formated_data>-status = |{ <ls_formated_data>-status } MRU is mandatory | ##NO_TEXT.
+                            CONDENSE <ls_formated_data>-status.
+                            <ls_formated_data>-record_type = 'E'.
+                          ENDIF.
+*                          IF <ls_formated_data>-sequence IS INITIAL.
+*                            <ls_formated_data>-status = |{ <ls_formated_data>-status } Sequence no. is mandatory |.
+*                            CONDENSE <ls_formated_data>-status.
+*                            <ls_formated_data>-record_type = 'E'.
+*                          ENDIF.
+                          IF <ls_formated_data>-manuf_serno IS INITIAL.
+                            <ls_formated_data>-status = |{ <ls_formated_data>-status } Manufacture Serial no. is mandatory | ##NO_TEXT.
+                            CONDENSE <ls_formated_data>-status.
+                            <ls_formated_data>-record_type = 'E'.
+                          ENDIF.
+                          IF <ls_formated_data>-code = TEXT-133 AND <ls_formated_data>-disconnection_reading IS INITIAL.
+                            <ls_formated_data>-status = |{ <ls_formated_data>-status } Disc. number is mandatory | ##NO_TEXT.
+                            CONDENSE <ls_formated_data>-status.
+                            <ls_formated_data>-record_type = 'E'.
+                          ENDIF.
+                          IF <ls_formated_data>-code = TEXT-133  OR <ls_formated_data>-code = TEXT-137 OR
+                             <ls_formated_data>-code = TEXT-138  OR <ls_formated_data>-code = TEXT-139 OR
+                             <ls_formated_data>-code = TEXT-140  OR <ls_formated_data>-code = TEXT-141 OR
+                             <ls_formated_data>-code = TEXT-142  OR <ls_formated_data>-code = TEXT-143 OR
+                             <ls_formated_data>-code = TEXT-144  OR <ls_formated_data>-code = TEXT-145 OR
+                             <ls_formated_data>-code = TEXT-146  OR <ls_formated_data>-code = TEXT-147 OR
+                             <ls_formated_data>-code = TEXT-148.
+                          ELSE.
+                            <ls_formated_data>-status = |{ <ls_formated_data>-status } Invalid Code for TCD Dunning Type : { <ls_formated_data>-code }| ##NO_TEXT.
+                            CONDENSE <ls_formated_data>-status.
+                            <ls_formated_data>-record_type = 'E'.
+                          ENDIF.
+                          IF <ls_formated_data>-record_type <> 'E'.
+                            IF <ls_formated_data>-dunn_typ = TEXT-132 AND ls_fkkmako-step = TEXT-159 OR ls_fkkmako-step = TEXT-160.
+                              " Read related records from lt_fkkmakt and lt_disc using keys
+                              READ TABLE lt_fkkmakt INTO DATA(ls_fkkmakt) WITH KEY vkont = ls_fkkmako-vkont
+                                                                                   laufi = ls_fkkmako-laufi
+                                                                                   laufd = ls_fkkmako-laufd
+                                                                                   gpart = ls_fkkmako-gpart
+                                                                                   BINARY SEARCH.
+                              IF sy-subrc = 0.
+                                READ TABLE lt_disc INTO DATA(ls_disc) WITH KEY discn_doc_num = ls_fkkmakt-discno BINARY SEARCH ##NEEDED.
+                                IF sy-subrc = 0.
+                                  " Update fields in ls_disc with input data
+                                  ls_disc-disc_exec_date = <ls_formated_data>-job_execution_date.
+                                  ls_disc-disc_exec_time = <ls_formated_data>-job_execution_time.
+                                  ls_disc-disc_reading   = <ls_formated_data>-disconnection_reading.
+                                  ls_disc-lock_device    = <ls_formated_data>-locking_device_used.
+                                  ls_disc-disc_res_cod   = <ls_formated_data>-code.
+                                  ls_disc-obstruction    = <ls_formated_data>-kind_of_obstruction.
+                                  ls_disc-gen_remarks    = <ls_formated_data>-other_remarks.
+                                  ls_disc-service_man    = <ls_formated_data>-service_man.
+
+                                  " Update ZDT_M2C_DISC table with new values
+                                  UPDATE zdt_m2c_disc SET  disc_exec_date = ls_disc-disc_exec_date
+                                                           disc_exec_time = ls_disc-disc_exec_time
+                                                           disc_reading   = ls_disc-disc_reading
+                                                           lock_device    = ls_disc-lock_device
+                                                           disc_res_cod   = ls_disc-disc_res_cod
+                                                           obstruction    = ls_disc-obstruction
+                                                           gen_remarks    = ls_disc-gen_remarks
+                                                           service_man    = ls_disc-service_man
+                                                     WHERE discn_doc_num   = ls_fkkmakt-discno
+                                                       AND contract_acc_no = ls_disc-contract_acc_no
+                                                       AND contract_no     = ls_disc-contract_no.
+                                  COMMIT WORK.
+                                ENDIF.
+                              ENDIF.
+                            ENDIF.
+                          ENDIF.
+                        ELSE.
+                          IF <ls_formated_data>-code = TEXT-150 OR <ls_formated_data>-code = TEXT-151 OR
+                             <ls_formated_data>-code = TEXT-152 OR <ls_formated_data>-code = TEXT-153 OR
+                             <ls_formated_data>-code = TEXT-154 OR <ls_formated_data>-code = TEXT-155 OR
+                             <ls_formated_data>-code = TEXT-156 OR <ls_formated_data>-code = TEXT-157 OR
+                             <ls_formated_data>-code = TEXT-158.
+                          ELSE.
+                            <ls_formated_data>-status = |{ <ls_formated_data>-status } Invalid Code for other Dunning Type : { <ls_formated_data>-code }| ##NO_TEXT.
+                            CONDENSE <ls_formated_data>-status.
+                            <ls_formated_data>-record_type = 'E'.
+                          ENDIF.
+                        ENDIF.
+                      ELSE.
+                        <ls_formated_data>-status = |{ <ls_formated_data>-status } Invalid CAN number : { <ls_formated_data>-can }| ##NO_TEXT.
+                        CONDENSE <ls_formated_data>-status.
+                        <ls_formated_data>-record_type = 'E'.
+                      ENDIF.
+                    ELSE.
+                      <ls_formated_data>-status = |{ <ls_formated_data>-status } Run ID is mandatory | ##NO_TEXT.
+                      CONDENSE <ls_formated_data>-status.
+                      <ls_formated_data>-record_type = 'E'.
+                    ENDIF.
+                    IF <ls_formated_data>-record_type <> 'E'.
+                      ls_fkkmako-zzjob_gen_dt    = p_date.
+                      ls_fkkmako-zzjob_exe_dt    = <ls_formated_data>-job_execution_date.
+*                      ls_fkkmako-zzjob_exe_time  = <ls_formated_data>-job_execution_time.          " EXECUTION TIME NOT COMING IN TABLE AFTER GUI UPLOAD
+                      ls_fkkmako-zzjob_res_code  = <ls_formated_data>-code.
+                      ls_fkkmako-zzref_id        = lv_file.
+                      ls_fkkmako-zzchange_dt     = sy-datum.
+                      ls_fkkmako-zzchange_by     = sy-uname.
+
+                      " Update database record in FKKMAKO table
+                      UPDATE fkkmako SET  zzjob_gen_dt   = ls_fkkmako-zzjob_gen_dt
+                                          zzjob_exe_dt   = ls_fkkmako-zzjob_exe_dt
+                                          zzjob_exe_time = ls_fkkmako-zzjob_exe_time
+                                          zzjob_res_code = ls_fkkmako-zzjob_res_code
+                                          zzref_id       = ls_fkkmako-zzref_id
+                                          zzchange_dt    = sy-datum
+                                          zzchange_by    = sy-uname
+                                          WHERE vkont = <ls_formated_data>-can
+                                            AND laufd = <ls_formated_data>-date_id
+                                            AND laufi = <ls_formated_data>-run_id.
+                      COMMIT WORK ##SUBRC_AFTER_COMMIT.
+                      IF sy-subrc = 0 ##NEEDED.
+                        " Write message to SLG log Handle
+                      ENDIF.
+
+                    ENDIF.
+                  ENDLOOP.
+*** END OF VALIDATING FILE
+
+                  DATA(lt_fieldcat) = VALUE lvc_t_fcat( ( col_pos = 1  fieldname = 'DATE_ID'                   coltext = TEXT-226 )
+                                                        ( col_pos = 2  fieldname = 'RUNID'                     coltext = TEXT-227 )
+                                                        ( col_pos = 3  fieldname = 'DUNNING_TYPE'              coltext = TEXT-228 )
+                                                        ( col_pos = 4  fieldname = 'SERVICE_AREA'              coltext = TEXT-229 )
+                                                        ( col_pos = 5  fieldname = 'DMZ'                       coltext = TEXT-230 )
+                                                        ( col_pos = 6  fieldname = 'MRU'                       coltext = TEXT-231 )
+                                                        ( col_pos = 7  fieldname = 'SEQUENCE'                  coltext = TEXT-232 )
+                                                        ( col_pos = 8  fieldname = 'MSERIAL_NUMBER'            coltext = TEXT-233 )
+                                                        ( col_pos = 9  fieldname = 'CAN'                       coltext = TEXT-234 )
+                                                        ( col_pos = 10 fieldname = 'CONTRACT'                  coltext = TEXT-235 )
+                                                        ( col_pos = 11 fieldname = 'NAME'                      coltext = TEXT-236 ) ##NUMBER_OK
+                                                        ( col_pos = 12 fieldname = 'ADDRESS'                   coltext = TEXT-237 ) ##NUMBER_OK
+                                                        ( col_pos = 13 fieldname = 'MINIMUM_PAYMENT'           coltext = TEXT-238 ) ##NUMBER_OK
+                                                        ( col_pos = 14 fieldname = 'TOTAL_AR'                  coltext = TEXT-239 ) ##NUMBER_OK
+                                                        ( col_pos = 15 fieldname = 'DUE_DATE'                  coltext = TEXT-240 ) ##NUMBER_OK
+                                                        ( col_pos = 16 fieldname = 'JOB_GENERATION_DATE'       coltext = TEXT-241 )
+                                                        ( col_pos = 17 fieldname = 'JOB_EXECUTION_DATE'        coltext = TEXT-242 ) ##NUMBER_OK
+                                                        ( col_pos = 18 fieldname = 'JOB_EXECUTION_TIME'        coltext = TEXT-243 ) ##NUMBER_OK
+                                                        ( col_pos = 19 fieldname = 'DISCONNECTION_READING'     coltext = TEXT-244 ) ##NUMBER_OK
+                                                        ( col_pos = 20 fieldname = 'LOCKING_DEVICE_USED'       coltext = TEXT-245 ) ##NUMBER_OK
+                                                        ( col_pos = 21 fieldname = 'CODE'                      coltext = TEXT-246 )
+                                                        ( col_pos = 22 fieldname = 'RECEIVED_BY'               coltext = TEXT-247 )
+                                                        ( col_pos = 23 fieldname = 'REALTIONSHIP_TO_THE_OWNER' coltext = TEXT-248 )
+                                                        ( col_pos = 24 fieldname = 'KIND_OF_OBSTRUCTION'       coltext = TEXT-249 )
+                                                        ( col_pos = 25 fieldname = 'OTHER_REMARKS'             coltext = TEXT-250 )
+                                                        ( col_pos = 26 fieldname = 'SERVICE_MAN'               coltext = TEXT-251 )
+                                                        ( col_pos = 27 fieldname = 'STATUS'                    coltext = TEXT-281 ) ).
+
+                  lt_valid_records = VALUE #( FOR i IN lt_formated_data
+                                              WHERE ( record_type <> 'E' )
+                                              ( date_id                   = |{ i-date_id+6(2) }-{ i-date_id+4(2) }-{ i-date_id(4) }|
+                                                runid                     = i-run_id
+                                                dunning_type              = i-dunn_typ
+                                                service_area              = i-serv_area
+                                                dmz                       = i-dmz
+                                                mru                       = i-mru
+                                                sequence                  = i-sequence
+                                                mserial_number            = i-manuf_serno
+                                                can                       = i-can
+                                                contract                  = i-contract
+                                                name                      = i-name
+                                                address                   = i-address
+                                                minimum_payment           = i-minimum_paym
+                                                total_ar                  = i-total_ar
+                                                due_date                  = |{ i-due_date+6(2) }-{ i-due_date+4(2) }-{ i-due_date(4) }|
+                                                job_generation_date       = |{ i-job_gene_date+6(2) }-{ i-job_gene_date+4(2) }-{ i-job_gene_date(4) }|
+                                                job_execution_date        = |{ i-job_execution_date+6(2) }-{ i-job_execution_date+4(2) }-{ i-job_execution_date(4) }|
+                                                job_execution_time        = i-job_execution_time
+                                                disconnection_reading     = i-disconnection_reading
+                                                locking_device_used       = i-locking_device_used
+                                                code                      = i-code
+                                                received_by               = i-received_by
+                                                realtionship_to_the_owner = i-realtionship_to_the_owner
+                                                kind_of_obstruction       = i-kind_of_obstruction
+                                                other_remarks             = i-other_remarks
+                                                service_man               = i-service_man
+                                                status                    = 'Successfully Validated' ) ) ##NO_TEXT.
+
+*** START OF UPLOADING VALIDATE RECORDS TO ARCHIVE FOLDER
+                  IF lt_valid_records[] IS NOT INITIAL.
+                    GET REFERENCE OF lt_valid_records INTO DATA(lo_data_ref).
+                    DATA(lo_result_data) = cl_salv_ex_util=>factory_result_data_table(
+                                                         r_data         = lo_data_ref
+                                                         t_fieldcatalog = lt_fieldcat ).
+
+                    CASE cl_salv_bs_a_xml_base=>get_version( ).
+                      WHEN if_salv_bs_xml=>version_25.
+                        DATA(lv_version) = if_salv_bs_xml=>version_25.
+                      WHEN if_salv_bs_xml=>version_26.
+                        lv_version = if_salv_bs_xml=>version_26.
+                    ENDCASE.
+
+                    "Transformation of data to excel
+                    CALL METHOD cl_salv_bs_tt_util=>if_salv_bs_tt_util~transform
+                      EXPORTING
+                        xml_type      = if_salv_bs_xml=>c_type_xlsx
+                        xml_version   = lv_version
+                        r_result_data = lo_result_data
+                        xml_flavour   = if_salv_bs_c_tt=>c_tt_xml_flavour_export
+                        gui_type      = if_salv_bs_xml=>c_gui_type_gui
+                      IMPORTING
+                        xml           = lv_xstring.
+
+                    CALL FUNCTION 'SCMS_XSTRING_TO_BINARY'
+                      EXPORTING
+                        buffer        = lv_xstring
+                      IMPORTING
+                        output_length = lv_len
+                      TABLES
+                        binary_tab    = lt_srctab.
+                    " Open the output dataset for writing in binary mode with path constructed earlier
+                    TRY.
+                        OPEN DATASET lv_archv_path FOR OUTPUT IN BINARY MODE.
+                      CATCH:
+                        cx_sy_file_open INTO lv_excp1 ##NO_HANDLER,
+                        cx_sy_pipes_not_supported INTO lv_excp2 ##NO_HANDLER,
+                        cx_sy_file_authority INTO lv_excp3 ##NO_HANDLER,
+                        cx_sy_conversion_codepage INTO lv_excp4 ##NO_HANDLER,
+                        cx_sy_codepage_converter_init INTO lv_excp5 ##NO_HANDLER.
+
+                    ENDTRY.
+                    IF sy-subrc = 0 ##FM_SUBRC_OK.
+                      " Write all lines of lt_data to the output file
+                      LOOP AT lt_srctab INTO DATA(ls_data).
+                        TRY.
+                            TRANSFER ls_data TO lv_archv_path.
+                          CATCH:
+                            cx_sy_codepage_converter_init INTO DATA(lv_trns_excp1) ##NO_HANDLER ##NEEDED,
+                            cx_sy_conversion_codepage INTO DATA(lv_trns_excp2) ##NO_HANDLER ##NEEDED,
+                            cx_sy_file_authority INTO DATA(lv_trns_excp3) ##NO_HANDLER ##NEEDED,
+                            cx_sy_file_io INTO DATA(lv_trns_excp4) ##NO_HANDLER ##NEEDED,
+                            cx_sy_file_open INTO DATA(lv_trns_excp5) ##NO_HANDLER ##NEEDED,
+                            cx_sy_file_open_mode INTO DATA(lv_trns_excp6) ##NO_HANDLER ##NEEDED,
+                            cx_sy_pipe_reopen INTO DATA(lv_trns_excp7) ##NO_HANDLER ##NEEDED,
+                            cx_sy_too_many_files INTO DATA(lv_trns_excp8) ##NO_HANDLER ##NEEDED.
+
+                        ENDTRY.
+                        CLEAR: ls_data.
+                      ENDLOOP.
+                    ENDIF.
+                    TRY.
+                        CLOSE DATASET lv_archv_path.
+                      CATCH cx_sy_file_close INTO DATA(lv_msg1).
+                        MESSAGE lv_msg1 TYPE 'I' DISPLAY LIKE TEXT-e00.
+                        LEAVE LIST-PROCESSING . "#EC CI_NOORDER
+                    ENDTRY.
+                    IF sy-subrc = 0.
+                      CLEAR: lv_msgno, lv_msgv1, lv_msgv2, lv_msgv3, lv_msgv4.
+                      lv_msgno = '085' ##NO_TEXT.
+                      lv_msgv1 = 'File moved to' ##NO_TEXT.
+                      lv_msgv2 = lv_arch_folder.
+                      lv_msgv3 = <ls_files>-name.
+                      PERFORM f_create_slg_logs USING lv_msgno lv_msgv1 lv_msgv2 lv_msgv3 lv_msgv4.
+                    ENDIF.
+                  ENDIF.
+*** END OF UPLOADING VALIDATE RECORDS TO ARCHIVE FOLDER
+
+                  lt_invl_data = VALUE #( FOR j IN lt_formated_data
+                                          WHERE ( record_type = 'E' )
+                                          ( date_id                   = |{ j-date_id+6(2) }-{ j-date_id+4(2) }-{ j-date_id(4) }|
+                                            runid                     = j-run_id
+                                            dunning_type              = j-dunn_typ
+                                            service_area              = j-serv_area
+                                            dmz                       = j-dmz
+                                            mru                       = j-mru
+                                            sequence                  = j-sequence
+                                            mserial_number            = j-manuf_serno
+                                            can                       = j-can
+                                            contract                  = j-contract
+                                            name                      = j-name
+                                            address                   = j-address
+                                            minimum_payment           = j-minimum_paym
+                                            total_ar                  = j-total_ar
+                                            due_date                  = |{ j-due_date+6(2) }-{ j-due_date+4(2) }-{ j-due_date(4) }|
+                                            job_generation_date       = |{ j-job_gene_date+6(2) }-{ j-job_gene_date+4(2) }-{ j-job_gene_date(4) }|
+                                            job_execution_date        = |{ j-job_execution_date+6(2) }-{ j-job_execution_date+4(2) }-{ j-job_execution_date(4) }|
+                                            job_execution_time        = j-job_execution_time
+                                            disconnection_reading     = j-disconnection_reading
+                                            locking_device_used       = j-locking_device_used
+                                            code                      = j-code
+                                            received_by               = j-received_by
+                                            realtionship_to_the_owner = j-realtionship_to_the_owner
+                                            kind_of_obstruction       = j-kind_of_obstruction
+                                            other_remarks             = j-other_remarks
+                                            service_man               = j-service_man
+                                            status                    = j-status ) ).
+
+*** START OF UPLOADING ERROR RECORDS TO ERROR FOLDER
+                  IF lt_invl_data[] IS NOT INITIAL.
+                    GET REFERENCE OF lt_invl_data INTO DATA(lo_data_ref2).
+                    lo_result_data = cl_salv_ex_util=>factory_result_data_table( r_data         = lo_data_ref2
+                                                                                 t_fieldcatalog = lt_fieldcat ).
+
+                    CASE cl_salv_bs_a_xml_base=>get_version( ).
+                      WHEN if_salv_bs_xml=>version_25.
+                        lv_version = if_salv_bs_xml=>version_25.
+                      WHEN if_salv_bs_xml=>version_26.
+                        lv_version = if_salv_bs_xml=>version_26.
+                    ENDCASE.
+
+                    "Transformation of data to excel
+                    CALL METHOD cl_salv_bs_tt_util=>if_salv_bs_tt_util~transform
+                      EXPORTING
+                        xml_type      = if_salv_bs_xml=>c_type_xlsx
+                        xml_version   = lv_version
+                        r_result_data = lo_result_data
+                        xml_flavour   = if_salv_bs_c_tt=>c_tt_xml_flavour_export
+                        gui_type      = if_salv_bs_xml=>c_gui_type_gui
+                      IMPORTING
+                        xml           = lv_xstring.
+
+                    CALL FUNCTION 'SCMS_XSTRING_TO_BINARY'
+                      EXPORTING
+                        buffer        = lv_xstring
+                      IMPORTING
+                        output_length = lv_len
+                      TABLES
+                        binary_tab    = lt_srctab.
+                    " Open the output dataset for writing in binary mode with path constructed earlier
+                    TRY.
+                        OPEN DATASET lv_error_path FOR OUTPUT IN BINARY MODE.
+                      CATCH:
+                        cx_sy_file_open INTO lv_excp1 ##NO_HANDLER,
+                        cx_sy_pipes_not_supported INTO lv_excp2 ##NO_HANDLER,
+                        cx_sy_file_authority INTO lv_excp3 ##NO_HANDLER,
+                        cx_sy_conversion_codepage INTO lv_excp4 ##NO_HANDLER,
+                        cx_sy_codepage_converter_init INTO lv_excp5 ##NO_HANDLER.
+
+                    ENDTRY.
+                    IF sy-subrc = 0 ##FM_SUBRC_OK.
+                      " Write all lines of lt_data to the output file
+                      LOOP AT lt_srctab INTO ls_data.
+                        TRY.
+                            TRANSFER ls_data TO lv_error_path.
+                          CATCH:
+                            cx_sy_codepage_converter_init INTO lv_trns_excp1 ##NO_HANDLER,
+                            cx_sy_conversion_codepage     INTO lv_trns_excp2 ##NO_HANDLER,
+                            cx_sy_file_authority          INTO lv_trns_excp3 ##NO_HANDLER,
+                            cx_sy_file_io                 INTO lv_trns_excp4 ##NO_HANDLER,
+                            cx_sy_file_open               INTO lv_trns_excp5 ##NO_HANDLER,
+                            cx_sy_file_open_mode          INTO lv_trns_excp6 ##NO_HANDLER,
+                            cx_sy_pipe_reopen             INTO lv_trns_excp7 ##NO_HANDLER,
+                            cx_sy_too_many_files          INTO lv_trns_excp8 ##NO_HANDLER.
+
+                        ENDTRY.
+                        CLEAR: ls_data.
+                      ENDLOOP.
+                    ENDIF.
+                    TRY.
+                        CLOSE DATASET lv_error_path.
+                      CATCH cx_sy_file_close INTO DATA(lv_clse_excp).
+                        lv_msgno = '077'.
+                        lv_msgv1 = lv_clse_excp->get_text( ).
+                        PERFORM f_create_slg_logs USING lv_msgno lv_msgv1 lv_msgv2 lv_msgv3 lv_msgv4.
+                        CONTINUE.
+                    ENDTRY.
+                    IF sy-subrc = 0.
+                      lv_msgno = '085' ##NO_TEXT.
+                      lv_msgv1 = 'File moved to' ##NO_TEXT.
+                      lv_msgv2 = lv_eror_folder.
+                      lv_msgv3 = <ls_files>-name.
+                      PERFORM f_create_slg_logs USING lv_msgno lv_msgv1 lv_msgv2 lv_msgv3 lv_msgv4.
+                    ENDIF.
+                  ENDIF.
+*** END OF UPLOADING ERROR RECORDS TO ERROR FOLDER
+
+                  TRY.
+                      DELETE DATASET lv_input_path.
+                    CATCH:
+                      cx_sy_file_authority INTO DATA(lv_auth_excp) ##NO_HANDLER,
+                      cx_sy_file_open INTO DATA(lv_fileopen_excp) ##NO_HANDLER.
+                      lv_msgno = '077'.
+                      lv_msgv1 = COND #( WHEN lv_auth_excp IS NOT INITIAL THEN lv_auth_excp->get_text( )
+                                         WHEN lv_fileopen_excp IS NOT INITIAL THEN lv_fileopen_excp->get_text( ) ).
+                      PERFORM f_create_slg_logs USING lv_msgno lv_msgv1 lv_msgv2 lv_msgv3 lv_msgv4.
+                      CONTINUE.
+                  ENDTRY.
+*                  IF sy-subrc = 0.
+*                    lv_msgno = '000'.
+*                    lv_msgv1 = lv_input_path.
+*                    lv_msgv2 = ' file is processed and moved to'.
+*                    lv_msgv3 = COND #( WHEN lt_valid_records IS NOT INITIAL THEN lv_archv_path ).
+*                    lv_msgv4 = COND #( WHEN lt_invl_data IS NOT INITIAL THEN lv_error_path ).
+*                    PERFORM f_create_slg_logs USING lv_msgno lv_msgv1 lv_msgv2 lv_msgv3 lv_msgv4.
+*                  ENDIF.
+
+                  DATA(lv_valid_lines) = lines( lt_valid_records ).
+                  IF lv_valid_lines IS NOT INITIAL.
+                    ls_dunfile-company_code = p_bukrs.
+                    ls_dunfile-service_provider = <ls_file_dunpath>-service_provider.
+                    ls_dunfile-processed_on = p_date.
+                    ls_dunfile-filename = lv_file.
+                    ls_dunfile-dateofupload = sy-datum.
+                    ls_dunfile-timeofupload = sy-uzeit.
+                    ls_dunfile-error_file = 'P'.
+                    ls_dunfile-outbound_file = abap_false.
+                    ls_dunfile-processed_by = sy-uname.
+                    ls_dunfile-num_of_records = lv_valid_lines.
+
+                    " Update the status table for the error file
+                    MODIFY zdt_m2c_dunfile FROM ls_dunfile.
+                    IF sy-subrc = 0 ##NEEDED.
+                      " ADD SLG LOGS
+                    ENDIF.
+                  ENDIF.
+
+                  DATA(lv_eror_lines) = lines( lt_invl_data ).
+                  IF lv_eror_lines IS NOT INITIAL.
+                    ls_dunfile-company_code = p_bukrs.
+                    ls_dunfile-service_provider = <ls_file_dunpath>-service_provider.
+                    ls_dunfile-processed_on = p_date.
+                    ls_dunfile-filename = lv_file.
+                    ls_dunfile-dateofupload = sy-datum.
+                    ls_dunfile-timeofupload = sy-uzeit.
+                    ls_dunfile-error_file = 'E'.
+                    ls_dunfile-outbound_file = abap_false.
+                    ls_dunfile-processed_by = sy-uname.
+                    ls_dunfile-num_of_records = lv_eror_lines.
+
+                    " Update the status table for the error file
+                    MODIFY zdt_m2c_dunfile FROM ls_dunfile.
+                    IF sy-subrc = 0 ##NEEDED.
+                      " ADD SLG LOGS
+                    ENDIF.
+                  ENDIF.
+
+                  CLEAR: lt_unformated_data.
+                ENDIF.    " END OF CHECK IF THE UNFORMATED TABLE IS INITIAL.
+              ENDIF.    " END OF READING LT_SHEETS
+            ENDIF.    " END OF CONVERSION FROM BINARY FORMAT TO INTERNAL TABLE
+          ENDIF.
+        ENDLOOP.    " LOOP END FOR READING EACH FILE FROM AL11 FOLDER
+      ENDLOOP.    " LOOP END FOR READING PATHS FROM DUNPATH TABLE.
+    ELSE.
+      CLEAR: lv_msgno, lv_msgv1, lv_msgv2, lv_msgv3, lv_msgv4.
+      lv_msgno = '052'.
+      PERFORM f_create_slg_logs USING lv_msgno lv_msgv1 lv_msgv2 lv_msgv3 lv_msgv4.
+      RETURN.
+    ENDIF.
+  ELSE.   " If no records found, log error message
+    CLEAR: lv_msgno, lv_msgv1, lv_msgv2, lv_msgv3, lv_msgv4.
+    lv_msgno = '055'.
+    PERFORM f_create_slg_logs USING lv_msgno lv_msgv1 lv_msgv2 lv_msgv3 lv_msgv4.
+    RETURN.
+  ENDIF.    " END OF SY-SUBRC CHECK FOR PATH IN DUNPATH TABLE
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form f_upload_data
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM f_upload_data .
+
+  DATA: lt_data           TYPE STANDARD TABLE OF gts_cline,     " Internal table to hold file data in binary format
+        lt_upld_data      TYPE STANDARD TABLE OF gts_upld_file, " Internal table to hold file data in internal format
+        ls_dunfile        TYPE zdt_m2c_dunfile,                 " WORK AREA to update the ZDT_M2C_DUNFILE table
+        lv_header         TYPE xstring ##NEEDED,
+        lv_xstring        TYPE xstring ##NEEDED,
+        lv_message        TYPE char100 ##NEEDED,
+        lv_fullpath       TYPE string ##NEEDED,
+        ls_ret            TYPE bapiret2 ##NEEDED,
+        lv_filename       TYPE string,
+        lv_apl_fullpath   TYPE string ##NEEDED,
+        lv_answer         TYPE string,                          " POP UP FIELD
+        lv_flag           TYPE c,
+        lv_len            TYPE i ##NEEDED,
+        lv_records        TYPE i,
+        lv_offset         TYPE i,
+        lv_service_length TYPE i ##NEEDED,
+        l_ref_excel       TYPE REF TO cl_fdt_xl_spreadsheet ##NEEDED,
+        lv_localfile      TYPE localfile.
+
+*CONSTANTS
+  CONSTANTS: lc_btn1(30) TYPE c VALUE zcl_abap_utility=>zif_m2c_constant~zab_m2c_inbound_dunning-lc_btn1,
+             lc_btn2(30) TYPE c VALUE zcl_abap_utility=>zif_m2c_constant~zab_m2c_inbound_dunning-lc_btn2,
+             lc_bin      TYPE char10 VALUE zcl_abap_utility=>zif_m2c_constant~zab_m2c_inbound_dunning-filetype_bin.
+
+  " Assign input parameter file path
+  lv_fullpath = p_file.
+
+  " TRUNCTATING FILE NAME FROM THE FILE PATH ENTERED BY THE USER
+  FIND REGEX TEXT-196 IN lv_fullpath MATCH OFFSET lv_offset ##REGEX_POSIX.
+  lv_offset = lv_offset + 1.
+  TRY.
+      lv_filename = lv_fullpath+lv_offset.
+    CATCH cx_sy_range_out_of_bounds INTO DATA(lx_offset).
+      lv_message = lx_offset->get_text( ).
+      MESSAGE lv_message TYPE 'I' DISPLAY LIKE TEXT-e00.
+      LEAVE LIST-PROCESSING.
+  ENDTRY.
+
+  " Read path info from custom table zdt_m2c_dunpath based on company, service provider, and type
+  SELECT SINGLE company_code ,service_provider, type, inb_filepath, inb_filename "#EC WARNOK
+    FROM zdt_m2c_dunpath
+    WHERE company_code = @p_bukrs
+      AND service_provider = @p_scp
+      AND type = @gc_type
+    INTO @DATA(ls_file_dunpath).
+  IF sy-subrc = 0 AND ls_file_dunpath-inb_filename IS NOT INITIAL.
+    " Trim last 6 chars from inbound filename (usually a date or extension)
+    DATA(lv_cfilename) = strlen( ls_file_dunpath-inb_filename ).
+    DATA(lv_length) = lv_cfilename - 6.
+    TRY.
+        DATA(lv_lcl_filename) = |{ ls_file_dunpath-inb_filename+0(lv_length) }{ p_date+2(6) }|.   " Append date (in p_date+2(6)) to filename
+      CATCH cx_sy_range_out_of_bounds INTO DATA(lv_range_excp).
+        lv_message = lv_range_excp->get_text( ).
+        MESSAGE lv_message TYPE 'I' DISPLAY LIKE 'E'.
+        LEAVE LIST-PROCESSING.
+    ENDTRY.
+    ls_file_dunpath-inb_filename = |{ lv_lcl_filename }{ TEXT-109 }|.                         " filename + extension
+
+    " INPUT FOLDER PATH FOR INBOUND DUNNING ACTIVITY
+    DATA(ls_tvarvc) = VALUE #( gt_tvarvc[ name = gc_inpt ] OPTIONAL ).
+    IF sy-subrc = 0.
+      " Construct the full path to the file by concatenating prefix, inbound filepath, and filename
+      lv_apl_fullpath = |{ ls_tvarvc-low }{ ls_file_dunpath-inb_filepath }{ ls_file_dunpath-inb_filename }|.
+    ELSE.
+      MESSAGE i067(zmc_m2c_fica) DISPLAY LIKE TEXT-e00.    " No records found in the table TVARVC
+      LEAVE TO LIST-PROCESSING.
+    ENDIF.
+
+    " Check if filename from path matches filename extracted from parameter
+    IF lv_filename <> ls_file_dunpath-inb_filename.
+      lv_flag = abap_true.
+      MESSAGE i073(zmc_m2c_fica) DISPLAY LIKE TEXT-e00 WITH ls_file_dunpath-inb_filename.
+      LEAVE TO LIST-PROCESSING.
+    ENDIF.
+  ELSE.
+    MESSAGE i069(zmc_m2c_fica) DISPLAY LIKE TEXT-e00.
+    LEAVE TO LIST-PROCESSING.
+  ENDIF.
+
+  IF lv_flag IS INITIAL.
+    " Prepare confirmation popup text, e.g. "Do you want to upload [filename] ?"
+    DATA(lv_text_q) = |{ TEXT-063 } { lv_filename } { TEXT-064 }|.
+    CALL FUNCTION 'POPUP_TO_CONFIRM'  " Popup to ask user confirmation with two buttons (YES/NO or any labels defined in constants)
+      EXPORTING
+        text_question  = lv_text_q
+        text_button_1  = lc_btn1
+        text_button_2  = lc_btn2
+      IMPORTING
+        answer         = lv_answer
+      EXCEPTIONS
+        text_not_found = 1
+        OTHERS         = 2.
+    IF sy-subrc <> 0.
+      lv_message = |{ sy-msgv1 } { sy-msgv2 } { sy-msgv3 } { sy-msgv4 }|.
+      CONDENSE lv_message.
+      MESSAGE lv_message TYPE 'I' DISPLAY LIKE 'E'.
+      LEAVE LIST-PROCESSING.
+    ENDIF.
+
+    IF lv_answer = '1'.
+      " Upload the file content into internal table lt_data
+      CALL METHOD cl_gui_frontend_services=>gui_upload
+        EXPORTING
+          filename                = lv_fullpath
+          filetype                = lc_bin
+        IMPORTING
+          filelength              = lv_len
+          header                  = lv_header
+        CHANGING
+          data_tab                = lt_data
+        EXCEPTIONS
+          file_open_error         = 1
+          file_read_error         = 2
+          no_batch                = 3
+          gui_refuse_filetransfer = 4
+          invalid_type            = 5
+          no_authority            = 6
+          unknown_error           = 7
+          bad_data_format         = 8
+          header_not_allowed      = 9
+          separator_not_allowed   = 10
+          header_too_long         = 11
+          unknown_dp_error        = 12
+          access_denied           = 13
+          dp_out_of_memory        = 14
+          disk_full               = 15
+          dp_timeout              = 16
+          not_supported_by_gui    = 17
+          error_no_gui            = 18
+          OTHERS                  = 19.
+      IF sy-subrc <> 0 OR lt_data IS INITIAL.
+        lv_message = |{ sy-msgv1 } { sy-msgv2 } { sy-msgv3 } { sy-msgv4 }|.
+        CONDENSE lv_message.
+        MESSAGE lv_message TYPE 'I' DISPLAY LIKE TEXT-e00.
+        LEAVE TO LIST-PROCESSING.
+      ELSE.
+
+*       Get the file data into an internal table
+        lv_localfile = CONV #( lv_fullpath ).
+        DATA(lo_obj) = zcl_abap_utility=>get_instance( ).
+        CALL METHOD lo_obj->read_excel_data
+          EXPORTING
+            iv_filename             = lv_localfile
+            iv_begin_col            = zcl_abap_utility=>zif_m2c_constant~gc_m2c_143-lc_1     "1
+            iv_begin_row            = zcl_abap_utility=>zif_m2c_constant~gc_m2c_143-lc_2     "2
+            iv_end_col              = zcl_abap_utility=>zif_m2c_constant~gc_m2c_143-lc_50    "50
+            iv_end_row              = zcl_abap_utility=>zif_m2c_constant~gc_m2c_143-lc_99999 "99999
+          IMPORTING
+            et_data                 = lt_upld_data
+          EXCEPTIONS
+            inconsistent_parameters = 1
+            upload_ole              = 2
+            OTHERS                  = 3.
+        IF sy-subrc = 0.
+          lv_records = lines( lt_upld_data ).
+          LOOP AT lt_upld_data ASSIGNING FIELD-SYMBOL(<ls_upld_data>).
+            " Need to fix Date Conversions here after discussion with Anand.
+            TRY.
+                <ls_upld_data>-date_id            = COND #( WHEN <ls_upld_data>-date_id IS NOT INITIAL THEN |{ <ls_upld_data>-date_id+8(2) }-{ <ls_upld_data>-date_id+5(2) }-{ <ls_upld_data>-date_id(4) }| ).
+                <ls_upld_data>-due_date           = COND #( WHEN <ls_upld_data>-due_date IS NOT INITIAL THEN |{ <ls_upld_data>-due_date+8(2) }-{ <ls_upld_data>-due_date+5(2) }-{ <ls_upld_data>-due_date(4) }| ).
+                <ls_upld_data>-job_gene_date      = COND #( WHEN <ls_upld_data>-job_gene_date IS NOT INITIAL THEN |{ <ls_upld_data>-job_gene_date+8(2) }-{ <ls_upld_data>-job_gene_date+5(2) }-{ <ls_upld_data>-job_gene_date(4) }| ).
+                <ls_upld_data>-job_execution_date = COND #( WHEN <ls_upld_data>-job_execution_date IS NOT INITIAL THEN |{ <ls_upld_data>-job_execution_date+8(2) }-{ <ls_upld_data>-job_execution_date+5(2) }-{ <ls_upld_data>-job_execution_date(4) }| ).
+              CATCH cx_sy_range_out_of_bounds INTO lv_range_excp.
+                lv_message = lv_range_excp->get_text( ).
+                MESSAGE lv_message TYPE 'I' DISPLAY LIKE 'E'.
+            ENDTRY.
+            IF <ls_upld_data>-dmz CS '-'.
+              SPLIT <ls_upld_data>-dmz AT '-' INTO DATA(lv_fh) DATA(lv_sh).
+              IF strlen( lv_fh ) > 1.
+                <ls_upld_data>-dmz = |{ lv_sh }{ lv_fh }|.
+              ELSE.
+                <ls_upld_data>-dmz = |{ lv_sh }{ '0' }{ lv_fh }|.
+              ENDIF.
+            ELSEIF <ls_upld_data>-dmz CS ''''.
+              REPLACE ALL OCCURRENCES OF '''' IN <ls_upld_data>-dmz WITH ''.
+            ENDIF.
+          ENDLOOP.
+          CLEAR: lt_data.
+          IF lt_upld_data IS NOT INITIAL.
+            GET REFERENCE OF lt_upld_data INTO DATA(lo_data_ref).
+            DATA(lt_fieldcat) = VALUE lvc_t_fcat( ( col_pos = 1  fieldname = TEXT-252 coltext = TEXT-226 )        " DATE_ID
+                                                  ( col_pos = 2  fieldname = TEXT-253 coltext = TEXT-227 )        " RUN_ID
+                                                  ( col_pos = 3  fieldname = TEXT-254 coltext = TEXT-228 )        " DUNN_TYP
+                                                  ( col_pos = 4  fieldname = TEXT-255 coltext = TEXT-229 )        " SERV_AREA
+                                                  ( col_pos = 5  fieldname = TEXT-256 coltext = TEXT-230 )        " DMZ
+                                                  ( col_pos = 6  fieldname = TEXT-257 coltext = TEXT-231 )        " MRU
+                                                  ( col_pos = 7  fieldname = TEXT-258 coltext = TEXT-232 )        " SEQUENCE
+                                                  ( col_pos = 8  fieldname = TEXT-259 coltext = TEXT-233 )        " MANUF_SERNO
+                                                  ( col_pos = 9  fieldname = TEXT-260 coltext = TEXT-234 )        " CAN
+                                                  ( col_pos = 10 fieldname = TEXT-261 coltext = TEXT-235 )        " CONTRACT
+                                                  ( col_pos = 11 fieldname = TEXT-262 coltext = TEXT-236 ) ##NUMBER_OK        " NAME
+                                                  ( col_pos = 12 fieldname = TEXT-263 coltext = TEXT-237 ) ##NUMBER_OK       " ADDRESS
+                                                  ( col_pos = 13 fieldname = TEXT-264 coltext = TEXT-238 )  ##NUMBER_OK      " MINIMUM_PAYM
+                                                  ( col_pos = 14 fieldname = TEXT-265 coltext = TEXT-239 ) ##NUMBER_OK      " TOTAL_AR
+                                                  ( col_pos = 15 fieldname = TEXT-266 coltext = TEXT-240 )  ##NUMBER_OK      " DUE_DATE
+                                                  ( col_pos = 16 fieldname = TEXT-267 coltext = TEXT-241 )        " JOB_GENE_DATE
+                                                  ( col_pos = 17 fieldname = TEXT-268 coltext = TEXT-242 ) ##NUMBER_OK       " JOB_EXECUTION_DATE
+                                                  ( col_pos = 18 fieldname = TEXT-269 coltext = TEXT-243 ) ##NUMBER_OK       " JOB_EXECUTION_TIME
+                                                  ( col_pos = 19 fieldname = TEXT-270 coltext = TEXT-244 )        " DISCONNECTION_READING
+                                                  ( col_pos = 20 fieldname = TEXT-271 coltext = TEXT-245 )        " LOCKING_DEVICE_USED
+                                                  ( col_pos = 21 fieldname = TEXT-272 coltext = TEXT-246 )        " CODE
+                                                  ( col_pos = 22 fieldname = TEXT-273 coltext = TEXT-247 )        " RECEIVED_BY
+                                                  ( col_pos = 23 fieldname = TEXT-274 coltext = TEXT-248 )        " REALTIONSHIP_TO_THE_OWNER
+                                                  ( col_pos = 24 fieldname = TEXT-275 coltext = TEXT-249 )        " KIND_OF_OBSTRUCTION
+                                                  ( col_pos = 25 fieldname = TEXT-276 coltext = TEXT-250 )        " OTHER_REMARKS
+                                                  ( col_pos = 26 fieldname = TEXT-277 coltext = TEXT-251 ) ).     " SERVICE_MAN
+
+            DATA(lo_result_data) = cl_salv_ex_util=>factory_result_data_table(
+                                                 r_data         = lo_data_ref
+                                                 t_fieldcatalog = lt_fieldcat ).
+
+            CASE cl_salv_bs_a_xml_base=>get_version( ).
+              WHEN if_salv_bs_xml=>version_25.
+                DATA(lv_version) = if_salv_bs_xml=>version_25.
+              WHEN if_salv_bs_xml=>version_26.
+                lv_version = if_salv_bs_xml=>version_26.
+            ENDCASE.
+
+            "Transformation of data to excel
+            CALL METHOD cl_salv_bs_tt_util=>if_salv_bs_tt_util~transform
+              EXPORTING
+                xml_type      = if_salv_bs_xml=>c_type_xlsx
+                xml_version   = lv_version
+                r_result_data = lo_result_data
+                xml_flavour   = if_salv_bs_c_tt=>c_tt_xml_flavour_export
+                gui_type      = if_salv_bs_xml=>c_gui_type_gui
+              IMPORTING
+                xml           = lv_xstring.
+
+            CALL FUNCTION 'SCMS_XSTRING_TO_BINARY'
+              EXPORTING
+                buffer        = lv_xstring
+              IMPORTING
+                output_length = lv_len
+              TABLES
+                binary_tab    = lt_data.
+
+            " Open the output dataset for writing in binary mode with path constructed earlier
+            TRY.
+                OPEN DATASET lv_apl_fullpath FOR OUTPUT IN BINARY MODE.
+              CATCH:
+                cx_sy_file_open INTO DATA(lv_excp1) ##NO_HANDLER,
+                cx_sy_pipes_not_supported INTO DATA(lv_excp2) ##NO_HANDLER,
+                cx_sy_file_authority INTO DATA(lv_excp3) ##NO_HANDLER,
+                cx_sy_conversion_codepage INTO DATA(lv_excp4) ##NO_HANDLER,
+                cx_sy_codepage_converter_init INTO DATA(lv_excp5) ##NO_HANDLER.
+                lv_message = COND #( WHEN lv_excp1 IS NOT INITIAL THEN lv_excp1->get_text( )
+                                     WHEN lv_excp2 IS NOT INITIAL THEN lv_excp2->get_text( )
+                                     WHEN lv_excp3 IS NOT INITIAL THEN lv_excp3->get_text( )
+                                     WHEN lv_excp4 IS NOT INITIAL THEN lv_excp4->get_text( )
+                                     WHEN lv_excp5 IS NOT INITIAL THEN lv_excp5->get_text( )
+                                     ).
+                MESSAGE lv_message TYPE 'I' DISPLAY LIKE TEXT-e00.
+                LEAVE LIST-PROCESSING.
+            ENDTRY.
+            IF sy-subrc = 0 ##FM_SUBRC_OK.
+              " Write all lines of lt_data to the output file
+              LOOP AT lt_data INTO DATA(ls_data).
+                TRY.
+                    TRANSFER ls_data TO lv_apl_fullpath.
+                  CATCH:
+                    cx_sy_codepage_converter_init INTO DATA(lv_trns_excp1) ##NO_HANDLER,
+                    cx_sy_conversion_codepage INTO DATA(lv_trns_excp2) ##NO_HANDLER,
+                    cx_sy_file_authority INTO DATA(lv_trns_excp3) ##NO_HANDLER,
+                    cx_sy_file_io INTO DATA(lv_trns_excp4) ##NO_HANDLER,
+                    cx_sy_file_open INTO DATA(lv_trns_excp5) ##NO_HANDLER,
+                    cx_sy_file_open_mode INTO DATA(lv_trns_excp6) ##NO_HANDLER,
+                    cx_sy_pipe_reopen INTO DATA(lv_trns_excp7) ##NO_HANDLER,
+                    cx_sy_too_many_files INTO DATA(lv_trns_excp8) ##NO_HANDLER.
+                    lv_message = COND #( WHEN lv_trns_excp1 IS NOT INITIAL THEN lv_trns_excp1->get_text( )
+                                         WHEN lv_trns_excp2 IS NOT INITIAL THEN lv_trns_excp2->get_text( )
+                                         WHEN lv_trns_excp3 IS NOT INITIAL THEN lv_trns_excp3->get_text( )
+                                         WHEN lv_trns_excp4 IS NOT INITIAL THEN lv_trns_excp4->get_text( )
+                                         WHEN lv_trns_excp5 IS NOT INITIAL THEN lv_trns_excp5->get_text( )
+                                         WHEN lv_trns_excp6 IS NOT INITIAL THEN lv_trns_excp6->get_text( )
+                                         WHEN lv_trns_excp7 IS NOT INITIAL THEN lv_trns_excp7->get_text( )
+                                         WHEN lv_trns_excp8 IS NOT INITIAL THEN lv_trns_excp8->get_text( )
+                                         ).
+                    MESSAGE lv_message TYPE 'I' DISPLAY LIKE TEXT-e00.
+                    LEAVE LIST-PROCESSING.
+                ENDTRY.
+                CLEAR: ls_data.
+              ENDLOOP.
+            ENDIF.
+            TRY.
+                CLOSE DATASET lv_apl_fullpath.
+              CATCH cx_sy_file_close INTO DATA(lv_msg1).
+                MESSAGE lv_msg1 TYPE 'I' DISPLAY LIKE TEXT-e00.
+                LEAVE LIST-PROCESSING.
+            ENDTRY.
+            MESSAGE |{ TEXT-195 }{ lv_apl_fullpath }| TYPE 'I' DISPLAY LIKE TEXT-s00.
+
+            " Update file tracking info in database table zdt_m2c_dunfile
+            ls_dunfile-mandt = sy-mandt.
+            ls_dunfile-company_code = p_bukrs.
+            ls_dunfile-service_provider = ls_file_dunpath-service_provider. "p_scp-low.
+            ls_dunfile-filename = lv_lcl_filename.
+            ls_dunfile-dateofupload = sy-datum.
+            ls_dunfile-timeofupload = sy-uzeit.
+            ls_dunfile-error_file = abap_false.
+            ls_dunfile-num_of_records = lv_records.
+            ls_dunfile-outbound_file = abap_false.
+            ls_dunfile-processed_by = sy-uname.
+            ls_dunfile-processed_on = p_date.
+            ls_dunfile-last_acc_by = sy-uname.
+            ls_dunfile-last_acc_on = sy-datum.
+            MODIFY zdt_m2c_dunfile FROM ls_dunfile.
+            COMMIT WORK.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+    ELSEIF lv_answer = '2'.
+      MESSAGE i071(zmc_m2c_fica) DISPLAY LIKE TEXT-e00.       " Processing not executed
+    ELSEIF lv_answer = 'A'.  " If user pressed second button (e.g. No)
+      MESSAGE i072(zmc_m2c_fica) DISPLAY LIKE TEXT-e00.       " Processing Cancelled
+    ENDIF.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form f_get_viewdata
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM f_get_viewdata .
+  " Select records from custom table based on input filters
+  SELECT company_code,service_provider,processed_on,filename, dateofupload, timeofupload,
+         processed_by,num_of_records,last_acc_by,last_acc_on,error_file
+    FROM zdt_m2c_dunfile
+    WHERE company_code = @p_bukrs
+      AND service_provider = @p_scp
+      AND processed_on = @p_date
+      AND outbound_file = @abap_false
+      AND filename LIKE 'INDUN%'
+      AND ( error_file = 'P' OR error_file = 'E' )
+    INTO TABLE @DATA(lt_dunfile).
+  IF sy-subrc = 0.
+    " If records found, move to output table and display
+    gt_output = CORRESPONDING #( lt_dunfile ).
+    SORT gt_output BY company_code
+                      service_provider
+                      processed_on
+                      dateofupload DESCENDING
+                      timeofupload DESCENDING.
+    PERFORM f_display_alv.
+  ELSE.
+    " Show message if no records found
+    MESSAGE i082(zmc_m2c_fica) DISPLAY LIKE TEXT-e00.       " No files were created for given input
+    LEAVE TO LIST-PROCESSING.
+  ENDIF.
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form f_create_fieldcatalog
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      <-- LT_FIELDCAT
+*&---------------------------------------------------------------------*
+FORM f_create_fieldcatalog  CHANGING c_lt_fieldcat TYPE slis_t_fieldcat_alv.
+  DATA: ls_fieldcat TYPE slis_fieldcat_alv.
+
+  CLEAR: ls_fieldcat.
+  " Field: Company Code
+  ls_fieldcat-fieldname = TEXT-040.
+  ls_fieldcat-seltext_l = TEXT-041.
+  ls_fieldcat-seltext_m = TEXT-042.
+  ls_fieldcat-seltext_s = TEXT-043.
+  APPEND ls_fieldcat TO c_lt_fieldcat.
+  " Field: Service Provider
+  CLEAR: ls_fieldcat.
+  ls_fieldcat-fieldname = TEXT-044.
+  ls_fieldcat-seltext_l = TEXT-045.
+  ls_fieldcat-seltext_m = TEXT-046.
+  ls_fieldcat-seltext_s = TEXT-047.
+  APPEND ls_fieldcat TO c_lt_fieldcat.
+  " Field: Processed On
+  CLEAR: ls_fieldcat.
+  ls_fieldcat-fieldname = TEXT-048.
+  ls_fieldcat-seltext_l = TEXT-049.
+  ls_fieldcat-seltext_m = TEXT-050.
+  ls_fieldcat-seltext_s = TEXT-051.
+  APPEND ls_fieldcat TO c_lt_fieldcat.
+  " Field: Filename
+  CLEAR: ls_fieldcat.
+  ls_fieldcat-fieldname = TEXT-019.
+  ls_fieldcat-seltext_l = TEXT-020.
+  ls_fieldcat-seltext_m = TEXT-020.
+  ls_fieldcat-seltext_s = TEXT-021.
+  APPEND ls_fieldcat TO c_lt_fieldcat.
+
+  " FIELD - dateofupload
+  CLEAR: ls_fieldcat.
+  ls_fieldcat-fieldname = 'DATEOFUPLOAD'(308).
+  ls_fieldcat-seltext_l = 'Date of Processed'(309).
+  ls_fieldcat-seltext_m = 'Date of Process'(310).
+  ls_fieldcat-seltext_s = 'Proc Dat'(311).
+  APPEND ls_fieldcat TO c_lt_fieldcat.
+
+  " FIELD - timeofupload
+  CLEAR: ls_fieldcat.
+  ls_fieldcat-fieldname = 'TIMEOFUPLOAD'(312) ##NO_TEXT.
+  ls_fieldcat-seltext_l = 'Time of Process'(313) ##NO_TEXT.
+  ls_fieldcat-seltext_m = 'Time of Process'(314) ##NO_TEXT ##TEXT_DIFF ##TEXT_DUP.
+  ls_fieldcat-seltext_s = 'Proc Tme'(315) ##TEXT_POOL .
+  APPEND ls_fieldcat TO c_lt_fieldcat.
+
+  " Field: Outbound File
+  CLEAR: ls_fieldcat.
+  ls_fieldcat-fieldname = TEXT-022.
+  ls_fieldcat-seltext_l = TEXT-023.
+  ls_fieldcat-seltext_m = TEXT-023.
+  ls_fieldcat-seltext_s = TEXT-024.
+  APPEND ls_fieldcat TO c_lt_fieldcat.
+  " Field: Processed By
+  CLEAR: ls_fieldcat.
+  ls_fieldcat-fieldname = TEXT-025.
+  ls_fieldcat-seltext_l = TEXT-026.
+  ls_fieldcat-seltext_m = TEXT-026.
+  ls_fieldcat-seltext_s = TEXT-027.
+  APPEND ls_fieldcat TO c_lt_fieldcat.
+  " Field: Number of Records
+  CLEAR: ls_fieldcat.
+  ls_fieldcat-fieldname = TEXT-028.
+  ls_fieldcat-seltext_l = TEXT-029.
+  ls_fieldcat-seltext_m = TEXT-030.
+  ls_fieldcat-seltext_s = TEXT-031.
+  APPEND ls_fieldcat TO c_lt_fieldcat.
+  " Field: Last Accessed By
+  CLEAR: ls_fieldcat.
+  ls_fieldcat-fieldname = TEXT-032.
+  ls_fieldcat-seltext_l = TEXT-033.
+  ls_fieldcat-seltext_m = TEXT-034.
+  ls_fieldcat-seltext_s = TEXT-035.
+  APPEND ls_fieldcat TO c_lt_fieldcat.
+  " Field: Last Accessed On
+  CLEAR: ls_fieldcat.
+  ls_fieldcat-fieldname = TEXT-036.
+  ls_fieldcat-seltext_l = TEXT-037.
+  ls_fieldcat-seltext_m = TEXT-038.
+  ls_fieldcat-seltext_s = TEXT-039.
+  APPEND ls_fieldcat TO c_lt_fieldcat.
+  " Field: Error File
+  CLEAR: ls_fieldcat.
+  ls_fieldcat-fieldname = TEXT-165.
+  ls_fieldcat-seltext_l = TEXT-166.
+  ls_fieldcat-seltext_m = TEXT-166.
+  ls_fieldcat-seltext_s = TEXT-166.
+  APPEND ls_fieldcat TO c_lt_fieldcat.
+  " Field: Time of Update
+  CLEAR: ls_fieldcat.
+  ls_fieldcat-fieldname = TEXT-167.
+  ls_fieldcat-seltext_l = TEXT-168.
+  ls_fieldcat-seltext_m = TEXT-168.
+  ls_fieldcat-seltext_s = TEXT-169.
+  ls_fieldcat-no_out = abap_true.
+  APPEND ls_fieldcat TO c_lt_fieldcat.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form f_display_alv
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM f_display_alv .
+  " Define field catalog and layout for ALV
+  DATA: lt_fieldcat TYPE slis_t_fieldcat_alv,
+        ls_layout   TYPE slis_layout_alv.
+  " Populate field catalog
+  PERFORM f_create_fieldcatalog CHANGING lt_fieldcat.
+  " Set ALV layout options
+  ls_layout-header_text = TEXT-163."'Inbound Dunning'. "'Dunning Activity'(t02). " Title Header
+  ls_layout-zebra = abap_true.
+  ls_layout-colwidth_optimize = abap_true.
+  ls_layout-box_fieldname = TEXT-164."'SEL'.
+  " Display data in ALV grid
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      i_callback_program       = sy-repid
+      i_callback_pf_status_set = 'PF_STATUS'
+      i_callback_user_command  = 'USER_COMMAND'
+      is_layout                = ls_layout      " Layout Settings
+      it_fieldcat              = lt_fieldcat
+    TABLES
+      t_outtab                 = gt_output       " ALV Data Table
+    EXCEPTIONS
+      program_error            = 1
+      OTHERS                   = 2.
+  " Display error if ALV fails
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form pf_status
+*&---------------------------------------------------------------------*
+FORM pf_status USING rt_extab TYPE slis_t_extab ##CALLED  ##NEEDED.
+  SET PF-STATUS 'PF_STATUS'.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form f_get_viewdata
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM user_command USING r_ucomm TYPE syucomm
+                        rs_selfield TYPE slis_selfield  ##CALLED ##NEEDED.
+  TYPES: BEGIN OF gts_dwnld_file,
+           date_id                   TYPE fkkmako-laufd,
+           runid                     TYPE fkkmako-laufi,
+           dunning_type              TYPE fkkmako-zzdun_type,
+           service_area              TYPE fkkmako-zzser_area,
+           dmz                       TYPE ehauisu-regiogroup_perm,
+           mru                       TYPE eablg-ableinh,
+           sequence                  TYPE iloa-eqfnr,
+           mserial_number            TYPE equi-serge,
+           can                       TYPE fkkmako-vkont,
+           contract                  TYPE ever-vertrag,
+           name                      TYPE but000-name_org1,
+           address                   TYPE char100,
+           minimum_payment           TYPE p LENGTH 13 DECIMALS 2,
+           total_ar                  TYPE p LENGTH 13 DECIMALS 2,
+           due_date                  TYPE fkkmako-zznotice_due_dt,
+           job_generation_date       TYPE fkkmako-zzjob_gen_dt,
+           job_execution_date        TYPE fkkmako-zzjob_exe_dt,
+           job_execution_time        TYPE sy-uzeit,
+           disconnection_reading     TYPE zdt_m2c_disc-disc_reading,
+           locking_device_used       TYPE zdt_m2c_disc-lock_device,
+           code                      TYPE zdt_m2c_disc-disc_res_cod,
+           received_by               TYPE sy-uname,
+           realtionship_to_the_owner TYPE char20,
+           kind_of_obstruction       TYPE char20,
+           other_remarks             TYPE zdt_m2c_disc-rec_oth_remarks,
+           service_man               TYPE zdt_m2c_disc-rec_serv_man,
+           status                    TYPE char100,
+         END OF gts_dwnld_file.
+
+  DATA: lt_srctab                TYPE STANDARD TABLE OF gts_cline         ##NEEDED,
+        lt_formated_data         TYPE STANDARD TABLE OF gts_crt_file ##NEEDED,
+        lt_string_text           TYPE STANDARD TABLE OF gts_tab ##NEEDED,
+        lt_strings               TYPE STANDARD TABLE OF gts_tab ##NEEDED,
+        lt_dataset_lines         TYPE STANDARD TABLE OF string ##NEEDED,
+        lr_table                 TYPE REF TO cl_salv_table ##NEEDED,
+        lr_functions             TYPE REF TO cl_salv_functions_list       ##NEEDED, " Generic and User-Defined Functions in List-Type Tables
+        lr_layout                TYPE REF TO cl_salv_layout               ##NEEDED, " Settings for Layout
+        lr_content               TYPE REF TO cl_salv_form_element         ##NEEDED,
+        lo_columns               TYPE REF TO cl_salv_columns_table        ##NEEDED,
+        lo_grid                  TYPE REF TO cl_gui_alv_grid ##NEEDED,
+        lo_table_descr           TYPE REF TO cl_abap_tabledescr ##NEEDED,
+        lo_struct_descr          TYPE REF TO cl_abap_structdescr ##NEEDED,
+        lv_xml_type              TYPE salv_bs_constant                    ##NEEDED,
+        lv_xml                   TYPE xstring                             ##NEEDED,
+        ls_key                   TYPE salv_s_layout_key                   ##NEEDED, " Layout Key
+        lt_len                   TYPE i                                   ##NEEDED, " Len of type Integers
+        lv_len                   TYPE i                                   ##NEEDED,
+        lt_dir_list              TYPE STANDARD TABLE OF eps2fili,
+        lv_headerxstring         TYPE xstring,
+        lr_excel_ref             TYPE REF TO cl_fdt_xl_spreadsheet,
+        lv_ext                   TYPE string ##NEEDED,
+        lv_def_name              TYPE string ##NEEDED,
+        lv_xlfilename            TYPE string ##NEEDED,
+        lv_path                  TYPE string ##NEEDED,
+        lv_fullpath              TYPE string ##NEEDED,
+        lv_filefullpath          TYPE string ##NEEDED,
+        ls_tab                   TYPE gts_cline ##NEEDED,
+        lv_message               TYPE char100 ##NEEDED,
+        lv_xstring               TYPE xstring                             ##NEEDED,
+        lv_encoding              TYPE abap_encoding                       ##NEEDED, " Encoding type
+        lv_string_columns        TYPE i                                   ##NEEDED,
+        lv_formated_data_columns TYPE i                                   ##NEEDED,
+        lv_filename              TYPE string ##NEEDED,
+        lv_fullstring            TYPE string ##NEEDED,                                       " Full line from file
+        lv_col                   TYPE char30 ##NEEDED,
+        lv_m                     TYPE char20 ##NEEDED,
+        lv_s                     TYPE char10 ##NEEDED,
+        lv_l                     TYPE char40 ##NEEDED,
+        lv_filemask              TYPE epsf-epsfilnam ##NEEDED,
+        lv_folder                TYPE eps2filnam,
+        lt_download              TYPE STANDARD TABLE OF gts_dwnld_file.
+
+  FIELD-SYMBOLS : <ls_xl_data_t1> TYPE STANDARD TABLE,
+                  <ls_xl_data>    TYPE any,
+                  <ls_xl_data_a>  TYPE any.
+
+  lv_encoding = 'UTF-8'.
+  CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
+    IMPORTING
+      e_grid = lo_grid.    " Get ALV grid reference
+  IF lo_grid IS BOUND.
+    CALL METHOD lo_grid->check_changed_data.    " Save ALV changes before processing
+  ENDIF.
+
+  CASE r_ucomm.
+    WHEN '&DWN'(170).     " Download command triggered
+      DATA(lt_output) = gt_output.
+      SORT lt_output BY sel.
+      DELETE lt_output WHERE sel <> abap_true.        " Keep only selected rows
+      IF lines( lt_output ) = 1.
+        " Get file path config from custom table
+        SELECT *
+          FROM zdt_m2c_dunpath
+          FOR ALL ENTRIES IN @lt_output
+          WHERE company_code = @lt_output-company_code
+            AND service_provider = @lt_output-service_provider
+             AND type = @gc_type
+          INTO TABLE @DATA(lt_dunpath).
+        IF sy-subrc = 0.
+          SORT lt_dunpath BY company_code service_provider type.   "sort
+          DELETE ADJACENT DUPLICATES FROM lt_dunpath COMPARING company_code service_provider type.  "delete duplicate record
+          IF gt_tvarvc[] IS NOT INITIAL.
+            DATA(ls_dunpath) = VALUE #( lt_dunpath[ 1 ] OPTIONAL ).
+            DATA(ls_output)  = VALUE #( lt_output[ 1 ] OPTIONAL ).
+            DATA(ls_input)   = VALUE #( gt_tvarvc[ name = gc_inpt ] OPTIONAL ) ##NEEDED.
+            DATA(ls_archive) = VALUE #( gt_tvarvc[ name = gc_arch ] OPTIONAL ).
+            DATA(ls_error)   = VALUE #( gt_tvarvc[ name = gc_erro ] OPTIONAL ).
+            IF ls_output-error_file = 'P'.
+              CLEAR: lv_fullpath, lv_folder, lv_filemask.
+              lv_fullpath = |{ ls_archive-low }{ ls_dunpath-inb_filepath }{ ls_output-filename }{ TEXT-109 }|.  " Try archive or error path if input fails
+              lv_folder   = |{ ls_archive-low }{ ls_dunpath-inb_filepath }|.
+              lv_filemask = |{ ls_output-filename }{ TEXT-109 }|.
+              CALL FUNCTION 'EPS2_GET_DIRECTORY_LISTING'
+                EXPORTING
+                  iv_dir_name            = lv_folder
+                  file_mask              = lv_filemask
+                TABLES
+                  dir_list               = lt_dir_list
+                EXCEPTIONS
+                  invalid_eps_subdir     = 1
+                  sapgparam_failed       = 2
+                  build_directory_failed = 3
+                  no_authorization       = 4
+                  read_directory_failed  = 5
+                  too_many_read_errors   = 6
+                  empty_directory_list   = 7
+                  OTHERS                 = 8.
+              IF sy-subrc = 0.
+                lv_len = VALUE #( lt_dir_list[ name = lv_filemask ]-size OPTIONAL ).
+                TRY.
+                    OPEN DATASET lv_fullpath FOR INPUT IN BINARY MODE.
+                  CATCH:
+                    cx_sy_file_open INTO DATA(lv_arch_excp1) ##NO_HANDLER,
+                    cx_sy_pipes_not_supported INTO DATA(lv_arch_excp2) ##NO_HANDLER,
+                    cx_sy_file_authority INTO DATA(lv_arch_excp3) ##NO_HANDLER,
+                    cx_sy_conversion_codepage INTO DATA(lv_arch_excp4) ##NO_HANDLER,
+                    cx_sy_codepage_converter_init INTO DATA(lv_arch_excp5) ##NO_HANDLER.
+                    lv_message = COND #( WHEN lv_arch_excp1 IS NOT INITIAL THEN lv_arch_excp1->get_text( )
+                                         WHEN lv_arch_excp2 IS NOT INITIAL THEN lv_arch_excp2->get_text( )
+                                         WHEN lv_arch_excp3 IS NOT INITIAL THEN lv_arch_excp3->get_text( )
+                                         WHEN lv_arch_excp4 IS NOT INITIAL THEN lv_arch_excp4->get_text( )
+                                         WHEN lv_arch_excp5 IS NOT INITIAL THEN lv_arch_excp5->get_text( )
+                                         ).
+                    MESSAGE lv_message TYPE 'I' DISPLAY LIKE TEXT-e00.
+                    LEAVE LIST-PROCESSING.
+                ENDTRY.
+              ENDIF.
+            ELSEIF ls_output-error_file = 'E'.
+              CLEAR: lv_fullpath, lv_folder, lv_filemask.
+              lv_fullpath = |{ ls_error-low }{ ls_dunpath-inb_filepath }{ ls_output-filename }{ TEXT-109 }|.
+              lv_folder   = |{ ls_error-low }{ ls_dunpath-inb_filepath }|.
+              lv_filemask = |{ ls_output-filename }{ TEXT-109 }|.
+              CALL FUNCTION 'EPS2_GET_DIRECTORY_LISTING'
+                EXPORTING
+                  iv_dir_name            = lv_folder
+                  file_mask              = lv_filemask
+                TABLES
+                  dir_list               = lt_dir_list
+                EXCEPTIONS
+                  invalid_eps_subdir     = 1
+                  sapgparam_failed       = 2
+                  build_directory_failed = 3
+                  no_authorization       = 4
+                  read_directory_failed  = 5
+                  too_many_read_errors   = 6
+                  empty_directory_list   = 7
+                  OTHERS                 = 8.
+              IF sy-subrc = 0.
+                lv_len = VALUE #( lt_dir_list[ name = lv_filemask ]-size OPTIONAL ).
+                TRY.
+                    OPEN DATASET lv_fullpath FOR INPUT IN BINARY MODE.
+                  CATCH:
+                    cx_sy_file_open INTO DATA(lv_eror_excp1) ##NO_HANDLER,
+                    cx_sy_pipes_not_supported INTO DATA(lv_eror_excp2) ##NO_HANDLER,
+                    cx_sy_file_authority INTO DATA(lv_eror_excp3) ##NO_HANDLER,
+                    cx_sy_conversion_codepage INTO DATA(lv_eror_excp4) ##NO_HANDLER,
+                    cx_sy_codepage_converter_init INTO DATA(lv_eror_excp5) ##NO_HANDLER.
+                    lv_message = COND #( WHEN lv_eror_excp1 IS NOT INITIAL THEN lv_eror_excp1->get_text( )
+                                         WHEN lv_eror_excp2 IS NOT INITIAL THEN lv_eror_excp2->get_text( )
+                                         WHEN lv_eror_excp3 IS NOT INITIAL THEN lv_eror_excp3->get_text( )
+                                         WHEN lv_eror_excp4 IS NOT INITIAL THEN lv_eror_excp4->get_text( )
+                                         WHEN lv_eror_excp5 IS NOT INITIAL THEN lv_eror_excp5->get_text( )
+                                         ).
+                    MESSAGE lv_message TYPE 'I' DISPLAY LIKE TEXT-e00.
+                    LEAVE LIST-PROCESSING.
+                ENDTRY.
+              ENDIF.
+            ELSE.
+              MESSAGE i064(zmc_m2c_fica) DISPLAY LIKE TEXT-e00.
+              LEAVE TO LIST-PROCESSING.
+            ENDIF.
+
+            IF sy-subrc = 0.
+              DO.
+                IF sy-subrc <> 0.
+                  EXIT.
+                ENDIF.
+                TRY.
+                    READ DATASET lv_fullpath INTO ls_tab.   " Read one line from file
+                  CATCH:
+                    cx_sy_codepage_converter_init INTO DATA(lv_read_excp1) ##NO_HANDLER,
+                    cx_sy_conversion_codepage INTO DATA(lv_read_excp2) ##NO_HANDLER,
+                    cx_sy_file_authority INTO DATA(lv_read_excp3) ##NO_HANDLER,
+                    cx_sy_file_io INTO DATA(lv_read_excp4) ##NO_HANDLER,
+                    cx_sy_file_open INTO DATA(lv_read_excp5) ##NO_HANDLER,
+                    cx_sy_file_open_mode INTO DATA(lv_read_excp6) ##NO_HANDLER,
+                    cx_sy_pipe_reopen INTO DATA(lv_read_excp7).
+                    lv_message = COND #( WHEN lv_read_excp1 IS NOT INITIAL THEN lv_read_excp1->get_text( )
+                                         WHEN lv_read_excp2 IS NOT INITIAL THEN lv_read_excp2->get_text( )
+                                         WHEN lv_read_excp3 IS NOT INITIAL THEN lv_read_excp3->get_text( )
+                                         WHEN lv_read_excp4 IS NOT INITIAL THEN lv_read_excp4->get_text( )
+                                         WHEN lv_read_excp5 IS NOT INITIAL THEN lv_read_excp5->get_text( )
+                                         WHEN lv_read_excp6 IS NOT INITIAL THEN lv_read_excp6->get_text( )
+                                         WHEN lv_read_excp7 IS NOT INITIAL THEN lv_read_excp7->get_text( )
+                                         ).
+                    MESSAGE lv_message TYPE 'I' DISPLAY LIKE TEXT-e00.
+                    LEAVE LIST-PROCESSING.
+                ENDTRY.
+                APPEND ls_tab TO lt_srctab.
+                CLEAR: ls_tab.
+              ENDDO.  " End of file reading loop
+              TRY.
+                  CLOSE DATASET lv_fullpath.   " Close the opened dataset
+                CATCH cx_sy_file_close INTO DATA(lv_clos_excp).
+                  lv_message = lv_clos_excp->get_text( ).
+                  MESSAGE lv_message TYPE 'I' DISPLAY LIKE TEXT-e00.
+                  LEAVE LIST-PROCESSING.
+              ENDTRY.
+
+              IF sy-subrc = 0 AND lt_srctab[] IS NOT INITIAL.
+                lt_len = lv_len.
+                CALL FUNCTION 'SCMS_BINARY_TO_XSTRING'
+                  EXPORTING
+                    input_length = lt_len
+                  IMPORTING
+                    buffer       = lv_xstring
+                  TABLES
+                    binary_tab   = lt_srctab
+                  EXCEPTIONS
+                    failed       = 1
+                    OTHERS       = 2.
+                IF sy-subrc <> 0 ##NEEDED.
+                  " ERROR HANDLING
+                ENDIF.
+                lv_headerxstring = lv_xstring.
+                lv_filename = lv_filemask.
+* Get Excel Reference
+                TRY .
+                    lr_excel_ref = NEW cl_fdt_xl_spreadsheet(
+                                  document_name = lv_filename
+                                  xdocument     = lv_headerxstring ) .
+                  CATCH cx_fdt_excel_core.
+                    CLEAR: lr_excel_ref.
+                ENDTRY .
+
+* Get Spreadsher Ref.
+                IF lr_excel_ref IS BOUND.
+                  lr_excel_ref->if_fdt_doc_spreadsheet~get_worksheet_names(
+                    IMPORTING
+                      worksheet_names = DATA(lt_worksheets) ).
+                ENDIF.
+
+                IF lt_worksheets IS NOT INITIAL.
+*    CLEAR gv_sheet.
+                  READ TABLE lt_worksheets INTO DATA(lv_woksheetname) INDEX 1.
+                  IF sy-subrc = 0.
+                    DATA(lr_data_ref) = lr_excel_ref->if_fdt_doc_spreadsheet~get_itab_from_worksheet(
+                                                           lv_woksheetname ).
+* Excel data will be mapped in an Internal table dynamically
+                    ASSIGN lr_data_ref->* TO <ls_xl_data_t1>.
+
+                    IF <ls_xl_data_t1> IS ASSIGNED.
+                      DELETE  <ls_xl_data_t1> INDEX 1.
+
+                      TRY.
+* RTTI services to describe table variable
+                          lo_table_descr ?= cl_abap_tabledescr=>describe_by_data( p_data = <ls_xl_data_t1> ).
+* RTTI services to describe table structure
+                          lo_struct_descr ?= lo_table_descr->get_table_line_type( ).
+
+* Count number of columns in structure
+                          DATA(lv_number_of_columns) = lines( lo_struct_descr->components ).
+
+                        CATCH cx_sy_move_cast_error     ##NO_HANDLER.
+* Implement error handling
+                      ENDTRY.
+
+                      LOOP AT <ls_xl_data_t1> ASSIGNING <ls_xl_data>.
+                        APPEND INITIAL LINE TO lt_download ASSIGNING FIELD-SYMBOL(<fs_upload>).
+                        DO lv_number_of_columns TIMES.
+                          ASSIGN COMPONENT sy-index OF STRUCTURE <ls_xl_data> TO <ls_xl_data_a>.
+                          IF sy-subrc = 0.
+                            ASSIGN COMPONENT sy-index OF STRUCTURE <fs_upload> TO FIELD-SYMBOL(<fs_comp>).
+                            IF sy-subrc = 0.
+                              IF sy-index = 1 OR sy-index = 15 OR sy-index = 16 OR sy-index = 17 ##NUMBER_OK.
+                                FIND REGEX '^(0[1-9]|[12][0-9]|3[01])-(0[1-9]|1[0-2])-(?!0000)\d{4}$' IN <ls_xl_data_a> ##REGEX_POSIX.      " '^(0[1-9]|[12][0-9]|3[01])-(0[1-9]|1[0-2])-(?!0000)\d{4}$'
+                                IF sy-subrc = 0.
+                                  TRY.
+                                      <fs_comp> = |{ <ls_xl_data_a>+6(4) }{ <ls_xl_data_a>+3(2) }{ <ls_xl_data_a>(2) }|.
+                                    CATCH cx_sy_range_out_of_bounds INTO DATA(lv_range_excp) ##NEEDED ##NO_HANDLER.
+                                  ENDTRY.
+                                ELSE.
+                                  FIND REGEX '^(?!0000)\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$' IN <ls_xl_data_a> ##REGEX_POSIX.     " '^(?!0000)\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'
+                                  IF sy-subrc = 0.
+                                    TRY.
+                                        <fs_comp> = |{ <ls_xl_data_a>(4) }{ <ls_xl_data_a>+5(2) }{ <ls_xl_data_a>+8(2) }|.
+                                      CATCH cx_sy_range_out_of_bounds INTO lv_range_excp ##NO_HANDLER.
+                                    ENDTRY.
+                                  ENDIF.
+                                ENDIF.
+                              ELSE.
+                                <fs_comp> = <ls_xl_data_a>.
+                              ENDIF.
+                            ENDIF.
+                          ENDIF.
+                        ENDDO.
+                        UNASSIGN <fs_upload>.
+                      ENDLOOP.
+                    ENDIF.
+                  ENDIF.
+                ENDIF.
+                IF lt_download IS NOT INITIAL.
+                  GET REFERENCE OF lt_download INTO DATA(lo_data_ref).
+                  DATA(lt_fieldcat) = VALUE lvc_t_fcat( ( col_pos = 1  fieldname = 'DATE_ID'                   coltext = TEXT-226 )
+                                                        ( col_pos = 2  fieldname = 'RUNID'                     coltext = TEXT-227 )
+                                                        ( col_pos = 3  fieldname = 'DUNNING_TYPE'              coltext = TEXT-228 )
+                                                        ( col_pos = 4  fieldname = 'SERVICE_AREA'              coltext = TEXT-229 )
+                                                        ( col_pos = 5  fieldname = 'DMZ'                       coltext = TEXT-230 )
+                                                        ( col_pos = 6  fieldname = 'MRU'                       coltext = TEXT-231 )
+                                                        ( col_pos = 7  fieldname = 'SEQUENCE'                  coltext = TEXT-232 )
+                                                        ( col_pos = 8  fieldname = 'MSERIAL_NUMBER'            coltext = TEXT-233 )
+                                                        ( col_pos = 9  fieldname = 'CAN'                       coltext = TEXT-234 )
+                                                        ( col_pos = 10 fieldname = 'CONTRACT'                  coltext = TEXT-235 )
+                                                        ( col_pos = 11 fieldname = 'NAME'                      coltext = TEXT-236 ) ##NUMBER_OK
+                                                        ( col_pos = 12 fieldname = 'ADDRESS'                   coltext = TEXT-237 ) ##NUMBER_OK
+                                                        ( col_pos = 13 fieldname = 'MINIMUM_PAYMENT'           coltext = TEXT-238 ) ##NUMBER_OK
+                                                        ( col_pos = 14 fieldname = 'TOTAL_AR'                  coltext = TEXT-239 ) ##NUMBER_OK
+                                                        ( col_pos = 15 fieldname = 'DUE_DATE'                  coltext = TEXT-240 ) ##NUMBER_OK
+                                                        ( col_pos = 16 fieldname = 'JOB_GENERATION_DATE'       coltext = TEXT-241 ) ##NUMBER_OK
+                                                        ( col_pos = 17 fieldname = 'JOB_EXECUTION_DATE'        coltext = TEXT-242 ) ##NUMBER_OK
+                                                        ( col_pos = 18 fieldname = 'JOB_EXECUTION_TIME'        coltext = TEXT-243 ) ##NUMBER_OK
+                                                        ( col_pos = 19 fieldname = 'DISCONNECTION_READING'     coltext = TEXT-244 ) ##NUMBER_OK
+                                                        ( col_pos = 20 fieldname = 'LOCKING_DEVICE_USED'       coltext = TEXT-245 ) ##NUMBER_OK
+                                                        ( col_pos = 21 fieldname = 'CODE'                      coltext = TEXT-246 )
+                                                        ( col_pos = 22 fieldname = 'RECEIVED_BY'               coltext = TEXT-247 )
+                                                        ( col_pos = 23 fieldname = 'REALTIONSHIP_TO_THE_OWNER' coltext = TEXT-248 )
+                                                        ( col_pos = 24 fieldname = 'KIND_OF_OBSTRUCTION'       coltext = TEXT-249 )
+                                                        ( col_pos = 25 fieldname = 'OTHER_REMARKS'             coltext = TEXT-250 )
+                                                        ( col_pos = 26 fieldname = 'SERVICE_MAN'               coltext = TEXT-251 )
+                                                        ( col_pos = 27 fieldname = 'STATUS'                    coltext = 'Status'(281) ) ).
+
+                  DATA(lo_result_data) = cl_salv_ex_util=>factory_result_data_table(
+                                                       r_data         = lo_data_ref
+                                                       t_fieldcatalog = lt_fieldcat ).
+
+                  CASE cl_salv_bs_a_xml_base=>get_version( ).
+                    WHEN if_salv_bs_xml=>version_25.
+                      DATA(lv_version) = if_salv_bs_xml=>version_25.
+                    WHEN if_salv_bs_xml=>version_26.
+                      lv_version = if_salv_bs_xml=>version_26.
+                  ENDCASE.
+
+                  "Transformation of data to excel
+                  CALL METHOD cl_salv_bs_tt_util=>if_salv_bs_tt_util~transform
+                    EXPORTING
+                      xml_type      = if_salv_bs_xml=>c_type_xlsx
+                      xml_version   = lv_version
+                      r_result_data = lo_result_data
+                      xml_flavour   = if_salv_bs_c_tt=>c_tt_xml_flavour_export
+                      gui_type      = if_salv_bs_xml=>c_gui_type_gui
+                    IMPORTING
+                      xml           = lv_xstring.
+
+                  CALL FUNCTION 'SCMS_XSTRING_TO_BINARY'
+                    EXPORTING
+                      buffer        = lv_xstring
+                    IMPORTING
+                      output_length = lt_len
+                    TABLES
+                      binary_tab    = lt_srctab.
+                  IF sy-subrc = 0 ##FM_SUBRC_OK.
+                    " Update database table zdt_m2c_dunfile with last accessed user and date depending on error file flag
+                    UPDATE zdt_m2c_dunfile SET   last_acc_by = @sy-uname,
+                                                 last_acc_on = @sy-datum
+                                           WHERE company_code = @ls_dunpath-company_code
+                                             AND service_provider = @ls_dunpath-service_provider
+                                             AND processed_on = @p_date
+                                             AND filename = @ls_output-filename
+                                             AND dateofupload = @ls_output-dateofupload
+                                             AND timeofupload = @ls_output-timeofupload
+                                             AND error_file = @ls_output-error_file.
+*                Get File Path
+                    " Open save dialog to get filename and path for saving the file
+                    lv_ext = TEXT-193."'xlsx'.
+                    lv_def_name = ls_output-filename.
+                    CALL METHOD cl_gui_frontend_services=>file_save_dialog(
+                      EXPORTING
+                        window_title         = 'Provide Download Path' ##NO_TEXT
+                        default_extension    = lv_ext
+                        default_file_name    = lv_def_name
+                      CHANGING
+                        filename             = lv_xlfilename
+                        path                 = lv_path
+                        fullpath             = lv_filefullpath
+                      EXCEPTIONS
+                        cntl_error           = 1
+                        error_no_gui         = 2
+                        not_supported_by_gui = 3
+                        OTHERS               = 4 ).
+                    IF sy-subrc IS NOT INITIAL.
+                      DATA(lv_mess) = |{ sy-msgv1 } { sy-msgv2 } { sy-msgv3 } { sy-msgv4 }|.
+                      MESSAGE lv_mess TYPE 'I' DISPLAY LIKE 'E'.
+                    ENDIF.
+                    " Download binary data from internal table lt_srctab to frontend
+                    CALL METHOD cl_gui_frontend_services=>gui_download
+                      EXPORTING
+                        bin_filesize            = lt_len
+                        filename                = lv_filefullpath
+                        filetype                = zcl_abap_utility=>zif_m2c_constant~zab_m2c_inbound_dunning-filetype_bin
+                      CHANGING
+                        data_tab                = lt_srctab
+                      EXCEPTIONS
+                        file_write_error        = 1
+                        no_batch                = 2
+                        gui_refuse_filetransfer = 3
+                        invalid_type            = 4
+                        no_authority            = 5
+                        unknown_error           = 6
+                        header_not_allowed      = 7
+                        separator_not_allowed   = 8
+                        filesize_not_allowed    = 9
+                        header_too_long         = 10
+                        dp_error_create         = 11
+                        dp_error_send           = 12
+                        dp_error_write          = 13
+                        unknown_dp_error        = 14
+                        access_denied           = 15
+                        dp_out_of_memory        = 16
+                        disk_full               = 17
+                        dp_timeout              = 18
+                        file_not_found          = 19
+                        dataprovider_exception  = 20
+                        control_flush_error     = 21
+                        not_supported_by_gui    = 22
+                        error_no_gui            = 23
+                        OTHERS                  = 24.
+                    IF sy-subrc <> 0.
+                      MESSAGE: i063(zmc_m2c_fica) DISPLAY LIKE TEXT-e00.      " Selected file could not be downloaded
+                    ENDIF.
+                  ENDIF.
+                ENDIF.
+                " Clear temporary data
+                CLEAR: lt_strings,lt_string_text.
+              ELSE.
+                MESSAGE i064(zmc_m2c_fica) DISPLAY LIKE TEXT-e00.
+                LEAVE TO LIST-PROCESSING.
+              ENDIF.
+            ELSE.
+              MESSAGE i065(zmc_m2c_fica) DISPLAY LIKE TEXT-e00.
+              LEAVE TO LIST-PROCESSING.
+            ENDIF.
+          ENDIF.  " NO PATH FOUND IN TVARVC TABLE
+        ENDIF.  " NO ENTRY FOUND IN DUNPATH TABLE
+      ELSE.
+        MESSAGE i066(zmc_m2c_fica) DISPLAY LIKE TEXT-e00.
+        LEAVE TO LIST-PROCESSING.
+      ENDIF.
+    WHEN OTHERS.
+  ENDCASE.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form f_create_slg_logs
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM f_create_slg_logs USING p_msgno TYPE symsgno
+                             p_msgv1 TYPE symsgv
+                             p_msgv2 TYPE symsgv
+                             p_msgv3 TYPE symsgv
+                             p_msgv4 TYPE symsgv.
+  CLEAR: gs_msg_l.
+  gs_msg_l-msgty = zcl_abap_utility=>zif_m2c_constant~zab_m2c_inbound_dunning-info.
+  gs_msg_l-msgid = zcl_abap_utility=>zif_m2c_constant~zab_m2c_inbound_dunning-msgid.
+  gs_msg_l-msgno = p_msgno.
+  gs_msg_l-msgv1 = p_msgv1.
+  gs_msg_l-msgv2 = p_msgv2.
+  gs_msg_l-msgv3 = p_msgv3.
+  gs_msg_l-msgv4 = p_msgv4.
+  CALL FUNCTION 'BAL_LOG_MSG_ADD'
+    EXPORTING
+      i_log_handle     = gs_loghandle
+      i_s_msg          = gs_msg_l
+    EXCEPTIONS
+      log_not_found    = 1
+      msg_inconsistent = 2
+      log_is_full      = 3
+      OTHERS           = 4.
+  IF sy-subrc = 0.
+    APPEND gs_loghandle TO gt_loghandle.
+  ENDIF.
+ENDFORM.

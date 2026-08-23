@@ -1,0 +1,119 @@
+IF_BADI_INTERFACE	Tag Interface for BAdIs
+IF_EX_HCMFAB_COMMON	Interface for BAdI: HCMFAB_B_COMMON
+
+methods - 
+IF_EX_HCMFAB_COMMON~GET_ONBEHALF_EMPLOYEES	Instance Method	Public	                               	Get On-Behalf Employee List
+IF_EX_HCMFAB_COMMON~GET_COLLEAGUES	Instance Method	Public	                               	Get Colleagues of an Employee
+IF_EX_HCMFAB_COMMON~GET_DIRECT_REPORTS	Instance Method	Public	                               	Get Direct Reports of a Manager
+IF_EX_HCMFAB_COMMON~GET_EMPLOYEES	Instance Method	Public	                               	Get Employees
+IF_EX_HCMFAB_COMMON~GET_MANAGER	Instance Method	Public	                               	Get Employee Number of the corresponding Manager
+IF_EX_HCMFAB_COMMON~GET_EMPLOYEE_DETAILS	Instance Method	Public	                               	Get the Details for an Employee
+IF_EX_HCMFAB_COMMON~GET_EMPLOYEE_PICTURE	Instance Method	Public	                               	Get the Employee Picture
+IF_EX_HCMFAB_COMMON~GET_OFFICE_ADDRESS	Instance Method	Public	                               	Get the Office Address for an Employee
+IF_EX_HCMFAB_COMMON~GET_CONFIGURATION	Instance Method	Public	                               	Get central Configuration
+IF_EX_HCMFAB_COMMON~GET_CE_CONFIGURATION	Instance Method	Public	                               	Get Configuration for Concurrent Employement
+IF_EX_HCMFAB_COMMON~EMPLOYEE_IS_MANAGER	Instance Method	Public	                               	Employee is Manager ('X' = yes, SPACE = no)
+IF_EX_HCMFAB_COMMON~EMPLOYEE_IS_ONBEHALF_RELEVANT	Instance Method	Public	                               	Employee is Part of On-Behalf List ('X' = yes, SPACE = no)
+
+  method IF_EX_HCMFAB_COMMON~GET_MANAGER.
+
+data : lv_usrid TYPE P0105-USRID,
+      lv_pernr TYPE P0105-PERNR.
+
+** -> Begin of changes by  KRITIKA on 06.11.2024 for ATC
+*select SINGLE PERNR, SUBTY, OBJPS, SPRPS, ENDDA, BEGDA, SEQNR, plans
+*  from pa0001 INto @data(lwa_pa0001) where
+*  pernr = @IS_TIME_RECORD-pernr and
+*  begda le @sy-datum and
+*  endda ge @sy-datum.
+select PERNR, SUBTY, OBJPS, SPRPS, ENDDA, BEGDA, SEQNR, plans
+  from pa0001 INto @data(lwa_pa0001)  UP TO 1 ROWS where
+  pernr = @IV_EMPLOYEE_PERNR and
+  begda le @sy-datum and
+  endda ge @sy-datum ORDER BY PRIMARY KEY.
+ENDSELECT.
+** <- End of changes by KRITIKA on 06.11.2024 for ATC
+  IF sy-subrc eq 0.
+** -> Begin of changes by  KRITIKA on 06.11.2024 for ATC
+*    SELECT SINGLE OTYPE, OBJID, PLVAR, RSIGN, RELAT, ISTAT, PRIOX, BEGDA, ENDDA, VARYF, SEQNR , sobid
+*      from hrp1001 into @data(lwa_hrp1001) where
+*      otype = 'S' and
+*      rsign = 'A' and
+*      relat = '002' and
+*      objid = @lwA_pa0001-plans and
+*      begda le @sy-datum and
+*      endda ge @sy-datum.
+    SELECT OTYPE, OBJID, PLVAR, RSIGN, RELAT, ISTAT, PRIOX, BEGDA, ENDDA, VARYF, SEQNR , sobid
+      from hrp1001 UP TO 1 ROWS into @data(lwa_hrp1001) where
+      otype = 'S' and
+      rsign = 'A' and
+      relat = '002' and
+      objid = @lwA_pa0001-plans and
+      begda le @sy-datum and
+      endda ge @sy-datum ORDER BY PRIMARY KEY.
+     ENDSELECT.
+** <- End of changes by KRITIKA on 06.11.2024 for ATC
+      IF sy-subrc eq 0.
+** -> Begin of changes by  KRITIKA on 06.11.2024 for ATC
+*        SELECT SINGLE OTYPE, OBJID, PLVAR, RSIGN, RELAT, ISTAT, PRIOX, BEGDA, ENDDA, VARYF, SEQNR , sobid, uname
+*      from hrp1001 into @data(lwa_hrp1001_1) where
+*      otype = 'S' and
+*      rsign = 'A' and
+*      relat = '008' and
+*      objid = @lwA_hrp1001-sobid and
+*      begda le @sy-datum and
+*      endda ge @sy-datum.
+        SELECT OTYPE, OBJID, PLVAR, RSIGN, RELAT, ISTAT, PRIOX, BEGDA, ENDDA, VARYF, SEQNR , sobid, uname
+      from hrp1001 into @data(lwa_hrp1001_1) UP TO 1 ROWS where
+      otype = 'S' and
+      rsign = 'A' and
+      relat = '008' and
+      objid = @lwA_hrp1001-sobid and
+      begda le @sy-datum and
+      endda ge @sy-datum ORDER BY PRIMARY KEY.
+      ENDSELECT.
+** <- End of changes by KRITIKA on 06.11.2024 for ATC
+          IF sy-subrc eq 0.
+*            rv_approver-otype = 'P'.
+*            lv_usrid = lwa_hrp1001_1-sobid.
+
+*            CALL FUNCTION 'RP_GET_PERNR_FROM_USERID'
+*          EXPORTING
+*            begda     = sy-datum
+*            endda     = sy-datum
+*            usrid     = lv_usrid
+*            usrty     = ' '
+*          IMPORTING
+*            usr_pernr = lv_pernr
+*          EXCEPTIONS
+*            retcd     = 1
+*            OTHERS    = 2.
+
+         EV_MANAGER_PERNR = lwa_hrp1001_1-sobid.
+          ENDIF.
+      ENDIF.
+endif.
+  endmethod.
+parameters - 
+IV_APPLICATION_ID	Importing	Type	HCMFAB_APPLICATION_ID	                                                                                                                                    	HCM Fiori Application ID
+IV_EMPLOYEE_PERNR	Importing	Type	PERNR_D	                                                                                                                                    	Personnel Number of Employee
+EV_MANAGER_PERNR	Exporting	Type	PERNR_D	                                                                                                                                    	Personnel Number of Manager
+ET_MANAGER_PERNRS	Exporting	Type	PERNR_TAB	                                                                                                                                    	HR: Master Data, PERNR Table (unsorted)
+
+
+aliases - 
+IF_EX_HCMFAB_COMMON~EMPLOYEE_IS_MANAGER
+IF_EX_HCMFAB_COMMON~EMPLOYEE_IS_ONBEHALF_RELEVANT
+IF_EX_HCMFAB_COMMON~GET_CE_CONFIGURATION
+IF_EX_HCMFAB_COMMON~GET_COLLEAGUES
+IF_EX_HCMFAB_COMMON~GET_CONFIGURATION
+IF_EX_HCMFAB_COMMON~GET_DIRECT_REPORTS
+IF_EX_HCMFAB_COMMON~GET_EMPLOYEES
+IF_EX_HCMFAB_COMMON~GET_EMPLOYEE_DETAILS
+IF_EX_HCMFAB_COMMON~GET_EMPLOYEE_PICTURE
+IF_EX_HCMFAB_COMMON~GET_MANAGER
+IF_EX_HCMFAB_COMMON~GET_OFFICE_ADDRESS
+IF_EX_HCMFAB_COMMON~GET_ONBEHALF_EMPLOYEES
+IF_EX_HCMFAB_COMMON~TY_T_MIMETYPES
+
+

@@ -1,0 +1,2000 @@
+*---------------------------------------------------------------------*
+* GAIL - Project INTERCONNECT
+*---------------------------------------------------------------------*
+* PROGRAM DESCRIPTION:
+*
+*       DEVELOPER: DIVYA
+*       CREATION DATE: 2004-10-08
+*       DER NUMBER: GAILRIR002
+*---------------------------------------------------------------------*
+
+* REVISION HISTORY----------------------------------------------------*
+*
+*        REVISION NO:   R***
+*        DEVELOPER:                        DATE:YYYY-MM-DD
+*        DESCRIPTION:
+*---------------------------------------------------------------------*
+
+REPORT yrir005_slip_approval_report
+LINE-SIZE 250
+MESSAGE-ID yi01.
+*INCLUDE YRIX_REPORT_STANDARD .
+
+DATA: wa_mpos LIKE mpos,
+      wa_iloa LIKE iloa,
+      wa_mpla LIKE mpla,
+      wa_mhis LIKE mhis,
+      wa_crhd LIKE crhd,
+      wa_mhio LIKE mhio,
+      wa_eqkt LIKE eqkt,
+      wa_t351x LIKE t351x,
+      BEGIN OF wa_final,
+        arbpl LIKE crhd-arbpl,
+        equnr TYPE i,"LIKE MPOS-EQUNR,
+        plnnr LIKE mpos-plnnr,
+        plnal LIKE mpos-plnal,
+        pstxt LIKE mpos-pstxt,
+        wapos TYPE i, "LIKE MPOS-WAPOS,
+        abnum LIKE mhis-abnum,
+        abrud LIKE mhis-abrud,
+        lrmdt LIKE mhis-lrmdt,
+        nplda LIKE mhis-nplda,
+        nnplda LIKE mhis-nplda,
+        warpl TYPE i," LIKE MPLA-WARPL,
+        wptxt LIKE mpla-wptxt,
+        tplnr LIKE iloa-tplnr,
+        aufnr TYPE i ,"LIKE MHIO-AUFNR,
+        tequnr(18) TYPE c,
+        twarpl(12) TYPE c,
+        twapos(16) TYPE c,
+        taufnr(12) TYPE c,
+        eqktx LIKE eqkt-eqktx,
+        wstra LIKE mpos-wstra,
+        ktex1 LIKE t351x-ktex1,
+      END OF wa_final.
+DATA:    prev_order(12) TYPE c.
+DATA: BEGIN OF i_result OCCURS 10,
+        arbpl LIKE crhd-arbpl,
+        total_calls(5) TYPE n,
+        compl_calls_p(5) TYPE p DECIMALS 2,
+        slippage(5) TYPE p DECIMALS 2,
+        dev_calls(2) TYPE n,
+        num(3) TYPE n,
+      END OF i_result.
+DATA: i_mpos LIKE STANDARD TABLE OF wa_mpos,
+      i_mhis LIKE STANDARD TABLE OF wa_mhis,
+      i_mhio LIKE STANDARD TABLE OF wa_mhio,
+      i_iloa LIKE STANDARD TABLE OF wa_iloa,
+      i_crhd LIKE STANDARD TABLE OF wa_crhd,
+      i_mpla LIKE STANDARD TABLE OF wa_mpla,
+      i_eqkt LIKE STANDARD TABLE OF wa_eqkt,
+      i_t351x LIKE STANDARD TABLE OF wa_t351x,
+      i_final LIKE STANDARD TABLE OF wa_final WITH HEADER LINE.
+
+DATA : total_calls(5) TYPE n, dev_calls(2) TYPE n, compl_calls(5) TYPE n,
+       compl_calls_p(5) TYPE p DECIMALS 2, slippage(5) TYPE p DECIMALS 2.
+
+TYPE-POOLS : slis.
+DATA: w_s_no(3) TYPE n.      "S.NO
+DATA: pfstatus TYPE slis_formname VALUE 'PF_STATUS_SET'.
+DATA: fpfstatus TYPE slis_formname VALUE 'FPF_STATUS_SET'.
+DATA: usercommand TYPE slis_formname VALUE 'USER_COMMAND'.
+DATA: i_status TYPE TABLE OF sy-ucomm.
+DATA: i_events TYPE slis_t_event WITH HEADER LINE.
+
+DATA: gt_fieldcat TYPE slis_t_fieldcat_alv WITH HEADER LINE.
+DATA: ss_print TYPE slis_print_alv.
+DATA: ln TYPE i VALUE 0.
+DATA: w_id LIKE thead-tdid,
+      w_obj LIKE thead-tdobject,
+      w_name LIKE thead-tdname.
+
+DATA : wa_events TYPE slis_alv_event,
+       wa_line       TYPE slis_listheader.
+
+DATA : i_top_of_page         TYPE slis_t_listheader,
+       i_layout              TYPE slis_layout_alv,
+       i_sort                TYPE slis_t_sortinfo_alv.
+
+DATA:  BEGIN OF i_afko OCCURS 0,
+               aufnr TYPE afko-aufnr,
+               aufpl TYPE afvu-aufpl,
+               plnnr TYPE afko-plnnr,
+               plnty TYPE afko-plnty,
+        END   OF i_afko.
+
+DATA : BEGIN OF i_jest OCCURS 0     ,
+        objnr TYPE jest-objnr,
+        stat TYPE jest-stat,
+       END OF i_jest.
+
+DATA:  BEGIN OF i_afvu OCCURS 0,
+              usr00 TYPE afvu-usr00,
+              usr08 TYPE afvu-usr08,
+              usr01 TYPE afvu-usr01,
+              usr02 TYPE afvu-usr02,
+              aufpl TYPE afvu-aufpl,
+              slwid TYPE afvu-slwid,
+          END   OF i_afvu.
+
+DATA : i_exit_event TYPE slis_t_event_exit WITH HEADER LINE.
+
+SELECTION-SCREEN BEGIN OF BLOCK b4 WITH FRAME TITLE text-001.
+SELECTION-SCREEN SKIP.
+
+SELECT-OPTIONS: s_iwerk FOR wa_mpos-iwerk NO-EXTENSION NO INTERVALS OBLIGATORY,     "DATE
+*                  S_TPLNR  FOR WA_ILOA-TPLNR,                "PLANT
+*                  S_EQUNR  FOR WA_MPOS-EQUNR,                "GROUP
+*                  S_WARPL  FOR WA_MPOS-WARPL,
+*                  S_WAPOS  FOR WA_MPOS-WAPOS,
+                s_arbpl  FOR wa_crhd-arbpl MATCHCODE OBJECT cram,
+*                  S_WPGRP  FOR WA_MPOS-WPGRP,
+                s_nplda  FOR wa_mhis-nplda OBLIGATORY.             "SORT FIELD
+
+SELECTION-SCREEN SKIP.
+SELECTION-SCREEN END OF BLOCK b4.
+
+START-OF-SELECTION.
+  PERFORM select_data.
+
+END-OF-SELECTION.
+  PERFORM build_layout USING i_layout.
+*PERFORM FILL_SORT.
+  PERFORM build_header   USING i_top_of_page[].
+  i_layout-colwidth_optimize = 'X'.
+  i_layout-detail_popup = ' '.
+  i_layout-detail_titlebar = 'DETAILS OF RECORD'.
+  i_layout-info_fieldname = 'COLOR_LINE'.
+
+  PERFORM build_events CHANGING i_events[].
+  PERFORM populate_fieldcat .
+
+  PERFORM display_data.
+
+*&---------------------------------------------------------------------*
+*&      Form  SELECT_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM select_data .
+  SELECT * INTO TABLE i_mpos
+  FROM mpos
+  WHERE iwerk IN s_iwerk.
+*    WAPOS IN S_WAPOS
+*  AND   EQUNR IN S_EQUNR
+*  AND
+
+*  AND   WPGRP IN S_WPGRP.
+*  AND   WARPL IN S_WARPL.
+
+  IF i_mpos[] IS NOT INITIAL.
+    SELECT * INTO TABLE i_iloa
+    FROM iloa
+    FOR ALL ENTRIES IN i_mpos
+    WHERE iloan  = i_mpos-iloan
+    AND   swerk = i_mpos-iwerk.
+*    AND   TPLNR IN S_TPLNR.
+
+    SELECT * INTO TABLE i_crhd
+    FROM crhd
+    FOR ALL ENTRIES IN i_mpos
+    WHERE objid = i_mpos-gewrk
+    AND   werks = i_mpos-iwerk
+    AND   arbpl IN s_arbpl.
+
+    SELECT * INTO TABLE i_t351x
+    FROM t351x
+    FOR ALL ENTRIES IN i_mpos
+    WHERE spras = 'E'
+    AND   strat = i_mpos-wstra.
+
+  ENDIF.
+
+  LOOP AT i_mpos INTO wa_mpos.
+    READ TABLE i_iloa INTO wa_iloa WITH KEY iloan = wa_mpos-iloan.
+    IF sy-subrc NE 0.
+      READ TABLE i_crhd INTO wa_crhd WITH KEY objid = wa_mpos-gewrk.
+      IF sy-subrc NE 0.
+        DELETE i_mpos.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+
+  IF i_mpos[] IS NOT INITIAL.
+    SELECT * INTO TABLE i_mhis
+    FROM mhis
+    FOR ALL ENTRIES IN i_mpos
+    WHERE warpl = i_mpos-warpl
+    AND   nplda IN s_nplda.
+*    AND   ABRUD <> 0.
+
+    SELECT * INTO TABLE i_mpla
+    FROM mpla
+    FOR ALL ENTRIES IN i_mpos
+    WHERE warpl = i_mpos-warpl.
+
+    SELECT * INTO TABLE i_eqkt
+    FROM eqkt
+    FOR ALL ENTRIES IN i_mpos
+    WHERE equnr = i_mpos-equnr.
+  ENDIF.
+
+  IF i_mhis[] IS NOT INITIAL.
+    SELECT * INTO TABLE i_mhio
+    FROM mhio
+    FOR ALL ENTRIES IN i_mhis
+    WHERE warpl = i_mhis-warpl
+    AND   abnum = i_mhis-abnum.
+
+    IF NOT i_mhio[] IS INITIAL.
+      SELECT aufnr  aufpl plnnr plnty
+      INTO TABLE i_afko
+      FROM  afko
+      FOR ALL ENTRIES IN i_mhio
+      WHERE aufnr = i_mhio-aufnr.
+
+      IF NOT i_afko[] IS INITIAL.
+        SELECT usr00 usr08 usr01 usr02  aufpl slwid
+        INTO TABLE i_afvu
+        FROM afvu
+        FOR ALL ENTRIES IN i_afko WHERE
+        aufpl = i_afko-aufpl AND
+        slwid = 'DEVIATE'.
+      ENDIF.
+    ENDIF.
+
+  ENDIF.
+
+  CLEAR i_jest.
+  REFRESH i_jest.
+  SELECT objnr stat INTO CORRESPONDING FIELDS OF TABLE i_jest FROM jest
+    FOR ALL ENTRIES IN i_mpla WHERE objnr = i_mpla-objnr AND
+    ( stat = 'I0076' OR stat = 'I0320' ) AND inact = ''.
+
+**************************************************************************
+  LOOP AT i_mpos INTO wa_mpos.
+    wa_final-equnr = wa_mpos-equnr.
+    wa_final-tequnr = wa_final-equnr.
+    wa_final-plnnr = wa_mpos-plnnr.
+    wa_final-plnal = wa_mpos-plnal.
+    wa_final-pstxt = wa_mpos-pstxt.
+    wa_final-wapos = wa_mpos-wapos.
+    wa_final-twapos = wa_final-wapos.
+
+    READ TABLE i_eqkt INTO wa_eqkt WITH KEY equnr = wa_mpos-equnr.
+    IF sy-subrc = 0.
+      wa_final-eqktx = wa_eqkt-eqktx.
+    ENDIF.
+
+    READ TABLE i_mpla INTO wa_mpla WITH KEY warpl = wa_mpos-warpl.
+    IF sy-subrc = 0.
+      READ TABLE i_jest WITH KEY objnr = wa_mpla-objnr .
+      IF sy-subrc = 0.
+*    If I_JEST-STAT = '00076' or I_JEST-STAT = '00320'.
+        DELETE i_mpos. CONTINUE.
+*    ENDIF.
+      ENDIF.
+
+      wa_final-warpl = wa_mpla-warpl.
+      wa_final-twarpl = wa_final-warpl.
+      wa_final-wptxt = wa_mpla-wptxt.
+    ENDIF.
+
+    READ TABLE i_iloa INTO wa_iloa WITH KEY iloan = wa_mpos-iloan.
+    IF sy-subrc = 0.
+      wa_final-tplnr = wa_iloa-tplnr.
+    ENDIF.
+
+    READ TABLE i_crhd INTO wa_crhd WITH KEY objid = wa_mpos-gewrk.
+    IF sy-subrc = 0.
+      wa_final-arbpl = wa_crhd-arbpl.
+    ENDIF.
+
+    READ TABLE i_mhis INTO wa_mhis WITH KEY warpl = wa_mpos-warpl.
+    IF sy-subrc = 0.
+*  CLEAR WA_MHIS.
+*  LOOP AT I_MHIS INTO WA_MHIS WHERE WARPL = WA_MPOS-WARPL.
+      wa_final-abnum = wa_mhis-abnum.
+      wa_final-abrud = wa_mhis-abrud.
+*    WA_FINAL-LRMDT = WA_MHIS-LRMDT.
+      wa_final-nplda = wa_mhis-nplda.
+      READ TABLE i_t351x INTO wa_t351x WITH KEY strat = wa_mpos-wstra paket = wa_mhis-zaehl.
+      IF sy-subrc = 0.
+        wa_final-ktex1 = wa_t351x-ktex1.
+      ENDIF.
+
+      READ TABLE i_mhio INTO wa_mhio WITH KEY warpl = wa_mhis-warpl abnum = wa_mhis-abnum wppos = wa_mpos-wapos.
+      IF sy-subrc = 0.
+        LOOP AT i_mhio INTO wa_mhio WHERE warpl = wa_mhis-warpl AND abnum = wa_mhis-abnum AND wppos = wa_mpos-wapos.
+          wa_final-aufnr = wa_mhio-aufnr.
+          wa_final-taufnr = wa_final-aufnr.
+          wa_final-lrmdt = wa_mhio-addat.
+          CONDENSE wa_final-arbpl.
+          APPEND wa_final TO i_final.
+        ENDLOOP.
+*    ELSE.
+*      APPEND WA_FINAL TO I_FINAL.  "not required
+      ENDIF.
+*  ENDLOOP.
+*ELSE.
+*  APPEND WA_FINAL TO I_FINAL.
+    ENDIF.
+    CLEAR wa_final.
+  ENDLOOP.
+  DELETE i_final WHERE warpl IS INITIAL OR nplda IS INITIAL.
+*DELETE I_FINAL where NPLDA is INITIAL.
+  DELETE i_final WHERE taufnr IS INITIAL AND NOT lrmdt IS INITIAL.
+
+  SORT i_final BY arbpl. "TAUFNR.              "BREAK-POINT.
+  LOOP AT i_final .
+
+    AT NEW arbpl.
+      CLEAR total_calls.
+      CLEAR compl_calls.
+      CLEAR dev_calls.
+      CLEAR compl_calls_p.
+      CLEAR slippage.
+      CLEAR prev_order.
+    ENDAT.
+
+*  if I_FINAL-TAUFNR <> PREV_ORDER.
+    total_calls = total_calls + 1.  " Total Calls
+
+    IF NOT i_final-lrmdt IS INITIAL.
+      compl_calls = compl_calls + 1.   "Complete Calls
+    ENDIF.
+
+    READ TABLE i_afko WITH KEY aufnr = i_final-aufnr.
+    READ TABLE i_afvu WITH KEY aufpl = i_afko-aufpl.
+    IF i_afvu-slwid = 'DEVIATE'.
+      dev_calls = dev_calls + 1.
+    ENDIF.
+*      PREV_ORDER = I_FINAL-TAUFNR.
+*   ENDIF.
+
+    AT END OF arbpl.
+*    AT LAST.
+      compl_calls_p = ( compl_calls / total_calls ) * 100.  "Slippage
+      slippage = 100 - compl_calls_p .
+      DATA : num(3) TYPE n.
+      num = num + 1.
+
+      i_result-arbpl = i_final-arbpl.
+      i_result-total_calls = total_calls.
+      i_result-compl_calls_p = compl_calls_p.
+      i_result-slippage = slippage.
+      i_result-dev_calls = dev_calls.
+      i_result-num = num.
+      APPEND i_result.
+      CLEAR i_result.
+
+    ENDAT.
+  ENDLOOP.
+
+
+ENDFORM.                    " SELECT_DATA
+
+*&---------------------------------------------------------------------*
+*&      Form  BUILD_LAYOUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_I_LAYOUT  text
+*----------------------------------------------------------------------*
+FORM build_layout  USING pi_layout TYPE slis_layout_alv.
+
+  pi_layout-colwidth_optimize  = 'X'.
+
+  pi_layout-f2code       = 'PICK'.
+  pi_layout-zebra  = 'X'.
+ENDFORM.                    "BUILD_LAYOUT
+
+*&---------------------------------------------------------------------*
+*&      Form  FILL_SORT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM fill_sort .
+  DATA : wa_sort TYPE slis_sortinfo_alv.
+  CLEAR wa_sort.
+
+  wa_sort-fieldname = 'WARPL'.
+  wa_sort-spos      = 1.
+  wa_sort-up        = 'X'.
+  APPEND wa_sort TO i_sort.
+
+  CLEAR wa_sort.
+
+ENDFORM.                    " FILL_SORT
+
+*&---------------------------------------------------------------------*
+*&      Form  BUILD_HEADER
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_I_TOP_OF_PAGE[]  text
+*----------------------------------------------------------------------*
+FORM build_header  USING pi_top_of_page TYPE slis_t_listheader.
+  DATA: plnt TYPE char30, w_info2(48).
+
+* Quick Fix Append ORDER BY PRIMARY KEY to the SELECT statement
+* 07.10.2024 17:24:51 AB_GAIL
+* Transport SBRK900012 SAP: S4C: ATC: 03.10.2024 : 1
+* Replaced Code:
+*  SELECT
+*    name1 FROM t001w
+*    INTO plnt
+*    WHERE
+*    werks IN s_iwerk .
+
+SELECT
+    name1 FROM t001w
+    INTO plnt
+    WHERE
+    werks IN s_iwerk ORDER BY PRIMARY KEY .
+
+* End of Quick Fix
+
+  ENDSELECT.
+
+  DATA : w_vtext(30),
+         w_date(10),
+         w_info(60).
+
+  WRITE  sy-datum TO w_date DD/MM/YYYY.
+
+  CLEAR wa_line.
+  wa_line-typ   = 'H'.
+  wa_line-info  = 'Preventive Maintenance Statistics'(002).
+
+  APPEND  wa_line TO pi_top_of_page.
+  CLEAR wa_line.
+
+  CONCATENATE s_iwerk+3(4) '    ' plnt
+    INTO w_info SEPARATED
+                              BY space.
+  CLEAR wa_line.
+  wa_line-typ   = 'S'.
+  wa_line-key   = 'Plant'(003).
+  wa_line-info =  w_info.
+  APPEND wa_line TO pi_top_of_page.
+
+  CONCATENATE 'From :'(004) s_nplda-low+6(2) '/' s_nplda-low+4(2) '/' s_nplda-low(4)
+  '     To :'(005) s_nplda-high+6(2) '/' s_nplda-high+4(2) '/' s_nplda-high(4)
+  INTO w_info2 SEPARATED
+                                                          BY space.
+  CLEAR wa_line.
+  wa_line-typ   = 'S'.
+  wa_line-key = 'Plan Date '(006).
+  wa_line-info =  w_info2.
+  APPEND wa_line TO pi_top_of_page.
+
+ENDFORM.                    " BUILD_HEADER
+
+*&---------------------------------------------------------------------*
+*&      Form  BUILD_EVENTS
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM build_events CHANGING p_i_events  TYPE slis_t_event.
+
+  DATA: w_event TYPE slis_alv_event.
+  CONSTANTS:
+    gc_formname_top_of_page TYPE slis_formname VALUE 'TOP_OF_PAGE'.
+
+  CALL FUNCTION 'REUSE_ALV_EVENTS_GET'
+    EXPORTING
+      i_list_type = 0
+    IMPORTING
+      et_events   = p_i_events.
+
+  READ TABLE p_i_events WITH KEY name =  slis_ev_top_of_page
+                           INTO w_event.
+  IF sy-subrc = 0.
+    MOVE gc_formname_top_of_page TO w_event-form.
+    APPEND w_event TO p_i_events.
+  ENDIF.
+
+ENDFORM.                    " BUILD_EVENTS
+
+*&---------------------------------------------------------------------*
+*&      Form  populate_fieldcat
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM populate_fieldcat.
+  DATA: l_sno TYPE i.
+  REFRESH gt_fieldcat[].
+  CLEAR:   gt_fieldcat, l_sno.
+
+  ADD 1 TO l_sno.
+  gt_fieldcat-col_pos      =  l_sno.
+  gt_fieldcat-fieldname    = 'NUM'.
+  gt_fieldcat-just         =  'R' .
+  gt_fieldcat-seltext_s    = ' S.No '.
+  gt_fieldcat-seltext_m    = ' S. No '(007).
+  gt_fieldcat-ddictxt      = 'M'.
+  gt_fieldcat-do_sum       = space.
+  gt_fieldcat-outputlen    =  15.
+  APPEND gt_fieldcat.
+  CLEAR gt_fieldcat.
+
+  ADD 1 TO l_sno.
+  gt_fieldcat-col_pos      =  l_sno.
+  gt_fieldcat-fieldname    = 'ARBPL'.
+  gt_fieldcat-just         =  'L' .
+  gt_fieldcat-seltext_s    = 'Maint. Work Centre'(008).
+  gt_fieldcat-seltext_m    = 'Maint. Work Centre'(008).
+  gt_fieldcat-ddictxt      = 'M'.
+  gt_fieldcat-do_sum       = space.
+  gt_fieldcat-outputlen    =  15.
+  APPEND gt_fieldcat.
+  CLEAR gt_fieldcat.
+
+  ADD 1 TO l_sno.
+  gt_fieldcat-col_pos      =  l_sno.
+  gt_fieldcat-fieldname    = 'TOTAL_CALLS'.
+  gt_fieldcat-just         =  'R' .
+  gt_fieldcat-seltext_s    = 'Total calls'(009).
+  gt_fieldcat-seltext_m    = 'Total calls'(009).
+  gt_fieldcat-ddictxt      = 'M'.
+  gt_fieldcat-do_sum       = space.
+  gt_fieldcat-outputlen    =  15.
+  APPEND gt_fieldcat.
+  CLEAR gt_fieldcat.
+
+  ADD 1 TO l_sno.
+  gt_fieldcat-col_pos      =  l_sno.
+  gt_fieldcat-fieldname    = 'COMPL_CALLS_P'.
+  gt_fieldcat-just         =  'R' .
+  gt_fieldcat-seltext_s    = 'Calls completed%'(010).
+  gt_fieldcat-seltext_m    = 'Calls completed%'(010).
+  gt_fieldcat-ddictxt      = 'M'.
+  gt_fieldcat-do_sum       = space.
+  gt_fieldcat-outputlen    =  15.
+  APPEND gt_fieldcat.
+  CLEAR gt_fieldcat.
+  ADD 1 TO l_sno.
+  gt_fieldcat-col_pos      =  l_sno.
+  gt_fieldcat-fieldname    = 'SLIPPAGE'.
+  gt_fieldcat-just         =  'R' .
+  gt_fieldcat-seltext_s    = 'Slippage%'(011).
+  gt_fieldcat-seltext_m    = 'Slippage %'(012).
+  gt_fieldcat-ddictxt      = 'M'.
+  gt_fieldcat-do_sum       = space.
+  gt_fieldcat-outputlen    =  15.
+  APPEND gt_fieldcat.
+  CLEAR gt_fieldcat.
+  ADD 1 TO l_sno.
+  gt_fieldcat-col_pos      =  l_sno.
+  gt_fieldcat-fieldname    = 'DEV_CALLS'.
+  gt_fieldcat-just         =  'R' .
+  gt_fieldcat-seltext_s    = 'Deviation'(013).
+  gt_fieldcat-seltext_m    = 'Deviation'(013).
+  gt_fieldcat-ddictxt      = 'M'.
+  gt_fieldcat-do_sum       = space.
+  gt_fieldcat-outputlen    =  15.
+  APPEND gt_fieldcat.
+  CLEAR gt_fieldcat.
+
+ENDFORM. "POPULATE FIELDCAT
+
+**********************************************************************
+* FORM    :  DISPLAY_DATA
+* Created :  24.09.2007 14:32:11
+**********************************************************************
+FORM display_data.
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      i_callback_program = 'YRIR011_PREVENTIVE_MAIN'
+      is_layout          = i_layout
+      it_fieldcat        = gt_fieldcat[]
+      it_events          = i_events[]
+    TABLES
+      t_outtab           = i_result
+    EXCEPTIONS
+      program_error      = 1
+      OTHERS             = 2.
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+ENDFORM. "DISPLAY_DATA
+
+*--------------------------------------------------------------------*
+*&      Form  TOP_OF_PAGE
+*&--------------------------------------------------------------------*
+FORM top_of_page.
+
+  CALL FUNCTION 'REUSE_ALV_COMMENTARY_WRITE'
+    EXPORTING
+      it_list_commentary = i_top_of_page.
+
+ENDFORM.                    "top_of_page
+
+
+** INITIALIZATION-------------------------------------------------------*
+*INITIALIZATION.
+*
+*
+**INCLUDES-------------------------------------------------------------*
+**TABLES - SAP TABLES--------------------------------------------------*
+*  TABLES: MPLA,        "Maintenance plan
+*          iloa,        "PM Object Location and Account Assignment
+*          aufk,        "Order master data
+*          afvu,        "DB structure of the user fields of the operation
+*          mhis,        "Maintenance plan history
+*          t351x,       "Maintenance strategy package texts
+*          eqkt,        "Equipment Short Texts
+*          t001w,       "Plants/Branches
+*          IFLOTX,      "Functional Location: Short Texts
+*          mhio,        "Call Object from Maintenance Order
+*          mpos.        "Maintenance item
+*
+**INTERNAL TABLES------------------------------------------------------*
+*  DATA:  BEGIN OF I_MAIN OCCURS 0,
+*          IWERK TYPE MPOS-IWERK,
+*          WPGRP TYPE MPOS-WPGRP,
+*          WARPL TYPE MPOS-WARPL,
+*          WAPOS TYPE MPOS-WAPOS,
+*          EQUNR TYPE MPOS-EQUNR,
+*          ILOAN TYPE MPOS-ILOAN,
+*          OBKNR TYPE MPOS-OBKNR,
+*          LAUFN TYPE MPOS-LAUFN,
+*    END   OF I_MAIN.
+*
+*  DATA:  BEGIN OF I_OBJK OCCURS 0,
+*            OBKNR TYPE OBJK-OBKNR,
+*            EQUNR TYPE OBJK-EQUNR,
+*    END   OF I_OBJK.
+*
+*  DATA:  BEGIN OF I_MHISS OCCURS 0,
+*           WARPL  TYPE MHIS-WARPL,
+*           NPLDA TYPE MHIS-NPLDA,
+*           STADT TYPE MHIS-STADT,
+*           ZAEHL  TYPE MHIS-ZAEHL,
+*           ABNUM TYPE MHIS-ABNUM,
+*    END   OF I_MHISS.
+*
+*  DATA:  BEGIN OF I_MPLAA OCCURS 0,
+*          PLAN_SORT TYPE MPLA-PLAN_SORT,
+*          STADT TYPE MPLA-STADT,
+*          EQUNR TYPE MPLA-EQUNR,
+*          TPLNR TYPE MPLA-TPLNR,
+*          WARPL TYPE MPLA-WARPL,
+*          ZAEHL TYPE MHIS-ZAEHL,
+*    END   OF I_MPLAA.
+*
+*  DATA:  BEGIN OF I_MPLA1 OCCURS 0,
+*            WARPL TYPE MPLA-WARPL,
+*            STRAT TYPE MPLA-STRAT,
+*            ZAEHL TYPE MHIS-ZAEHL,
+*        END   OF I_MPLA1.
+*
+*  DATA:  BEGIN OF I_T351X OCCURS 0,
+*                 STRAT TYPE MPLA-STRAT,
+*                 KTEX1 TYPE T351X-KTEX1,
+*                 PAKET TYPE T351X-PAKET,
+*                 SPRAS TYPE T351X-SPRAS,
+*       END   OF I_T351X.
+*
+*  DATA:  BEGIN OF I_T351P OCCURS 0,
+*              STRAT TYPE MPLA-STRAT,
+*              ZAEHL TYPE MHIS-ZAEHL,
+*    END   OF I_T351P.
+*
+*  DATA:  BEGIN OF I_MHIS1 OCCURS 0,
+*               NPLDA TYPE MHIS-NPLDA,
+*               WARPL TYPE MHIS-WARPL,
+*               LRMDT TYPE MHIS-LRMDT,
+*               ABNUM TYPE MHIS-ABNUM,
+*               HORDA TYPE MHIS-HORDA,
+*            END   OF I_MHIS1.
+*
+*  DATA:  BEGIN OF I_MHIO OCCURS 0,
+*          ABNUM TYPE MHIO-ABNUM,
+*          ADDAT TYPE MHIO-ADDAT,
+*          WARPL TYPE MHIO-WARPL,
+*    END   OF I_MHIO.
+*
+*  DATA:  BEGIN OF I_MHIO3 OCCURS 0,
+*            WARPL TYPE MHIO-WARPL ,
+*            ADDAT TYPE MHIO-ADDAT,
+*            AUFNR TYPE MHIO-AUFNR,
+*            TSENQ  TYPE MHIO-TSENQ,
+*            WPPOS TYPE MHIO-WPPOS,
+*            NPLDA TYPE MHIS-NPLDA,
+*            ABNUM TYPE MHIS-ABNUM,
+*            W_C(3) TYPE N,
+*      END   OF I_MHIO3.
+*
+*  DATA:  BEGIN OF I_AFKO OCCURS 0,
+*               AUFNR TYPE AFKO-AUFNR,
+*               AUFPL TYPE afvu-AUFPL,
+*               PLNNR TYPE AFKO-PLNNR,
+*               PLNTY TYPE AFKO-PLNTY,
+*        END   OF I_AFKO.
+*
+*  DATA:  BEGIN OF I_afvu OCCURS 0,
+*              USR00 TYPE afvu-USR00,
+*              USR08 TYPE afvu-USR08,
+*              USR01 TYPE afvu-USR01,
+*              USR02 TYPE afvu-USR02,
+*              AUFPL TYPE afvu-AUFPL,
+*              SLWID TYPE AFVU-SLWID,
+*          END   OF I_afvu.
+*
+*  DATA:  BEGIN OF I_PLKO OCCURS 0,
+*                PLNNR TYPE AFKO-PLNNR,
+*                PLNTY TYPE AFKO-PLNTY,
+*                KTEXT TYPE PLKO-KTEXT,
+*   END   OF I_PLKO.
+*
+*  DATA:  BEGIN OF I_ILOA OCCURS 0,
+*              ILOAN TYPE ILOA-ILOAN,
+*              TPLNR TYPE ILOA-TPLNR,
+*           END   OF I_ILOA.
+*
+*  DATA:  BEGIN OF I_IFLOTX OCCURS 0,
+*            PLTXT TYPE IFLOTX-PLTXT,
+*            TPLNR TYPE IFLOTX-TPLNR,
+*     END   OF I_IFLOTX.
+*
+*  DATA:  BEGIN OF I_EQKT OCCURS 0,
+*          EQUNR TYPE EQKT-EQUNR,
+*           EQKTX TYPE EQKT-EQKTX,
+*     END   OF I_EQKT.
+*
+*  DATA:  BEGIN OF I_T001W OCCURS 0,
+*              NAME1 TYPE T001W-NAME1,
+*              WERKS TYPE T001W-WERKS,
+*           END   OF I_T001W.
+*
+*  DATA:  BEGIN OF I_EQUI OCCURS 0,
+*           WERKS TYPE EQUI-WERK,
+*           EQUNR TYPE EQUI-EQUNR,
+*            NAME1 TYPE T001W-NAME1,
+*
+*         END   OF I_EQUI.
+*
+*  DATA:  BEGIN OF I_MAIN1 OCCURS 0,
+*                NPLDA TYPE MHIS-NPLDA,
+*                WARPL TYPE MHIS-WARPL,
+*                TSABR TYPE MHIS-TSABR,
+*             END   OF I_MAIN1.
+*
+*  DATA:  BEGIN OF I_MHIO2 OCCURS 0,
+*               WARPL TYPE MHIO-WARPL,
+*               ABNUM TYPE MHIO-ABNUM,
+*               AUFNR TYPE MHIO-AUFNR,
+*      END   OF I_MHIO2.
+*
+*  DATA: BEGIN OF I_AUFK1 OCCURS 0,
+*               AUFNR TYPE MHIO-AUFNR,
+*               IDAT2 TYPE AUFK-IDAT2,
+*             END OF I_AUFK1.
+*
+*  DATA:  BEGIN OF I_MHIO4 OCCURS  0,
+*                GSTRP TYPE MHIO-GSTRP,
+*                TSENQ TYPE MHIO-TSENQ,
+*                AUFNR TYPE MHIO-AUFNR,
+*       END   OF I_MHIO4.
+*
+*  DATA:  BEGIN OF I_MHIS2 OCCURS 0,
+*              STADT TYPE MHIS-STADT,
+*              NPLDA TYPE MHIS-NPLDA,
+*              TSABR TYPE MHIS-TSABR,
+*              WARPL TYPE MHIS-WARPL,
+*              ABNUM TYPE MHIS-ABNUM,
+*           END   OF I_MHIS2.
+*
+*  DATA: BEGIN OF I_MHIO1 OCCURS 0,
+*              WARPL TYPE MHIO-WARPL ,
+*              ABNUM TYPE MHIO-ABNUM,
+*              AUFNR TYPE MHIO-AUFNR,
+*  END OF I_MHIO1.
+*
+*  DATA: BEGIN OF I_MPLA_D OCCURS 0,
+*              PLAN_SORT TYPE MPLA-PLAN_SORT,
+*              STADT TYPE MPLA-STADT,
+*              WARPL TYPE MPLA-WARPL,
+*              EQUNR TYPE MPLA-EQUNR,
+*  END OF I_MPLA_D.
+*
+*  DATA: BEGIN OF I_MPOS_D OCCURS 0,
+*               IWERK TYPE MPOS-IWERK,
+*               WPGRP TYPE MPOS-WPGRP,
+*               WARPL TYPE MPOS-WARPL,
+*               EQUNR TYPE MPOS-EQUNR,
+*   END OF I_MPOS_D.
+*
+*  DATA: BEGIN OF I_MHIO5 OCCURS 0,
+*          AUFNR TYPE MHIO-AUFNR,
+*          WARPL TYPE MHIO-WARPL,
+*          ADDAT TYPE MHIO-ADDAT,
+*  END OF I_MHIO5.
+*
+*  DATA: BEGIN OF I_MHIS_D OCCURS 0,
+*              STADT TYPE MHIS-STADT,
+*              WARPL TYPE MHIS-WARPL,
+*  END OF I_MHIS_D.
+*
+*  DATA: BEGIN OF I_MHIS3 OCCURS 0,
+*            STADT TYPE MHIS-STADT,
+*            WARPL TYPE MHIS-WARPL,
+*  END OF I_MHIS3.
+*
+*  DATA: BEGIN OF I_AFIH OCCURS 0,
+*        AUFNR TYPE AFIH-AUFNR,
+*        INGRP LIKE afih-ingpr,
+*        LAUFN TYPE AFIH-LAUFN,
+*       END OF I_AFIH.
+*
+*
+*DATA: BEGIN OF I_AFIH1 OCCURS 0,
+*        AUFNR TYPE AFIH-AUFNR,
+*        INGPR LIKE afih-ingpr,
+*        LAUFN TYPE AFIH-LAUFN,
+*       END OF I_AFIH1.
+**  DATA: BEGIN OF I_
+*
+**VARIABLES------------------------------------------------------------*
+**   VARIABLES
+*  DATA: FLAG(1) TYPE N.
+*  DATA: W_TABIX(7) TYPE N,     "JOBS DUE
+*        W_TABIX1(7) TYPE N,    "JOBS NOT DONE
+*        W_TABIX2(7) TYPE N,    "JOBS NOT DONE
+*        W_NOT_COM(7) TYPE N,   "JOBS NOT DONE
+*        W_DONE(7) TYPE N,      "JOBS DONE
+*        W_SLIP(7) TYPE N.      "SLIPPAGE
+*  DATA: W_DUE(8) TYPE N,
+*        W_NOT_COM1(8) TYPE N,
+*        W_DONE1(8) TYPE N,
+*        W_SLIP1(8) TYPE N.
+*
+**  SELECTION SCREEN--------------------------------------------------*
+*
+**RADIO BUTTON
+*  SELECTION-SCREEN BEGIN OF BLOCK B1 WITH FRAME TITLE TEXT-001.
+*  SELECTION-SCREEN SKIP.
+*
+*  PARAMETERS:  P_SCH RADIOBUTTON GROUP RAD DEFAULT 'X',   "SCHEDULE
+*               P_SLIP RADIOBUTTON GROUP RAD,  "SLIPPAGE
+*               P_DEV RADIOBUTTON GROUP RAD.   "DEVIATION
+***SELECT-OPTIONS: S_IWERK1 FOR MPOS-IWERK MODIF ID SLI .                "PLANT
+*  SELECTION-SCREEN SKIP.
+*  SELECTION-SCREEN END OF BLOCK B1.
+*
+**SCHEDULE, DEVIATION
+**  SELECTION-SCREEN  BEGIN OF SCREEN 100.
+*  SELECTION-SCREEN  BEGIN OF BLOCK B2 WITH FRAME TITLE TEXT-002 .
+*  SELECTION-SCREEN SKIP.
+*
+*  SELECT-OPTIONS: S_STADT1 FOR MPLA-STADT  MODIF ID DEV,               "DATE
+*                  S_EQUNR1 FOR MPLA-EQUNR NO-EXTENSION NO INTERVALS MODIF ID DEV,
+*                                                         "Equipment no
+*                  S_TPLNR1 FOR MPLA-TPLNR MODIF ID DEV,                "TAG No
+*                  S_IWERK2 FOR MPOS-IWERK MODIF ID DEV,                "PLANT
+*                  S_WPGRP2 FOR MPOS-WPGRP MODIF ID DEV,                "GROUP
+*                  S_PLAN FOR MPLA-PLAN_SORT MODIF ID DEV.             "SORT FIELD
+*  SELECTION-SCREEN SKIP.
+*  SELECTION-SCREEN END OF BLOCK B2.
+**  SELECTION-SCREEN END OF SCREEN 100.
+*
+**SLIPPING
+**  SELECTION-SCREEN BEGIN OF SCREEN 200 .
+*  SELECTION-SCREEN BEGIN OF BLOCK B3 WITH FRAME TITLE TEXT-003.
+*  SELECTION-SCREEN SKIP.
+*
+*  SELECT-OPTIONS: S_STADT FOR MPLA-STADT MODIF ID SLI ,    "DATE
+*                  S_IWERK1 FOR MPOS-IWERK MODIF ID SLI ,                "PLANT
+*                  S_WPGRP1 FOR MPOS-WPGRP MODIF ID SLI,                "GROUP
+*                  S_PLAN1 FOR MPLA-PLAN_SORT MODIF ID SLI.             "SORT FIELD
+*
+*  SELECTION-SCREEN SKIP.
+*  SELECTION-SCREEN END OF BLOCK B3.
+*
+**  SELECTION-SCREEN END OF SCREEN 200.
+*
+** AT SELECTION SCREEN--------------------------------------------------*
+*
+*AT SELECTION-SCREEN OUTPUT." ON RADIOBUTTON GROUP RAD.
+*  LOOP AT SCREEN .
+*    IF P_SCH = 'X' OR P_SLIP = 'X'.
+*      IF SCREEN-GROUP1 = 'SLI'.
+*        SCREEN-ACTIVE = '0'.
+*        MODIFY SCREEN.
+*      ENDIF.
+*    ENDIF.
+*    IF P_DEV = 'X' .
+*      IF SCREEN-GROUP1 = 'DEV'.
+*        SCREEN-ACTIVE = '0'.
+*        MODIFY SCREEN.
+*      ENDIF.
+*    ENDIF.
+*  ENDLOOP.
+*
+*  IF P_SCH = 'X' OR P_DEV = 'X'.
+**SCHEDULE, DEVIATION
+**    CALL SELECTION-SCREEN 100 STARTING AT 1 1 .
+*  ELSE.
+**SLIPPING
+**    CALL SELECTION-SCREEN 200 STARTING AT 1 1 .
+*  ENDIF.
+*
+**AT SELECTION-SCREEN ON BLOCK B2.
+**IF S_EQUNR IS INITIAL  AND S_TPLNR-LOW IS INITIAL AND S_STADT-LOW IS
+**                                             INITIAL.
+***CALL SELECTION SCREEN
+**    CALL SELECTION-SCREEN 100 STARTING AT 10 5.
+**  ENDIF.
+*
+** START OF SELECTION---------------------------------------------------*
+*START-OF-SELECTION.
+**  PERFORM GET_DATA.
+*  PERFORM SELECT_DATA.
+**  PERFORM DISPLAY.
+*
+** AT USER COMMAND------------------------------------------------------*
+*AT USER-COMMAND.
+** TOP OF PAGE----------------------------------------------------------*
+*TOP-OF-PAGE.
+*  IF P_SCH = 'X'.
+*  WRITE:/1 'Output for PM Schedule:    PREVENTIVE MAINTENANCE SCHEDULE'.
+*    skip.
+*    ULINE.
+*
+*    WRITE:/1       SY-VLINE,
+*           2       'Tag No',
+*           20      SY-VLINE,
+*           21      'Equipment no',
+*           38      SY-VLINE,
+*           40      'Description',
+*           83      SY-VLINE,
+*           85      'Activity',
+*           125     SY-VLINE,
+*           130      'Maint Plan No',
+*           145     SY-VLINE,
+*           146     'Maint Plan',
+*           157     SY-VLINE,
+*           158     'Maint item',
+*           179     sy-vline,
+*           180     'Freq',
+*           195     sy-vline,
+*           196     'Last Maint',
+*           207     sy-vline,
+*           208     'Next Maint ',
+*           219     SY-VLINE.
+*
+*    WRITE:/1       SY-VLINE,
+*              20      SY-VLINE,
+*              38      SY-VLINE,
+*              83      SY-VLINE,
+*              125     SY-VLINE,
+*              145     SY-VLINE,
+*              146     'call no',
+*              157     SY-VLINE,
+*              179    sy-vline,
+*              195     sy-vline,
+*              196     'Done on',
+*              207     sy-vline,
+*              208     'Due',
+*              219     SY-VLINE.
+*
+*    ULINE (219).
+*  endif.
+** END OF SELECTION-----------------------------------------------------*
+*END-OF-SELECTION.
+**&---------------------------------------------------------------------*
+**&      Form  GET_DATA
+**&---------------------------------------------------------------------*
+**       text
+**----------------------------------------------------------------------*
+**  -->  p1        text
+**  <--  p2        text
+**----------------------------------------------------------------------*
+*FORM GET_DATA .
+****
+****  IF P_SCH = 'X' OR P_DEV = 'X'.
+****
+*****IF PLAN SORT IS SELECTED
+****    IF NOT S_PLAN[] IS INITIAL.
+****      SELECT PLAN_SORT STADT EQUNR TPLNR WARPL
+****             INTO TABLE I_MPLA
+****             FROM MPLA
+****             WHERE PLAN_SORT IN  S_PLAN ."AND
+*****               STADT IN S_STADT AND
+*****               EQUNR IN S_EQUNR AND
+*****               TPLNR IN S_TPLNR.
+****    ENDIF.
+****
+*****IF DATE , PLAN SORT IS SELECTED
+****    IF NOT S_STADT[] IS INITIAL.
+****      IF NOT I_MPLA[] IS INITIAL.
+****        SELECT STADT WARPL
+****               INTO TABLE I_MHIS3
+****               FROM MHIS
+****               FOR ALL ENTRIES IN I_MPLA
+****               WHERE WARPL = I_MPLA-WARPL AND
+****                     STADT IN S_STADT.
+****      ENDIF.
+****      IF I_MPLA[] IS INITIAL.
+*****IF ONLY DATE IS SELECTED
+****        SELECT STADT WARPL
+****               INTO TABLE I_MHIS3
+****               FROM MHIS
+****               WHERE STADT IN S_STADT.
+****      ENDIF.
+****    ENDIF.
+****
+*****IF EQUIP, MAINT PLANT, SORT FIELD
+*****        IF NOT I_MPLA[] IS INITIAL.
+*****          SELECT IWERK WPGRP WARPL WAPOS EQUNR ILOAN OBKNR LAUFN
+*****                 INTO TABLE I_MAIN
+*****                 FROM MPOS
+*****                 FOR ALL ENTRIES IN I_MPLA
+*****                 WHERE   EQUNR = I_MPLA-EQUNR AND
+*****                         IWERK IN S_IWERK AND
+*****                         WPGRP IN S_WPGRP.
+****
+****
+*****DATE IS ALREADY SELECTED
+****    IF NOT I_MHIS3[] IS INITIAL.
+****      SELECT IWERK WPGRP WARPL WAPOS EQUNR ILOAN OBKNR LAUFN
+****              INTO TABLE I_MAIN
+****              FROM MPOS
+****              FOR ALL ENTRIES IN I_MHIS3
+****              WHERE   WARPL =  I_MHIS3-WARPL AND
+****                      EQUNR IN S_EQUNR AND
+****                      IWERK IN S_IWERK AND
+****                      WPGRP IN S_WPGRP.
+****
+****    ELSEIF NOT I_MPLA[] IS INITIAL.
+****      SELECT IWERK WPGRP WARPL WAPOS EQUNR ILOAN OBKNR LAUFN
+****               INTO TABLE I_MAIN
+****               FROM MPOS
+****               FOR ALL ENTRIES IN I_MPLA
+****               WHERE  WARPL = I_MPLA-WARPL AND
+****                      EQUNR IN S_EQUNR AND
+****                       IWERK IN S_IWERK AND
+****                       WPGRP IN S_WPGRP.
+****    ELSE.
+****      SELECT IWERK WPGRP WARPL WAPOS EQUNR ILOAN OBKNR LAUFN
+****                INTO TABLE I_MAIN
+****                FROM MPOS
+****                WHERE   EQUNR IN S_EQUNR AND
+****                        IWERK IN S_IWERK AND
+****                        WPGRP IN S_WPGRP.
+****
+****
+****    ENDIF.
+****
+****    if i_main[] is initial.
+****      message i005.
+****      leave list-processing.
+****    endif.
+****
+*****LOCATION
+****    IF NOT I_MAIN[] IS INITIAL.
+****      SELECT ILOAN TPLNR
+****                    INTO TABLE I_ILOA
+****                    FROM ILOA
+****                    FOR ALL ENTRIES IN I_MAIN
+****                    WHERE ILOAN = I_MAIN-ILOAN AND
+****                          TPLNR IN S_TPLNR .
+****    ENDIF.
+*****DELETE ENTRIES WHICH DO NOT HAVE THE LOCATION SPECIFIED
+****    IF NOT I_ILOA[] IS INITIAL.
+****      IF I_MPLA[] IS INITIAL.
+****        LOOP AT I_MAIN.
+****          READ TABLE I_ILOA WITH KEY ILOAN = I_MAIN-ILOAN.
+****          IF NOT I_MAIN-ILOAN = I_ILOA-ILOAN.
+****            DELETE I_MAIN.
+****          ENDIF.
+****        ENDLOOP.
+****      ENDIF.
+****    ENDIF.
+****
+*****equipment
+****    IF NOT I_MAIN[] IS INITIAL.
+****      SELECT OBKNR EQUNR
+****             INTO TABLE I_OBJK
+****             FROM OBJK
+****             FOR ALL ENTRIES IN I_MAIN
+****             WHERE OBKNR = I_MAIN-OBKNR.
+****
+*****PLANNED DATE
+****      SELECT   WARPL NPLDA STADT ZAEHL ABNUM
+****               INTO TABLE I_MHIS
+****               FROM MHIS
+****               FOR ALL ENTRIES IN I_MAIN
+****               WHERE WARPL = I_MAIN-WARPL  AND
+****                     STADT IN S_STADT.
+****    ENDIF.
+****
+*****FREQ
+****    IF NOT I_MAIN[] IS INITIAL.
+****      SELECT WARPL STRAT
+****             INTO TABLE I_MPLA1
+****             FROM MPLA
+****             FOR ALL ENTRIES IN I_MAIN
+****             WHERE WARPL = I_MAIN-WARPL.
+****    ENDIF.
+****
+*****MODIFICATION FREQ
+****    LOOP AT I_MPLA1.
+****      READ TABLE I_MHIS WITH KEY WARPL = I_MPLA1-WARPL.
+****      IF SY-SUBRC = 0.
+****        I_MPLA1-ZAEHL = I_MHIS-ZAEHL.
+****      ENDIF.
+****      MODIFY I_MPLA1.
+****      CLEAR I_MPLA1.
+****    ENDLOOP.
+****
+****    IF NOT I_MPLA1[] IS INITIAL.
+****      SELECT  STRAT ZAEHL
+****                INTO TABLE I_T351P
+****                FROM T351P
+****                FOR ALL ENTRIES IN I_MPLA1
+****                WHERE STRAT = I_MPLA1-STRAT AND
+****                ZAEHL = I_MPLA1-ZAEHL.
+****    ENDIF.
+****    IF NOT I_T351P[] IS INITIAL.
+****      SELECT STRAT KTEX1 PAKET SPRAS
+****                  INTO TABLE I_T351X
+****                  FROM T351X
+****                  FOR ALL ENTRIES IN I_T351P
+****                  WHERE STRAT = I_T351P-STRAT AND
+****                        PAKET = I_T351P-ZAEHL AND
+****                        SPRAS = 'E'.
+****    ENDIF.
+****
+*****SORT I_MAIN BY WARPL WAPOS.
+****    IF P_SCH = 'X'.
+*****To get the Next maintenance due
+****      IF NOT I_MHIS[] IS INITIAL.
+****        SELECT NPLDA WARPL LRMDT ABNUM
+****                   INTO TABLE I_MHIS1
+****                   FROM MHIS
+****                   FOR ALL ENTRIES IN I_MHIS
+****                   WHERE NPLDA > SY-DATUM AND
+****                         WARPL = I_MHIS-WARPL AND
+****                         LRMDT = '00000000' ."AND
+****
+*****                     HORDA <> ''.
+****      ENDIF.
+****
+****
+****
+****
+****      DELETE ADJACENT DUPLICATES FROM I_MHIS1 COMPARING WARPL.
+****
+****
+*****LAST MAINT DONE ON
+****      SELECT WARPL ADDAT AUFNR TSENQ WPPOS ABNUM
+****             INTO CORRESPONDING FIELDS OF TABLE I_MHIO3
+****             FROM MHIO
+****             FOR ALL ENTRIES IN I_MHIS
+****             WHERE WARPL  = I_MHIS-WARPL AND
+****                   TSENQ <> 'X'.
+****
+****      SORT  I_MHIO3 BY WARPL  WPPOS AUFNR DESCENDING.
+****      DELETE ADJACENT DUPLICATES FROM I_MHIO3 COMPARING WARPL WPPOS.
+****
+****
+****      LOOP AT I_MHIO3.
+****        READ TABLE I_MHIS1 WITH KEY WARPL = I_MHIO3-WARPL.
+****        IF SY-SUBRC = 0 .
+****          I_MHIO3-NPLDA = I_MHIS1-NPLDA.
+*****    I_MHIO3-ABNUM = I_MHIS1-ABNUM.
+****          MODIFY I_MHIO3.
+****          CLEAR I_MHIO3.
+****
+****        ELSE.
+****          DELETE I_MHIO3.
+****
+****        ENDIF.
+****
+****      ENDLOOP.
+****      LOOP AT I_MHIO3.
+****        READ TABLE I_MAIN WITH KEY WARPL = I_MHIO3-WARPL
+****                                     WAPOS = I_MHIO3-WPPOS.
+****        IF SY-SUBRC = 0.
+****        ELSE.
+****          DELETE I_MHIO3.
+****        ENDIF.
+****      ENDLOOP.
+****    ELSE.
+****
+****
+****
+*****IN CASE OF DEVIATION
+*****To get the Next maintenance due
+****      IF NOT I_MHIS[] IS INITIAL.
+****        SELECT NPLDA WARPL LRMDT ABNUM
+****                   INTO TABLE I_MHIS1
+****                   FROM MHIS
+****                   FOR ALL ENTRIES IN I_MHIS
+****                   WHERE WARPL = I_MHIS-WARPL AND
+****                         LRMDT = '00000000' ."AND
+****      ENDIF.
+****
+****
+****
+****
+****      DELETE ADJACENT DUPLICATES FROM I_MHIS1 COMPARING WARPL.
+****
+****
+*****LAST MAINT DONE ON
+****      SELECT WARPL ADDAT AUFNR TSENQ WPPOS ABNUM
+****             INTO CORRESPONDING FIELDS OF TABLE I_MHIO3
+****             FROM MHIO
+****             FOR ALL ENTRIES IN I_MHIS
+****             WHERE WARPL  = I_MHIS-WARPL AND
+****                   TSENQ <> 'X'.
+****
+****      SORT  I_MHIO3 BY WARPL  WPPOS AUFNR .
+*****          DELETE ADJACENT DUPLICATES FROM I_MHIO3 COMPARING WARPL WPPOS
+*****.
+****
+****
+****      LOOP AT I_MHIO3.
+****        READ TABLE I_MHIS1 WITH KEY WARPL = I_MHIO3-WARPL.
+****        IF SY-SUBRC = 0 .
+****          I_MHIO3-NPLDA = I_MHIS1-NPLDA.
+****          MODIFY I_MHIO3.
+****          CLEAR I_MHIO3.
+****        ELSE.
+****          DELETE I_MHIO3.
+****
+****        ENDIF.
+****      ENDLOOP.
+****
+****      LOOP AT I_MHIO3.
+****        READ TABLE I_MAIN WITH KEY WARPL = I_MHIO3-WARPL
+****                                     WAPOS = I_MHIO3-WPPOS.
+****        IF SY-SUBRC = 0.
+****        ELSE.
+****          DELETE I_MHIO3.
+****        ENDIF.
+****      ENDLOOP.
+****
+*****DATE OF LAST ORDER
+****      SELECT AUFNR LAUFN
+****             INTO TABLE I_AFIH
+****             FROM AFIH
+****             FOR ALL ENTRIES IN I_MHIO3
+****             WHERE AUFNR = I_MHIO3-AUFNR.
+****
+****    ENDIF.
+****
+****
+*****USER DEFN FIELDS, ACTIVITY
+*****        IF NOT I_MHIO3[] IS INITIAL.
+*****          SELECT AUFNR WARPL  ADDAT
+*****                 INTO  TABLE I_MHIO5
+*****                 FROM MHIO
+*****                 FOR ALL ENTRIES IN I_MAIN
+*****                 WHERE WARPL = I_MAIN-WARPL." AND
+******             AUFNR <> ' ' AND
+******             ADDAT = '00.00.0000'.
+*****        ENDIF.
+****    IF NOT I_MHIO3[] IS INITIAL.
+****      SELECT AUFNR  AUFPL PLNNR PLNTY
+****            INTO TABLE I_AFKO
+****            FROM  AFKO
+****            FOR ALL ENTRIES IN I_MHIO3
+****            WHERE AUFNR = I_MHIO3-AUFNR.
+****    ENDIF.
+****
+****    IF NOT I_AFKO[] IS INITIAL.
+****      SELECT USR00 USR08 USR01 USR02  AUFPL SLWID
+****            INTO TABLE I_afvu
+****            FROM afvu
+****            FOR ALL ENTRIES IN I_AFKO
+****            WHERE AUFPL = I_AFKO-AUFPL AND
+****            SLWID = 'DEVIATE'.
+****    ENDIF.
+****
+*****To get the activity
+****    SELECT PLNNR PLNTY KTEXT
+****           INTO TABLE I_PLKO
+****           FROM PLKO
+****           FOR ALL ENTRIES IN I_AFKO
+****           WHERE PLNNR = I_AFKO-PLNNR AND
+****                 PLNTY = I_AFKO-PLNTY.
+****
+****
+*****DESCRIPTION
+****    IF NOT I_ILOA[] IS INITIAL.
+****      SELECT PLTXT TPLNR
+****              INTO TABLE I_IFLOTX
+****              FROM IFLOTX
+****              FOR ALL ENTRIES IN I_ILOA
+****              WHERE TPLNR = I_ILOA-TPLNR .
+****    ENDIF.
+****    IF NOT I_MPLA[] IS INITIAL.
+****      SELECT PLTXT TPLNR
+****               INTO TABLE I_IFLOTX
+****               FROM IFLOTX
+****               FOR ALL ENTRIES IN I_MPLA
+****               WHERE TPLNR = I_MPLA-TPLNR .
+****
+****    ENDIF.
+****
+*****EQUIPMENT DES
+****    IF NOT I_MAIN[] IS INITIAL.
+****      SELECT EQUNR EQKTX
+****              INTO TABLE I_EQKT
+****              FROM EQKT
+****              FOR ALL ENTRIES IN I_MAIN
+****              WHERE EQUNR = I_MAIN-EQUNR.
+****    ENDIF.
+****
+****
+*****UNIT
+****    IF NOT I_MAIN[] IS INITIAL.
+****      SELECT WERK EQUNR
+****                INTO TABLE I_EQUI
+****                FROM EQUI
+****                FOR ALL ENTRIES IN I_MAIN
+****                WHERE EQUNR = I_MAIN-EQUNR.
+****    ENDIF.
+****
+*****NAME
+****    IF NOT I_EQUI[] IS INITIAL.
+****      SELECT NAME1 WERKS
+****                INTO TABLE I_T001W
+****                FROM T001W
+****                FOR ALL ENTRIES IN I_EQUI
+****                WHERE WERKS = I_EQUI-WERKS.
+****    ENDIF.
+****
+****  ENDIF.
+****
+****************************************************************************
+*****   slippage                                                           *
+****************************************************************************
+****
+****  IF P_SLIP = 'X'.
+****
+*****IF PLAN SORT IS SELECTED
+****    IF NOT S_PLAN1[] IS INITIAL.
+****      SELECT PLAN_SORT STADT WARPL EQUNR
+****                       INTO TABLE I_MPLA_D
+****                       FROM MPLA
+****                       WHERE PLAN_SORT IN S_PLAN1.
+****    ENDIF.
+****
+*****soc by sumeet
+*****PLANT, PLANNER GROUP SELECTED
+****    IF ( NOT  S_IWERK1[] IS INITIAL ) OR (  NOT S_WPGRP1[] IS INITIAL ).
+*****commented by sumeet
+****
+*****      IF NOT I_MPLA_D[] IS INITIAL.
+*****        SELECT IWERK  WPGRP WARPL EQUNR
+*****                    INTO TABLE I_MPOS_D
+*****                    FROM MPOS
+*****                    FOR ALL ENTRIES IN I_MPLA_D
+*****                    WHERE WARPL = I_MPLA_D-WARPL AND
+*****                          IWERK IN S_IWERK1 AND
+*****                          WPGRP IN S_WPGRP1.
+*****
+*****      ELSE.
+****      SELECT IWERK  WPGRP WARPL EQUNR
+****                  INTO TABLE I_MPOS_D
+****                  FROM MPOS
+****                  WHERE IWERK IN S_IWERK1 AND
+****                        WPGRP IN S_WPGRP1.
+****
+*****      ENDIF.
+****    ENDIF.
+*****eoc by sumeet
+****
+***** DATE SELECTED
+****    IF NOT I_MPOS_D[] IS INITIAL.
+****      SELECT  NPLDA WARPL TSABR
+****                        INTO TABLE I_MAIN1
+****                        FROM MHIS
+****                        FOR ALL ENTRIES IN I_MPOS_D
+****                        WHERE  WARPL = I_MPOS_D-WARPL AND
+****                               NPLDA IN S_STADT1 AND
+****                               TSABR = 'X'.
+*****soa by sumeet
+****    ELSEIF NOT I_MPLA_D[] IS INITIAL.
+****      SELECT  NPLDA WARPL TSABR
+****                      APPENDING TABLE I_MAIN1
+****                      FROM MHIS
+****                      FOR ALL ENTRIES IN I_MPLA_D
+****                      WHERE  WARPL = I_MPLA_D-WARPL AND
+****                             NPLDA IN S_STADT1 AND
+****                             TSABR = 'X'.
+*****eoa by sumeet
+****    ELSE.
+****
+****      SELECT NPLDA WARPL TSABR
+****                        INTO TABLE I_MAIN1
+****                        FROM MHIS
+****                        WHERE NPLDA IN S_STADT1 AND
+****                              TSABR = 'X'.
+****
+****    ENDIF.
+****
+*****SOA BY SUMEET
+*****    W_DUE =  SY-DBCNT.  "COMMENTED BY SUMEET
+*****     DESCRIBE TABLE I_MAIN1 LINES W_DUE.
+*****EOA BY SUMEET
+****
+*****JOBS  NOT DONE
+****    IF NOT I_MAIN1[] IS INITIAL.
+****      SELECT STADT NPLDA TSABR WARPL ABNUM
+****            INTO TABLE I_MHIS2
+****            FROM MHIS
+****            FOR ALL ENTRIES IN I_MAIN1
+****            WHERE WARPL = I_MAIN1-WARPL AND
+****                  NPLDA = I_MAIN1-NPLDA AND
+****                  TSABR = 'X' .
+****    ENDIF.
+****
+****    IF NOT I_MHIS2[] IS INITIAL.
+****      SELECT WARPL ABNUM AUFNR
+****            INTO TABLE I_MHIO1
+****            FROM MHIO
+****            FOR ALL ENTRIES IN I_MHIS2
+****            WHERE WARPL = I_MHIS2-WARPL AND
+****            ABNUM = I_MHIS2-ABNUM.
+****    ENDIF.
+****     DESCRIBE TABLE I_MHIO1 LINES W_DUE.
+****
+*****soc wrf Nishant as on 21.10.05
+****if not S_WPGRP1[] is initial.
+****  IF NOT I_MHIO1[] IS INITIAL.
+****   SELECT AUFNR INGPR
+****    INTO CORRESPONDING FIELDS OF TABLE I_AFIH1
+****      from AFIH
+****        FOR ALL ENTRIES IN I_MHIO1
+****           WHERE AUFNR = I_MHIO1-AUFNR AND
+****              INGPR IN S_WPGRP1.
+****   ENDIF.
+****
+****  IF NOT I_AFIH1[] IS INITIAL.
+****      SELECT AUFNR IDAT2
+****              INTO TABLE I_AUFK1
+****              FROM AUFK
+****              FOR ALL ENTRIES IN I_AFIH1
+****              WHERE AUFNR = I_AFIH1-AUFNR ."AND
+*****                  IDAT2  = ' '.
+****  ENDIF.
+****
+****endif.
+****
+****if S_WPGRP1[] is initial.
+****
+****    IF NOT I_MHIO1[] IS INITIAL.
+****      SELECT AUFNR IDAT2
+****              INTO TABLE I_AUFK1
+****              FROM AUFK
+****              FOR ALL ENTRIES IN I_MHIO1
+****              WHERE AUFNR = I_MHIO1-AUFNR ."AND
+*****                  IDAT2  = ' '.
+****    ENDIF.
+****
+****ENDIF.
+****
+*****SOC BY SUMEET
+****DELETE I_AUFK1[] WHERE NOT IDAT2 IS INITIAL.
+****
+*****    LOOP AT I_AUFK1.
+*****      IF NOT I_AUFK1-IDAT2 IS INITIAL.
+*****        DELETE I_AUFK1.
+*****      ENDIF.
+*****    ENDLOOP.
+****   DESCRIBE TABLE I_AUFK1 LINES W_TABIX1.
+*****    loop at i_aufk1.
+*****      w_tabix1 = w_tabix1 + 1.
+*****    endloop.
+****
+*****EOC BY SUMEET
+*****        W_TABIX1 = SY-TABIX.
+****
+****
+****
+****
+*****        SELECT GSTRP TSENQ AUFNR
+*****                INTO TABLE I_MHIO4
+*****                FROM MHIO
+*****                WHERE GSTRP IN S_STADT1 AND
+*****                TSENQ = 'X'.
+*****
+*****        W_TABIX2 = SY-DBCNT.
+****
+*****JOBS DONE
+*****W_TABIX
+****    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+****      EXPORTING
+****        INPUT  = W_DUE
+****      IMPORTING
+****        OUTPUT = W_TABIX.
+****
+*****JOBS NOT COMPLETE
+****    W_NOT_COM1 =  W_TABIX1 .
+****
+****    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+****      EXPORTING
+****        INPUT  = W_NOT_COM1
+****      IMPORTING
+****        OUTPUT = W_NOT_COM.
+****
+****
+*****JOBS DONE
+****    W_DONE1 = W_TABIX - W_NOT_COM.
+****
+****    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+****      EXPORTING
+****        INPUT  = W_DONE1
+****      IMPORTING
+****        OUTPUT = W_DONE.
+****
+****
+*****SLIPPAGE
+****    W_SLIP1 = ( W_NOT_COM / W_TABIX ) * 100.
+****
+****    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+****      EXPORTING
+****        INPUT  = W_SLIP1
+****      IMPORTING
+****        OUTPUT = W_SLIP.
+****
+****
+****  ENDIF.
+****
+*****        SELECT STADT WARPL
+*****               INTO TABLE I_MHIS_D
+*****               FROM MHIS
+*****               WHERE STADT IN S_STADT1.
+*****
+*****
+*****        IF NOT I_MHIS_D[] IS INITIAL.
+*****          SELECT PLAN_SORT STADT WARPL EQUNR
+*****                 INTO TABLE I_MPLA_D
+*****                 FROM MPLA
+*****                 FOR ALL ENTRIES IN I_MHIS_D
+*****                 WHERE WARPL = I_MHIS_D-WARPL AND
+*****                       PLAN_SORT IN S_PLAN1 .
+*****        ENDIF.
+*****
+*****
+*****        IF NOT I_MPLA_D[] IS INITIAL.
+*****          SELECT IWERK  WPGRP WARPL EQUNR
+*****               INTO TABLE I_MPOS_D
+*****               FROM MPOS
+*****               FOR ALL ENTRIES IN I_MPLA_D
+*****               WHERE EQUNR = I_MPLA_D-EQUNR AND
+*****                     IWERK IN S_IWERK1 AND
+*****                     WPGRP IN S_WPGRP1.
+*****        ELSE.
+*****          SELECT IWERK  WPGRP WARPL EQUNR
+*****            INTO TABLE I_MPOS_D
+*****            FROM MPOS
+*****            FOR ALL ENTRIES IN I_MHIS_D
+*****            WHERE WARPL = I_MHIS_D-WARPL AND
+*****            IWERK IN S_IWERK AND
+*****                  WPGRP IN S_WPGRP1.
+*****
+*****        ENDIF.
+*****
+*****        IF NOT I_MPOS_D[] IS INITIAL.
+******NO OF JOBS DUE
+*****          select NPLDA WARPL
+*****                  INTO TABLE I_MAIN1
+*****                  FROM MHIS
+*****                  WHERE NPLDA IN S_STADT1.
+*****
+*****
+*****
+*****
+*****          LOOP AT I_MAIN1.
+*****            IF NOT I_MPOS_D[] IS INITIAL.
+*****              READ TABLE I_MPOS_D WITH KEY WARPL = I_MAIN1-WARPL.
+*****              IF SY-SUBRC = 0.
+*****              ELSE.
+*****                DELETE I_MAIN1.
+*****              ENDIF.
+*****            ENDIF.
+*****          ENDLOOP.
+****
+****
+*****        ENDIF.
+*****        W_TABIX = SY-DBCNT.
+******JOBS DONE
+*****        SELECT STADT NPLDA TSABR WARPL ABNUM
+*****              INTO TABLE I_MHIS2
+*****              FROM MHIS
+*****              WHERE STADT IN S_STADT1 AND
+*****              TSABR = 'X' AND
+*****              NPLDA = I_MAIN1-NPLDA.
+*****
+*****        IF NOT I_MHIS1[] IS INITIAL.
+*****          SELECT WARPL ABNUM AUFNR
+*****                INTO TABLE I_MHIO1
+*****                FROM MHIO
+*****                FOR ALL ENTRIES IN I_MHIS2
+*****                WHERE WARPL = I_MHIS2-WARPL AND
+*****                ABNUM = I_MHIS2-ABNUM.
+*****        ENDIF.
+*****
+*****        IF NOT I_MHIO1[] IS INITIAL.
+*****          SELECT AUFNR IDAT2
+*****                  INTO TABLE I_AUFK1
+*****                  FROM AUFK
+*****                  FOR ALL ENTRIES IN I_MHIO1
+*****                  WHERE AUFNR = I_MHIO1-AUFNR AND
+*****                  IDAT2 = ''.
+*****        ENDIF.
+*****
+*****
+*****        W_TABIX1 = SY-DBCNT.
+*****
+*****        SELECT GSTRP TSENQ AUFNR
+*****                INTO TABLE I_MHIO4
+*****                FROM MHIO
+*****                WHERE GSTRP IN S_STADT1 AND
+*****                TSENQ = 'X'.
+*****
+*****        W_TABIX2 = SY-DBCNT.
+*****
+******JOBS NOT COMPLETE
+*****        W_NOT_COM =  W_TABIX2 + W_TABIX1 .
+*****
+******JOBS DONE
+*****        W_DONE = W_TABIX - W_NOT_COM.
+*****
+******SLIPPAGE
+*****        W_SLIP = ( W_NOT_COM / W_TABIX ) * 100.
+*****
+*****      ENDIF.
+*
+*ENDFORM.                    " GET_DATA
+**&---------------------------------------------------------------------*
+**&      Form  DISPLAY
+**&---------------------------------------------------------------------*
+**       text
+**----------------------------------------------------------------------*
+**  -->  p1        text
+**  <--  p2        text
+**----------------------------------------------------------------------*
+*FORM DISPLAY .
+*
+*
+*  IF P_SCH = 'X'.
+*
+*
+*
+*
+*    LOOP AT I_MHIO3.
+*      WRITE:/1       SY-VLINE.
+**TAG NO------------------------------------------------
+**      READ TABLE I_MPLA WITH KEY WARPL = I_MHIS-WARPL.
+**      IF SY-SUBRC = 0.
+**        WRITE: I_MPLA-TPLNR.        "TAG NO
+**      ELSE.
+*      READ TABLE I_MAIN WITH KEY WARPL = I_MHIO3-WARPL.
+*      IF SY-SUBRC = 0.
+*        READ TABLE I_ILOA WITH KEY ILOAN = I_MAIN-ILOAN.
+*        IF SY-SUBRC = 0.
+*          WRITE: I_ILOA-TPLNR.        "TAG NO
+*        ENDIF.
+*      ENDIF.
+**      ENDIF.
+*      WRITE:20       SY-VLINE.
+**Equipment no--------------------------------------------
+*      READ TABLE I_MAIN WITH KEY WARPL = I_MHIO3-WARPL.
+*      IF SY-SUBRC = 0.
+*
+*        WRITE:21       I_MAIN-EQUNR.     "Equipment no
+*      ENDIF.
+*
+*      WRITE:38       SY-VLINE.
+**DESCRIPTION----------------------------------------------
+*      FLAG = 0.
+**      READ TABLE I_MPLA WITH KEY WARPL = I_MHIS-WARPL.
+**      IF SY-SUBRC = 0.
+**        READ TABLE I_IFLOTX WITH KEY TPLNR = I_MPLA-TPLNR .
+**        IF SY-SUBRC = 0.
+**          WRITE:40  I_IFLOTX-PLTXT.
+**          FLAG = 1.
+**        ENDIF.
+**      ELSE.
+*      READ TABLE I_MAIN WITH KEY WARPL = I_MHIO3-WARPL.
+*      IF SY-SUBRC = 0.
+*        READ TABLE I_ILOA WITH KEY ILOAN = I_MAIN-ILOAN.
+*        IF SY-SUBRC = 0.
+*          READ TABLE  I_IFLOTX WITH KEY TPLNR = I_ILOA-TPLNR.
+*          IF SY-SUBRC = 0.
+*            WRITE:40  I_IFLOTX-PLTXT.
+*            FLAG = 1.
+*          ENDIF.
+*        ENDIF.
+*      ENDIF.
+**      ENDIF.
+*      IF FLAG = 0.
+*        READ TABLE I_MAIN WITH KEY WARPL = I_MHIO3-WARPL.
+*        IF SY-SUBRC = 0.
+*          READ TABLE I_EQKT WITH KEY EQUNR = I_MAIN-EQUNR.
+*          IF SY-SUBRC = 0.
+*            WRITE:40 I_EQKT-EQKTX.
+*          ENDIF.
+*        ENDIF.
+*      ENDIF.
+*      WRITE:83      SY-VLINE.
+*
+**ACTIVITY--------------------------------------------------
+**soc by sumeet
+**      READ TABLE I_MAIN WITH KEY WARPL = I_MHIS1-WARPL.
+*      READ TABLE I_MAIN WITH KEY WARPL = I_MHIO3-WARPL.
+**eoc
+*      IF SY-SUBRC = 0.
+*        READ TABLE I_AFKO WITH KEY AUFNR = I_MAIN-LAUFN.
+*        IF SY-SUBRC = 0.
+*          READ TABLE I_PLKO WITH KEY PLNNR = I_AFKO-PLNNR
+*                                      PLNTY = I_AFKO-PLNTY.
+*          IF SY-SUBRC = 0.
+*            WRITE:85 I_PLKO-KTEXT.
+*          ENDIF.
+*        ENDIF.
+*      ENDIF.
+*      WRITE:125     SY-VLINE.
+**Maint Plan No--------------------------------------
+*
+*      WRITE:128      I_MHIO3-WARPL.  "Maint Plan No
+*      WRITE:145      SY-VLINE.
+*
+**ABNUM(MAINT CALL NO)---------------------------------
+*      WRITE:147 I_MHIO3-ABNUM.
+*      WRITE:157 SY-VLINE.
+**WAPOS(MAINT ITEM)-----------------------------------
+**      READ TABLE I_MAIN WITH KEY WARPL = I_MHIO3-WARPL.
+**      IF SY-SUBRC = 0.
+*      WRITE:158 I_MHIO3-WPPOS.
+**      ENDIF.
+*      WRITE:179 SY-VLINE.
+*
+**Freq------------------------------------------------
+*      READ TABLE I_MPLA1 WITH KEY WARPL = I_MHIO3-WARPL.
+*      IF SY-SUBRC = 0.
+*        READ TABLE I_T351P WITH KEY STRAT = I_MPLA1-STRAT
+*                                     ZAEHL = I_MPLA1-ZAEHL.
+*        IF SY-SUBRC = 0.
+*
+*          READ TABLE I_T351X WITH KEY STRAT = I_T351P-STRAT
+*                                      PAKET = I_T351P-ZAEHL.
+*
+*          IF SY-SUBRC = 0.
+*            WRITE:181      I_T351X-KTEX1.
+*
+*          ENDIF.
+*        ENDIF.
+*      ENDIF.
+*
+*      WRITE:195      SY-VLINE.
+**Last Maint Done on
+*
+**READ TABLE I_MHIO3 WITH KEY WARPL = I_MHIS1-WARPL.
+** IF SY-SUBRC = 0.
+*
+*      WRITE:196      I_MHIO3-ADDAT.
+** ENDIF.
+*      WRITE:207      SY-VLINE.
+**      READ TABLE I_MHIS1 WITH KEY WARPL = I_MHIS-WARPL.
+**      IF SY-SUBRC = 0.
+**        READ TABLE I_MHIO WITH KEY ABNUM = I_MHIS1-ABNUM
+**                                 WARPL = I_MHIS1-WARPL.
+**        IF SY-SUBRC = 0.
+**          WRITE:206 I_MHIO-ADDAT.
+**        ENDIF.
+*
+*
+** Planned Date
+*      WRITE:208 I_MHIO3-NPLDA.
+**      ENDIF.
+*
+*      WRITE:219 SY-VLINE.
+*
+*      ULINE (219).
+*    ENDLOOP.
+*    EXIT.
+*  ENDIF.
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+**DEVIATION
+*  IF P_DEV = 'X'.
+*    WRITE:2    'UNIT:'.
+*    READ TABLE I_EQUI WITH KEY EQUNR = I_MAIN-EQUNR.
+*    IF SY-SUBRC = 0.
+*      READ TABLE I_T001W WITH KEY WERKS = I_EQUI-WERKS.
+*      IF SY-SUBRC = 0.
+*        WRITE:7  I_T001W-NAME1.
+*      ENDIF.
+*    ENDIF.
+*    SKIP.
+*    ULINE (210).
+*    WRITE:/1      SY-VLINE,
+*           2         'Tag No',
+*           20       SY-VLINE,
+*           21      'Equipment No',
+*           38      SY-VLINE,
+*           40      'Equipment desc',
+*           83      SY-VLINE,
+*           84      'Maint plan no',
+*           102     sy-vline,
+*           103     'Order',
+*           114      sy-vline,
+*           115     'Maint item',
+*           135      sy-vline,
+*           136      'Last maint',
+*           146      SY-VLINE,
+*           147      'Maint',
+*           157     SY-VLINE,
+*           158     'Proposed',
+*           168     SY-VLINE,
+*           169      'Reasons for deviation',
+*           210     SY-VLINE.
+*
+*    WRITE:/1      SY-VLINE,
+*    20       SY-VLINE,
+*    38      SY-VLINE,
+*    83      SY-VLINE,
+*    102     sy-vline,
+*    103     'no',
+*    114      sy-vline,
+*    135      sy-vline,
+*    136      'done on',
+*    146      SY-VLINE,
+*    147      'Due On',
+*    157     SY-VLINE,
+*    158     'To done on',
+*    168     SY-VLINE,
+*    210     SY-VLINE.
+*
+*    ULINE (210).
+*
+*    LOOP AT I_AFVU.
+**TAG NO------------------------------------------------
+*      WRITE:/1      SY-VLINE.
+*      READ TABLE I_AFKO WITH KEY AUFPL = I_AFVU-AUFPL.
+**      READ TABLE I_MHIO5 WITH KEY AUFNR = I_AFKO-AUFNR.
+*      READ TABLE I_MHIO3 WITH KEY AUFNR = I_AFKO-AUFNR.
+*      IF SY-SUBRC = 0.
+*        READ TABLE I_MAIN WITH KEY WARPL = I_MHIO3-WARPL.
+*        IF SY-SUBRC = 0.
+*          READ TABLE I_ILOA WITH KEY ILOAN = I_MAIN-ILOAN.
+*          IF SY-SUBRC = 0.
+*            WRITE:2 I_ILOA-TPLNR.        "TAG NO
+*          ENDIF.
+*        ENDIF.
+*        WRITE:20       SY-VLINE.
+*
+**Equipment no--------------------------------------------
+*        READ TABLE I_MAIN WITH KEY WARPL = I_MHIO3-WARPL.
+*        IF SY-SUBRC = 0.
+*
+*          WRITE:21       I_MAIN-EQUNR.     "Equipment no
+*        ENDIF.
+*
+*        WRITE:38       SY-VLINE.
+**DESCRIPTION----------------------------------------------
+*        FLAG = 0.
+*        READ TABLE I_MAIN WITH KEY WARPL = I_MHIO3-WARPL.
+*        IF SY-SUBRC = 0.
+*          READ TABLE I_ILOA WITH KEY ILOAN = I_MAIN-ILOAN.
+*          IF SY-SUBRC = 0.
+*            READ TABLE  I_IFLOTX WITH KEY TPLNR = I_ILOA-TPLNR.
+*            IF SY-SUBRC = 0.
+*              WRITE:40  I_IFLOTX-PLTXT.
+*              FLAG = 1.
+*            ENDIF.
+*          ENDIF.
+*        ENDIF.
+*        IF FLAG = 0.
+*          READ TABLE I_MAIN WITH KEY WARPL = I_MHIO3-WARPL.
+*          IF SY-SUBRC = 0.
+*            READ TABLE I_EQKT WITH KEY EQUNR = I_MAIN-EQUNR.
+*            IF SY-SUBRC = 0.
+*              WRITE:40 I_EQKT-EQKTX.
+*            ENDIF.
+*          ENDIF.
+*        ENDIF.
+*        WRITE:83      SY-VLINE.
+*
+*
+**Maint Plan No--------------------------------------
+*
+*        WRITE:84      I_MHIO3-WARPL.  "Maint Plan No
+*        WRITE:102      SY-VLINE.
+*
+**ABNUM(MAINT CALL NO)---------------------------------
+*        WRITE:103 I_MHIO3-AUFNR.
+*        WRITE:114 SY-VLINE.
+**WAPOS(MAINT ITEM)-----------------------------------
+*        WRITE:115 I_MHIO3-WPPOS.
+*        WRITE:135 SY-VLINE.
+**Last Maint Done on
+*        READ TABLE I_AFIH WITH KEY AUFNR = I_MHIO3-AUFNR.
+*        READ TABLE I_MHIO3 WITH KEY AUFNR = I_AFIH-LAUFN.
+*        IF SY-SUBRC = 0.
+*          WRITE:136      I_MHIO3-ADDAT.
+*        ENDIF.
+*        WRITE:146      SY-VLINE.
+*
+** Planned Date
+*        WRITE:147 I_MHIO3-NPLDA.
+*        WRITE:157 SY-VLINE.
+*
+*      ENDIF.
+**USER FIELDS
+*      WRITE:158    I_AFVU-USR08.    "Maint Due On
+*      WRITE:169     I_AFVU-USR01.    "Reasons for deviation
+*
+*      WRITE:168     SY-VLINE,
+*           210     SY-VLINE.
+*
+*
+*
+*      ULINE (210).
+*
+*    ENDLOOP.
+*    EXIT.
+*  ENDIF.
+*
+**R2
+*  IF P_SLIP = 'X'.
+*    WRITE:/1 '% SLIPPAGE OF PREVENTIVE MAINTENANCE JOBS '.
+*    ULINE.
+*    WRITE:/1       'Date',
+*           30      'No of PM Jobs Due',
+*           55      'No of PM Jobs Done',
+*           80      'No of PM Jobs Not Done',
+*           110      '% Slippage'.
+**           135      'Remarks'.
+*
+*    uline.
+*    WRITE:/1 S_STADT1-LOW.
+*    WRITE:12 'TO'.
+*    WRITE:15 S_STADT1-HIGH.
+*    WRITE:30      W_TABIX,       "No of PM Jobs Due
+*           55     W_DONE,       "No of PM Jobs Done
+*           80      W_NOT_COM,       "No of PM Jobs Not Done
+*           110      W_SLIP.        "% Slippage
+**            90      'Remarks'.
+*
+*
+*    EXIT.
+*  ENDIF.
+*
+*ENDFORM.                    " DISPLAY

@@ -1,0 +1,32 @@
+PROCESS BEFORE OUTPUT.
+
+  MODULE tc_records_change_tc_attr.
+  MODULE fetch_data.
+  MODULE data_mapping.
+
+  LOOP AT   gt_final
+       INTO gs_final
+       WITH CONTROL tc_records
+       CURSOR tc_records-current_line.
+    MODULE tc_records_get_lines.
+  ENDLOOP.
+PROCESS AFTER INPUT.
+  LOOP AT gt_final.
+    CHAIN.
+      FIELD gs_final-plant_id.
+      FIELD gs_final-start_date.
+      FIELD gs_final-end_date.
+      FIELD gs_final-hours_worked.
+      FIELD gs_final-no_of_workers.
+      FIELD gs_final-worker_type.
+    ENDCHAIN.
+    FIELD gs_final-sel
+      MODULE tc_records_mark ON REQUEST.
+  ENDLOOP.
+  MODULE tc_records_user_command.
+  MODULE call_screen.
+
+PROCESS ON VALUE-REQUEST.
+  FIELD p_sdate MODULE f4_sdate.
+  FIELD p_edate MODULE f4_edate.
+  FIELD p_plant MODULE f4_plant.

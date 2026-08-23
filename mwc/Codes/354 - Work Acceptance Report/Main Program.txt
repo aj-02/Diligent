@@ -1,0 +1,23 @@
+*&---------------------------------------------------------------------*
+*& Report ZAB_S2P_WORK_ACC_RPT
+*&---------------------------------------------------------------------*
+*& Requirement Id: DID_S2P_354                                          *
+*& Title: Work Accomplishment Report                                    *
+*& Date Created: 25.07.2025                                             *
+*& Programmer: Sarfraz Sayyad Ali (SARFRAZS)                            *
+*& Program Objective: Displays WAR report for service line items        *
+*& Orig Request: DS4K903120                                             *
+*&----------------------------------------------------------------------*
+*& Modification History                                                 *
+*&----------------------------------------------------------------------*
+*& Modified By:                                                         *
+*& Date:                                                                *
+*& Modification TR:                                                     *
+*& Reason:                                                              *
+*&----------------------------------------------------------------------*
+"Include used for Declarations and Selection Screen
+INCLUDE zin_s2p_work_acc_rpt_top.
+"Include used for Event Handling
+INCLUDE zin_s2p_work_acc_rpt_e01.
+"Include used for Functionalities
+INCLUDE zin_s2p_work_acc_rpt_f01.

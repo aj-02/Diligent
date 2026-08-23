@@ -1,0 +1,52 @@
+ENHANCEMENT 44  OI0_COMMON_SAPMM07M.    "active version
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""$"$\SE:(1) Enhancement Exit MM07MFB9_BUCHEN_AUSFUEHREN_05, Enhancement OI0_COMMON_SAPMM07M, Start                                                            A
+*$*$-Start: (1)---------------------------------------------------------------------------------$*$*
+ENHANCEMENT 1  YENC_UPDATE_V_LOC_GR8.    "active version
+""Added by virendar for updatiin v lovation in GMS. dt 23.01.2016
+*BREAK 00002716.
+data : ls_mseg15 TYPE mseg,
+      LV_LOCID1 TYPE C LENGTH 10,
+      LV_LOCID2 TYPE C LENGTH 10.
+data : lv_doc15 TYPE vbeln.
+READ TABLE xmseg INto ls_mseg15 Index 1.
+if ls_mseg15-bwart = '101'.
+ """Import for sales doc
+import LV_LOCID to LV_LOCID1 from memory id 'LOCID'.
+IF LV_LOCID1 IS NOT  INITIAL.
+  XMSEG-ABLAD = LV_LOCID1.
+  YMSEG-ABLAD = LV_LOCID1.
+  ZMSEG-ABLAD = LV_LOCID1.
+ENDIF.
+ LV_DOC15  = ls_mseg15-mblnr.
+EXPORT LV_DOC15 TO MEMORY ID 'MYDOCID'.
+
+
+IF SY-TCODE = 'O4TEN'.
+IMPORT LV_LOCID2 TO LV_LOCID2 FROM MEMORY ID 'LOCID2' .
+IF LV_LOCID2 IS NOT  INITIAL.
+  XMSEG-ABLAD = LV_LOCID2.
+  YMSEG-ABLAD = LV_LOCID2.
+  ZMSEG-ABLAD = LV_LOCID2.
+
+ASSIGN ('(SAPMM07M)XMSEG[]') to FIELD-SYMBOL(<fs_xmseg>).
+if sy-subrc = 0.
+  loop at <fs_xmseg> ASSIGNING FIELD-SYMBOL(<fs_mseg>).
+    ASSIGN COMPONENT 'ABLAD' of STRUCTURE <fs_mseg> to FIELD-SYMBOL(<fs1>).
+    if sy-subrc = 0.
+    <fs1> = lv_locid2.
+    endif.
+  ENDLOOP.
+endif.
+ENDIF.
+ENDIF.
+ENDIF.
+ENDENHANCEMENT.
+*$*$-End:   (1)---------------------------------------------------------------------------------$*$*
+
+  perform oih_get_license_quantity tables oih_oihltr.   "SO4K002606 MSEG
+  perform OIB_GET_DIP_ANALYSIS_TABLE tables l_oii_dip_mvmt
+                                            l_oii_dip_mvmto1.
+  perform oia_copy_cond using mkpf_knumv.               "SO4K003324 BL
+
+
+ENDENHANCEMENT.

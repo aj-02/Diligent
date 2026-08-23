@@ -1,0 +1,42 @@
+  METHOD IF_POAC_ACCRUAL_OBJECT_ITEMS~CHANGE_ACCRUAL_OBJECT_ITEMS.
+
+* This BAdI method can be used to create, change or delete items of an accrual object
+* The information provided in structures PURCHASEORDER, PURCHASEORDERITEM, PURCHASEORDERACCOUNTING
+* and table PURCHASEORDERSCHEDULELINES can be used to determine the item properties.
+* The input parameter IN_ACCRUALOBJECTITEMS provides the list of items determined by the system.
+* Note: The output parameter OUT_ACCRUALOBJECTITEMS must be filled. Copy the input parameter
+* IN_ACCRUALOBJECTITEMS if there are no changes.
+* This example shows how the life start and end dates of the accrual object items can be changed
+
+*****    DATA: lv_start_date TYPE sydate,
+*****          lv_end_date   TYPE sydate.
+*****
+    out_accrualobjectitems = in_accrualobjectitems.
+*****
+****** The start date should be set to the first day of the month of original life start date
+****** The end date should be set to the last day of the month of original life end date
+*****    READ TABLE out_accrualobjectitems ASSIGNING FIELD-SYMBOL(<accrualobjectitems>) INDEX 1.
+*****    IF sy-subrc <> 0.
+*****      RETURN.
+*****    ENDIF.
+*****
+*****    lv_start_date = <accrualobjectitems>-life_start_date.
+*****    lv_start_date+6(2) = '01'.
+*****
+*****    lv_end_date = <accrualobjectitems>-life_end_date.
+*****    CASE lv_end_date+4(2).
+*****      WHEN  '01' OR '03' OR '05' OR '07' OR '08' OR '10' OR '12' .
+*****        lv_end_date+6(2) = '31'.
+*****      WHEN '02'.
+*****        lv_end_date+6(2) = '28'.
+*****      WHEN OTHERS.
+*****        lv_end_date+6(2) = '30'.
+*****    ENDCASE.
+*****
+*****    " Set the new dates in the accrual object items
+*****    LOOP AT out_accrualobjectitems ASSIGNING <accrualobjectitems>.
+*****      <accrualobjectitems>-life_start_date = lv_start_date.
+*****      <accrualobjectitems>-life_end_date = lv_end_date.
+*****    ENDLOOP.
+
+  ENDMETHOD.

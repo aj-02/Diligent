@@ -1,0 +1,1369 @@
+*&---------------------------------------------------------------------*
+*& Report  ZPP_FORECAST_UPLOAD   Transaction  ZFCST_UPL
+*& ZFORECAST (Adhesive) - all uploads in one program
+*&
+*& Eight upload types selected by radio button. For each the user can
+*& download a ready made template, fill it in, upload it, and see a
+*& result list saying exactly what was created, what was changed and
+*& what was rejected and why.
+*&
+*& Built to Forecast Template-Adhesive.xlsx dated 20.08.2026
+*&---------------------------------------------------------------------*
+REPORT zpp_forecast_upload MESSAGE-ID zpp_fcst.
+
+TABLES sscrfields.
+
+TYPES: BEGIN OF ty_raw,
+         f01 TYPE char40, f02 TYPE char40, f03 TYPE char40, f04 TYPE char40,
+         f05 TYPE char40, f06 TYPE char40, f07 TYPE char40, f08 TYPE char40,
+         f09 TYPE char40, f10 TYPE char40, f11 TYPE char40, f12 TYPE char40,
+         f13 TYPE char40, f14 TYPE char40, f15 TYPE char40, f16 TYPE char40,
+       END OF ty_raw,
+
+       BEGIN OF ty_log,
+         row     TYPE i,
+         werks   TYPE werks_d,
+         matnr   TYPE matnr,
+         period  TYPE char12,
+         action  TYPE char14,
+         light   TYPE char1,
+         message TYPE char200,
+       END OF ty_log.
+
+CONSTANTS: gc_new  TYPE char14 VALUE 'Created',
+           gc_chg  TYPE char14 VALUE 'Changed',
+           gc_err  TYPE char14 VALUE 'Rejected',
+           gc_tnew TYPE char14 VALUE 'Would create',
+           gc_tchg TYPE char14 VALUE 'Would change'.
+
+DATA: gt_raw TYPE STANDARD TABLE OF ty_raw,
+      gt_log TYPE STANDARD TABLE OF ty_log,
+      g_new  TYPE i,
+      g_chg  TYPE i,
+      g_err  TYPE i,
+      g_tab  TYPE c LENGTH 1.
+
+*&---------------------------------------------------------------------*
+SELECTION-SCREEN FUNCTION KEY 1.
+
+SELECTION-SCREEN BEGIN OF BLOCK b0 WITH FRAME TITLE TEXT-b00.
+PARAMETERS: p_cat  RADIOBUTTON GROUP typ DEFAULT 'X',
+            p_trk  RADIOBUTTON GROUP typ,
+            p_exc  RADIOBUTTON GROUP typ,
+            p_hist RADIOBUTTON GROUP typ,
+            p_busq RADIOBUTTON GROUP typ,
+            p_busm RADIOBUTTON GROUP typ,
+            p_chgq RADIOBUTTON GROUP typ,
+            p_chgm RADIOBUTTON GROUP typ.
+SELECTION-SCREEN END OF BLOCK b0.
+
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-b01.
+PARAMETERS: p_file TYPE localfile,
+            p_head AS CHECKBOX DEFAULT 'X',
+            p_test AS CHECKBOX DEFAULT 'X'.
+SELECTION-SCREEN END OF BLOCK b1.
+
+
+*&---------------------------------------------------------------------*
+INITIALIZATION.
+
+* The file name is deliberately not OBLIGATORY. A mandatory field is
+* checked before AT SELECTION-SCREEN runs, which would stop the user
+* pressing Download Template before they have a file to name.
+  sscrfields-functxt_01 = 'Download Template'.
+  g_tab = cl_abap_char_utilities=>horizontal_tab.
+
+*&---------------------------------------------------------------------*
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_file.
+
+  PERFORM f4_file.
+
+*&---------------------------------------------------------------------*
+AT SELECTION-SCREEN.
+
+  IF sscrfields-ucomm = 'FC01'.
+    PERFORM download_template.
+  ELSEIF sscrfields-ucomm = 'ONLI' AND p_file IS INITIAL.
+    MESSAGE e013 WITH 'no file name entered'.
+  ENDIF.
+
+*&---------------------------------------------------------------------*
+START-OF-SELECTION.
+
+  CLEAR: gt_raw, gt_log, g_new, g_chg, g_err.
+
+  PERFORM upload_file.
+
+  IF gt_raw IS INITIAL.
+    MESSAGE s008 DISPLAY LIKE 'I'.
+    RETURN.
+  ENDIF.
+
+  CASE 'X'.
+    WHEN p_cat.  PERFORM do_category.
+    WHEN p_trk.  PERFORM do_tracking.
+    WHEN p_exc.  PERFORM do_exclusion.
+    WHEN p_hist. PERFORM do_history.
+    WHEN p_busq. PERFORM do_business USING 'Q'.
+    WHEN p_busm. PERFORM do_business USING 'M'.
+    WHEN p_chgq. PERFORM do_change   USING 'Q'.
+    WHEN p_chgm. PERFORM do_change   USING 'M'.
+  ENDCASE.
+
+* Nothing is committed on a test run. On a real run the good rows are
+* committed even when other rows failed, so a partly correct file loads
+* what it can and the log says exactly what it did not.
+  IF p_test = abap_false AND ( g_new > 0 OR g_chg > 0 ).
+    COMMIT WORK AND WAIT.
+  ELSE.
+    ROLLBACK WORK.
+  ENDIF.
+
+  PERFORM display_log.
+
+
+*&---------------------------------------------------------------------*
+*& Template definition - one place, used by the download button and
+*& matching the layouts documented for the functional team
+*&---------------------------------------------------------------------*
+FORM template_columns CHANGING ct_head TYPE string_table
+                               ct_demo TYPE string_table
+                               cv_name TYPE string.
+
+  CLEAR: ct_head, ct_demo, cv_name.
+
+  IF p_cat = 'X'.
+    cv_name = 'ZFCST_Product_Category'.
+    ct_head = VALUE #( ( 'PLANT' ) ( 'MATERIAL' ) ( 'CATEGORY' )
+                       ( 'LOAD FACTOR' ) ( 'MTS OR MTO' ) ).
+    ct_demo = VALUE #( ( '1001' ) ( 'FG00000000001' ) ( 'A' )
+                       ( '1.300' ) ( 'MTS' ) ).
+
+  ELSEIF p_trk = 'X'.
+    cv_name = 'ZFCST_Material_Tracking'.
+    ct_head = VALUE #( ( 'PLANT' ) ( 'NEW MATERIAL' )
+                       ( 'OLD MATERIAL 1' ) ( 'OLD MATERIAL 2' ) ).
+    ct_demo = VALUE #( ( '1001' ) ( 'FG00000000002' )
+                       ( 'FG00000000001' ) ( '' ) ).
+
+  ELSEIF p_exc = 'X'.
+    cv_name = 'ZFCST_Material_Exclusion'.
+    ct_head = VALUE #( ( 'PLANT' ) ( 'MATERIAL' ) ).
+    ct_demo = VALUE #( ( '1001' ) ( 'FG00000000001' ) ).
+
+  ELSEIF p_hist = 'X'.
+    cv_name = 'ZFCST_Legacy_Sales_History'.
+    ct_head = VALUE #( ( 'PLANT' ) ( 'MATERIAL' ) ( 'YEAR' )
+                       ( 'M1 APR' ) ( 'M2 MAY' ) ( 'M3 JUN' ) ( 'M4 JUL' )
+                       ( 'M5 AUG' ) ( 'M6 SEP' ) ( 'M7 OCT' ) ( 'M8 NOV' )
+                       ( 'M9 DEC' ) ( 'M10 JAN' ) ( 'M11 FEB' ) ( 'M12 MAR' )
+                       ( 'UOM' ) ).
+    ct_demo = VALUE #( ( '1001' ) ( 'FG00000000001' ) ( '2025' )
+                       ( '100' ) ( '120' ) ( '90' ) ( '110' )
+                       ( '95' ) ( '130' ) ( '105' ) ( '115' )
+                       ( '125' ) ( '85' ) ( '100' ) ( '140' )
+                       ( 'EA' ) ).
+
+  ELSEIF p_busq = 'X'.
+    cv_name = 'ZFCST_Business_Forecast_Quarterly'.
+    ct_head = VALUE #( ( 'MATERIAL' ) ( 'PLANT' ) ( 'QUARTER' )
+                       ( 'YEAR' ) ( 'SALES FORECAST' ) ).
+    ct_demo = VALUE #( ( 'FG00000000001' ) ( '1001' ) ( '2' )
+                       ( '2026' ) ( '12000' ) ).
+
+  ELSEIF p_busm = 'X'.
+    cv_name = 'ZFCST_Business_Forecast_Monthly'.
+    ct_head = VALUE #( ( 'MATERIAL' ) ( 'PLANT' ) ( 'MONTH' )
+                       ( 'YEAR' ) ( 'SALES FORECAST' ) ).
+    ct_demo = VALUE #( ( 'FG00000000001' ) ( '1001' ) ( '1' )
+                       ( '2026' ) ( '4000' ) ).
+
+  ELSEIF p_chgq = 'X'.
+    cv_name = 'ZFCST_Forecast_Change_Quarterly'.
+    ct_head = VALUE #( ( 'MATERIAL' ) ( 'PLANT' ) ( 'QUARTER' )
+                       ( 'YEAR' ) ( 'CHANGE QTY' ) ( 'REASON' ) ).
+    ct_demo = VALUE #( ( 'FG00000000001' ) ( '1001' ) ( '2' )
+                       ( '2026' ) ( '10' ) ( 'Additional plan' ) ).
+
+  ELSEIF p_chgm = 'X'.
+    cv_name = 'ZFCST_Forecast_Change_Monthly'.
+    ct_head = VALUE #( ( 'MATERIAL' ) ( 'PLANT' ) ( 'MONTH' )
+                       ( 'YEAR' ) ( 'CHANGE QTY' ) ( 'REASON' ) ).
+    ct_demo = VALUE #( ( 'FG00000000001' ) ( '1001' ) ( '1' )
+                       ( '2026' ) ( '-10' ) ( 'Reduced plan' ) ).
+  ENDIF.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+FORM download_template.
+
+  DATA: lt_head TYPE string_table,
+        lt_demo TYPE string_table,
+        lt_out  TYPE string_table,
+        lv_name TYPE string,
+        lv_line TYPE string,
+        lv_path TYPE string,
+        lv_full TYPE string,
+        lv_file TYPE string,
+        lv_msg  TYPE string.
+
+  PERFORM template_columns CHANGING lt_head lt_demo lv_name.
+
+  CHECK lt_head IS NOT INITIAL.
+
+* Row 1 the column headings, row 2 one example line the user overwrites
+  PERFORM join_row USING lt_head CHANGING lv_line.
+  APPEND lv_line TO lt_out.
+
+  PERFORM join_row USING lt_demo CHANGING lv_line.
+  APPEND lv_line TO lt_out.
+
+  CONCATENATE lv_name '.txt' INTO lv_file.
+
+  cl_gui_frontend_services=>file_save_dialog(
+    EXPORTING  default_file_name = lv_file
+               default_extension = 'txt'
+    CHANGING   filename          = lv_file
+               path              = lv_path
+               fullpath          = lv_full
+    EXCEPTIONS OTHERS            = 1 ).
+
+  IF sy-subrc <> 0 OR lv_full IS INITIAL.
+    RETURN.
+  ENDIF.
+
+  cl_gui_frontend_services=>gui_download(
+    EXPORTING  filename         = lv_full
+               filetype         = 'ASC'
+    CHANGING   data_tab         = lt_out
+    EXCEPTIONS file_write_error = 1
+               OTHERS           = 2 ).
+
+  IF sy-subrc = 0.
+    CONCATENATE 'Template saved to' lv_full INTO lv_msg SEPARATED BY space.
+    MESSAGE lv_msg TYPE 'S'.
+  ELSE.
+    MESSAGE e013 WITH lv_full.
+  ENDIF.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+FORM join_row USING pt_val TYPE string_table
+              CHANGING cv_line TYPE string.
+
+  DATA lv_val TYPE string.
+
+  CLEAR cv_line.
+
+  LOOP AT pt_val INTO lv_val.
+    IF sy-tabix = 1.
+      cv_line = lv_val.
+    ELSE.
+      CONCATENATE cv_line g_tab lv_val INTO cv_line.
+    ENDIF.
+  ENDLOOP.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+FORM f4_file.
+
+  DATA: lt_files TYPE filetable,
+        ls_file  TYPE file_table,
+        lv_rc    TYPE i.
+
+  cl_gui_frontend_services=>file_open_dialog(
+    CHANGING   file_table = lt_files
+               rc         = lv_rc
+    EXCEPTIONS OTHERS     = 1 ).
+
+  IF sy-subrc = 0 AND lv_rc > 0.
+    READ TABLE lt_files INTO ls_file INDEX 1.
+    IF sy-subrc = 0.
+      p_file = ls_file-filename.
+    ENDIF.
+  ENDIF.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+FORM upload_file.
+
+  DATA lv_name TYPE string.
+
+  lv_name = p_file.
+
+  cl_gui_frontend_services=>gui_upload(
+    EXPORTING  filename            = lv_name
+               filetype            = 'ASC'
+               has_field_separator = 'X'
+    CHANGING   data_tab            = gt_raw
+    EXCEPTIONS file_open_error     = 1
+               file_read_error     = 2
+               OTHERS              = 3 ).
+
+  IF sy-subrc <> 0.
+    MESSAGE e013 WITH lv_name.
+  ENDIF.
+
+  IF p_head = 'X'.
+    DELETE gt_raw INDEX 1.
+  ENDIF.
+
+* Trailing blank lines at the end of a spreadsheet export are ignored
+* rather than reported as errors
+  DELETE gt_raw WHERE f01 IS INITIAL AND f02 IS INITIAL AND f03 IS INITIAL.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+*& 1 - Product category, load factor, MTS / MTO
+*&---------------------------------------------------------------------*
+FORM do_category.
+
+  DATA: ls_raw   TYPE ty_raw,
+        ls_cat   TYPE zppt_prod_cat,
+        ls_old   TYPE zppt_prod_cat,
+        lv_row   TYPE i,
+        lv_werks TYPE werks_d,
+        lv_matnr TYPE matnr,
+        lv_cat   TYPE zde_prod_cat,
+        lv_mts   TYPE zde_mts_mto,
+        lv_load  TYPE zde_load_fct,
+        lv_ex    TYPE abap_bool,
+        lv_err   TYPE string,
+        lv_txt   TYPE string,
+        lv_tmp   TYPE char40,
+        lv_blank TYPE char12.
+
+  LOOP AT gt_raw INTO ls_raw.
+
+    lv_row = sy-tabix.
+    PERFORM to_plant    USING ls_raw-f01 CHANGING lv_werks.
+    PERFORM to_material USING ls_raw-f02 CHANGING lv_matnr.
+
+    PERFORM check_marc USING lv_werks lv_matnr CHANGING lv_err.
+    IF lv_err IS NOT INITIAL.
+      PERFORM log USING lv_row lv_werks lv_matnr lv_blank gc_err lv_err.
+      CONTINUE.
+    ENDIF.
+
+    lv_tmp = ls_raw-f03.
+    CONDENSE lv_tmp.
+    lv_cat = to_upper( lv_tmp ).
+    IF lv_cat IS INITIAL.
+      lv_err = 'Product category is mandatory'.
+      PERFORM log USING lv_row lv_werks lv_matnr lv_blank gc_err lv_err.
+      CONTINUE.
+    ENDIF.
+
+    PERFORM to_dec USING ls_raw-f04 CHANGING lv_load.
+    IF lv_load <= 0.
+      lv_err = 'Load factor must be a number greater than zero'.
+      PERFORM log USING lv_row lv_werks lv_matnr lv_blank gc_err lv_err.
+      CONTINUE.
+    ENDIF.
+
+    lv_tmp = ls_raw-f05.
+    CONDENSE lv_tmp.
+    lv_mts = to_upper( lv_tmp ).
+    IF lv_mts IS NOT INITIAL AND lv_mts <> 'MTS' AND lv_mts <> 'MTO'.
+      lv_err = 'MTS or MTO column must contain MTS, MTO or nothing'.
+      PERFORM log USING lv_row lv_werks lv_matnr lv_blank gc_err lv_err.
+      CONTINUE.
+    ENDIF.
+
+*   The existing row is read first so the original created by and
+*   created on are carried forward instead of being wiped by the MODIFY
+    CLEAR: ls_cat, ls_old, lv_ex.
+    SELECT SINGLE * FROM zppt_prod_cat INTO @ls_old
+      WHERE werks = @lv_werks AND matnr = @lv_matnr.
+    IF sy-subrc = 0.
+      lv_ex  = abap_true.
+      ls_cat = ls_old.
+    ENDIF.
+
+    ls_cat-werks    = lv_werks.
+    ls_cat-matnr    = lv_matnr.
+    ls_cat-prod_cat = lv_cat.
+    ls_cat-load_fct = lv_load.
+    ls_cat-mts_mto  = lv_mts.
+    PERFORM stamp USING lv_ex CHANGING ls_cat-ernam ls_cat-erdat
+                                       ls_cat-aenam ls_cat-aedat.
+
+    IF p_test = abap_false.
+      MODIFY zppt_prod_cat FROM @ls_cat.
+      IF sy-subrc <> 0.
+        lv_err = 'Database update failed'.
+        PERFORM log USING lv_row lv_werks lv_matnr lv_blank gc_err lv_err.
+        CONTINUE.
+      ENDIF.
+    ENDIF.
+
+    lv_txt = |Category { lv_cat }, load factor { lv_load }, { lv_mts }|.
+    PERFORM log_ok USING lv_row lv_werks lv_matnr lv_blank lv_ex lv_txt.
+
+  ENDLOOP.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+*& 2 - Material code tracking, old code to new code
+*&---------------------------------------------------------------------*
+FORM do_tracking.
+
+  DATA: ls_raw   TYPE ty_raw,
+        ls_trk   TYPE zppt_mat_track,
+        ls_old   TYPE zppt_mat_track,
+        lv_row   TYPE i,
+        lv_werks TYPE werks_d,
+        lv_new   TYPE matnr,
+        lv_old1  TYPE matnr,
+        lv_old2  TYPE matnr,
+        lv_ex    TYPE abap_bool,
+        lv_err   TYPE string,
+        lv_txt   TYPE string,
+        lv_blank TYPE char12.
+
+  LOOP AT gt_raw INTO ls_raw.
+
+    lv_row = sy-tabix.
+    PERFORM to_plant    USING ls_raw-f01 CHANGING lv_werks.
+    PERFORM to_material USING ls_raw-f02 CHANGING lv_new.
+    PERFORM to_material USING ls_raw-f03 CHANGING lv_old1.
+    PERFORM to_material USING ls_raw-f04 CHANGING lv_old2.
+
+    PERFORM check_marc USING lv_werks lv_new CHANGING lv_err.
+    IF lv_err IS NOT INITIAL.
+      PERFORM log USING lv_row lv_werks lv_new lv_blank gc_err lv_err.
+      CONTINUE.
+    ENDIF.
+
+    IF lv_old1 IS INITIAL AND lv_old2 IS INITIAL.
+      lv_err = 'At least one old material code must be given'.
+      PERFORM log USING lv_row lv_werks lv_new lv_blank gc_err lv_err.
+      CONTINUE.
+    ENDIF.
+
+    IF lv_old1 = lv_new OR lv_old2 = lv_new.
+      lv_err = 'The old material code must be different from the new code'.
+      PERFORM log USING lv_row lv_werks lv_new lv_blank gc_err lv_err.
+      CONTINUE.
+    ENDIF.
+
+    IF lv_old1 IS NOT INITIAL AND lv_old1 = lv_old2.
+      lv_err = 'Old material 1 and old material 2 are the same code'.
+      PERFORM log USING lv_row lv_werks lv_new lv_blank gc_err lv_err.
+      CONTINUE.
+    ENDIF.
+
+*   An old code that is itself a successor would make the chain
+*   ambiguous, so it is refused rather than silently mis-added
+    PERFORM check_chain USING lv_werks lv_old1 lv_old2 CHANGING lv_err.
+    IF lv_err IS NOT INITIAL.
+      PERFORM log USING lv_row lv_werks lv_new lv_blank gc_err lv_err.
+      CONTINUE.
+    ENDIF.
+
+    CLEAR: ls_trk, ls_old, lv_ex.
+    SELECT SINGLE * FROM zppt_mat_track INTO @ls_old
+      WHERE werks = @lv_werks AND new_matnr = @lv_new.
+    IF sy-subrc = 0.
+      lv_ex  = abap_true.
+      ls_trk = ls_old.
+    ENDIF.
+
+    ls_trk-werks      = lv_werks.
+    ls_trk-new_matnr  = lv_new.
+    ls_trk-old_matnr1 = lv_old1.
+    ls_trk-old_matnr2 = lv_old2.
+    PERFORM stamp USING lv_ex CHANGING ls_trk-ernam ls_trk-erdat
+                                       ls_trk-aenam ls_trk-aedat.
+
+    IF p_test = abap_false.
+      MODIFY zppt_mat_track FROM @ls_trk.
+      IF sy-subrc <> 0.
+        lv_err = 'Database update failed'.
+        PERFORM log USING lv_row lv_werks lv_new lv_blank gc_err lv_err.
+        CONTINUE.
+      ENDIF.
+    ENDIF.
+
+    lv_txt = |History of { lv_old1 } { lv_old2 } will now be reported under { lv_new }|.
+    PERFORM log_ok USING lv_row lv_werks lv_new lv_blank lv_ex lv_txt.
+
+  ENDLOOP.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+FORM check_chain USING pv_werks TYPE werks_d
+                       pv_old1  TYPE matnr
+                       pv_old2  TYPE matnr
+                 CHANGING pv_err TYPE string.
+
+  DATA lv_hit TYPE matnr.
+
+  CLEAR pv_err.
+
+  IF pv_old1 IS NOT INITIAL.
+    SELECT SINGLE new_matnr FROM zppt_mat_track INTO @lv_hit
+      WHERE werks = @pv_werks AND new_matnr = @pv_old1.
+    IF sy-subrc = 0.
+      pv_err = |{ pv_old1 } is already a new code in this table, a chain is not supported|.
+      RETURN.
+    ENDIF.
+  ENDIF.
+
+  IF pv_old2 IS NOT INITIAL.
+    SELECT SINGLE new_matnr FROM zppt_mat_track INTO @lv_hit
+      WHERE werks = @pv_werks AND new_matnr = @pv_old2.
+    IF sy-subrc = 0.
+      pv_err = |{ pv_old2 } is already a new code in this table, a chain is not supported|.
+    ENDIF.
+  ENDIF.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+*& 3 - Material exclusion
+*&---------------------------------------------------------------------*
+FORM do_exclusion.
+
+  DATA: ls_raw   TYPE ty_raw,
+        ls_exc   TYPE zppt_mat_excl,
+        ls_old   TYPE zppt_mat_excl,
+        lv_row   TYPE i,
+        lv_werks TYPE werks_d,
+        lv_matnr TYPE matnr,
+        lv_ex    TYPE abap_bool,
+        lv_err   TYPE string,
+        lv_txt   TYPE string,
+        lv_blank TYPE char12.
+
+  LOOP AT gt_raw INTO ls_raw.
+
+    lv_row = sy-tabix.
+    PERFORM to_plant    USING ls_raw-f01 CHANGING lv_werks.
+    PERFORM to_material USING ls_raw-f02 CHANGING lv_matnr.
+
+    PERFORM check_marc USING lv_werks lv_matnr CHANGING lv_err.
+    IF lv_err IS NOT INITIAL.
+      PERFORM log USING lv_row lv_werks lv_matnr lv_blank gc_err lv_err.
+      CONTINUE.
+    ENDIF.
+
+    CLEAR: ls_exc, ls_old, lv_ex.
+    SELECT SINGLE * FROM zppt_mat_excl INTO @ls_old
+      WHERE werks = @lv_werks AND matnr = @lv_matnr.
+    IF sy-subrc = 0.
+      lv_ex  = abap_true.
+      ls_exc = ls_old.
+    ENDIF.
+
+    ls_exc-werks = lv_werks.
+    ls_exc-matnr = lv_matnr.
+    PERFORM stamp USING lv_ex CHANGING ls_exc-ernam ls_exc-erdat
+                                       ls_exc-aenam ls_exc-aedat.
+
+    IF p_test = abap_false.
+      MODIFY zppt_mat_excl FROM @ls_exc.
+      IF sy-subrc <> 0.
+        lv_err = 'Database update failed'.
+        PERFORM log USING lv_row lv_werks lv_matnr lv_blank gc_err lv_err.
+        CONTINUE.
+      ENDIF.
+    ENDIF.
+
+    IF lv_ex = abap_true.
+      lv_txt = 'Already excluded, entry refreshed'.
+    ELSE.
+      lv_txt = 'Excluded from forecasting'.
+    ENDIF.
+    PERFORM log_ok USING lv_row lv_werks lv_matnr lv_blank lv_ex lv_txt.
+
+  ENDLOOP.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+*& 4 - Legacy sales history, twelve months on one row
+*&---------------------------------------------------------------------*
+FORM do_history.
+
+  DATA: ls_raw   TYPE ty_raw,
+        ls_hist  TYPE zppt_sls_hist,
+        ls_old   TYPE zppt_sls_hist,
+        lv_row   TYPE i,
+        lv_werks TYPE werks_d,
+        lv_matnr TYPE matnr,
+        lv_year  TYPE i,
+        lv_gjahr TYPE gjahr,
+        lv_meins TYPE meins,
+        lv_qty   TYPE zde_fcst_qty,
+        lv_tot   TYPE zde_fcst_qty,
+        lv_ex    TYPE abap_bool,
+        lv_err   TYPE string,
+        lv_txt   TYPE string,
+        lv_tmp   TYPE char40,
+        lv_per   TYPE char12,
+        lv_i     TYPE i,
+        lv_src   TYPE i,
+        lv_fld   TYPE char3.
+
+  FIELD-SYMBOLS: <lv_in>  TYPE any,
+                 <lv_out> TYPE any.
+
+  LOOP AT gt_raw INTO ls_raw.
+
+    lv_row = sy-tabix.
+    PERFORM to_plant    USING ls_raw-f01 CHANGING lv_werks.
+    PERFORM to_material USING ls_raw-f02 CHANGING lv_matnr.
+
+    lv_per = ls_raw-f03.
+    CONDENSE lv_per.
+
+    PERFORM check_marc USING lv_werks lv_matnr CHANGING lv_err.
+    IF lv_err IS NOT INITIAL.
+      PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
+      CONTINUE.
+    ENDIF.
+
+    PERFORM to_int USING ls_raw-f03 CHANGING lv_year.
+    IF lv_year < 1900 OR lv_year > 2999.
+      lv_err = 'Year must be the four digit year the financial year starts in'.
+      PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
+      CONTINUE.
+    ENDIF.
+    lv_gjahr = lv_year.
+
+    lv_tmp = ls_raw-f16.
+    CONDENSE lv_tmp.
+    lv_meins = to_upper( lv_tmp ).
+
+    CLEAR: ls_hist, ls_old, lv_ex.
+    SELECT SINGLE * FROM zppt_sls_hist INTO @ls_old
+      WHERE werks = @lv_werks AND matnr = @lv_matnr AND gjahr = @lv_gjahr.
+    IF sy-subrc = 0.
+      lv_ex   = abap_true.
+      ls_hist = ls_old.
+    ENDIF.
+
+    ls_hist-werks = lv_werks.
+    ls_hist-matnr = lv_matnr.
+    ls_hist-gjahr = lv_gjahr.
+    ls_hist-meins = lv_meins.
+
+*   Columns 4 to 15 of the file hold M01 to M12, April first
+    CLEAR lv_tot.
+    lv_i = 1.
+    WHILE lv_i <= 12.
+
+      lv_src = lv_i + 3.
+      lv_fld = |M{ lv_i WIDTH = 2 PAD = '0' }|.
+
+      UNASSIGN: <lv_in>, <lv_out>.
+      ASSIGN COMPONENT lv_src OF STRUCTURE ls_raw  TO <lv_in>.
+      ASSIGN COMPONENT lv_fld OF STRUCTURE ls_hist TO <lv_out>.
+
+      IF <lv_in> IS ASSIGNED AND <lv_out> IS ASSIGNED.
+        PERFORM to_dec USING <lv_in> CHANGING lv_qty.
+        <lv_out> = lv_qty.
+        lv_tot   = lv_tot + lv_qty.
+      ENDIF.
+
+      lv_i = lv_i + 1.
+    ENDWHILE.
+
+    IF lv_tot = 0.
+      lv_err = 'All twelve monthly figures are zero or not numeric'.
+      PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
+      CONTINUE.
+    ENDIF.
+
+    PERFORM stamp USING lv_ex CHANGING ls_hist-ernam ls_hist-erdat
+                                       ls_hist-aenam ls_hist-aedat.
+
+    IF p_test = abap_false.
+      MODIFY zppt_sls_hist FROM @ls_hist.
+      IF sy-subrc <> 0.
+        lv_err = 'Database update failed'.
+        PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
+        CONTINUE.
+      ENDIF.
+    ENDIF.
+
+    lv_txt = |Twelve months loaded, year total { lv_tot } { lv_meins }|.
+    PERFORM log_ok USING lv_row lv_werks lv_matnr lv_per lv_ex lv_txt.
+
+  ENDLOOP.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+*& 5 and 6 - Business forecast given by sales, quarterly or monthly
+*&---------------------------------------------------------------------*
+FORM do_business USING pv_mode TYPE char1.
+
+  DATA: ls_raw   TYPE ty_raw,
+        ls_qt    TYPE zppt_fcst_qt,
+        ls_mn    TYPE zppt_fcst_mn,
+        lv_row   TYPE i,
+        lv_werks TYPE werks_d,
+        lv_matnr TYPE matnr,
+        lv_pi    TYPE i,
+        lv_year  TYPE i,
+        lv_gjahr TYPE gjahr,
+        lv_qtr   TYPE zde_quarter,
+        lv_poper TYPE poper,
+        lv_qty   TYPE zde_fcst_qty,
+        lv_ex    TYPE abap_bool,
+        lv_err   TYPE string,
+        lv_txt   TYPE string,
+        lv_per   TYPE char12.
+
+  LOOP AT gt_raw INTO ls_raw.
+
+    lv_row = sy-tabix.
+    PERFORM to_material USING ls_raw-f01 CHANGING lv_matnr.
+    PERFORM to_plant    USING ls_raw-f02 CHANGING lv_werks.
+    PERFORM period_text USING pv_mode ls_raw-f03 CHANGING lv_per.
+
+    PERFORM check_marc USING lv_werks lv_matnr CHANGING lv_err.
+    IF lv_err IS NOT INITIAL.
+      PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
+      CONTINUE.
+    ENDIF.
+
+    PERFORM to_int USING ls_raw-f03 CHANGING lv_pi.
+    PERFORM check_period USING pv_mode lv_pi CHANGING lv_err.
+    IF lv_err IS NOT INITIAL.
+      PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
+      CONTINUE.
+    ENDIF.
+
+    PERFORM to_int USING ls_raw-f04 CHANGING lv_year.
+    IF lv_year < 1900 OR lv_year > 2999.
+      lv_err = 'Year must be the four digit year the financial year starts in'.
+      PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
+      CONTINUE.
+    ENDIF.
+    lv_gjahr = lv_year.
+
+    PERFORM to_dec USING ls_raw-f05 CHANGING lv_qty.
+    IF lv_qty < 0.
+      lv_err = 'Sales forecast quantity cannot be negative'.
+      PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
+      CONTINUE.
+    ENDIF.
+
+    CLEAR lv_ex.
+
+    IF pv_mode = 'Q'.
+
+      lv_qtr = lv_pi.
+
+*     The whole row is read and written back, so a business forecast
+*     loaded onto an already generated forecast changes only that one
+*     column and leaves the calculated figures untouched
+      CLEAR ls_qt.
+      SELECT SINGLE * FROM zppt_fcst_qt INTO @ls_qt
+        WHERE werks = @lv_werks AND matnr = @lv_matnr
+          AND gjahr = @lv_gjahr AND quarter = @lv_qtr.
+      IF sy-subrc = 0.
+        lv_ex = abap_true.
+      ELSE.
+        CLEAR ls_qt.
+        ls_qt-werks   = lv_werks.
+        ls_qt-matnr   = lv_matnr.
+        ls_qt-gjahr   = lv_gjahr.
+        ls_qt-quarter = lv_qtr.
+      ENDIF.
+
+      ls_qt-bus_fcst = lv_qty.
+      PERFORM final_qty CHANGING ls_qt-fcst_qty ls_qt-bus_fcst
+                                 ls_qt-bus_fcst_add ls_qt-final_qty.
+      PERFORM stamp USING lv_ex CHANGING ls_qt-ernam ls_qt-erdat
+                                         ls_qt-aenam ls_qt-aedat.
+
+      IF p_test = abap_false.
+        MODIFY zppt_fcst_qt FROM @ls_qt.
+        IF sy-subrc <> 0.
+          lv_err = 'Database update failed'.
+          PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
+          CONTINUE.
+        ENDIF.
+      ENDIF.
+
+      lv_txt = |Business forecast { lv_qty }, final quantity now { ls_qt-final_qty }|.
+
+    ELSE.
+
+      lv_poper = lv_pi.
+
+      CLEAR ls_mn.
+      SELECT SINGLE * FROM zppt_fcst_mn INTO @ls_mn
+        WHERE werks = @lv_werks AND matnr = @lv_matnr
+          AND gjahr = @lv_gjahr AND period = @lv_poper.
+      IF sy-subrc = 0.
+        lv_ex = abap_true.
+      ELSE.
+        CLEAR ls_mn.
+        ls_mn-werks  = lv_werks.
+        ls_mn-matnr  = lv_matnr.
+        ls_mn-gjahr  = lv_gjahr.
+        ls_mn-period = lv_poper.
+      ENDIF.
+
+      ls_mn-bus_fcst = lv_qty.
+      PERFORM final_qty CHANGING ls_mn-fcst_qty ls_mn-bus_fcst
+                                 ls_mn-bus_fcst_add ls_mn-final_qty.
+      PERFORM stamp USING lv_ex CHANGING ls_mn-ernam ls_mn-erdat
+                                         ls_mn-aenam ls_mn-aedat.
+
+      IF p_test = abap_false.
+        MODIFY zppt_fcst_mn FROM @ls_mn.
+        IF sy-subrc <> 0.
+          lv_err = 'Database update failed'.
+          PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
+          CONTINUE.
+        ENDIF.
+      ENDIF.
+
+      lv_txt = |Business forecast { lv_qty }, final quantity now { ls_mn-final_qty }|.
+
+    ENDIF.
+
+    PERFORM log_ok USING lv_row lv_werks lv_matnr lv_per lv_ex lv_txt.
+
+  ENDLOOP.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+*& 7 and 8 - Additional or reduced quantity with a reason
+*&---------------------------------------------------------------------*
+FORM do_change USING pv_mode TYPE char1.
+
+  DATA: ls_raw   TYPE ty_raw,
+        ls_qt    TYPE zppt_fcst_qt,
+        ls_mn    TYPE zppt_fcst_mn,
+        lv_row   TYPE i,
+        lv_werks TYPE werks_d,
+        lv_matnr TYPE matnr,
+        lv_pi    TYPE i,
+        lv_year  TYPE i,
+        lv_gjahr TYPE gjahr,
+        lv_qtr   TYPE zde_quarter,
+        lv_poper TYPE poper,
+        lv_qty   TYPE zde_fcst_qty,
+        lv_rsn   TYPE zde_fcst_reason,
+        lv_err   TYPE string,
+        lv_txt   TYPE string,
+        lv_tmp   TYPE char40,
+        lv_per   TYPE char12,
+        lv_yes   TYPE abap_bool.
+
+  lv_yes = abap_true.
+
+  LOOP AT gt_raw INTO ls_raw.
+
+    lv_row = sy-tabix.
+    PERFORM to_material USING ls_raw-f01 CHANGING lv_matnr.
+    PERFORM to_plant    USING ls_raw-f02 CHANGING lv_werks.
+    PERFORM period_text USING pv_mode ls_raw-f03 CHANGING lv_per.
+
+    PERFORM check_marc USING lv_werks lv_matnr CHANGING lv_err.
+    IF lv_err IS NOT INITIAL.
+      PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
+      CONTINUE.
+    ENDIF.
+
+    PERFORM to_int USING ls_raw-f03 CHANGING lv_pi.
+    PERFORM check_period USING pv_mode lv_pi CHANGING lv_err.
+    IF lv_err IS NOT INITIAL.
+      PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
+      CONTINUE.
+    ENDIF.
+
+    PERFORM to_int USING ls_raw-f04 CHANGING lv_year.
+    IF lv_year < 1900 OR lv_year > 2999.
+      lv_err = 'Year must be the four digit year the financial year starts in'.
+      PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
+      CONTINUE.
+    ENDIF.
+    lv_gjahr = lv_year.
+
+    lv_tmp = ls_raw-f06.
+    CONDENSE lv_tmp.
+    lv_rsn = lv_tmp.
+    IF lv_rsn IS INITIAL.
+      lv_err = 'Reason is mandatory when the forecast is changed'.
+      PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
+      CONTINUE.
+    ENDIF.
+
+    PERFORM to_dec USING ls_raw-f05 CHANGING lv_qty.
+    IF lv_qty = 0.
+      lv_err = 'Change quantity is zero or not numeric, nothing to apply'.
+      PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
+      CONTINUE.
+    ENDIF.
+
+*   A change adjusts a forecast that already exists. If it is not there
+*   the row is rejected rather than a bare change record being created.
+    IF pv_mode = 'Q'.
+
+      lv_qtr = lv_pi.
+
+      CLEAR ls_qt.
+      SELECT SINGLE * FROM zppt_fcst_qt INTO @ls_qt
+        WHERE werks = @lv_werks AND matnr = @lv_matnr
+          AND gjahr = @lv_gjahr AND quarter = @lv_qtr.
+      IF sy-subrc <> 0.
+        lv_err = 'No quarterly forecast has been saved for this plant, material and quarter'.
+        PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
+        CONTINUE.
+      ENDIF.
+
+      ls_qt-bus_fcst_add = lv_qty.
+      ls_qt-reason       = lv_rsn.
+      PERFORM final_qty CHANGING ls_qt-fcst_qty ls_qt-bus_fcst
+                                 ls_qt-bus_fcst_add ls_qt-final_qty.
+
+      IF ls_qt-final_qty < 0.
+        lv_err = 'The reduction is larger than the forecast, the final quantity would be negative'.
+        PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
+        CONTINUE.
+      ENDIF.
+
+      PERFORM stamp USING lv_yes CHANGING ls_qt-ernam ls_qt-erdat
+                                          ls_qt-aenam ls_qt-aedat.
+
+      IF p_test = abap_false.
+        MODIFY zppt_fcst_qt FROM @ls_qt.
+        IF sy-subrc <> 0.
+          lv_err = 'Database update failed'.
+          PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
+          CONTINUE.
+        ENDIF.
+      ENDIF.
+
+      lv_txt = |Change { lv_qty }, final quantity now { ls_qt-final_qty }, reason { lv_rsn }|.
+
+    ELSE.
+
+      lv_poper = lv_pi.
+
+      CLEAR ls_mn.
+      SELECT SINGLE * FROM zppt_fcst_mn INTO @ls_mn
+        WHERE werks = @lv_werks AND matnr = @lv_matnr
+          AND gjahr = @lv_gjahr AND period = @lv_poper.
+      IF sy-subrc <> 0.
+        lv_err = 'No monthly forecast has been saved for this plant, material and month'.
+        PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
+        CONTINUE.
+      ENDIF.
+
+      ls_mn-bus_fcst_add = lv_qty.
+      ls_mn-reason       = lv_rsn.
+      PERFORM final_qty CHANGING ls_mn-fcst_qty ls_mn-bus_fcst
+                                 ls_mn-bus_fcst_add ls_mn-final_qty.
+
+      IF ls_mn-final_qty < 0.
+        lv_err = 'The reduction is larger than the forecast, the final quantity would be negative'.
+        PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
+        CONTINUE.
+      ENDIF.
+
+      PERFORM stamp USING lv_yes CHANGING ls_mn-ernam ls_mn-erdat
+                                          ls_mn-aenam ls_mn-aedat.
+
+      IF p_test = abap_false.
+        MODIFY zppt_fcst_mn FROM @ls_mn.
+        IF sy-subrc <> 0.
+          lv_err = 'Database update failed'.
+          PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
+          CONTINUE.
+        ENDIF.
+      ENDIF.
+
+      lv_txt = |Change { lv_qty }, final quantity now { ls_mn-final_qty }, reason { lv_rsn }|.
+
+    ENDIF.
+
+*   A change always adjusts an existing forecast, so it is never a create
+    PERFORM log_ok USING lv_row lv_werks lv_matnr lv_per lv_yes lv_txt.
+
+  ENDLOOP.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+*& The final quantity is kept consistent with the report, which shows
+*& generated + business forecast + change
+*&---------------------------------------------------------------------*
+FORM final_qty CHANGING cv_gen TYPE zde_fcst_qty
+                        cv_bus TYPE zde_fcst_qty
+                        cv_add TYPE zde_fcst_qty
+                        cv_fin TYPE zde_fcst_qty.
+
+  cv_fin = cv_gen + cv_bus + cv_add.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+FORM stamp USING pv_exists TYPE abap_bool
+           CHANGING cv_ernam TYPE any
+                    cv_erdat TYPE any
+                    cv_aenam TYPE any
+                    cv_aedat TYPE any.
+
+  IF pv_exists = abap_false OR cv_ernam IS INITIAL.
+    cv_ernam = sy-uname.
+    cv_erdat = sy-datum.
+  ENDIF.
+
+  cv_aenam = sy-uname.
+  cv_aedat = sy-datum.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+FORM check_period USING pv_mode TYPE char1
+                        pv_per  TYPE i
+                  CHANGING pv_err TYPE string.
+
+  CLEAR pv_err.
+
+  IF pv_mode = 'Q'.
+    IF pv_per < 1 OR pv_per > 4.
+      pv_err = 'Quarter must be 1 to 4, where 1 is April to June'.
+    ENDIF.
+  ELSE.
+    IF pv_per < 1 OR pv_per > 12.
+      pv_err = 'Month must be 1 to 12, where 1 is April and 12 is March'.
+    ENDIF.
+  ENDIF.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+*& The period is shown on the log in words so the user is not left
+*& working out why month 1 means April
+*&---------------------------------------------------------------------*
+FORM period_text USING pv_mode TYPE char1
+                       pv_in   TYPE any
+                 CHANGING cv_txt TYPE char12.
+
+  CONSTANTS lc_mon TYPE char36
+    VALUE 'AprMayJunJulAugSepOctNovDecJanFebMar'.
+
+  DATA: lv_i   TYPE i,
+        lv_off TYPE i,
+        lv_nam TYPE char3,
+        lv_num TYPE char2.
+
+  CLEAR cv_txt.
+
+  PERFORM to_int USING pv_in CHANGING lv_i.
+
+  IF pv_mode = 'Q'.
+    IF lv_i >= 1 AND lv_i <= 4.
+      lv_num = lv_i.
+      CONDENSE lv_num.
+      CONCATENATE 'Q' lv_num INTO cv_txt.
+    ENDIF.
+    RETURN.
+  ENDIF.
+
+  IF lv_i >= 1 AND lv_i <= 12.
+    lv_off = ( lv_i - 1 ) * 3.
+    lv_nam = lc_mon+lv_off(3).
+    lv_num = lv_i.
+    CONDENSE lv_num.
+    CONCATENATE 'M' lv_num '-' lv_nam INTO cv_txt.
+  ENDIF.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+FORM check_marc USING pv_werks TYPE werks_d
+                      pv_matnr TYPE matnr
+                CHANGING pv_err TYPE string.
+
+  DATA: lv_hit TYPE matnr,
+        lv_ok  TYPE abap_bool.
+
+  CLEAR pv_err.
+
+  IF pv_werks IS INITIAL OR pv_matnr IS INITIAL.
+    pv_err = 'Plant and material are both mandatory'.
+    RETURN.
+  ENDIF.
+
+  SELECT SINGLE matnr FROM marc INTO @lv_hit
+    WHERE werks = @pv_werks AND matnr = @pv_matnr.
+
+  IF sy-subrc <> 0.
+    pv_err = |Material { pv_matnr } is not extended to plant { pv_werks }|.
+    RETURN.
+  ENDIF.
+
+  lv_ok = zcl_pp_fcst_util=>check_authority( iv_werks = pv_werks
+                                             iv_actvt = '02' ).
+  IF lv_ok = abap_false.
+    pv_err = |No authorisation to maintain forecast data for plant { pv_werks }|.
+  ENDIF.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+FORM to_plant USING pv_in TYPE any CHANGING cv_werks TYPE werks_d.
+
+* Plant carries no conversion exit, so it is taken as typed
+  CLEAR cv_werks.
+  cv_werks = pv_in.
+  CONDENSE cv_werks.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+FORM to_material USING pv_in TYPE any CHANGING cv_matnr TYPE matnr.
+
+  DATA lv_in TYPE char40.
+
+  CLEAR cv_matnr.
+
+  lv_in = pv_in.
+  CONDENSE lv_in.
+  CHECK lv_in IS NOT INITIAL.
+
+* Entered without leading zeros in the spreadsheet, stored padded
+  CALL FUNCTION 'CONVERSION_EXIT_MATN1_INPUT'
+    EXPORTING  input        = lv_in
+    IMPORTING  output       = cv_matnr
+    EXCEPTIONS length_error = 1
+               OTHERS       = 2.
+
+  IF sy-subrc <> 0.
+    cv_matnr = lv_in.
+  ENDIF.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+FORM to_dec USING pv_in TYPE any CHANGING cv_out TYPE any.
+
+  DATA lv_in TYPE string.
+
+  CLEAR cv_out.
+
+  lv_in = pv_in.
+  CONDENSE lv_in NO-GAPS.
+  CHECK lv_in IS NOT INITIAL.
+
+* Thousand separators from a spreadsheet export are dropped
+  REPLACE ALL OCCURRENCES OF ',' IN lv_in WITH ''.
+
+  TRY.
+      cv_out = lv_in.
+    CATCH cx_sy_conversion_no_number.
+      CLEAR cv_out.
+  ENDTRY.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+FORM to_int USING pv_in TYPE any CHANGING cv_out TYPE i.
+
+  DATA lv_in TYPE string.
+
+  CLEAR cv_out.
+
+  lv_in = pv_in.
+  CONDENSE lv_in NO-GAPS.
+  CHECK lv_in IS NOT INITIAL.
+
+  TRY.
+      cv_out = lv_in.
+    CATCH cx_sy_conversion_no_number.
+      CLEAR cv_out.
+  ENDTRY.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+FORM log USING pv_row    TYPE i
+               pv_werks  TYPE any
+               pv_matnr  TYPE any
+               pv_period TYPE any
+               pv_action TYPE char14
+               pv_text   TYPE any.
+
+  DATA ls_log TYPE ty_log.
+
+  CLEAR ls_log.
+  ls_log-row     = pv_row.
+  ls_log-werks   = pv_werks.
+  ls_log-matnr   = pv_matnr.
+  ls_log-period  = pv_period.
+  ls_log-action  = pv_action.
+  ls_log-message = pv_text.
+
+  IF pv_action = gc_err.
+    ls_log-light = '1'.
+    g_err = g_err + 1.
+  ELSEIF pv_action = gc_chg OR pv_action = gc_tchg.
+    ls_log-light = '2'.
+    g_chg = g_chg + 1.
+  ELSE.
+    ls_log-light = '3'.
+    g_new = g_new + 1.
+  ENDIF.
+
+  APPEND ls_log TO gt_log.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+FORM log_ok USING pv_row    TYPE i
+                  pv_werks  TYPE any
+                  pv_matnr  TYPE any
+                  pv_period TYPE any
+                  pv_exists TYPE abap_bool
+                  pv_text   TYPE any.
+
+  DATA: lv_action TYPE char14,
+        lv_text   TYPE string.
+
+  IF p_test = 'X'.
+    IF pv_exists = abap_true.
+      lv_action = gc_tchg.
+    ELSE.
+      lv_action = gc_tnew.
+    ENDIF.
+  ELSE.
+    IF pv_exists = abap_true.
+      lv_action = gc_chg.
+    ELSE.
+      lv_action = gc_new.
+    ENDIF.
+  ENDIF.
+
+  lv_text = pv_text.
+
+  PERFORM log USING pv_row pv_werks pv_matnr pv_period lv_action lv_text.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+FORM display_log.
+
+  DATA: lo_alv  TYPE REF TO cl_salv_table,
+        lo_cols TYPE REF TO cl_salv_columns_table,
+        lv_head TYPE string,
+        lv_n    TYPE char10,
+        lv_c    TYPE char10,
+        lv_e    TYPE char10,
+        lv_ttl  TYPE lvc_title.
+
+  lv_n = g_new. CONDENSE lv_n.
+  lv_c = g_chg. CONDENSE lv_c.
+  lv_e = g_err. CONDENSE lv_e.
+
+  IF p_test = 'X'.
+    CONCATENATE 'Test run, nothing saved:' lv_n 'would be created,' lv_c
+                'would be changed,' lv_e 'rejected'
+           INTO lv_head SEPARATED BY space.
+  ELSE.
+    CONCATENATE 'Upload finished:' lv_n 'created,' lv_c 'changed,' lv_e
+                'rejected'
+           INTO lv_head SEPARATED BY space.
+  ENDIF.
+
+  MESSAGE lv_head TYPE 'S'.
+
+  TRY.
+      cl_salv_table=>factory( IMPORTING r_salv_table = lo_alv
+                              CHANGING  t_table      = gt_log ).
+
+      lo_alv->get_functions( )->set_all( ).
+
+      lo_cols = lo_alv->get_columns( ).
+      lo_cols->set_optimize( ).
+
+      TRY.
+          lo_cols->set_exception_column( 'LIGHT' ).
+        CATCH cx_salv_data_error.
+      ENDTRY.
+
+      PERFORM txt USING lo_cols 'ROW'     'File Row'.
+      PERFORM txt USING lo_cols 'WERKS'   'Plant'.
+      PERFORM txt USING lo_cols 'MATNR'   'Material'.
+      PERFORM txt USING lo_cols 'PERIOD'  'Period'.
+      PERFORM txt USING lo_cols 'ACTION'  'Result'.
+      PERFORM txt USING lo_cols 'MESSAGE' 'Detail'.
+
+      lv_ttl = lv_head.
+      lo_alv->get_display_settings( )->set_list_header( lv_ttl ).
+
+      lo_alv->display( ).
+
+    CATCH cx_salv_msg.
+      MESSAGE lv_head TYPE 'I'.
+  ENDTRY.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+FORM txt USING po_cols TYPE REF TO cl_salv_columns_table
+               pv_name TYPE any
+               pv_text TYPE any.
+
+  DATA: lo_col TYPE REF TO cl_salv_column,
+        lv_nam TYPE lvc_fname,
+        lv_s   TYPE scrtext_s,
+        lv_m   TYPE scrtext_m,
+        lv_l   TYPE scrtext_l.
+
+  lv_nam = pv_name.
+  lv_s   = pv_text.
+  lv_m   = pv_text.
+  lv_l   = pv_text.
+
+  TRY.
+      lo_col = po_cols->get_column( lv_nam ).
+      lo_col->set_short_text( lv_s ).
+      lo_col->set_medium_text( lv_m ).
+      lo_col->set_long_text( lv_l ).
+    CATCH cx_salv_not_found.
+  ENDTRY.
+
+ENDFORM.

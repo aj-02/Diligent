@@ -1,0 +1,1407 @@
+*&---------------------------------------------------------------------*
+*& Include          ZIN_S2P_WORK_ACC_RPT_F01
+*&---------------------------------------------------------------------*
+
+*& Requirement Id: DID_S2P_354                                          *
+*& Title: Work Accomplishment Report                                    *
+*& Date Created: 25.07.2025                                             *
+*& Programmer: Sarfraz Sayyad Ali (SARFRAZS)                            *
+*& Program Objective: Displays WAR report for service line items       *
+*& Orig Request: DS4K903120                                             *
+*&----------------------------------------------------------------------*
+*& Modification History                                                 *
+*&----------------------------------------------------------------------*
+*& Modified By:                                                         *
+*& Date:                                                                *
+*& Modification TR:                                                     *
+*& Reason:                                                              *
+*&----------------------------------------------------------------------*
+
+*&---------------------------------------------------------------------*
+*& Form F_GET_DATA
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM f_get_data .
+  TYPES: BEGIN OF ty_ekbe,
+           belnr TYPE char10,
+           buzei TYPE numc5,
+           gjahr TYPE numc4,
+         END OF ty_ekbe.
+
+  DATA: lt_ekbe1 TYPE TABLE OF ty_ekbe.
+  DATA: lv_pdate TYPE dats.
+
+  " Get performance dates from service entry item
+  SELECT
+    performancedate,
+    performanceenddate,
+    serviceentrysheet
+    FROM mmpur_ses_item
+    INTO TABLE @DATA(lt_ses_item)
+    WHERE serviceentrysheet = @p_seshdr.
+
+  " Get account assignment info for PO
+  SELECT
+    ebeln,
+    ps_psp_pnr,
+    nplnr
+    FROM ekkn
+    INTO TABLE @DATA(lt_ekkn)
+    WHERE ebeln = @p_ebeln.
+  IF sy-subrc IS INITIAL.
+
+    " Try to get WBS element from PRPS using EKKN
+    SELECT
+      pspnr,
+      psphi                                        "#EC CI_NO_TRANSFORM
+      FROM prps
+      INTO TABLE @DATA(lt_prps)
+      FOR ALL ENTRIES IN @lt_ekkn
+      WHERE pspnr = @lt_ekkn-ps_psp_pnr.
+    IF sy-subrc IS NOT INITIAL.
+
+      " If PRPS fails, try getting order and project number from AFKO
+      SELECT
+        aufnr,
+        pronr                                      "#EC CI_NO_TRANSFORM
+        FROM afko
+        INTO TABLE @DATA(lt_afko)
+        FOR ALL ENTRIES IN @lt_ekkn
+        WHERE aufnr = @lt_ekkn-nplnr.
+
+      IF sy-subrc IS INITIAL.
+        SELECT
+          post1,
+          pspnr,
+          plfaz,
+          plsez                                    "#EC CI_NO_TRANSFORM
+          FROM proj
+          INTO TABLE @DATA(lt_proj)
+          FOR ALL ENTRIES IN @lt_afko
+          WHERE pspnr = @lt_afko-pronr.
+      ENDIF.
+
+    ELSE.
+
+      " Get project definition details from PROJ
+      SELECT
+        post1,
+        pspnr,
+        plfaz,
+        plsez                                      "#EC CI_NO_TRANSFORM
+        FROM proj
+        INTO TABLE @lt_proj
+        FOR ALL ENTRIES IN @lt_prps
+        WHERE pspnr = @lt_prps-psphi.
+
+    ENDIF.
+
+  ENDIF.
+
+  " Get supplier and purchasing info from EKKO
+  SELECT
+    SINGLE
+    lifnr,
+    waers,
+    bedat,
+    retpc,
+    dppct
+    FROM ekko
+    INTO @DATA(ls_ekko)
+    WHERE ebeln = @p_ebeln.
+  IF sy-subrc IS INITIAL.
+
+    " Get vendor name from LFA1
+    SELECT
+      SINGLE
+      lifnr,
+      name1
+      FROM lfa1
+      INTO @DATA(ls_lfa1)
+      WHERE lifnr = @ls_ekko-lifnr.
+  ENDIF.
+
+  SELECT
+    ebeln,
+    ebelp,
+    txz01,
+    meins,
+    netpr,
+    menge,
+    netwr
+    FROM ekpo
+    INTO TABLE @DATA(lt_ekpo)
+    WHERE ebeln = @p_ebeln
+    AND loekz = ''.
+
+  IF LT_EKPO IS NOT INITIAL.
+
+  SELECT
+    ebeln,
+    ebelp,
+    belnr,
+    buzei,
+    gjahr
+    FROM ekbe
+    INTO TABLE @DATA(lt_ekbe)
+    FOR ALL ENTRIES IN @lt_ekpo
+    WHERE ebeln = @lt_ekpo-ebeln
+    AND ebelp = @lt_ekpo-ebelp
+    AND bewtp = '0'.
+
+
+  IF sy-subrc IS INITIAL.
+
+    lt_ekbe1 = CORRESPONDING #( lt_ekbe ).
+    IF LT_EKBE1 IS NOT INITIAL.
+
+    SELECT
+       serviceentrysheet,
+      serviceentrysheetitem,
+      quantity,
+      netamount
+      FROM mmpur_ses_item
+      INTO TABLE @DATA(lt_item)
+      FOR ALL ENTRIES IN @lt_ekbe1
+      WHERE serviceentrysheet = @lt_ekbe1-belnr
+      AND serviceentrysheetitem = @lt_ekbe1-buzei.
+
+    IF lt_item IS NOT INITIAL.
+
+      " Filter out unapproved SES headers
+      SELECT serviceentrysheet                     "#EC CI_NO_TRANSFORM
+        FROM mmpur_ses_header
+        INTO TABLE @DATA(lt_seshdr)
+        FOR ALL ENTRIES IN @lt_item
+        WHERE serviceentrysheet = @lt_item-serviceentrysheet
+        AND approvalstatus <> '30'."@zcl_abap_utility=>zif_s2p_constant~gc_s2p_354-appr_status.
+
+    ENDIF.
+
+    LOOP AT lt_item INTO DATA(ls_item).
+      READ TABLE lt_seshdr TRANSPORTING NO FIELDS WITH KEY serviceentrysheet = ls_item-serviceentrysheet.
+      IF sy-subrc IS INITIAL.
+        DELETE lt_item WHERE serviceentrysheet = ls_item-serviceentrysheet.
+      ENDIF.
+    ENDLOOP.
+
+    ENDIF.
+
+    SELECT
+      lfbnr,
+      mblnr
+      FROM mseg
+      INTO TABLE @DATA(lt_mseg)
+      FOR ALL ENTRIES IN @lt_ekbe
+      WHERE lfbnr = @lt_ekbe-belnr.
+
+    IF sy-subrc IS INITIAL.
+
+      SELECT
+        mblnr,
+        budat
+        FROM mkpf
+        INTO TABLE @DATA(lt_mkpf)
+        FOR ALL ENTRIES IN @lt_mseg
+        WHERE mblnr = @lt_mseg-mblnr.
+
+    ENDIF.
+  ENDIF.
+  ENDIF.
+
+  IF lt_ekpo IS NOT INITIAL.
+
+  SELECT ebeln, ebelp, belnr, gjahr, lfbnr, wrbtr, buzei
+    FROM rseg
+    INTO TABLE @DATA(lt_rseg)
+    FOR ALL ENTRIES IN @lt_ekpo
+    WHERE ebeln = @lt_ekpo-ebeln
+    AND ebelp = @lt_ekpo-ebelp.
+  IF sy-subrc IS INITIAL.
+    SELECT belnr, gjahr, stblg, rbstat
+      FROM rbkp
+      INTO TABLE @DATA(lt_rbkp)
+      FOR ALL ENTRIES IN @lt_rseg
+      WHERE belnr = @lt_rseg-belnr
+      AND gjahr = @lt_rseg-gjahr.
+  ENDIF.
+  ENDIF.
+
+  DATA(lt_rseg1) = lt_rseg.
+  LOOP AT lt_rseg1 INTO DATA(ls_rseg).
+    READ TABLE lt_rbkp INTO DATA(ls_rbkp) WITH KEY belnr = ls_rseg-belnr gjahr = ls_rseg-gjahr .
+    IF sy-subrc IS INITIAL.
+      IF ls_rbkp-stblg IS NOT INITIAL. "<> ' '.
+        DELETE lt_rseg1 WHERE belnr = ls_rseg-belnr AND gjahr = ls_rseg-gjahr AND buzei = ls_rseg-buzei.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+
+  DATA(lt_rseg2) = lt_rseg.
+  LOOP AT lt_rseg2 INTO ls_rseg.
+    READ TABLE lt_rbkp INTO ls_rbkp WITH KEY belnr = ls_rseg-belnr gjahr = ls_rseg-gjahr .
+    IF sy-subrc IS INITIAL.
+      IF ls_rbkp-stblg IS NOT INITIAL. "<> ' '.
+        DELETE lt_rseg2 WHERE belnr = ls_rseg-belnr AND gjahr = ls_rseg-gjahr AND buzei = ls_rseg-buzei.
+      ELSEIF ls_rbkp-rbstat = zcl_abap_utility=>zif_s2p_constant~gc_s2p_354-rbstat_5. "'5'.
+        DELETE lt_rseg2 WHERE belnr = ls_rseg-belnr AND gjahr = ls_rseg-gjahr AND buzei = ls_rseg-buzei.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+
+  DATA(lt_rseg3) = lt_rseg.
+  LOOP AT lt_rseg3 INTO ls_rseg.
+    READ TABLE lt_rbkp INTO ls_rbkp WITH KEY belnr = ls_rseg-belnr gjahr = ls_rseg-gjahr .
+    IF sy-subrc IS INITIAL.
+      IF ls_rbkp-stblg IS NOT INITIAL." <> ' '.
+        DELETE lt_rseg3 WHERE belnr = ls_rseg-belnr AND gjahr = ls_rseg-gjahr AND buzei = ls_rseg-buzei.
+      ELSEIF ls_rbkp-rbstat <> zcl_abap_utility=>zif_s2p_constant~gc_s2p_354-rbstat_5. "'5'.
+        DELETE lt_rseg3 WHERE belnr = ls_rseg-belnr AND gjahr = ls_rseg-gjahr AND buzei = ls_rseg-buzei.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+
+
+*  SELECT
+*    ebeln,
+*    ebelp,
+*    belnr,
+*    buzei,
+*    GJAHR
+*    FROM ekbe
+*    INTO TABLE @DATA(lt_ekbe2)
+*    FOR ALL ENTRIES IN @lt_ekpo
+*    WHERE ebeln = @lt_ekpo-ebeln
+*    AND ebelp = @lt_ekpo-ebelp
+*    AND bewtp = 'Q'.
+*  IF sy-subrc is INITIAL.
+*     gt_rseg = CORRESPONDING #( lt_ekbe2 ).
+*    " Get RBKP headers for posted invoices
+*    IF gt_rseg IS NOT INITIAL.
+*
+*      SELECT belnr, gjahr, stblg, rbstat
+*        FROM rbkp
+*        INTO TABLE @DATA(lt_rbkp)
+*        FOR ALL ENTRIES IN @gt_rseg
+*        WHERE belnr = @gt_rseg-belnr
+*        AND gjahr = @gt_rseg-gjahr.
+*    ENDIF.
+*
+*    LOOP AT gt_rseg INTO DATA(ls_rseg).
+*      READ TABLE lt_rbkp INTO DATA(ls_rbkp) WITH KEY belnr = ls_rseg-belnr gjahr = ls_rseg-gjahr .
+*      IF sy-subrc IS INITIAL.
+*        IF ls_rbkp-stblg IS NOT INITIAL. "<> ' '.
+*          DELETE gt_rseg WHERE belnr = ls_rseg-belnr AND gjahr = ls_rseg-gjahr AND buzei = ls_rseg-buzei.
+*        ENDIF.
+*      ENDIF.
+*    ENDLOOP.
+*
+*    IF gt_rseg IS NOT INITIAL.
+*      " Get cleared and posted RSEG lines
+*      SELECT belnr, gjahr, buzei, wrbtr
+*        FROM rseg
+*        INTO TABLE @DATA(lt_rseg)
+*        FOR ALL ENTRIES IN @gt_rseg
+*        WHERE belnr = @gt_rseg-belnr
+*        AND gjahr = @gt_rseg-gjahr
+*        AND buzei = @gt_rseg-buzei.
+*    ENDIF.
+*
+*    gt_rseg1 = CORRESPONDING #( lt_ekbe2 ).
+*    LOOP AT gt_rseg1 INTO ls_rseg.
+*      READ TABLE lt_rbkp INTO ls_rbkp WITH KEY belnr = ls_rseg-belnr gjahr = ls_rseg-gjahr .
+*      IF sy-subrc IS INITIAL.
+*        IF ls_rbkp-stblg IS NOT INITIAL. "<> ' '.
+*          DELETE gt_rseg1 WHERE belnr = ls_rseg-belnr AND gjahr = ls_rseg-gjahr AND buzei = ls_rseg-buzei.
+*        ELSEIF ls_rbkp-rbstat = zcl_abap_utility=>zif_s2p_constant~gc_s2p_354-rbstat_4 "'4'
+*          OR ls_rbkp-rbstat = zcl_abap_utility=>zif_s2p_constant~gc_s2p_354-rbstat_5. "'5'.
+*          DELETE gt_rseg1 WHERE belnr = ls_rseg-belnr AND gjahr = ls_rseg-gjahr AND buzei = ls_rseg-buzei.
+*        ENDIF.
+*      ENDIF.
+*    ENDLOOP.
+*
+*    IF gt_rseg1 IS NOT INITIAL.
+*      " Fetch payable RSEG entries (billable)
+*      SELECT belnr, gjahr, buzei, wrbtr
+*        FROM rseg
+*        INTO TABLE @DATA(lt_rseg1)
+*        FOR ALL ENTRIES IN @gt_rseg1
+*        WHERE belnr = @gt_rseg1-belnr
+*        AND gjahr = @gt_rseg1-gjahr
+*        AND buzei = @gt_rseg1-buzei.
+*    ENDIF.
+*
+*    gt_rseg2 = CORRESPONDING #( lt_ekbe2 ).
+*    LOOP AT gt_rseg2 INTO ls_rseg.
+*      READ TABLE lt_rbkp INTO ls_rbkp WITH KEY belnr = ls_rseg-belnr gjahr = ls_rseg-gjahr .
+*      IF sy-subrc IS INITIAL.
+*        IF ls_rbkp-stblg IS NOT INITIAL." <> ' '.
+*          DELETE gt_rseg2 WHERE belnr = ls_rseg-belnr AND gjahr = ls_rseg-gjahr AND buzei = ls_rseg-buzei.
+*        ELSEIF ls_rbkp-rbstat <> zcl_abap_utility=>zif_s2p_constant~gc_s2p_354-rbstat_4. "'4'.
+*          IF ls_rbkp-rbstat <> zcl_abap_utility=>zif_s2p_constant~gc_s2p_354-rbstat_5. "'5'.
+*            DELETE gt_rseg2 WHERE belnr = ls_rseg-belnr AND gjahr = ls_rseg-gjahr AND buzei = ls_rseg-buzei.
+*          ENDIF.
+*        ENDIF.
+*      ENDIF.
+*    ENDLOOP.
+*    IF gt_rseg2 is not INITIAL.
+*      SELECT belnr, gjahr, buzei, wrbtr
+*        FROM rseg
+*        INTO TABLE @DATA(lt_rseg2)
+*        FOR ALL ENTRIES IN @gt_rseg2
+*        WHERE belnr = @gt_rseg2-belnr
+*        AND gjahr = @gt_rseg2-gjahr
+*        AND buzei = @gt_rseg2-buzei.
+*    ENDIF.
+*
+*  ENDIF.
+
+
+
+*  sort gt_rseg by belnr buzei.
+*  sort gt_rseg1 by belnr buzei.
+*  sort gt_rseg1 by belnr buzei.
+  READ TABLE lt_ses_item INTO DATA(ls_ses_item) WITH KEY serviceentrysheet = p_seshdr.
+  gs_header-from = ls_ses_item-performancedate.
+  gs_header-to = ls_ses_item-performanceenddate.
+  gs_header-job_order_no = p_ebeln.
+
+  READ TABLE lt_ekkn INTO DATA(ls_ekkn) WITH KEY ebeln = p_ebeln.                       "Get account assignment for PO
+  IF sy-subrc IS INITIAL.
+    READ TABLE lt_prps INTO DATA(ls_prps) WITH KEY pspnr = ls_ekkn-ps_psp_pnr.          "Fetch WBS element
+    IF sy-subrc IS INITIAL.
+      gs_header-project_code = ls_prps-psphi.
+      READ TABLE lt_proj INTO DATA(ls_proj) WITH KEY pspnr = ls_prps-psphi.             "Get project definition
+      IF sy-subrc IS INITIAL.
+        gs_header-description = ls_proj-post1.
+        gs_header-start_date = ls_proj-plfaz.
+        gs_header-expiry_date = ls_proj-plsez.
+      ENDIF.
+    ELSE.
+      READ TABLE lt_afko INTO DATA(ls_afko) WITH KEY aufnr = ls_ekkn-nplnr.             "Get order from account assignment
+      IF sy-subrc IS INITIAL.
+        gs_header-project_code = ls_afko-pronr.
+      ENDIF.
+      READ TABLE lt_proj INTO ls_proj WITH KEY pspnr = ls_afko-pronr.                   "Fetch project from order
+      IF sy-subrc IS INITIAL.
+        gs_header-description = ls_proj-post1.
+        gs_header-start_date = ls_proj-plfaz.
+        gs_header-expiry_date = ls_proj-plsez.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+
+  gs_header-contractor = |{ ls_ekko-lifnr }{ TEXT-072 }{ ls_lfa1-name1 }|.
+  gs_header-purpose = p_purp.
+  gs_header-war_no = p_seshdr.
+  gs_header-contract_duration = gs_header-expiry_date - gs_header-start_date.
+  gs_header-approved_time_extension = p_time.
+  gs_header-finish_date = gs_header-expiry_date + gs_header-approved_time_extension.
+
+  SORT lt_ekpo BY ebelp.
+  LOOP AT lt_ekpo INTO DATA(ls_ekpo) ##INTO_OK.
+    gs_output-item_code = ls_ekpo-ebelp.
+    gs_output-description = ls_ekpo-txz01.
+    gs_output-unit = ls_ekpo-meins.
+    gs_output-unit_bid_price = ls_ekpo-netpr.
+    gs_output-contract_qty = ls_ekpo-menge.
+    gs_output-contract_cost = ls_ekpo-netwr.
+
+    READ TABLE lt_mseg INTO DATA(ls_mseg) WITH KEY lfbnr = p_seshdr.
+    IF sy-subrc IS INITIAL.
+      READ TABLE lt_mkpf INTO DATA(ls_mkpf) WITH KEY mblnr = ls_mseg-mblnr.
+      IF sy-subrc IS INITIAL.
+        lv_pdate = ls_mkpf-budat.
+      ENDIF.
+    ENDIF.
+    CLEAR: ls_item, ls_mseg, ls_mkpf.
+*    READ TABLE lt_ekbe into data(ls_ekbe) with key ebeln = ls_ekpo-ebeln ebelp = ls_ekpo-ebelp.
+    LOOP AT lt_ekbe INTO DATA(ls_ekbe) WHERE ebeln = ls_ekpo-ebeln AND ebelp = ls_ekpo-ebelp.
+
+      LOOP AT lt_item INTO ls_item WHERE serviceentrysheet = ls_ekbe-belnr AND serviceentrysheetitem = ls_ekbe-buzei.
+        IF ls_item-serviceentrysheet = p_seshdr.
+          gs_output-accomplished_current_cost = gs_output-accomplished_current_cost + ls_item-netamount.
+          gs_output-accomplished_current_qty = gs_output-accomplished_current_qty + ls_item-quantity.
+        ELSE.
+
+          READ TABLE lt_mseg INTO ls_mseg WITH KEY lfbnr = ls_item-serviceentrysheet.
+          IF sy-subrc IS INITIAL.
+            READ TABLE lt_mkpf INTO ls_mkpf WITH KEY mblnr = ls_mseg-mblnr.
+            IF sy-subrc IS INITIAL.
+              IF ls_mkpf-budat < lv_pdate.
+                gs_output-accomplished_previous_qty = gs_output-accomplished_previous_qty + ls_item-quantity.
+                gs_output-accomplished_previous_cost = gs_output-accomplished_previous_cost + ls_item-netamount.
+              ENDIF.
+            ENDIF.
+          ENDIF.
+        ENDIF.
+      ENDLOOP.
+    ENDLOOP.
+
+    gs_output-accomplished_td_qty = gs_output-accomplished_previous_qty + gs_output-accomplished_current_qty.
+    gs_output-accomplished_td_cost = gs_output-accomplished_previous_cost + gs_output-accomplished_current_cost.
+
+    LOOP AT lt_rseg1 into ls_rseg where ebeln = ls_ekpo-ebeln and ebelp = ls_ekpo-ebelp.
+      READ TABLE lt_mseg INTO ls_mseg WITH KEY lfbnr = ls_rseg-lfbnr.
+          IF sy-subrc IS INITIAL.
+            READ TABLE lt_mkpf INTO ls_mkpf WITH KEY mblnr = ls_mseg-mblnr.
+            IF sy-subrc IS INITIAL.
+              IF ls_mkpf-budat <= lv_pdate.
+                gs_output-parked_posted_cost = gs_output-parked_posted_cost + ls_rseg-wrbtr.
+              ENDIF.
+            ENDIF.
+          ENDIF.
+    ENDLOOP.
+
+    LOOP AT lt_rseg2 into ls_rseg where ebeln = ls_ekpo-ebeln and ebelp = ls_ekpo-ebelp.
+      READ TABLE lt_mseg INTO ls_mseg WITH KEY lfbnr = ls_rseg-lfbnr.
+          IF sy-subrc IS INITIAL.
+            READ TABLE lt_mkpf INTO ls_mkpf WITH KEY mblnr = ls_mseg-mblnr.
+            IF sy-subrc IS INITIAL.
+              IF ls_mkpf-budat <= lv_pdate.
+                gs_output-payment_billable_cost = gs_output-payment_billable_cost + ls_rseg-wrbtr.
+              ENDIF.
+            ENDIF.
+          ENDIF.
+    ENDLOOP.
+
+    LOOP AT lt_rseg3 into ls_rseg where ebeln = ls_ekpo-ebeln and ebelp = ls_ekpo-ebelp.
+      READ TABLE lt_mseg INTO ls_mseg WITH KEY lfbnr = ls_rseg-lfbnr.
+          IF sy-subrc IS INITIAL.
+            READ TABLE lt_mkpf INTO ls_mkpf WITH KEY mblnr = ls_mseg-mblnr.
+            IF sy-subrc IS INITIAL.
+              IF ls_mkpf-budat <= lv_pdate.
+                gs_output-payment_td_cost = gs_output-payment_td_cost + ls_rseg-wrbtr.
+              ENDIF.
+            ENDIF.
+          ENDIF.
+    ENDLOOP.
+
+*    READ TABLE lt_ekbe2 INTO DATA(ls_ekbe2) WITH KEY ebeln = ls_ekpo-ebeln EBELP = LS_EKPO-ebelp .
+*    IF sy-subrc is INITIAL.
+*      lv_buzei = ls_ekbe2-buzei.
+*      READ TABLE lt_rseg INTO DATA(ls_rseg_a)
+*      WITH KEY belnr = ls_ekbe2-belnr gjahr = ls_ekbe2-gjahr buzei = lv_buzei.            "Parked+Posted cost
+*      IF sy-subrc IS INITIAL.
+*        gs_output-parked_posted_cost = ls_rseg_a-wrbtr.
+**        lv_final_park_posted = lv_final_park_posted + gs_output-parked_posted_cost.
+*      ENDIF.
+*      READ TABLE lt_rseg1 INTO DATA(ls_rseg1)
+*      WITH KEY belnr = ls_ekbe2-belnr gjahr = ls_ekbe2-gjahr buzei = lv_buzei.            "Billable cost
+*      IF sy-subrc IS INITIAL.
+*        gs_output-payment_billable_cost = ls_rseg1-wrbtr.
+**        lv_final_bill_cost = lv_final_bill_cost + gs_output-payment_billable_cost.
+*      ENDIF.
+*      READ TABLE lt_rseg2 INTO DATA(ls_rseg2)
+*      WITH KEY belnr = ls_ekbe2-belnr gjahr = ls_ekbe2-gjahr buzei = lv_buzei.            "Total paid cost
+*      IF sy-subrc IS INITIAL.
+*        gs_output-payment_td_cost = ls_rseg2-wrbtr.
+**        lv_final_td_cost1 = lv_final_td_cost1 + gs_output-payment_td_cost.
+*      ENDIF.
+*    ENDIF.
+
+    APPEND gs_output TO gt_output.
+    CLEAR: gs_output.
+
+  ENDLOOP.
+
+  gs_header-no_of_entries = lines( gt_output ).
+
+*  sort gt_output by item_code.
+
+
+
+
+
+*  DATA:
+*    lv_buzei               TYPE rblgp,
+*    lv_final_contract_cost TYPE ekpo-netwr,
+*    lv_final_prev_cost     TYPE mmpur_ses_item-netamount,
+*    lv_final_curr_cost     TYPE mmpur_ses_item-netamount,
+*    lv_final_td_cost       TYPE mmpur_ses_item-netamount,
+*    lv_final_park_posted   TYPE rseg-wrbtr,
+*    lv_final_bill_cost     TYPE rseg-wrbtr,
+*    lv_final_td_cost1      TYPE rseg-wrbtr.
+*
+*
+*  " Get performance dates from service entry item
+*  SELECT
+*    performancedate,
+*    performanceenddate,
+*    serviceentrysheet
+*    FROM mmpur_ses_item
+*    INTO TABLE @DATA(lt_ses_item)
+*    WHERE serviceentrysheet = @p_seshdr.
+*
+*  " Get account assignment info for PO
+*  SELECT
+*    ebeln,
+*    ps_psp_pnr,
+*    nplnr
+*      FROM ekkn
+*      INTO TABLE @DATA(lt_ekkn)
+*      WHERE ebeln = @p_ebeln.
+*  IF sy-subrc IS INITIAL.
+*
+*    " Try to get WBS element from PRPS using EKKN
+*    SELECT
+*      pspnr,
+*      psphi                                        "#EC CI_NO_TRANSFORM
+*      FROM prps
+*      INTO TABLE @DATA(lt_prps)
+*      FOR ALL ENTRIES IN @lt_ekkn
+*      WHERE pspnr = @lt_ekkn-ps_psp_pnr.
+*    IF sy-subrc IS NOT INITIAL.
+*
+*      " If PRPS fails, try getting order and project number from AFKO
+*      SELECT
+*        aufnr,
+*        pronr                                      "#EC CI_NO_TRANSFORM
+*        FROM afko
+*        INTO TABLE @DATA(lt_afko)
+*        FOR ALL ENTRIES IN @lt_ekkn
+*        WHERE aufnr = @lt_ekkn-nplnr.
+*        IF sy-subrc is INITIAL.
+*          SELECT
+*        post1,
+*        pspnr,
+*        plfaz,
+*        plsez                                      "#EC CI_NO_TRANSFORM
+*        FROM proj
+*        INTO TABLE @DATA(lt_proj)
+*        FOR ALL ENTRIES IN @lt_afko
+*        WHERE pspnr = @lt_afko-pronr.
+*
+*        ENDIF.
+*    ELSE.
+*
+*      " Get project definition details from PROJ
+*      SELECT
+*        post1,
+*        pspnr,
+*        plfaz,
+*        plsez                                      "#EC CI_NO_TRANSFORM
+*        FROM proj
+*        INTO TABLE @lt_proj
+*        FOR ALL ENTRIES IN @lt_prps
+*        WHERE pspnr = @lt_prps-psphi.
+*    ENDIF.
+*  ENDIF.
+*
+*  " Get supplier and purchasing info from EKKO
+*  SELECT
+*    SINGLE
+*    lifnr,
+*    waers,
+*    bedat,
+*    retpc,
+*    dppct
+*    FROM ekko
+*    INTO @DATA(ls_ekko)
+*    WHERE ebeln = @p_ebeln.
+*  IF sy-subrc IS INITIAL.
+*
+*    " Get vendor name from LFA1
+*    SELECT
+*      SINGLE
+*      lifnr,
+*      name1
+*      FROM lfa1
+*      INTO @DATA(ls_lfa1)
+*      WHERE lifnr = @ls_ekko-lifnr.
+*  ENDIF.
+*
+*  " Fetch current SES item entries
+*  SELECT
+*    serviceentrysheet, serviceentrysheetitem, referencepurchaseorder, referencepurchaseorderitem, service, description, unit, quantity, netamount
+*    FROM mmpur_ses_item
+*    INTO TABLE @DATA(lt_final)
+*    WHERE serviceentrysheet = @p_seshdr.
+*  IF sy-subrc IS INITIAL.
+*
+*    " Get PO item details for the SES
+*    SELECT
+*      ebeln,
+*      ebelp,
+*      netpr,
+*      menge,
+*      netwr,
+*      TXZ01,
+*      MEINS                                       "#EC CI_NO_TRANSFORM
+*      FROM ekpo
+*      INTO TABLE @DATA(lt_ekpo)
+*      where ebeln = @p_ebeln.
+**      FOR ALL ENTRIES IN @lt_final
+**      WHERE ebeln = @lt_final-referencepurchaseorder
+**      AND ebelp = @lt_final-referencepurchaseorderitem.
+*
+*    " Get previously accomplished quantities before current SES
+*    SELECT
+*      referencepurchaseorder,
+*      referencepurchaseorderitem,
+*      serviceentrysheet, quantity,
+*      netamount                                    "#EC CI_NO_TRANSFORM
+*      FROM mmpur_ses_item
+*      INTO TABLE @DATA(lt_acc_qty)
+*      FOR ALL ENTRIES IN @lt_final
+*      WHERE referencepurchaseorder = @lt_final-referencepurchaseorder
+*      AND referencepurchaseorderitem = @lt_final-referencepurchaseorderitem
+*      AND serviceentrysheet < @p_seshdr.
+*
+*    IF lt_acc_qty IS NOT INITIAL.
+*
+*      " Filter out unapproved SES headers
+*      SELECT serviceentrysheet                     "#EC CI_NO_TRANSFORM
+*        FROM mmpur_ses_header
+*        INTO TABLE @DATA(lt_seshdr)
+*        FOR ALL ENTRIES IN @lt_acc_qty
+*        WHERE serviceentrysheet = @lt_acc_qty-serviceentrysheet
+*        AND approvalstatus <> @zcl_abap_utility=>zif_s2p_constant~gc_s2p_354-appr_status.
+*    ENDIF.
+*
+*    LOOP AT lt_acc_qty INTO DATA(ls_acc_qty).
+*      READ TABLE lt_seshdr TRANSPORTING NO FIELDS WITH KEY serviceentrysheet = ls_acc_qty-serviceentrysheet.
+*      IF sy-subrc IS INITIAL.
+*        DELETE lt_acc_qty WHERE serviceentrysheet = ls_acc_qty-serviceentrysheet.
+*      ENDIF.
+*    ENDLOOP.
+*
+*    " Get logistics doc refs for SES postings
+*    SELECT
+*      lfbnr,
+*      ebelp,
+*      belnr,
+*      buzei,
+*      gjahr                                        "#EC CI_NO_TRANSFORM
+*      FROM ekbe
+*      INTO TABLE @DATA(lt_ekbe)
+*      FOR ALL ENTRIES IN @LT_EKPO
+*      WHERE LFBNR = @LT_EKPO-ebeln
+*      AND EBELP = @LT_EKPO-ebelp
+*      AND bewtp = @zcl_abap_utility=>zif_s2p_constant~gc_s2p_354-bewtp_q.
+**
+**      FOR ALL ENTRIES IN @lt_FINAL
+**      WHERE lfbnr = @lt_final-serviceentrysheet
+**      AND lfpos = @lt_final-serviceentrysheetitem+1(4)
+**      AND bewtp = @zcl_abap_utility=>zif_s2p_constant~gc_s2p_354-bewtp_q.
+*    IF sy-subrc IS INITIAL.
+*
+*
+*
+*      gt_rseg = CORRESPONDING #( lt_ekbe ).
+*
+*      " Get RBKP headers for posted invoices
+*      IF gt_rseg IS NOT INITIAL.
+*
+*        SELECT belnr, gjahr, stblg, rbstat
+*          FROM rbkp
+*          INTO TABLE @DATA(lt_rbkp)
+*          FOR ALL ENTRIES IN @gt_rseg
+*          WHERE belnr = @gt_rseg-belnr
+*          AND gjahr = @gt_rseg-gjahr.
+*      ENDIF.
+*
+*      LOOP AT gt_rseg INTO DATA(ls_rseg).
+*        READ TABLE lt_rbkp INTO DATA(ls_rbkp) WITH KEY belnr = ls_rseg-belnr gjahr = ls_rseg-gjahr .
+*        IF sy-subrc IS INITIAL.
+*          IF ls_rbkp-stblg IS NOT INITIAL. "<> ' '.
+*            DELETE gt_rseg WHERE belnr = ls_rseg-belnr AND gjahr = ls_rseg-gjahr and buzei = ls_rseg-buzei.
+*          ENDIF.
+*        ENDIF.
+*      ENDLOOP.
+*
+*      IF gt_rseg IS NOT INITIAL.
+*        " Get cleared and posted RSEG lines
+*        SELECT belnr, gjahr, buzei, wrbtr
+*          FROM rseg
+*          INTO TABLE @DATA(lt_rseg)
+*          FOR ALL ENTRIES IN @gt_rseg
+*          WHERE belnr = @gt_rseg-belnr
+*          AND gjahr = @gt_rseg-gjahr
+*          AND buzei = @gt_rseg-buzei.
+*      ENDIF.
+*      gt_rseg1 = CORRESPONDING #( lt_ekbe ).
+*      LOOP AT gt_rseg1 INTO ls_rseg.
+*        READ TABLE lt_rbkp INTO ls_rbkp WITH KEY belnr = ls_rseg-belnr gjahr = ls_rseg-gjahr .
+*        IF sy-subrc IS INITIAL.
+*          IF ls_rbkp-stblg IS NOT INITIAL. "<> ' '.
+*            DELETE gt_rseg1 WHERE belnr = ls_rseg-belnr AND gjahr = ls_rseg-gjahr AND buzei = ls_rseg-buzei.
+*          ELSEIF ls_rbkp-rbstat = zcl_abap_utility=>zif_s2p_constant~gc_s2p_354-rbstat_4 "'4'
+*            OR ls_rbkp-rbstat = zcl_abap_utility=>zif_s2p_constant~gc_s2p_354-rbstat_5. "'5'.
+*            DELETE gt_rseg1 WHERE belnr = ls_rseg-belnr AND gjahr = ls_rseg-gjahr AND buzei = ls_rseg-buzei.
+*          ENDIF.
+*        ENDIF.
+*      ENDLOOP.
+*      IF gt_rseg1 IS NOT INITIAL.
+*
+*        " Fetch payable RSEG entries (billable)
+*        SELECT belnr, gjahr, buzei, wrbtr
+*          FROM rseg
+*          INTO TABLE @DATA(lt_rseg1)
+*          FOR ALL ENTRIES IN @gt_rseg1
+*          WHERE belnr = @gt_rseg1-belnr
+*          AND gjahr = @gt_rseg1-gjahr
+*          AND buzei = @gt_rseg1-buzei.
+*      ENDIF.
+*
+*      gt_rseg2 = CORRESPONDING #( lt_ekbe ).
+*      LOOP AT gt_rseg2 INTO ls_rseg.
+*        READ TABLE lt_rbkp INTO ls_rbkp WITH KEY belnr = ls_rseg-belnr gjahr = ls_rseg-gjahr .
+*        IF sy-subrc IS INITIAL.
+*          IF ls_rbkp-stblg IS NOT INITIAL." <> ' '.
+*            DELETE gt_rseg2 WHERE belnr = ls_rseg-belnr AND gjahr = ls_rseg-gjahr AND buzei = ls_rseg-buzei.
+*          ELSEIF ls_rbkp-rbstat <> zcl_abap_utility=>zif_s2p_constant~gc_s2p_354-rbstat_4. "'4'.
+*            IF ls_rbkp-rbstat <> zcl_abap_utility=>zif_s2p_constant~gc_s2p_354-rbstat_5. "'5'.
+*              DELETE gt_rseg2 WHERE belnr = ls_rseg-belnr AND gjahr = ls_rseg-gjahr AND buzei = ls_rseg-buzei.
+*            ENDIF.
+*          ENDIF.
+*        ENDIF.
+*      ENDLOOP.
+*      IF gt_rseg2 IS NOT INITIAL.
+*
+*        " Fetch posted RSEG lines (TD cost)
+*        SELECT belnr, gjahr, buzei, wrbtr
+*          FROM rseg
+*          INTO TABLE @DATA(lt_rseg2)
+*          FOR ALL ENTRIES IN @gt_rseg2
+*          WHERE belnr = @gt_rseg2-belnr
+*          AND gjahr = @gt_rseg2-gjahr
+*          AND buzei = @gt_rseg2-buzei.
+*      ENDIF.
+*    ENDIF.
+*  ENDIF.
+*
+*
+*  select lfbnr, ebelp, bewtp, belnr, buzei
+*    from ekbe
+*    into table @data(lt_ekbe1)
+*    FOR ALL ENTRIES IN @lt_ekpo
+*    where lfbnr = @lt_ekpo-ebeln
+*    and ebelp = @lt_ekpo-ebelp
+*    and bewtp = '0'.
+*
+*    types: begin of ty_ekbe,
+*      belnr type char10,
+*      buzei type numc5,
+*      end of ty_ekbe.
+*
+*      data: lt_ekbe_1 type table of ty_ekbe.
+*      data: ls_ekbe_1 type ty_ekbe.
+*      LOOP AT lt_ekbe1 into data(ls_ekbe1).
+*        ls_ekbe_1-belnr = ls_ekbe1-belnr.
+*        ls_ekbe_1-buzei = ls_ekbe1-buzei.
+*        append ls_ekbe_1 to lt_ekbe_1.
+*      ENDLOOP.
+*    IF sy-subrc = 0.
+*
+*      select serviceentrysheet, serviceentrysheetitem, quantity, netamount
+*        from mmpur_ses_item
+*        into table @data(lT_item1)
+*        FOR ALL ENTRIES IN @lt_ekbe_1
+*        where serviceentrysheet = @lt_ekbe_1-belnr
+*        and serviceentrysheetitem = @lt_ekbe_1-buzei
+*        and serviceentrysheet < @p_seshdr.
+*
+*     IF lt_item1 IS NOT INITIAL.
+*
+*      " Filter out unapproved SES headers
+*      SELECT serviceentrysheet                     "#EC CI_NO_TRANSFORM
+*        FROM mmpur_ses_header
+*        INTO TABLE @DATA(lt_seshdr1)
+*        FOR ALL ENTRIES IN @lt_item1
+*        WHERE serviceentrysheet = @lt_ITEM1-serviceentrysheet
+*        AND approvalstatus <> '30'.
+*    ENDIF.
+*
+*    LOOP AT LT_ITEM1 INTO DATA(ls_ITEM1).
+*      READ TABLE lt_seshdr1 TRANSPORTING NO FIELDS WITH KEY serviceentrysheet = ls_ITEM1-serviceentrysheet.
+*      IF sy-subrc IS INITIAL.
+*        DELETE lt_ITEM1 WHERE serviceentrysheet = ls_ITEM1-serviceentrysheet.
+*      ENDIF.
+*    ENDLOOP.
+*
+*    ENDIF.
+*
+*    select  serviceentrysheet, serviceentrysheetitem, quantity, netamount
+*        from mmpur_ses_item
+*      into table @data(lt_item2)
+*      for ALL ENTRIES IN @lt_ekpo
+*      where serviceentrysheet = @p_seshdr
+*      and referencepurchaseorderitem = @lt_ekpo-ebelp.
+*
+*      IF lt_item2 IS NOT INITIAL.
+*
+*      " Filter out unapproved SES headers
+*      SELECT serviceentrysheet                     "#EC CI_NO_TRANSFORM
+*        FROM mmpur_ses_header
+*        INTO TABLE @DATA(lt_seshdr2)
+*        FOR ALL ENTRIES IN @lt_item2
+*        WHERE serviceentrysheet = @lt_ITEM2-serviceentrysheet
+*        AND approvalstatus <> '30'.
+*    ENDIF.
+*
+*     LOOP AT LT_ITEM2 INTO DATA(ls_ITEM2).
+*      READ TABLE lt_seshdr2 TRANSPORTING NO FIELDS WITH KEY serviceentrysheet = ls_ITEM2-serviceentrysheet.
+*      IF sy-subrc IS INITIAL.
+*        DELETE lt_ITEM2 WHERE serviceentrysheet = ls_ITEM2-serviceentrysheet.
+*      ENDIF.
+*    ENDLOOP.
+*
+*
+*
+*
+*
+*
+*  READ TABLE lt_ses_item INTO DATA(ls_ses_item) WITH KEY serviceentrysheet = p_seshdr.
+*  gs_header-from = ls_ses_item-performancedate.
+*  gs_header-to = ls_ses_item-performanceenddate.
+*  gs_header-job_order_no = p_ebeln.
+*
+*  READ TABLE lt_ekkn INTO DATA(ls_ekkn) WITH KEY ebeln = p_ebeln.                       "Get account assignment for PO
+*  IF sy-subrc IS INITIAL.
+*    READ TABLE lt_prps INTO DATA(ls_prps) WITH KEY pspnr = ls_ekkn-ps_psp_pnr.          "Fetch WBS element
+*    IF sy-subrc IS INITIAL.
+*      gs_header-project_code = ls_prps-psphi.
+*      READ TABLE lt_proj INTO DATA(ls_proj) WITH KEY pspnr = ls_prps-psphi.             "Get project definition
+*      IF sy-subrc IS INITIAL.
+*        gs_header-description = ls_proj-post1.
+*        gs_header-start_date = ls_proj-plfaz.
+*        gs_header-expiry_date = ls_proj-plsez.
+*      ENDIF.
+*    ELSE.
+*      READ TABLE lt_afko INTO DATA(ls_afko) WITH KEY aufnr = ls_ekkn-nplnr.             "Get order from account assignment
+*      IF sy-subrc IS INITIAL.
+*        gs_header-project_code = ls_afko-pronr.
+*      ENDIF.
+*      READ TABLE lt_proj INTO ls_proj WITH KEY pspnr = ls_afko-pronr.                   "Fetch project from order
+*      IF sy-subrc IS INITIAL.
+*        gs_header-description = ls_proj-post1.
+*        gs_header-start_date = ls_proj-plfaz.
+*        gs_header-expiry_date = ls_proj-plsez.
+*      ENDIF.
+*    ENDIF.
+*  ENDIF.
+*  gs_header-contractor = |{ ls_ekko-lifnr }{ TEXT-072 }{ ls_lfa1-name1 }|. "/
+*
+*  gs_header-purpose = p_purp.
+*  gs_header-war_no = p_seshdr.
+*  gs_header-contract_duration = gs_header-expiry_date - gs_header-start_date.
+*  gs_header-approved_time_extension = p_time.
+*  gs_header-finish_date = gs_header-expiry_date + gs_header-approved_time_extension.
+*
+*
+*
+*
+*
+*
+*
+*  LOOP AT lt_ekpo into data(ls_ekpo).
+*    gs_output-item_code = ls_ekpo-ebelp.
+*    GS_OUTPUT-description = LS_EKPO-TXZ01.
+*    GS_OUTPUT-UNIT = LS_EKPO-MEINS.
+*    gs_output-unit_bid_price = ls_ekpo-netpr.
+*    gs_output-contract_qty = ls_ekpo-menge.
+*    gs_output-contract_cost = ls_ekpo-netwr.
+*    clear: ls_ekbe1.
+*
+*    LOOP AT lt_ITEM1 INTO ls_ITEM1.             "Sum previous accomplishments
+*      gs_output-accomplished_previous_cost = gs_output-accomplished_previous_cost + ls_ITEM1-netamount.
+*      gs_output-accomplished_previous_qty = gs_output-accomplished_previous_qty + ls_ITEM1-quantity.
+*    ENDLOOP.
+*
+*    LOOP AT lt_ITEM1 INTO ls_ITEM1.             "Sum previous accomplishments
+*      gs_output-accomplished_current_qty = gs_output-accomplished_current_qty + ls_ITEM2-quantity.
+*    gs_output-accomplished_current_cost = gs_output-accomplished_current_cost + ls_ITEM2-netamount.
+*    ENDLOOP.
+*    gs_output-accomplished_td_cost = gs_output-accomplished_current_cost + gs_output-accomplished_previous_cost.
+*    gs_output-accomplished_td_qty = gs_output-accomplished_current_qty + gs_output-accomplished_previous_qty.
+*    READ TABLE lt_ekbe INTO DATA(ls_ekbe)
+*    WITH KEY lfbnr = ls_ekpo-ebeln
+*    EBELP = LS_EKPO-ebelp .                                    "Get invoice document from SES
+*    IF sy-subrc IS INITIAL.
+*
+*      lv_buzei = ls_ekbe-buzei.
+*      READ TABLE lt_rseg INTO DATA(ls_rseg_a)
+*      WITH KEY belnr = ls_ekbe-belnr gjahr = ls_ekbe-gjahr buzei = lv_buzei.            "Parked+Posted cost
+*      IF sy-subrc IS INITIAL.
+*        gs_output-parked_posted_cost = ls_rseg_a-wrbtr.
+*        lv_final_park_posted = lv_final_park_posted + gs_output-parked_posted_cost.
+*      ENDIF.
+*      READ TABLE lt_rseg1 INTO DATA(ls_rseg1)
+*      WITH KEY belnr = ls_ekbe-belnr gjahr = ls_ekbe-gjahr buzei = lv_buzei.            "Billable cost
+*      IF sy-subrc IS INITIAL.
+*        gs_output-payment_billable_cost = ls_rseg1-wrbtr.
+*        lv_final_bill_cost = lv_final_bill_cost + gs_output-payment_billable_cost.
+*      ENDIF.
+*      READ TABLE lt_rseg2 INTO DATA(ls_rseg2)
+*      WITH KEY belnr = ls_ekbe-belnr gjahr = ls_ekbe-gjahr buzei = lv_buzei.            "Total paid cost
+*      IF sy-subrc IS INITIAL.
+*        gs_output-payment_td_cost = ls_rseg2-wrbtr.
+*        lv_final_td_cost1 = lv_final_td_cost1 + gs_output-payment_td_cost.
+*      ENDIF.
+*    ENDIF.
+*
+*    APPEND gs_output TO gt_output.
+*    CLEAR: gs_output.
+*
+*
+*  ENDLOOP.
+**
+***  LOOP AT lt_final INTO DATA(ls_final) ##INTO_OK.
+**LOOP AT lt_ekpo INTO DATA(ls_ekpo).
+***    gs_output-item_code = ls_final-service.
+***    gs_output-description = ls_final-description.
+***    gs_output-unit = ls_final-unit.
+**     GS_OUTPUT-item_code = LS_EKPO-ebelp.
+**     GS_OUTPUT-description = LS_EKPO-TXZ01.
+**     GS_OUTPUT-UNIT = LS_EKPO-MEINS.
+***    READ TABLE lt_ekpo INTO DATA(ls_ekpo)                                               "Fetch PO item details
+***    WITH KEY ebeln = ls_final-referencepurchaseorder
+***    ebelp = ls_final-referencepurchaseorderitem.
+***    IF sy-subrc IS INITIAL.
+**      gs_output-unit_bid_price = ls_ekpo-netpr.
+**      gs_output-contract_qty = ls_ekpo-menge.
+**      gs_output-contract_cost = ls_ekpo-netwr.
+**      lv_final_contract_cost = lv_final_contract_cost + ls_ekpo-netwr.
+***    ENDIF.
+**
+**    LOOP AT lt_acc_qty INTO ls_acc_qty.             "Sum previous accomplishments
+**      gs_output-accomplished_previous_cost = gs_output-accomplished_previous_cost + ls_acc_qty-netamount.
+**      gs_output-accomplished_previous_qty = gs_output-accomplished_previous_qty + ls_acc_qty-quantity.
+**    ENDLOOP.
+**    lv_final_prev_cost = lv_final_prev_cost + gs_output-accomplished_previous_cost.
+**
+**    gs_output-accomplished_current_qty = ls_final-quantity.
+**    gs_output-accomplished_current_cost = ls_final-netamount.
+**
+**    lv_final_curr_cost = lv_final_curr_cost + gs_output-accomplished_current_cost.
+**
+**    gs_output-accomplished_td_cost = gs_output-accomplished_current_cost + gs_output-accomplished_previous_cost.
+**    gs_output-accomplished_td_qty = gs_output-accomplished_current_qty + gs_output-accomplished_previous_qty.
+**
+**    lv_final_td_cost = lv_final_td_cost + gs_output-accomplished_td_cost.
+**
+**    READ TABLE lt_ekbe INTO DATA(ls_ekbe)
+**    WITH KEY lfbnr = ls_final-serviceentrysheet
+**    lfpos = ls_final-serviceentrysheetitem+1(4).                                        "Get invoice document from SES
+**    IF sy-subrc IS INITIAL.
+**
+**      lv_buzei = ls_ekbe-buzei.
+**      READ TABLE lt_rseg INTO DATA(ls_rseg_a)
+**      WITH KEY belnr = ls_ekbe-belnr gjahr = ls_ekbe-gjahr buzei = lv_buzei.            "Parked+Posted cost
+**      IF sy-subrc IS INITIAL.
+**        gs_output-parked_posted_cost = ls_rseg_a-wrbtr.
+**        lv_final_park_posted = lv_final_park_posted + gs_output-parked_posted_cost.
+**      ENDIF.
+**      READ TABLE lt_rseg1 INTO DATA(ls_rseg1)
+**      WITH KEY belnr = ls_ekbe-belnr gjahr = ls_ekbe-gjahr buzei = lv_buzei.            "Billable cost
+**      IF sy-subrc IS INITIAL.
+**        gs_output-payment_billable_cost = ls_rseg1-wrbtr.
+**        lv_final_bill_cost = lv_final_bill_cost + gs_output-payment_billable_cost.
+**      ENDIF.
+**      READ TABLE lt_rseg2 INTO DATA(ls_rseg2)
+**      WITH KEY belnr = ls_ekbe-belnr gjahr = ls_ekbe-gjahr buzei = lv_buzei.            "Total paid cost
+**      IF sy-subrc IS INITIAL.
+**        gs_output-payment_td_cost = ls_rseg2-wrbtr.
+**        lv_final_td_cost1 = lv_final_td_cost1 + gs_output-payment_td_cost.
+**      ENDIF.
+**    ENDIF.
+**
+**    APPEND gs_output TO gt_output.
+**    CLEAR: gs_output.
+**  ENDLOOP.
+*
+*  gs_header-no_of_entries = lines( gt_output ).
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form F_DISPLAY_ALV
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM f_display_alv .
+  DATA :
+    lo_alv              TYPE REF TO cl_salv_table,
+    lv_message          TYPE REF TO cx_salv_msg,
+    lo_layout_settings  TYPE REF TO cl_salv_layout,
+    lo_layout_key       TYPE salv_s_layout_key,
+    lo_columns          TYPE REF TO cl_salv_columns_table,
+    lo_column           TYPE REF TO cl_salv_column,
+    lv_not_found        TYPE REF TO cx_salv_not_found,
+    lo_functions        TYPE REF TO cl_salv_functions_list,
+    lo_display_settings TYPE REF TO cl_salv_display_settings,
+    lo_header           TYPE REF TO cl_salv_form_layout_grid,
+    lo_header_sp        TYPE REF TO cl_salv_form_layout_grid,
+    lv_data_error       TYPE REF TO cx_salv_data_error,
+    lv_existing         TYPE REF TO cx_salv_existing,
+    lr_aggregations     TYPE REF TO cl_salv_aggregations.
+
+  " Initialize the ALV using the CL_SALV_TABLE=>factory
+  TRY.
+      cl_salv_table=>factory(
+        IMPORTING
+          r_salv_table = lo_alv
+        CHANGING
+          t_table      = gt_output ).
+
+    CATCH cx_salv_msg INTO lv_message.
+      MESSAGE: lv_message TYPE 'E'.
+  ENDTRY.
+
+  " Set the ALV Layouts
+  lo_layout_settings   = lo_alv->get_layout( ).
+  lo_layout_key-report = sy-repid.
+  lo_layout_settings->set_key( lo_layout_key ).
+  lo_layout_settings->set_save_restriction( if_salv_c_layout=>restrict_none ).
+
+  " set the ALV Toolbars
+  lo_functions = lo_alv->get_functions( ).
+  lo_functions->set_all( ).
+
+  " Optimize ALV Columns size
+  lo_columns = lo_alv->get_columns( ).
+  lo_columns->set_optimize( ).
+
+  " Set Zebra Lines display
+  lo_display_settings = lo_alv->get_display_settings( ).
+  lo_display_settings->set_striped_pattern( if_salv_c_bool_sap=>true ).
+
+  " Set ALV Header title
+  lo_display_settings->set_list_header( TEXT-001 ).  "Work Accomplishment Report
+
+  lo_columns = lo_alv->get_columns( ).
+
+  lr_aggregations = lo_alv->get_aggregations( ).
+
+  TRY.
+      CALL METHOD lr_aggregations->add_aggregation
+        EXPORTING
+          columnname  = TEXT-009                             "UNIT_BID_PRICE
+          aggregation = if_salv_c_aggregation=>total.
+    CATCH cx_salv_data_error INTO lv_data_error.
+      MESSAGE lv_data_error TYPE 'E'.
+    CATCH cx_salv_not_found INTO lv_not_found.
+      MESSAGE lv_not_found TYPE 'E'.
+    CATCH cx_salv_existing INTO lv_existing.
+      MESSAGE lv_existing TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      CALL METHOD lr_aggregations->add_aggregation
+        EXPORTING
+          columnname  = TEXT-015                              "CONTRACT_COST
+          aggregation = if_salv_c_aggregation=>total.
+    CATCH cx_salv_data_error INTO lv_data_error.
+      MESSAGE lv_data_error TYPE 'E'.
+    CATCH cx_salv_not_found INTO lv_not_found.
+      MESSAGE lv_not_found TYPE 'E'.
+    CATCH cx_salv_existing INTO lv_existing.
+      MESSAGE lv_existing TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      CALL METHOD lr_aggregations->add_aggregation
+        EXPORTING
+          columnname  = TEXT-022                              "ACCOMPLISHED_PREVIOUS_COST
+          aggregation = if_salv_c_aggregation=>total.
+    CATCH cx_salv_data_error INTO lv_data_error.
+      MESSAGE lv_data_error TYPE 'E'.
+    CATCH cx_salv_not_found INTO lv_not_found.
+      MESSAGE lv_not_found TYPE 'E'.
+    CATCH cx_salv_existing INTO lv_existing.
+      MESSAGE lv_existing TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      CALL METHOD lr_aggregations->add_aggregation
+        EXPORTING
+          columnname  = TEXT-030                              "ACCOMPLISHED_CURRENT_COST
+          aggregation = if_salv_c_aggregation=>total.
+    CATCH cx_salv_data_error INTO lv_data_error.
+      MESSAGE lv_data_error TYPE 'E'.
+    CATCH cx_salv_not_found INTO lv_not_found.
+      MESSAGE lv_not_found TYPE 'E'.
+    CATCH cx_salv_existing INTO lv_existing.
+      MESSAGE lv_existing TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      CALL METHOD lr_aggregations->add_aggregation
+        EXPORTING
+          columnname  = TEXT-034                               "ACCOMPLISHED_TD_COST
+          aggregation = if_salv_c_aggregation=>total.
+    CATCH cx_salv_data_error INTO lv_data_error.
+      MESSAGE lv_data_error TYPE 'E'.
+    CATCH cx_salv_not_found INTO lv_not_found.
+      MESSAGE lv_not_found TYPE 'E'.
+    CATCH cx_salv_existing INTO lv_existing.
+      MESSAGE lv_existing TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      CALL METHOD lr_aggregations->add_aggregation
+        EXPORTING
+          columnname  = TEXT-042                                "PARKED_POSTED_COST
+          aggregation = if_salv_c_aggregation=>total.
+    CATCH cx_salv_data_error INTO lv_data_error.
+      MESSAGE lv_data_error TYPE 'E'.
+    CATCH cx_salv_not_found INTO lv_not_found.
+      MESSAGE lv_not_found TYPE 'E'.
+    CATCH cx_salv_existing INTO lv_existing.
+      MESSAGE lv_existing TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      CALL METHOD lr_aggregations->add_aggregation
+        EXPORTING
+          columnname  = TEXT-045                                "PAYMENT_BILLABLE_COST
+          aggregation = if_salv_c_aggregation=>total.
+    CATCH cx_salv_data_error INTO lv_data_error.
+      MESSAGE lv_data_error TYPE 'E'.
+    CATCH cx_salv_not_found INTO lv_not_found.
+      MESSAGE lv_not_found TYPE 'E'.
+    CATCH cx_salv_existing INTO lv_existing.
+      MESSAGE lv_existing TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      CALL METHOD lr_aggregations->add_aggregation
+        EXPORTING
+          columnname  = TEXT-049                                "PAYMENT_TD_COST
+          aggregation = if_salv_c_aggregation=>total.
+    CATCH cx_salv_data_error INTO lv_data_error.
+      MESSAGE lv_data_error TYPE 'E'.
+    CATCH cx_salv_not_found INTO lv_not_found.
+      MESSAGE lv_not_found TYPE 'E'.
+    CATCH cx_salv_existing INTO lv_existing.
+      MESSAGE lv_existing TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      lo_column = lo_columns->get_column( TEXT-002 ).                 "ITEM_CODE
+      lo_column->set_short_text( TEXT-003 ).
+      lo_column->set_medium_text( TEXT-003 ).
+      lo_column->set_long_text( TEXT-003 ).
+    CATCH cx_salv_not_found INTO lv_not_found.
+      MESSAGE lv_not_found TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      lo_column = lo_columns->get_column( TEXT-004 ).               "DESCRIPTION
+      lo_column->set_short_text( TEXT-005 ).
+      lo_column->set_medium_text( TEXT-006 ).
+      lo_column->set_long_text( TEXT-006 ).
+    CATCH cx_salv_not_found INTO lv_not_found.
+      MESSAGE lv_not_found TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      lo_column = lo_columns->get_column( TEXT-007 ).                      "UNIT
+      lo_column->set_short_text( TEXT-008 ).
+      lo_column->set_medium_text( TEXT-008 ).
+      lo_column->set_long_text( TEXT-008 ).
+    CATCH cx_salv_not_found INTO lv_not_found.
+      MESSAGE lv_not_found TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      lo_column = lo_columns->get_column( TEXT-009 ).            "UNIT_BID_PRICE
+      lo_column->set_zero( abap_false ).
+      lo_column->set_short_text( TEXT-010 ).
+      lo_column->set_medium_text( TEXT-011 ).
+      lo_column->set_long_text( TEXT-011 ).
+    CATCH cx_salv_not_found INTO lv_not_found.
+      MESSAGE lv_not_found TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      lo_column = lo_columns->get_column( TEXT-012 ).              "CONTRACT_QTY
+      lo_column->set_zero( abap_false ).
+      lo_column->set_short_text( TEXT-013 ).
+      lo_column->set_medium_text( TEXT-014 ).
+      lo_column->set_long_text( TEXT-014 ).
+    CATCH cx_salv_not_found INTO lv_not_found.
+      MESSAGE lv_not_found TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      lo_column = lo_columns->get_column( TEXT-015 ).             "CONTRACT_COST
+      lo_column->set_short_text( TEXT-016 ).
+      lo_column->set_medium_text( TEXT-017 ).
+      lo_column->set_long_text( TEXT-017 ).
+    CATCH cx_salv_not_found INTO lv_not_found.
+      MESSAGE lv_not_found TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      lo_column = lo_columns->get_column( TEXT-018 ). "ACCOMPLISHED_PREVIOUS_QTY
+      lo_column->set_zero( abap_false ).
+      lo_column->set_short_text( TEXT-019 ).
+      lo_column->set_medium_text( TEXT-020 ).
+      lo_column->set_long_text( TEXT-021 ).
+    CATCH cx_salv_not_found INTO lv_not_found.
+      MESSAGE lv_not_found TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      lo_column = lo_columns->get_column( TEXT-022 ). "ACCOMPLISHED_PREVIOUS_COST
+      lo_column->set_short_text( TEXT-023 ).
+      lo_column->set_medium_text( TEXT-024 ).
+      lo_column->set_long_text( TEXT-025 ).
+    CATCH cx_salv_not_found INTO lv_not_found.
+      MESSAGE lv_not_found TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      lo_column = lo_columns->get_column( TEXT-026 ).  "ACCOMPLISHED_CURRENT_QTY
+      lo_column->set_zero( abap_false ).
+      lo_column->set_short_text( TEXT-027 ).
+      lo_column->set_medium_text( TEXT-028 ).
+      lo_column->set_long_text( TEXT-029 ).
+    CATCH cx_salv_not_found INTO lv_not_found.
+      MESSAGE lv_not_found TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      lo_column = lo_columns->get_column( TEXT-030 ). "ACCOMPLISHED_CURRENT_COST
+      lo_column->set_short_text( TEXT-031 ).
+      lo_column->set_medium_text( TEXT-032 ).
+      lo_column->set_long_text( TEXT-033 ).
+    CATCH cx_salv_not_found INTO lv_not_found.
+      MESSAGE lv_not_found TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      lo_column = lo_columns->get_column( TEXT-038 ).       "ACCOMPLISHED_TD_QTY
+      lo_column->set_zero( abap_false ).
+      lo_column->set_short_text( TEXT-039 ).
+      lo_column->set_medium_text( TEXT-040 ).
+      lo_column->set_long_text( TEXT-041 ).
+    CATCH cx_salv_not_found INTO lv_not_found.
+      MESSAGE lv_not_found TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      lo_column = lo_columns->get_column( TEXT-034 ).      "ACCOMPLISHED_TD_COST
+      lo_column->set_short_text( TEXT-035 ).
+      lo_column->set_medium_text( TEXT-036 ).
+      lo_column->set_long_text( TEXT-037 ).
+    CATCH cx_salv_not_found INTO lv_not_found.
+      MESSAGE lv_not_found TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      lo_column = lo_columns->get_column( TEXT-042 ).        "PARKED_POSTED_COST
+      lo_column->set_short_text( TEXT-043 ).
+      lo_column->set_medium_text( TEXT-044 ).
+      lo_column->set_long_text( TEXT-044 ).
+    CATCH cx_salv_not_found INTO lv_not_found.
+      MESSAGE lv_not_found TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      lo_column = lo_columns->get_column( TEXT-045 ).     "PAYMENT_BILLABLE_COST
+      lo_column->set_short_text( TEXT-046 ).
+      lo_column->set_medium_text( TEXT-047 ).
+      lo_column->set_long_text( TEXT-048 ).
+    CATCH cx_salv_not_found INTO lv_not_found.
+      MESSAGE lv_not_found TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      lo_column = lo_columns->get_column( TEXT-049 ).           "PAYMENT_TD_COST
+      lo_column->set_short_text( TEXT-036 ).
+      lo_column->set_medium_text( TEXT-050 ).
+      lo_column->set_long_text( TEXT-050 ).
+    CATCH cx_salv_not_found INTO lv_not_found.
+      MESSAGE lv_not_found TYPE 'E'.
+  ENDTRY.
+
+  " Create a header grid with required column and rows
+  "-----------------------------------------------------------"
+  CREATE OBJECT lo_header_sp.
+
+  lo_header = lo_header_sp->create_grid( row = zcl_abap_utility=>zif_s2p_constant~gc_s2p_354-row_15  column = 2  colspan = 5 ).
+
+  lo_header->create_label(  row = 1  column = 3  text = TEXT-051 ).                  "MANILA WATER COMPANY INC.
+  lo_header->create_label(  row = 2  column = 3  text = TEXT-052 ).    "WORK ACCOMPLISHMENT REPORT - CIVIL WORK
+  lo_header->create_label(  row = 3  column = 1  text = TEXT-053 ).                      "From
+  lo_header->create_label(  row = 3  column = 2  text = gs_header-from ).
+  lo_header->create_label(  row = 3  column = 4  text = TEXT-054 ).                         "To
+  lo_header->create_label(  row = 3  column = 5  text = gs_header-to ).
+  lo_header->create_label(  row = 4  column = 1  text = TEXT-055 ).           "Job Order Number
+  lo_header->create_label(  row = 4  column = 2  text = gs_header-job_order_no ).
+  lo_header->create_label(  row = 4  column = 4  text = TEXT-056 ).               "Project Code
+  lo_header->create_label(  row = 4  column = 5  text = gs_header-project_code ).
+  lo_header->create_label(  row = 5  column = 1  text = TEXT-057 ).                "Description
+  lo_header->create_label(  row = 5  column = 2  text = gs_header-description ).
+  lo_header->create_label(  row = 6  column = 1  text = TEXT-058 ).                 "Contractor
+  lo_header->create_label(  row = 6  column = 2  text = gs_header-contractor ).
+  lo_header->create_label(  row = 7  column = 1  text = TEXT-059 ).                    "Purpose
+  lo_header->create_label(  row = 7  column = 2  text = gs_header-purpose ).
+  lo_header->create_label(  row = 8  column = 1  text = TEXT-060 ).                    "WAR No.
+  lo_header->create_label(  row = 8  column = 2  text = gs_header-war_no ).
+  lo_header->create_label(  row = 5  column = 4  text = TEXT-061 ).              "No of Entries
+  lo_header->create_label(  row = 5  column = 5  text = gs_header-no_of_entries ).
+  lo_header->create_label(  row = 9  column = 1  text = TEXT-062 ).          "Contract Duration
+  lo_header->create_label(  row = 9  column = 2  text = gs_header-contract_duration ).
+  lo_header->create_label(  row = 6  column = 4  text = TEXT-063 ).        "Contract Start Date
+  lo_header->create_label(  row = 6  column = 5  text = gs_header-start_date ).
+  lo_header->create_label(  row = 7  column = 4  text = TEXT-064 ).       "Contract Expiry Date
+  lo_header->create_label(  row = 7  column = 5  text = gs_header-expiry_date ).
+  lo_header->create_label(  row = 8  column = 4  text = TEXT-065 ).    "Approved Time Extension
+  lo_header->create_label(  row = 8  column = 5  text = gs_header-approved_time_extension ).
+  lo_header->create_label(  row = 9  column = 4  text = TEXT-066 ).                "Finish Date
+  lo_header->create_label(  row = 9  column = 5  text = gs_header-finish_date ).
+  lo_alv->set_top_of_list_height( zcl_abap_utility=>zif_s2p_constant~gc_s2p_354-height_37 ).
+  lo_alv->set_top_of_list( lo_header ).
+
+  " Display the ALV in ABAP in the whole main screen
+  lo_alv->display( ).
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form f_dropdown
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM f_dropdown .
+  DATA: lt_values TYPE vrm_values,
+        ls_value  TYPE vrm_value.
+
+  CLEAR lt_values.
+
+  ls_value-key = TEXT-068.                          "Progress Billing
+  ls_value-text = TEXT-068.
+  APPEND ls_value TO lt_values.
+  CLEAR ls_value.
+
+  ls_value-key = TEXT-069.                             "First Billing
+  ls_value-text = TEXT-069.
+  APPEND ls_value TO lt_values.
+  CLEAR ls_value.
+
+  ls_value-key = TEXT-070.                             "Final Billing
+  ls_value-text = TEXT-070.
+  APPEND ls_value TO lt_values.
+  CLEAR ls_value.
+
+  ls_value-key = TEXT-071.                          "One time Billing
+  ls_value-text = TEXT-071.
+  APPEND ls_value TO lt_values.
+  CLEAR ls_value.
+
+  CALL FUNCTION 'VRM_SET_VALUES'
+    EXPORTING
+      id     = zcl_abap_utility=>zif_s2p_constant~gc_s2p_354-id "'P_PURP'
+      values = lt_values.
+ENDFORM.

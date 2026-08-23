@@ -1,0 +1,1022 @@
+@AbapCatalog.sqlViewName: 'YYICAGENJES2'
+
+@AbapCatalog.compiler.compareFilter:true
+
+@AbapCatalog.viewEnhancementCategory: [#PROJECTION_LIST,#UNION]
+
+
+@EndUserText.label: 'Match Universal Journal Entry Line Items'
+
+
+@ClientHandling.type: #CLIENT_DEPENDENT
+
+
+@ClientHandling.algorithm: #SESSION_VARIABLE
+
+
+@ObjectModel.usageType.serviceQuality: #X
+
+
+@ObjectModel.usageType.dataClass: #MIXED
+
+
+@ObjectModel.usageType.sizeCategory: #XL
+
+
+@OData.publish: true
+
+
+define view YYICA_GENJOURNALENTRIES_2
+
+
+  as select from acdoca          as a
+
+
+    inner join   t001            as b on  a.rclnt  = b.mandt
+
+
+                                      and a.rbukrs = b.bukrs
+
+
+    inner join   finsc_fisc_date as c on a.budat = c.calendar_date
+
+
+    inner join   bkpf              as d on  a.rclnt  = d.mandt
+
+
+                                       and a.rbukrs = d.bukrs
+
+
+                                       and a.belnr  = d.belnr
+
+
+                                       and a.gjahr  = d.gjahr
+
+
+                                  
+
+
+    left outer to one join  ifiglaccounthn as e on  e.glaccount = racct
+
+
+                                       and e.glaccounthierarchy = 'H109/GAIL/GAIL_ICMR'
+
+
+{
+
+
+  rclnt,
+
+
+  cast ('' as ica_method_id)                                      as method_id,
+
+
+  cast ('0000000000' as ica_docnr)                                as DOCNR,
+
+
+  cast (0 as ica_docln)                                           as DOCLN,
+
+
+  cast ('000000000000' as ica_grref)                              as GRREF,
+
+
+  cast ('00' as ica_pstat)                                        as PSTAT,
+
+
+  cast ('' as ica_cstat)                                          as CSTAT,
+
+
+  cast ('00000000' as ica_due_date)                               as DUE_DATE,
+
+
+  --0 N/A， 1   Open，2   Parked，3   Cleared
+
+
+  case when xopvw = 'X'
+
+
+       then ( case when augbl <> '' then cast ('3' as ica_clearing_status )
+
+
+                                    else cast ('1' as ica_clearing_status )
+
+
+             end  )
+
+
+     else cast ('0' as ica_clearing_status )
+
+
+     end                                                          as CLEARING_STATUS,
+
+
+  augdt,
+
+
+  augbl,
+
+
+  auggj,
+
+
+  a.rldnr,
+
+
+  rbukrs,
+
+
+  //b.rcomp,
+
+
+  a.blart,
+
+
+  a.belnr                                                           as ref_belnr,
+
+
+  docln                                                           as ref_docln,
+
+
+  docnr_ld,
+
+
+  rrcty,
+
+
+  a.xreversing,
+
+
+  a.xreversed,
+
+
+  xtruerev,
+
+
+  a.aworg_rev,
+
+
+  a.awref_rev,
+
+
+  aworg,
+
+
+  awref,
+
+
+  c.fiscal_year_variant                                           as periv,
+
+
+  a.gjahr,
+
+
+  c.fiscal_period                                                 as poper,
+
+
+  cast (c.fiscal_year_period as fis_jahrper_conv preserving type) as fiscyearper,
+
+
+  c.fiscal_year                                                   as ryear,
+
+
+  a.budat,
+
+
+  a.bldat,
+
+
+  a.ktopl,
+
+
+  racct,
+
+
+  glaccount_type,
+
+
+  kokrs,
+
+
+  rcntr,
+
+
+  prctr,
+
+
+  segment,
+
+
+  scntr,
+
+
+  pprctr,
+
+
+  rassc,
+
+
+  d.xblnr,
+
+
+  d.awkey,
+
+
+  d.bvorg,
+
+
+  coalesce(e.parentnode, '1' ) as parentnode , //e.parentnode,
+
+
+  psegment,
+
+
+  @Semantics.currencyCode
+
+
+  rwcur,
+
+
+  @Semantics.currencyCode
+
+
+  rhcur,
+
+
+  @Semantics.currencyCode
+
+
+  rkcur,
+
+
+  @Semantics.unitOfMeasure
+
+
+  runit,
+
+
+  @Semantics.amount.currencyCode: 'RWCUR'
+
+
+  wsl,
+
+
+  @Semantics.amount.currencyCode: 'RHCUR'
+
+
+  hsl,
+
+
+  @Semantics.amount.currencyCode: 'RKCUR'
+
+
+  ksl,
+
+
+  @Semantics.quantity.unitOfMeasure: 'RUNIT'
+
+
+  msl,
+
+
+  drcrk,
+
+
+  bschl,
+
+
+  rmvct,
+
+
+  bttype,
+
+
+  zuonr,
+
+
+  a.bstat,
+
+
+  linetype,
+
+
+  ktosl,
+
+
+  slalittype,
+
+
+  a.usnam,
+
+
+  timestamp,
+
+
+  eprctr,
+
+
+  rebzg,
+
+
+  rebzj,
+
+
+  rebzz,
+
+
+  cast (rbest as abap.numc( 3 ))                                  as rbest,
+
+
+  ebeln,
+
+
+  ebelp,
+
+
+  sgtxt,
+
+
+  kdauf,
+
+
+  kdpos,
+
+
+  matnr,
+
+
+  werks,
+
+
+  lifnr,
+
+
+  kunnr,
+
+
+  koart,
+
+
+  umskz,
+
+
+  a.mwskz,
+
+
+  a.xopvw,
+
+
+  afabe,
+
+
+  anln1,
+
+
+  anln2,
+
+
+  anbwa,
+
+
+  anlkl,
+
+
+  panl1,
+
+
+  panl2,
+
+
+  fkart,
+
+
+  vkorg,
+
+
+  vtweg,
+
+
+  spart,
+
+
+  matnr_copa,
+
+
+  matkl,
+
+
+  kdgrp,
+
+
+  a.land1,
+
+
+  brsch,
+
+
+  bzirk,
+
+
+  kunre,
+
+
+  kunwe,
+
+
+  konzs,
+
+
+  gkont,
+
+
+  gkoar,
+
+
+  @Semantics.currencyCode
+
+
+  rfccur,
+
+
+  @Semantics.amount.currencyCode: 'RFCCUR'
+
+
+  fcsl,
+
+
+  @Semantics.currencyCode
+
+
+  rtcur,
+
+
+  @Semantics.amount.currencyCode: 'RTCUR'
+
+
+  tsl,
+
+
+  buzei,  
+
+
+     case when ( ( d.bukrs between '1000' and '8000'  ) and 
+
+
+                 ( rassc not between '001000' and '008000'  ) and
+
+
+                   rassc is not initial  )
+
+
+    //case when ( d.bukrs = '2000'  and rassc = '7300' ) 
+
+
+    then  '001000'
+
+
+    else b.rcomp
+
+
+    end as rcomp,
+
+
+    case when ( ( d.bukrs between '1000' and '8000'  ) and 
+
+
+                 ( rassc between '001000' and '008000'  ) and
+
+
+                   rassc is not initial  )
+
+
+    then 'Y'
+
+
+    else 'N'
+
+
+    end as gail,
+
+
+    a.rbusa as rbusa 
+
+
+}
+
+
+where
+
+
+      a.bstat <> 'D'
+
+
+  and a.bstat <> 'M'
+
+
+  and poper  > '000'
+
+
+  and d.tcode <> 'FB05'
+
+
+  and d.tcode <> 'YRFC019'                     
+
+
+  
+
+
+// and e.glaccounthierarchy = 'H109/GAIL/GAIL_ICMR'
+
+
+union all
+
+
+ select from acdoca          as a
+
+
+    inner join   t001            as b on  a.rclnt  = b.mandt
+
+
+                                      and a.rbukrs = b.bukrs
+
+
+    left outer join t009         as c on  a.rclnt  = c.mandt
+
+
+    inner join bkpf              as d on  a.rclnt  = d.mandt
+
+
+                                      and a.rbukrs = d.bukrs
+
+
+                                      and a.belnr  = d.belnr
+
+
+                                      and a.gjahr  = d.gjahr
+
+
+  left outer join ifiglaccounthn as e on e.glaccount = racct  
+
+
+                                      and e.glaccounthierarchy = 'H109/GAIL/GAIL_ICMR'
+
+
+{
+
+
+  rclnt,
+
+
+  cast ('' as ica_method_id)                                      as method_id,
+
+
+  cast ('0000000000' as ica_docnr)                                as DOCNR,
+
+
+  cast (0 as ica_docln)                                           as DOCLN,
+
+
+  cast ('000000000000' as ica_grref)                              as GRREF,
+
+
+  cast ('00' as ica_pstat)                                        as PSTAT,
+
+
+  cast ('' as ica_cstat)                                          as CSTAT,
+
+
+  cast ('00000000' as ica_due_date)                               as DUE_DATE,
+
+
+  --0 N/A， 1   Open，2   Parked，3   Cleared
+
+
+  case when xopvw = 'X'
+
+
+       then ( case when augbl <> '' then cast ('3' as ica_clearing_status )
+
+
+                                    else cast ('1' as ica_clearing_status )
+
+
+             end  )
+
+
+     else cast ('0' as ica_clearing_status )
+
+
+     end                                                          as CLEARING_STATUS,
+
+
+  augdt,
+
+
+  augbl,
+
+
+  auggj,
+
+
+  a.rldnr,
+
+
+  rbukrs,
+
+
+  //b.rcomp,
+
+
+  a.blart,
+
+
+  a.belnr                                                           as ref_belnr,
+
+
+  docln                                                           as ref_docln,
+
+
+  docnr_ld,
+
+
+  rrcty,
+
+
+  a.xreversing,
+
+
+  a.xreversed,
+
+
+  xtruerev,
+
+
+  a.aworg_rev,
+
+
+  a.awref_rev,
+
+
+  aworg,
+
+
+  awref,
+
+
+  c.periv                                                         as periv,
+
+
+  a.gjahr,
+
+
+  poper,
+
+
+  fiscyearper,
+
+
+  ryear,
+
+
+  a.budat,
+
+
+  a.bldat,
+
+
+  a.ktopl,
+
+
+  racct,
+
+
+  glaccount_type,
+
+
+  kokrs,
+
+
+  rcntr,
+
+
+  prctr,
+
+
+  segment,
+
+
+  scntr,
+
+
+  pprctr,
+
+
+  rassc,
+
+
+  d.xblnr,
+
+
+  d.awkey,
+
+
+  d.bvorg,
+
+
+  coalesce(e.parentnode, '1' ) as parentnode , //e.parentnode,
+
+
+  //zrcomp,         
+
+
+  psegment,
+
+
+  @Semantics.currencyCode
+
+
+  rwcur,
+
+
+  @Semantics.currencyCode
+
+
+  rhcur,    
+
+
+  @Semantics.currencyCode
+
+
+  rkcur,
+
+
+  @Semantics.unitOfMeasure
+
+
+  runit,
+
+
+  @Semantics.amount.currencyCode: 'RWCUR'
+
+
+  wsl,
+
+
+  @Semantics.amount.currencyCode: 'RHCUR'
+
+
+  hsl,
+
+
+  @Semantics.amount.currencyCode: 'RKCUR'
+
+
+  ksl,
+
+
+  @Semantics.quantity.unitOfMeasure: 'RUNIT'
+
+
+  msl,
+
+
+  drcrk,
+
+
+  bschl,
+
+
+  rmvct,
+
+
+  bttype,
+
+
+  zuonr,
+
+
+  a.bstat,
+
+
+  linetype,
+
+
+  ktosl,
+
+
+  slalittype,
+
+
+  a.usnam,
+
+
+  timestamp,
+
+
+  eprctr,
+
+
+  rebzg,
+
+
+  rebzj,
+
+
+  rebzz,
+
+
+  cast (rbest as abap.numc( 3 ))                                  as rbest,
+
+
+  ebeln,
+
+
+  ebelp,
+
+
+  sgtxt,
+
+
+  kdauf,
+
+
+  kdpos,
+
+
+  matnr,
+
+
+  werks,
+
+
+  lifnr,
+
+
+  kunnr,
+
+
+  koart,
+
+
+  umskz,
+
+
+  a.mwskz,
+
+
+  a.xopvw,
+
+
+  afabe,
+
+
+  anln1,
+
+
+  anln2,
+
+
+  anbwa,
+
+
+  anlkl,
+
+
+  panl1,
+
+
+  panl2,
+
+
+  fkart,
+
+
+  vkorg,
+
+
+  vtweg,
+
+
+  spart,
+
+
+  matnr_copa,
+
+
+  matkl,
+
+
+  kdgrp,
+
+
+  a.land1,
+
+
+  brsch,
+
+
+  bzirk,
+
+
+  kunre,
+
+
+  kunwe,
+
+
+  konzs,
+
+
+  gkont,
+
+
+  gkoar,
+
+
+  @Semantics.currencyCode
+
+
+  rfccur,
+
+
+  @Semantics.amount.currencyCode: 'RFCCUR'
+
+
+  fcsl,
+
+
+  @Semantics.currencyCode
+
+
+  rtcur,
+
+
+  @Semantics.amount.currencyCode: 'RTCUR'
+
+
+  tsl,
+
+
+  buzei ,
+
+
+     case when ( ( d.bukrs between '1000' and '8000'  ) and 
+
+
+                 ( rassc not between '001000' and '008000'  ) and
+
+
+                   rassc is not initial  )
+
+
+    then  '001000'
+
+
+    else b.rcomp
+
+
+    end   as rcomp,
+
+
+    case when ( ( d.bukrs between '1000' and '8000'  ) and 
+
+
+                 ( rassc between '001000' and '008000'  ) and
+
+
+                   rassc is not initial  )
+
+
+    then  'Y'
+
+
+    else 'N'
+
+
+    end as gail,
+
+
+    a.rbusa as rbusa
+
+
+}
+
+
+where
+
+
+      a.bstat <> 'D'
+
+
+  and a.bstat <> 'M'
+
+
+  and poper = '000'
+
+
+  and d.tcode <> 'FB05'
+
+
+  and d.tcode <> 'YRFC019'
+
+
+ // and e.glaccounthierarchy = 'H109/GAIL/GAIL_ICMR'

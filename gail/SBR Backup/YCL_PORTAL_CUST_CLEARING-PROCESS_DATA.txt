@@ -1,0 +1,393 @@
+  METHOD PROCESS_DATA.
+*&---------------------------------------------------------------------*
+*& Class: YCL_PORTAL_CUST_CLEARING                                     *
+*& Method: PROCESS_DATA                                                *
+*&---------------------------------------------------------------------*
+*& Module: Finance(FI)                                                 *
+*& Developer: Rohtash                                                  *
+*& Functional: Manoj Narendra Rane                                     *
+*& Creation Date: 17/10/2024                                           *
+*&---------------------------------------------------------------------*
+*------------------------Technical Changes-----------------------------*
+*----------------------------------------------------------------------*
+* Date               Changed By          Charm No.          Transport  *
+*----------------------------------------------------------------------*
+* 17/10/2024         Rohtash             2000000859          DVRK9A1AP8 *
+*----------------------------------------------------------------------*
+
+    DATA: LS_FTCLEAR TYPE FTCLEAR,
+          LT_FTCLEAR TYPE STANDARD TABLE OF FTCLEAR.
+
+    DATA: LS_FTPOST TYPE TY_FTPOST.
+
+    DATA: LR_REQ_NO  TYPE RANGE OF YRFA_CUST_CLEAR-REQ_NO.
+    DATA: LR_REQ_NO1 TYPE RANGE OF YRFA_CUST_CLEAR-REQ_NO.
+
+    DATA: LI_TDS      TYPE TABLE OF TY_TDS,
+          LI_BSEG_INV TYPE TABLE OF TY_BSEG,
+          LI_BSEG_PAY TYPE TABLE OF TY_BSEG.
+
+
+
+    CLEAR LR_REQ_NO.
+    DATA: t_ftpost LIKE gi_ftpost.
+    IF GI_CUST_CLR IS NOT INITIAL.
+
+      ME->ROUND_OFF_VALIDATION( ).
+
+*      me->spl_gl_validation( ).
+
+      DATA(GI_CUST_CLR_TMP) = GI_CUST_CLR.
+
+      SELECT A~BUKRS, A~BELNR, A~GJAHR, A~BLART, A~BUDAT, A~XBLNR, A~AWKEY, B~GSBER
+          FROM BKPF AS A
+          INNER JOIN BSID AS B
+          ON A~BELNR = B~BELNR
+          AND A~BUKRS = B~BUKRS
+          AND A~GJAHR = B~GJAHR
+          INTO TABLE @LI_TDS
+          FOR ALL ENTRIES IN @GI_CUST_CLR_TMP
+          WHERE A~BUKRS EQ @GI_CUST_CLR_TMP-INV_CC
+            AND A~BELNR EQ @GI_CUST_CLR_TMP-INV_DOC
+            AND A~GJAHR EQ @GI_CUST_CLR_TMP-INV_YEAR
+            AND B~BUZEI EQ @GI_CUST_CLR_TMP-INV_ITEM.
+      IF SY-SUBRC EQ 0.
+        "Do Nothing
+      ENDIF.
+"Begain of changes by Sayyad Sarfarz on 17.03.2025 16:39:16
+      SELECT BUKRS, BELNR, GJAHR, BUZEI, FILKD, UMSKZ "#EC CI_NOORDER
+        FROM BSEG "#EC CI_DB_OPERATION_OK[2431747]
+        INTO TABLE @LI_BSEG_INV
+        FOR ALL ENTRIES IN @GI_CUST_CLR_TMP
+          WHERE BUKRS EQ @GI_CUST_CLR_TMP-INV_CC
+            AND BELNR EQ @GI_CUST_CLR_TMP-INV_DOC
+            AND GJAHR EQ @GI_CUST_CLR_TMP-INV_YEAR
+            AND BUZEI EQ @GI_CUST_CLR_TMP-INV_ITEM.
+      IF SY-SUBRC EQ 0.
+        "Do Nothing
+      ENDIF.
+*      SELECT BUKRS, BELNR, GJAHR, BUZEI, FILKD, UMSKZ "#EC CI_NOORDER
+*        FROM BSEG
+*        INTO TABLE @LI_BSEG_INV
+*        FOR ALL ENTRIES IN @GI_CUST_CLR_TMP
+*          WHERE BUKRS EQ @GI_CUST_CLR_TMP-INV_CC
+*            AND BELNR EQ @GI_CUST_CLR_TMP-INV_DOC
+*            AND GJAHR EQ @GI_CUST_CLR_TMP-INV_YEAR
+*            AND BUZEI EQ @GI_CUST_CLR_TMP-INV_ITEM.
+*      IF SY-SUBRC EQ 0.
+*        "Do Nothing
+*      ENDIF.
+
+
+      SELECT BUKRS, BELNR, GJAHR, BUZEI, FILKD, UMSKZ "#EC CI_NOORDER
+        FROM BSEG "#EC CI_DB_OPERATION_OK[2431747]
+        INTO TABLE @LI_BSEG_PAY
+        FOR ALL ENTRIES IN @GI_CUST_CLR_TMP
+          WHERE BUKRS EQ @GI_CUST_CLR_TMP-PAY_CC
+            AND BELNR EQ @GI_CUST_CLR_TMP-PAY_DOC
+            AND GJAHR EQ @GI_CUST_CLR_TMP-PAY_YEAR
+            AND BUZEI EQ @GI_CUST_CLR_TMP-PAY_ITEM.
+      IF SY-SUBRC EQ 0.
+        "Do Nothing
+      ENDIF.
+*      SELECT BUKRS, BELNR, GJAHR, BUZEI, FILKD, UMSKZ "#EC CI_NOORDER
+*        FROM BSEG
+*        INTO TABLE @LI_BSEG_PAY
+*        FOR ALL ENTRIES IN @GI_CUST_CLR_TMP
+*          WHERE BUKRS EQ @GI_CUST_CLR_TMP-PAY_CC
+*            AND BELNR EQ @GI_CUST_CLR_TMP-PAY_DOC
+*            AND GJAHR EQ @GI_CUST_CLR_TMP-PAY_YEAR
+*            AND BUZEI EQ @GI_CUST_CLR_TMP-PAY_ITEM.
+*      IF SY-SUBRC EQ 0.
+*        "Do Nothing
+*      ENDIF.
+
+"End of changes by Sayyad Sarfarz on 17.03.2025 16:39:16
+
+      ME->CREATE_GROUPING( EXPORTING LI_TDS = LI_TDS ).
+
+
+      LOOP AT GI_CUST_CLR ASSIGNING FIELD-SYMBOL(<LFS_DATA>).
+
+        DATA(LW_BSEG_INV) = VALUE TY_BSEG( LI_BSEG_INV[ BUKRS = <LFS_DATA>-INV_CC
+                                                        BELNR = <LFS_DATA>-INV_DOC
+                                                        GJAHR = <LFS_DATA>-INV_YEAR
+                                                        BUZEI = <LFS_DATA>-INV_ITEM ] OPTIONAL ).
+
+        DATA(LW_BSEG_PAY) = VALUE TY_BSEG( LI_BSEG_PAY[ BUKRS = <LFS_DATA>-PAY_CC
+                                                        BELNR = <LFS_DATA>-PAY_DOC
+                                                        GJAHR = <LFS_DATA>-PAY_YEAR
+                                                        BUZEI = <LFS_DATA>-PAY_ITEM ] OPTIONAL ).
+
+        IF <LFS_DATA>-TDS_AMOUNT IS NOT INITIAL AND <LFS_DATA>-POST_CLR_STATUS IS INITIAL.
+
+          ""Post TDS document
+          ME->POST_TDS( EXPORTING LS_TDS = VALUE #( LI_TDS[ BUKRS = <LFS_DATA>-INV_CC
+                                                            BELNR = <LFS_DATA>-INV_DOC
+                                                            GJAHR = <LFS_DATA>-INV_YEAR ] OPTIONAL )
+                                  LS_BSEG = LW_BSEG_INV
+                        CHANGING CHS_POST_DATA = <LFS_DATA> ).
+
+          ""Update TDS fields in table 'YRFA_CUST_CLEAR'
+          ME->UPDATE_TDS_DETAILS( CHANGING CHS_UPD_DATA = <LFS_DATA> ).
+
+          IF <LFS_DATA>-MESSAGE IS NOT INITIAL.
+            EXIT.
+          ENDIF.
+
+        ENDIF.
+
+        IF <LFS_DATA>-SHORT_PAY IS NOT INITIAL.                                          "Short_Pay
+          GI_FTPOST = VALUE #( BASE GI_FTPOST ( REQ_NO   = <LFS_DATA>-REQ_NO
+                                                TYPE     = 'SHORT_PAY'
+                                                REF_CC   = <LFS_DATA>-INV_CC
+                                                REF_DOC  = <LFS_DATA>-INV_DOC
+                                                REF_YEAR = <LFS_DATA>-INV_YEAR
+                                                REF_ITEM = <LFS_DATA>-INV_ITEM
+                                                KUNNR    = <LFS_DATA>-INV_CUST
+                                                WRBTR    = <LFS_DATA>-SHORT_PAY ) ).
+        ENDIF. "IF <lfs_data>-short_pay IS NOT INITIAL.
+
+        IF <LFS_DATA>-ROUND_OFF IS NOT INITIAL.                                          "Round_off
+          GI_FTPOST = VALUE #( BASE GI_FTPOST ( REQ_NO   = <LFS_DATA>-REQ_NO
+                                                TYPE     = 'ROUND_OFF'
+                                                REF_CC   = <LFS_DATA>-INV_CC
+                                                REF_DOC  = <LFS_DATA>-INV_DOC
+                                                REF_YEAR = <LFS_DATA>-INV_YEAR
+                                                REF_ITEM = <LFS_DATA>-INV_ITEM
+                                                KUNNR    = <LFS_DATA>-INV_CUST
+                                                WRBTR    = <LFS_DATA>-ROUND_OFF ) ).
+
+        ENDIF. "IF <lfs_data>-round_off IS NOT INITIAL.
+
+        GI_FTPOST = VALUE #( BASE GI_FTPOST ( REQ_NO   = <LFS_DATA>-REQ_NO         "Inv_bal
+                                              TYPE     = 'INV_BAL'
+                                              REF_CC   = <LFS_DATA>-INV_CC
+                                              REF_DOC  = <LFS_DATA>-INV_DOC
+                                              REF_YEAR = <LFS_DATA>-INV_YEAR
+                                              REF_ITEM = <LFS_DATA>-INV_ITEM
+                                              KUNNR    = <LFS_DATA>-INV_CUST
+                                              WRBTR    = <LFS_DATA>-INV_BAL ) ).
+
+        GI_FTPOST = VALUE #( BASE GI_FTPOST ( REQ_NO   = <LFS_DATA>-REQ_NO          "Pay_bal
+                                              TYPE     = 'PAY_BAL'
+                                              REF_CC   = <LFS_DATA>-PAY_CC
+                                              REF_DOC  = <LFS_DATA>-PAY_DOC
+                                              REF_YEAR = <LFS_DATA>-PAY_YEAR
+                                              REF_ITEM = <LFS_DATA>-PAY_ITEM
+                                              KUNNR    = <LFS_DATA>-PAY_CUST
+                                              WRBTR    = <LFS_DATA>-PAY_BAL ) ).
+
+*        IF <LFS_DATA>-INV_SPL_GL EQ '3'.
+*        IF <LFS_DATA>-INV_SPL_GL in ('3,5,X,Z').
+        IF <LFS_DATA>-INV_SPL_GL EQ  '3' or <LFS_DATA>-INV_SPL_GL EQ '5' or <LFS_DATA>-INV_SPL_GL EQ 'Z' or <LFS_DATA>-INV_SPL_GL EQ 'X' . " """added by mobin/anshul 24.07.2025
+          GI_FTPOST = VALUE #( BASE GI_FTPOST ( REQ_NO   = <LFS_DATA>-REQ_NO         "Reserve
+                                                TYPE     = 'RESERVE'
+                                                REF_CC   = <LFS_DATA>-INV_CC
+                                                REF_DOC  = <LFS_DATA>-INV_DOC
+                                                REF_YEAR = <LFS_DATA>-INV_YEAR
+                                                REF_ITEM = <LFS_DATA>-INV_ITEM
+                                                KUNNR    = <LFS_DATA>-INV_CUST
+                                                wrbtr    = <lfs_data>-clear_amount + <lfs_data>-tds_amount ) )."+ <LFS_DATA>-SHORT_PAY
+        ENDIF.
+
+        SORT LR_REQ_NO1 BY LOW DESCENDING.
+
+        ""Prepare 'FTCLEAR' table for BAPI  'POSTING_INTERFACE_CLEARING'
+
+        "" For 'FTCLEAR' if any inv_doc document is already cleared then replace inv_doc with clear_doc
+*         IF <LFS_DATA>-INV_DOC IS NOT INITIAL AND <LFS_DATA>-INV_SPL_GL NE '3'.                                "Inv_doc
+        IF <LFS_DATA>-INV_DOC IS NOT INITIAL AND  ( <LFS_DATA>-INV_SPL_GL NE '3' AND  <LFS_DATA>-INV_SPL_GL NE '5' AND <LFS_DATA>-INV_SPL_GL NE 'Z' AND <LFS_DATA>-INV_SPL_GL NE 'X'). """added by mobin/anshul 24.07.2025                             "Inv_doc
+          LS_FTCLEAR-SELVON = |{ <LFS_DATA>-INV_DOC ALPHA = IN }{ <LFS_DATA>-INV_YEAR }{ <LFS_DATA>-INV_ITEM ALPHA = IN }|.
+          LS_FTCLEAR-XNOPS  = ABAP_TRUE.
+*        LS_FTCLEAR-AGUMS  = COND #( WHEN LW_BSEG_INV-UMSKZ IS NOT INITIAL THEN LW_BSEG_INV-UMSKZ ).
+          IF LW_BSEG_INV-UMSKZ IS NOT INITIAL.
+            LS_FTCLEAR-AGUMS = LW_BSEG_INV-UMSKZ.
+          ENDIF.
+          LOOP AT GI_CUST_CLR INTO DATA(LS_CUST_CLR) WHERE INV_DOC  = <LFS_DATA>-INV_DOC
+                                                       AND INV_CC   = <LFS_DATA>-INV_CC
+                                                       AND INV_YEAR = <LFS_DATA>-INV_YEAR
+                                                       AND INV_ITEM = <LFS_DATA>-INV_ITEM
+                                                       AND INV_BAL_DOC IS NOT INITIAL
+                                                       AND REQ_NO   IN LR_REQ_NO1 .
+            LS_FTCLEAR-SELVON = LS_CUST_CLR-INV_BAL_DOC.
+            CLEAR LS_FTCLEAR-AGUMS.
+            EXIT.
+          ENDLOOP.
+
+          LS_FTCLEAR-AGKOA  = 'D'.
+          LS_FTCLEAR-AGKON  = <LFS_DATA>-INV_CUST.
+          LS_FTCLEAR-AGBUK  = <LFS_DATA>-INV_CC.
+
+          LS_FTCLEAR-SELFD  = 'BELNR'.
+          APPEND LS_FTCLEAR TO LT_FTCLEAR.
+          CLEAR LS_FTCLEAR.
+        ENDIF.  "IF <lfs_data>-inv_doc IS NOT INITIAL.
+
+        "" For 'FTCLEAR' if any pay_doc document is already cleared then replace inv_doc with clear_doc
+        IF <LFS_DATA>-PAY_DOC IS NOT INITIAL.                           "Pay_doc
+          LS_FTCLEAR-SELVON = |{ <LFS_DATA>-PAY_DOC ALPHA = IN }{ <LFS_DATA>-PAY_YEAR }{ <LFS_DATA>-PAY_ITEM ALPHA = IN }|.
+          LS_FTCLEAR-XNOPS  = ABAP_TRUE.
+*        LS_FTCLEAR-AGUMS  = COND #( WHEN LW_BSEG_PAY-UMSKZ IS NOT INITIAL THEN LW_BSEG_PAY-UMSKZ ).
+          IF LW_BSEG_PAY-UMSKZ IS NOT INITIAL.
+            LS_FTCLEAR-AGUMS = LW_BSEG_PAY-UMSKZ.
+          ENDIF.
+          LOOP AT GI_CUST_CLR INTO DATA(LS_CUST_CLR1) WHERE PAY_DOC  = <LFS_DATA>-PAY_DOC
+                                                        AND PAY_CC   = <LFS_DATA>-PAY_CC
+                                                        AND PAY_YEAR = <LFS_DATA>-PAY_YEAR
+                                                        AND PAY_ITEM = <LFS_DATA>-PAY_ITEM
+                                                        AND PAY_BAL_DOC IS NOT INITIAL
+                                                        AND REQ_NO   IN LR_REQ_NO1 .
+            LS_FTCLEAR-SELVON = LS_CUST_CLR1-PAY_BAL_DOC.
+            CLEAR LS_FTCLEAR-AGUMS.
+            EXIT.
+          ENDLOOP.
+
+          LS_FTCLEAR-AGKOA  = 'D'.
+          LS_FTCLEAR-AGKON  = <LFS_DATA>-PAY_CUST.
+          LS_FTCLEAR-AGBUK  = <LFS_DATA>-PAY_CC.
+          LS_FTCLEAR-XNOPS  = 'X'.
+          LS_FTCLEAR-SELFD  = 'BELNR'.
+          APPEND LS_FTCLEAR TO LT_FTCLEAR.
+          CLEAR LS_FTCLEAR.
+        ENDIF.  "IF <lfs_data>-pay_doc IS NOT INITIAL.
+
+        IF <LFS_DATA>-TDS_DOC IS NOT INITIAL.                              "TDS_doc
+          LS_FTCLEAR-AGKOA  = 'D'.
+          LS_FTCLEAR-AGKON  = <LFS_DATA>-INV_CUST.
+          LS_FTCLEAR-AGBUK  = <LFS_DATA>-TDS_CC.
+          LS_FTCLEAR-XNOPS  = 'X'.
+          LS_FTCLEAR-SELFD  = 'BELNR'.
+          LS_FTCLEAR-SELVON = <LFS_DATA>-TDS_DOC.
+          APPEND LS_FTCLEAR TO LT_FTCLEAR.
+          CLEAR LS_FTCLEAR.
+        ENDIF.
+
+        IF <LFS_DATA>-INV_BAL_DOC IS NOT INITIAL.                          "Inv_bal_doc
+          LS_FTCLEAR-AGKOA  = 'D'.
+          LS_FTCLEAR-AGKON  = <LFS_DATA>-INV_CUST.
+          LS_FTCLEAR-AGBUK  = <LFS_DATA>-INV_BAL_CC.
+          LS_FTCLEAR-XNOPS  = 'X'.
+          LS_FTCLEAR-SELFD  = 'BELNR'.
+          LS_FTCLEAR-SELVON = <LFS_DATA>-INV_BAL_DOC.
+          APPEND LS_FTCLEAR TO LT_FTCLEAR.
+          CLEAR LS_FTCLEAR.
+        ENDIF.
+
+        IF <LFS_DATA>-PAY_BAL_DOC IS NOT INITIAL.                          "Inv_pay_doc
+          LS_FTCLEAR-AGKOA  = 'D'.
+          LS_FTCLEAR-AGKON  = <LFS_DATA>-PAY_CUST.
+          LS_FTCLEAR-AGBUK  = <LFS_DATA>-PAY_BAL_CC.
+          LS_FTCLEAR-XNOPS  = 'X'.
+          LS_FTCLEAR-SELFD  = 'BELNR'.
+          LS_FTCLEAR-SELVON = <LFS_DATA>-PAY_BAL_DOC.
+          APPEND LS_FTCLEAR TO LT_FTCLEAR.
+          CLEAR LS_FTCLEAR.
+        ENDIF.
+
+
+        LR_REQ_NO  = VALUE #( BASE LR_REQ_NO ( SIGN = 'I' OPTION = 'EQ' LOW = <LFS_DATA>-REQ_NO ) ).
+        LR_REQ_NO1 = VALUE #( BASE LR_REQ_NO ( SIGN = 'I' OPTION = 'EQ' LOW = <LFS_DATA>-REQ_NO ) ).
+
+*        AT END OF PAY_DATE.      "Process Groups based on Payment Date
+        AT END OF GROUP.      "Do clearing based on grouping
+
+          "if doc_type is 'INV' then only post the clearing document
+          IF <LFS_DATA>-DOC_TYPE EQ 'INV' AND <LFS_DATA>-POST_CLR_STATUS NE 'CLEARED'.
+
+            DATA(LV_ITEM) = 0.
+            DATA(LV_NEW_ITEM) = 0.
+
+            " For 'FTPOST' exclude docs which has amount 0 at any record &
+            " if same document is repeated multiple times then get the amount of with highest req no.
+            IF GI_FTPOST IS NOT INITIAL.
+
+              DATA(GI_FTPOST_TMP) = GI_FTPOST.
+* SOC kartik / Manoj Rane Charm 4000009379 Date 06/03/2025."Deleting line items of type 'INV_BAL' & 'INV_BAL' where ref_doc same as 'RESERVE'
+              LOOP AT gi_ftpost_tmp INTO DATA(wa_ftpost) WHERE type = 'RESERVE'.
+                DELETE gi_ftpost WHERE  ref_doc EQ wa_ftpost-ref_doc AND type EQ 'INV_BAL' OR type EQ 'SHORT_PAY'.
+                CLEAR: wa_ftpost.
+              ENDLOOP.
+* EOC kartik / Manoj Rane Charm 4000009379 Date 06/03/2025
+              SORT GI_FTPOST_TMP BY REF_DOC.
+
+*            DELETE GI_FTPOST WHERE WRBTR IS INITIAL AND ( TYPE EQ 'INV_BAL' OR TYPE EQ 'PAY_BAL' ).
+              "Delete all documents from FT_POST where type is 'INV_BAL' or 'PAY_BAL' and amount is 0 even once
+              LOOP AT GI_FTPOST_TMP INTO DATA(LS_FTPOST_TMP) WHERE WRBTR IS INITIAL AND ( TYPE EQ 'INV_BAL' OR TYPE EQ 'PAY_BAL' ).
+                DELETE GI_FTPOST WHERE REF_DOC EQ LS_FTPOST_TMP-REF_DOC AND REF_CC EQ LS_FTPOST_TMP-REF_CC AND REF_YEAR EQ LS_FTPOST_TMP-REF_YEAR
+                AND TYPE EQ LS_FTPOST_TMP-TYPE. " kartik / Manoj charm 2000000859 Date 27/01/2025
+              ENDLOOP.
+
+              ""If all amounts in a group are 0 then post only last/1 docuemnt with 0 amount.
+              IF GI_FTPOST IS INITIAL.
+                DELETE GI_FTPOST_TMP WHERE TYPE NE 'INV_BAL'.
+                SORT GI_FTPOST_TMP BY REQ_NO DESCENDING.
+
+                IF GI_FTPOST_TMP IS NOT INITIAL.
+                  READ TABLE GI_FTPOST_TMP INTO DATA(LS_FTPOST_TMP1) INDEX 1.
+                  IF SY-SUBRC EQ 0.
+                    APPEND INITIAL LINE TO GI_FTPOST ASSIGNING FIELD-SYMBOL(<LFS_FTPOST1>).
+                    <LFS_FTPOST1> = CORRESPONDING #( LS_FTPOST_TMP1 ).
+                  ENDIF.
+                  GV_AMOUNT_ZERO_FLAG = ABAP_TRUE.
+                ENDIF.
+              ENDIF.  "IF gi_ftpost IS INITIAL.
+
+              SORT GI_FTPOST BY TYPE ASCENDING REQ_NO DESCENDING.
+*              DELETE ADJACENT DUPLICATES FROM GI_FTPOST COMPARING TYPE REF_DOC.
+*" SoC kartik / Manoj Rane  4000009379 Date 24/03/2025
+              t_ftpost = CORRESPONDING #(  gi_ftpost   ).
+
+              DELETE t_ftpost WHERE type NE 'RESERVE'.
+              DELETE gi_ftpost WHERE type EQ 'RESERVE'.
+              SORT gi_ftpost BY type ASCENDING req_no DESCENDING.
+              DELETE ADJACENT DUPLICATES FROM gi_ftpost COMPARING type ref_doc.
+
+              gi_ftpost = CORRESPONDING #( BASE ( gi_ftpost )  t_ftpost   ).
+
+*"EoC kartik / Manoj Rane  4000009379 Date 24/03/2025
+              SORT GI_FTPOST BY REF_CC.
+
+              LOOP AT GI_FTPOST ASSIGNING FIELD-SYMBOL(<LFS_FTPOST>).
+                LV_ITEM = LV_ITEM + 1.
+                LV_NEW_ITEM = LV_NEW_ITEM + 1.
+
+                <LFS_FTPOST>-ITEM_NO = LV_ITEM.
+                <LFS_FTPOST>-NEW_ITEM_NO = LV_NEW_ITEM.
+
+                AT END OF REF_CC.
+                  CLEAR LV_NEW_ITEM.
+                ENDAT.
+              ENDLOOP.
+
+            ENDIF.   "IF gi_ftpost IS NOT INITIAL.
+
+            IF LT_FTCLEAR IS NOT INITIAL.
+              SORT LT_FTCLEAR BY SELVON.
+              DELETE ADJACENT DUPLICATES FROM LT_FTCLEAR COMPARING AGKON AGBUK SELVON.
+            ENDIF.
+
+            ME->CLEAR_DOCUMENT( EXPORTING IT_FTCLEAR     = LT_FTCLEAR
+                                 CHANGING CHS_CLEAR_DATA = <LFS_DATA> ).
+
+            "" Update Clearing fields in table 'YRFA_CUST_CLEAR'
+            ME->UPDATE_CLEAR_DETAILS( EXPORTING IR_REQ_NO = LR_REQ_NO
+                                       CHANGING CHS_UPD_DATA = <LFS_DATA> ).
+
+            IF <LFS_DATA>-MESSAGE IS NOT INITIAL.
+              EXIT.
+            ENDIF.
+
+          ENDIF.  "IF <lfs_data>-doc_type EQ 'INV'.
+
+          CLEAR: LT_FTCLEAR, GI_FTPOST, LR_REQ_NO, GV_AMOUNT_ZERO_FLAG.
+
+        ENDAT.  "AT END OF pay_date.
+
+        CLEAR: LW_BSEG_INV, LW_BSEG_PAY.
+
+      ENDLOOP.  "LOOP AT gi_cust_clr ASSIGNING FIELD-SYMBOL(<lfs_data>).
+
+    ENDIF.  "IF GI_CUST_CLR IS NOT INITIAL.
+
+  ENDMETHOD.  "METHOD process_data.

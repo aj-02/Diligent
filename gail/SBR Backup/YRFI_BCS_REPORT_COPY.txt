@@ -1,0 +1,1930 @@
+*&---------------------------------------------------------------------*
+*& Report YRFI_BCS_REPORT
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+REPORT yrfi_bcs_report_copy.
+INCLUDE YRFI_BCS_REPORT_COPY_TOP.
+*INCLUDE: yrfi_bcs_report_top,
+INCLUDE YRFI_BCS_REPORT_COPY_SS.
+*yrfi_bcs_report_ss,
+INCLUDE YRFI_BCS_REPORT_COPY_F01.
+*yrfi_bcs_report_f01.
+*yrfi_bcs_report_top,
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR s_yfyear-low .
+
+  PERFORM yfyear_f4.
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR s_yfyear-high .
+  PERFORM yfyear_f4.
+
+START-OF-SELECTION.
+  PERFORM get_data.
+
+end-of-SELECTION.
+  PERFORM display_data.
+
+*&---------------------------------------------------------------------*
+*&  Include           YRFI_BCS_REPORT_TOP
+*&---------------------------------------------------------------------*
+TYPES: BEGIN OF ty_final,
+         yfyear      TYPE bseg-gjahr,
+         fikrs       TYPE fm01-fikrs,
+         fictr       TYPE fmfctr-fictr,
+         beschr      TYPE fmfctrt-beschr,
+         fipex       TYPE fmci-fipex,
+*         fipex       TYPE bseg-fipos,
+         text1       TYPE fmcit-text1,
+         ybdg_or     TYPE ybdg_or,
+         ybdg_re_rt  TYPE ybdg_or,
+         ybdg_re_su  TYPE ybdg_or,
+         ybdg_tr_re  TYPE ybdg_or,
+         ybdg_tr_se  TYPE ybdg_or,
+         ybdg_ad_rt  TYPE ybdg_or,
+         ybdg_ad_su  TYPE ybdg_or,
+         ybdg_tot    TYPE ybdg_or,
+         ycommitment TYPE ybdg_or,
+         yactual_fm  TYPE ybdg_or,
+         ytot_cons   TYPE ybdg_or,
+         ybdg_avlb   TYPE ybdg_or,
+         yactual_fi  TYPE ybdg_or,
+
+
+       END OF ty_final.
+*
+*       rldnr,ryear,rfikrs ,rfundsctr,rcmmtitem,
+*    hslvt, hsl01,hsl02, hsl03,
+*    hsl04, hsl05, hsl06, hsl07, hsl08,
+*     hsl09, hsl10, hsl11, hsl12, hsl13,
+*     hsl14, hsl15, hsl16,process_9,budtype_9
+
+TYPES: BEGIN OF ty_fmbdt,
+         comb      TYPE string,
+** -> Begin of changes by of Jatin on 17Oct24 for ATC
+*         rldnr     TYPE fmbdt-rldnr,
+         rldnr     TYPE rldnr,
+*         ryear     TYPE fmbdt-ryear,
+         ryear     TYPE gjahr,
+*         rfikrs    TYPE fmbdt-rfikrs,
+         rfikrs    TYPE fikrs,
+*         rfundsctr TYPE fmbdt-rfundsctr,
+         rfundsctr TYPE fistl,
+*         rcmmtitem TYPE fmbdt-rcmmtitem,
+         rcmmtitem TYPE fm_fipex,
+*         hslvt     TYPE fmbdt-hslvt,
+         hslvt     TYPE hslvt9_cs,
+*         hsl01     TYPE fmbdt-hsl01,
+         hsl01     TYPE hslxx9_cs,
+*         hsl02     TYPE fmbdt-hsl01,
+         hsl02     TYPE HSLXX9_CS,
+*         hsl03     TYPE fmbdt-hsl01,
+         hsl03     TYPE hslxx9_cs,
+*         hsl04     TYPE fmbdt-hsl01,
+         hsl04     TYPE hslxx9_cs,
+*         hsl05     TYPE fmbdt-hsl01,
+         hsl05     TYPE hslxx9_cs,
+*         hsl06     TYPE fmbdt-hsl01,
+         hsl06     TYPE hslxx9_cs,
+*         hsl07     TYPE fmbdt-hsl01,
+         hsl07     TYPE hslxx9_cs,
+*         hsl08     TYPE fmbdt-hsl01,
+         hsl08     TYPE hslxx9_cs,
+*         hsl09     TYPE fmbdt-hsl01,
+         hsl09     TYPE hslxx9_cs,
+*         hsl10     TYPE fmbdt-hsl01,
+         hsl10     TYPE hslxx9_cs,
+*         hsl11     TYPE fmbdt-hsl01,
+         hsl11     TYPE hslxx9_cs,
+*         hsl12     TYPE fmbdt-hsl01,
+         hsl12     TYPE hslxx9_cs,
+*         hsl13     TYPE fmbdt-hsl01,
+         hsl13     TYPE hslxx9_cs,
+*         hsl14     TYPE fmbdt-hsl01,
+         hsl14     TYPE hslxx9_cs,
+*         hsl15     TYPE fmbdt-hsl01,
+         hsl15     TYPE hslxx9_cs,
+*         hsl16     TYPE fmbdt-hsl01,
+         hsl16     TYPE hslxx9_cs,
+** <- End changes by of Jatin on 17Oct24 for ATC
+         process_9 TYPE fmbl-process,
+         budtype_9 TYPE fmbl-budtype,
+
+       END OF ty_fmbdt.
+DATA: it_fmb_1 TYPE TABLE OF ty_fmbdt.
+*      ls_fmbdt  TYPE  ty_fmbdt.
+
+TYPES: BEGIN OF ty_drill,
+         fm_area  TYPE fmbl-fm_area,
+         docnr    TYPE fmbl-docnr,
+         docyear  TYPE fmbl-docyear,
+         docln    TYPE fmbl-docln,
+         fiscyear TYPE fmbl-fiscyear,
+         fundsctr TYPE fmbl-fundsctr,
+         cmmtitem TYPE fmbl-cmmtitem,
+         budcat   TYPE fmbl-budcat,
+         process  TYPE fmbl-process,
+         budtype  TYPE fmbl-budtype,
+         amt      TYPE ybdg_or,
+         text     TYPE text50,
+       END OF ty_drill.
+
+TYPES: BEGIN OF ty_commit_drill,
+         fikrs TYPE fmioi-fikrs,
+         refbn TYPE fmioi-refbn,
+         rfpos TYPE fmioi-rfpos,
+         rftyp TYPE fmioi-rftyp,
+         btart TYPE fmioi-btart,
+         rldnr TYPE fmioi-rldnr,
+         gjahr TYPE fmioi-gjahr,
+         zhldt TYPE fmioi-zhldt,
+         perio TYPE fmioi-perio,
+         fistl TYPE fmioi-fistl,
+         fipex TYPE fmioi-fipex,
+         wrttp TYPE fmioi-wrttp,
+         vrgng TYPE fmioi-vrgng,
+         bukrs TYPE fmioi-bukrs,
+         budat TYPE fmioi-budat,
+         tcode TYPE fmioi-tcode,
+         fkbtr TYPE fmioi-fkbtr,
+         sgtxt TYPE fmioi-sgtxt,
+
+       END OF ty_commit_drill.
+
+
+TYPES: BEGIN OF ty_actfm_drill,
+
+         fikrs   TYPE fmifiit-fikrs,
+         refbn   TYPE fmioi-refbn,
+         fmbelnr TYPE fmifiit-fmbelnr,
+         rfpos   TYPE fmioi-rfpos,
+         fmbuzei TYPE fmifiit-fmbuzei,
+         btart   TYPE fmifiit-btart,
+         rldnr   TYPE fmifiit-rldnr,
+         gjahr   TYPE fmifiit-gjahr,
+         zhldt   TYPE fmifiit-zhldt,
+         perio   TYPE fmifiit-perio,
+         fistl   TYPE fmifiit-fistl,
+         fipex   TYPE fmifiit-fipex,
+         wrttp   TYPE fmifiit-wrttp,
+         vrgng   TYPE fmifiit-vrgng,
+         bukrs   TYPE fmifiit-bukrs,
+         kngjahr TYPE fmifiit-kngjahr,
+         knbelnr TYPE fmifiit-knbelnr,
+         knbuzei TYPE fmifiit-knbuzei,
+         fkbtr   TYPE fmifiit-fkbtr,
+         sgtxt   TYPE fmifiit-sgtxt,
+
+       END OF ty_actfm_drill.
+TYPES: BEGIN OF ty_fi_drill,
+
+         fikrs    TYPE fmioi-fikrs,
+         bukrs    TYPE bseg-bukrs,
+         belnr    TYPE bseg-belnr,
+         gjahr    TYPE bseg-gjahr,
+         buzei    TYPE bseg-buzei,
+         shkzg    TYPE bseg-shkzg,
+         koart    TYPE bseg-koart,
+         dmbtr    TYPE bseg-dmbtr,
+         vorgn    TYPE bseg-vorgn,
+         hkont    TYPE bseg-hkont,
+         kunnr    TYPE bseg-kunnr,
+         lifnr    TYPE bseg-lifnr,
+         fistl    TYPE bseg-fistl,
+         fipos    TYPE bseg-fipos,
+         sgtxt    TYPE bseg-sgtxt,
+         fmbelnr  TYPE fmifiit-fmbelnr,
+         fm_gjahr TYPE fmifiit-gjahr,
+         fmbuzei  TYPE fmifiit-fmbuzei,
+
+       END OF ty_fi_drill.
+* SOC Kartik gupta/ Brijesh charm; 2000000837 REPORTS & VALIDATION IN BCS 12.08.2024
+TYPES: BEGIN OF ty_bseg,
+         bukrs TYPE bseg-bukrs,
+         belnr TYPE bseg-belnr,
+         gjahr TYPE bseg-gjahr,
+         buzei TYPE bseg-buzei,
+         shkzg TYPE bseg-shkzg,
+         koart TYPE bseg-koart,
+         dmbtr TYPE bseg-dmbtr,
+         vorgn TYPE bseg-vorgn,
+         hkont TYPE bseg-hkont,
+         kunnr TYPE bseg-kunnr,
+         lifnr TYPE bseg-lifnr,
+         fistl TYPE bseg-fistl,
+         fipos TYPE char20,
+         sgtxt TYPE bseg-sgtxt,
+       END OF ty_bseg.
+* EOC Kartik gupta/ Brijesh charm; 2000000837 REPORTS & VALIDATION IN BCS 12.08.2024
+DATA: it_final         TYPE TABLE OF ty_final,
+      it_drill         TYPE TABLE OF ty_drill,
+      it_commit_drill  TYPE TABLE OF ty_commit_drill,
+      wa_commit_drill  TYPE  ty_commit_drill,
+      it_actfm_drill   TYPE TABLE OF ty_actfm_drill,
+      it_totcons_drill TYPE TABLE OF ty_actfm_drill,
+      it_fmioi         TYPE TABLE OF ty_actfm_drill,
+      wa_tot_drill     TYPE  ty_actfm_drill,
+      wa_actfm_drill   TYPE  ty_actfm_drill,
+      it_fi_drill      TYPE TABLE OF ty_fi_drill,
+      lt_bseg          TYPE TABLE OF bseg,
+* SOC Kartik gupta/ Brijesh charm; 2000000837 REPORTS & VALIDATION IN BCS 12.08.2024
+      it_bseg          TYPE TABLE OF ty_bseg,
+* EOC Kartik gupta/ Brijesh charm; 2000000837 REPORTS & VALIDATION IN BCS 12.08.2024
+
+* SOC Kartik gupta/ Brijesh charm; 2000000837 REPORTS & VALIDATION IN BCS 29.07.2024
+      lt_ska1          TYPE TABLE OF ska1,
+* EOC Kartik gupta/ Brijesh charm; 2000000837 REPORTS & VALIDATION IN BCS 29.07.2024
+      wa_fi_drill      TYPE  ty_fi_drill,
+      wa_drill         TYPE  ty_drill,
+      wa_final         TYPE  ty_final.
+DATA : it_return TYPE STANDARD TABLE OF ddshretval WITH HEADER LINE.
+
+*&---------------------------------------------------------------------*
+*&  Include           YRFI_BCS_REPORT_SS
+*&---------------------------------------------------------------------*
+** -> Begin of changes by of Jatin on 18Oct24 for ATC
+*TABLES: fm01,fmfctr,fmci,bseg,fmbdt .
+TABLES: fm01,fmfctr,fmci,bseg, pfmbdt.
+** <- End changes by of Jatin on 18Oct24 for ATC
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
+*SELECTION-SCREEN SKIP.
+** -> Begin of changes by of Jatin on 18Oct24 for ATC
+  DATA: gv_gjahr TYPE gjahr.
+** <- End changes by of Jatin on 18Oct24 for ATC
+SELECT-OPTIONS: s_fikrs FOR fm01-fikrs  NO INTERVALS NO-EXTENSION OBLIGATORY,
+                s_fictr FOR fmfctr-fictr NO INTERVALS ,
+                s_fipex FOR bseg-fipos   NO INTERVALS ," NO INTERVALS ,
+** -> Begin of changes by of Jatin on 18Oct24 for ATC
+*                s_yfyear FOR fmbdt-ryear  NO INTERVALS OBLIGATORY.
+                s_yfyear FOR gv_gjahr  NO INTERVALS OBLIGATORY.
+** <- End changes by of Jatin on 18Oct24 for ATC
+PARAMETERS: ywith_fi AS CHECKBOX.
+*SELECTION-SCREEN SKIP.
+SELECTION-SCREEN END OF BLOCK b1.
+
+*&---------------------------------------------------------------------*
+*&  Include           YRFI_BCS_REPORT_F01
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Form  GET_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+
+CLASS evnt DEFINITION.
+  PUBLIC SECTION.
+    METHODS handler FOR EVENT double_click OF cl_salv_events_table IMPORTING row column.
+ENDCLASS.
+CLASS evnt IMPLEMENTATION.
+  METHOD handler.
+*
+    PERFORM drill_down_rep USING row column.
+
+  ENDMETHOD.
+ENDCLASS.
+
+FORM get_data .
+
+** -> Begin of changes by of Jatin on 18Oct24 for ATC
+*  RANGES: r_fipex FOR fmbdt-rcmmtitem.
+  RANGES: r_fipex FOR pfmbdt-rcmmtitem.
+** <- End changes by of Jatin on 18Oct24 for ATC
+  DATA : yactual_s TYPE bseg-dmbtr,
+         yactual_h TYPE bseg-dmbtr,
+         amt_com   TYPE ybdg_or,
+         amt_fm    TYPE ybdg_or,
+         op_fipex  TYPE char24.
+
+
+  LOOP AT s_fipex[] INTO s_fipex.
+    CALL FUNCTION 'CONVERSION_EXIT_FMCIS_OUTPUT'
+      EXPORTING
+        input  = s_fipex-low
+      IMPORTING
+        output = op_fipex.
+
+    r_fipex-sign = 'I'  .
+    r_fipex-option = 'EQ' .
+    r_fipex-low  = op_fipex.
+
+    APPEND r_fipex .
+  ENDLOOP.
+
+  SORT r_fipex[] BY low .
+  DELETE ADJACENT DUPLICATES FROM r_fipex[] COMPARING low.
+
+  SELECT fmci~fipex,fmci~fikrs,fmcit~text1 FROM fmci AS fmci
+      LEFT JOIN fmcit AS fmcit ON fmci~fipex = fmcit~fipex
+       WHERE fmci~fikrs IN @s_fikrs AND fmci~fictr IN @s_fictr
+    AND fmci~fipex IN  @r_fipex
+     AND fmcit~spras = @sy-langu INTO TABLE @DATA(it_fmci).
+
+  SELECT fmfctr~fikrs,fmfctr~fictr,fmft~beschr FROM fmfctr AS fmfctr
+ LEFT JOIN fmfctrt AS fmft ON fmft~fikrs = fmfctr~fikrs AND fmft~fictr = fmfctr~fictr
+ WHERE  fmfctr~fikrs IN @s_fikrs AND fmfctr~fictr IN @s_fictr
+ AND fmft~spras = @sy-langu INTO TABLE @DATA(it_fmfctr).
+
+  SELECT rldnr, ryear,fikrs AS rfikrs,rbukrs,rfistl AS rfundsctr,
+    rfipex AS rcmmtitem,rvrgng,
+    hslvt, hsl01, hsl02, hsl03, hsl04, hsl05, hsl06, hsl07, hsl08,
+    hsl09, hsl10, hsl11, hsl12, hsl13, hsl14, hsl15, hsl16
+    FROM fmit INTO TABLE @DATA(it_fmit_main)
+    WHERE rldnr = '9A' AND ryear  IN @s_yfyear AND fikrs IN @s_fikrs
+    AND rfistl IN @s_fictr AND rfipex IN @r_fipex .
+
+** -> Begin of changes by of Jatin on 18Oct24 for ATC
+*  SELECT  rldnr,ryear,rfikrs ,rfundsctr,rcmmtitem,
+*    hslvt, hsl01,hsl02, hsl03,
+*    hsl04, hsl05, hsl06, hsl07, hsl08,
+*     hsl09, hsl10, hsl11, hsl12, hsl13,
+*     hsl14, hsl15, hsl16,process_9,budtype_9  FROM fmbdt
+*        FOR ALL ENTRIES IN @it_fmfctr
+*     WHERE rldnr = '9F' AND  ryear IN @s_yfyear AND rfikrs = @it_fmfctr-fikrs  AND
+*     rfundsctr = @it_fmfctr-fictr AND rcmmtitem IN @r_fipex  INTO TABLE @DATA(it_fmbdt).
+  SELECT  rldnr,ryear,rfikrs ,rfundsctr,rcmmtitem,
+    hslvt, hsl01,hsl02, hsl03,
+    hsl04, hsl05, hsl06, hsl07, hsl08,
+     hsl09, hsl10, hsl11, hsl12, hsl13,
+     hsl14, hsl15, hsl16,process_9,budtype_9  FROM pfmbdt
+        FOR ALL ENTRIES IN @it_fmfctr
+     WHERE rldnr = '9F' AND  ryear IN @s_yfyear AND rfikrs = @it_fmfctr-fikrs  AND
+     rfundsctr = @it_fmfctr-fictr AND rcmmtitem IN @r_fipex  INTO TABLE @DATA(it_fmbdt).
+** <- End changes by of Jatin on 18Oct24 for ATC
+
+  SORT it_fmbdt BY ryear rfikrs rfundsctr rcmmtitem.
+
+  SELECT * FROM fmit INTO TABLE @DATA(it_fmit) FOR ALL ENTRIES IN @it_fmit_main
+     WHERE rldnr = '9A' AND ryear  IN @s_yfyear AND fikrs = @it_fmit_main-rfikrs
+     AND rfistl = @it_fmit_main-rfundsctr AND rfipex = @it_fmit_main-rcmmtitem
+     AND rwrttp IN ( '50', '51','52','65','81','82' ) .
+
+
+  SELECT * FROM fmit INTO TABLE @DATA(it_fmit_1) FOR ALL ENTRIES IN @it_fmit_main
+ WHERE rldnr = '9A' AND ryear  IN @s_yfyear AND fikrs = @it_fmit_main-rfikrs
+ AND rfistl = @it_fmit_main-rfundsctr AND rfipex = @it_fmit_main-rcmmtitem
+AND rwrttp IN ( '54', '57', '58', '61', '66', '6B' ) .
+
+*it_fmbdt = it_fmit_main
+*  APPEND LINES OF it_fmit_main TO it_fmbdt.
+  DATA :ls1_fmbdt LIKE it_fmbdt WITH HEADER LINE.
+  LOOP AT it_fmit_main INTO DATA(ls_fmit_main) .
+    MOVE-CORRESPONDING ls_fmit_main TO ls1_fmbdt.
+
+    APPEND  ls1_fmbdt  TO it_fmbdt[].
+
+  ENDLOOP.
+  SELECT bukrs, fikrs FROM t001 INTO TABLE @DATA(it_t001) FOR ALL ENTRIES IN @it_fmbdt WHERE fikrs = @it_fmbdt-rfikrs.
+
+  IF it_t001 IS NOT INITIAL  AND ywith_fi EQ abap_true.
+
+** -> Begin of changes by of Jatin on 18Oct24 for ATC
+*    RANGES: r_fictr FOR fmbdt-rfundsctr,
+*     r_ryear FOR fmbdt-ryear,
+*     r_bukrs FOR bseg-bukrs,
+*     r_fipos FOR bseg-fipos.
+  DATA: r_fictr TYPE RANGE OF  pfmbdt-rfundsctr,
+        r_ryear TYPE RANGE OF  pfmbdt-ryear,
+        r_bukrs TYPE RANGE OF  bseg-bukrs,
+        r_fipos TYPE RANGE OF  bseg-fipos.
+** <- End changes by of Jatin on 18Oct24 for ATC
+
+    r_bukrs[] = VALUE #( FOR ls_t001 IN it_t001
+    ( sign = 'I' option = 'EQ' low = ls_t001-bukrs ) ).
+
+    r_fictr[] = VALUE #( FOR  ls_fmbdt IN it_fmbdt (
+     sign = 'I'  option = 'EQ' low  = ls_fmbdt-rfundsctr  ) ).
+    SORT r_fictr[] BY low .
+    DELETE ADJACENT DUPLICATES FROM r_fictr[] COMPARING low.
+
+    r_ryear[] = VALUE #( FOR  ls_fmbdt IN it_fmbdt (
+   sign = 'I'  option = 'EQ' low  = ls_fmbdt-ryear  ) ).
+    SORT r_ryear[] BY low .
+    DELETE ADJACENT DUPLICATES FROM r_ryear[] COMPARING low.
+
+** -> Begin of changes by  KRITIKA on 21.10.2024 for ATC
+    SELECT  "#EC CI_DB_OPERATION_OK[2431747]
+      bukrs,
+** <- End of changes by KRITIKA on 21.10.2024 for ATC
+      belnr,
+      gjahr,
+      buzei,
+      shkzg,
+      koart,
+      dmbtr,
+      vorgn,
+      hkont,
+      kunnr,
+      lifnr,
+      fistl,
+      fipos,
+      sgtxt
+      FROM bseg INTO TABLE @it_bseg "FOR ALL ENTRIES IN @it_fmbdt
+    WHERE  bukrs IN  @r_bukrs
+      AND fipos IN @s_fipex"  AND vorgn NE 'RMWE'
+      AND fistl IN @s_fictr AND gjahr IN @s_yfyear
+*** -> Begin of changes by of Harsh on 24Oct-24 for ATC
+      ORDER BY PRIMARY KEY.
+*** <- End changes by of Harsh on 24Oct-24 for ATC
+* SOC Kartik gupta/ Brijesh charm; 2000000837 REPORTS & VALIDATION IN BCS 29.07.2024
+    IF it_bseg IS NOT INITIAL .
+** -> Begin of changes by of Ritika on 09.10.2024 for ATC
+      SELECT saknr,ktoks  FROM  ska1      "#EC CI_DB_OPERATION_OK[2389136]
+      FOR ALL ENTRIES IN @it_bseg          "#EC CI_DB_OPERATION_OK[2431747]
+      WHERE saknr = @it_bseg-hkont AND  ktoks IN ('EXPS','ASST')
+         INTO TABLE @DATA(it_ska1).
+** -> End of changes by of Ritika on 09.10.2024 for ATC
+      lt_ska1 = CORRESPONDING #( it_ska1 ).
+
+    ENDIF.
+* EOC Kartik gupta/ Brijesh charm; 2000000837 REPORTS & VALIDATION IN BCS 29.07.2024
+
+    LOOP AT it_bseg ASSIGNING FIELD-SYMBOL(<ls_bseg>).
+      CLEAR:op_fipex.
+      CALL FUNCTION 'CONVERSION_EXIT_FMCIS_OUTPUT'
+        EXPORTING
+          input  = <ls_bseg>-fipos
+        IMPORTING
+          output = op_fipex.
+      <ls_bseg>-fipos = op_fipex.
+    ENDLOOP.
+    lt_bseg = CORRESPONDING #( it_bseg ).
+  ENDIF.
+*CLEAR:it_fmbdt.
+
+  it_fmb_1 = VALUE #( FOR ls_fmbdt IN it_fmbdt
+   ( comb = |{ ls_fmbdt-ryear }{ ls_fmbdt-rfikrs }{ ls_fmbdt-rfundsctr }{ ls_fmbdt-rcmmtitem }|
+      rfikrs =     ls_fmbdt-rfikrs
+      ryear      =     ls_fmbdt-ryear
+      rfundsctr   =     ls_fmbdt-rfundsctr
+      rcmmtitem    =     ls_fmbdt-rcmmtitem
+      hslvt  =     ls_fmbdt-hslvt
+      hsl01  =     ls_fmbdt-hsl01
+      hsl02  =     ls_fmbdt-hsl02
+      hsl03  =     ls_fmbdt-hsl03
+      hsl04  =     ls_fmbdt-hsl04
+      hsl05  =     ls_fmbdt-hsl05
+      hsl06  =     ls_fmbdt-hsl06
+      hsl07  =     ls_fmbdt-hsl07
+      hsl08  =     ls_fmbdt-hsl08
+      hsl09  =     ls_fmbdt-hsl09
+      hsl10  =     ls_fmbdt-hsl10
+      hsl11  =     ls_fmbdt-hsl11
+      hsl12  =     ls_fmbdt-hsl12
+      hsl13  =     ls_fmbdt-hsl13
+      hsl14  =     ls_fmbdt-hsl14
+      hsl15  =     ls_fmbdt-hsl15
+      hsl16  =     ls_fmbdt-hsl16
+      process_9 =     ls_fmbdt-process_9
+      budtype_9 =     ls_fmbdt-budtype_9  ) ).
+
+  SORT it_fmb_1 BY comb.
+
+  LOOP AT it_fmb_1 INTO DATA(wa_fmbdt).
+
+    wa_final-fikrs = wa_fmbdt-rfikrs.
+    wa_final-yfyear =  wa_fmbdt-ryear.
+    wa_final-fictr = wa_fmbdt-rfundsctr.
+    wa_final-fipex = wa_fmbdt-rcmmtitem.
+
+    IF  wa_fmbdt-process_9  = 'ENTR' AND wa_fmbdt-budtype_9 =   'BE01' .
+      wa_final-ybdg_or =   ( wa_fmbdt-hslvt + wa_fmbdt-hsl01 + wa_fmbdt-hsl02 +
+                           wa_fmbdt-hsl03 + wa_fmbdt-hsl04 + wa_fmbdt-hsl05 +
+                           wa_fmbdt-hsl06 +  wa_fmbdt-hsl07 +  wa_fmbdt-hsl08 +
+                           wa_fmbdt-hsl09 +  wa_fmbdt-hsl10 + wa_fmbdt-hsl11 +
+                           wa_fmbdt-hsl12 + wa_fmbdt-hsl13 + wa_fmbdt-hsl14 +
+                           wa_fmbdt-hsl15 + wa_fmbdt-hsl16 ) * -1.
+
+    ELSEIF wa_fmbdt-process_9  = 'RETN' AND wa_fmbdt-budtype_9 =   'BR01'.
+
+      wa_final-ybdg_re_rt =  (  wa_fmbdt-hslvt + wa_fmbdt-hsl01 + wa_fmbdt-hsl02 +
+                          wa_fmbdt-hsl03 + wa_fmbdt-hsl04 + wa_fmbdt-hsl05 +
+                          wa_fmbdt-hsl06 +  wa_fmbdt-hsl07 +  wa_fmbdt-hsl08 +
+                          wa_fmbdt-hsl09 +  wa_fmbdt-hsl10 + wa_fmbdt-hsl11 +
+                          wa_fmbdt-hsl12 + wa_fmbdt-hsl13 + wa_fmbdt-hsl14 +
+                          wa_fmbdt-hsl15 + wa_fmbdt-hsl16 ) * -1.
+
+    ELSEIF wa_fmbdt-process_9  = 'SUPL' AND wa_fmbdt-budtype_9 =   'BS01'.
+
+      wa_final-ybdg_re_su =  ( wa_fmbdt-hslvt + wa_fmbdt-hsl01 + wa_fmbdt-hsl02 +
+                          wa_fmbdt-hsl03 + wa_fmbdt-hsl04 + wa_fmbdt-hsl05 +
+                          wa_fmbdt-hsl06 +  wa_fmbdt-hsl07 +  wa_fmbdt-hsl08 +
+                          wa_fmbdt-hsl09 +  wa_fmbdt-hsl10 + wa_fmbdt-hsl11 +
+                          wa_fmbdt-hsl12 + wa_fmbdt-hsl13 + wa_fmbdt-hsl14 +
+                          wa_fmbdt-hsl15 + wa_fmbdt-hsl16 ) * -1.
+
+    ELSEIF wa_fmbdt-process_9  = 'RECV' AND wa_fmbdt-budtype_9 =   'BT01'.
+
+      wa_final-ybdg_tr_re =  ( wa_fmbdt-hslvt + wa_fmbdt-hsl01 + wa_fmbdt-hsl02 +
+                          wa_fmbdt-hsl03 + wa_fmbdt-hsl04 + wa_fmbdt-hsl05 +
+                          wa_fmbdt-hsl06 +  wa_fmbdt-hsl07 +  wa_fmbdt-hsl08 +
+                          wa_fmbdt-hsl09 +  wa_fmbdt-hsl10 + wa_fmbdt-hsl11 +
+                          wa_fmbdt-hsl12 + wa_fmbdt-hsl13 + wa_fmbdt-hsl14 +
+                          wa_fmbdt-hsl15 + wa_fmbdt-hsl16 ) * -1.
+
+    ELSEIF wa_fmbdt-process_9  = 'SEND' AND wa_fmbdt-budtype_9 =   'BT01'.
+
+      wa_final-ybdg_tr_se =   ( wa_fmbdt-hslvt + wa_fmbdt-hsl01 + wa_fmbdt-hsl02 +
+                          wa_fmbdt-hsl03 + wa_fmbdt-hsl04 + wa_fmbdt-hsl05 +
+                          wa_fmbdt-hsl06 +  wa_fmbdt-hsl07 +  wa_fmbdt-hsl08 +
+                          wa_fmbdt-hsl09 +  wa_fmbdt-hsl10 + wa_fmbdt-hsl11 +
+                          wa_fmbdt-hsl12 + wa_fmbdt-hsl13 + wa_fmbdt-hsl14 +
+                          wa_fmbdt-hsl15 + wa_fmbdt-hsl16 ) * -1.
+
+    ELSEIF wa_fmbdt-process_9  = 'RETN' AND wa_fmbdt-budtype_9 =   'BA01'.
+
+      wa_final-ybdg_ad_rt =   ( wa_fmbdt-hslvt + wa_fmbdt-hsl01 + wa_fmbdt-hsl02 +
+                          wa_fmbdt-hsl03 + wa_fmbdt-hsl04 + wa_fmbdt-hsl05 +
+                          wa_fmbdt-hsl06 +  wa_fmbdt-hsl07 +  wa_fmbdt-hsl08 +
+                          wa_fmbdt-hsl09 +  wa_fmbdt-hsl10 + wa_fmbdt-hsl11 +
+                          wa_fmbdt-hsl12 + wa_fmbdt-hsl13 + wa_fmbdt-hsl14 +
+                          wa_fmbdt-hsl15 + wa_fmbdt-hsl16 ) * -1.
+    ELSEIF wa_fmbdt-process_9  = 'SUPL' AND wa_fmbdt-budtype_9 =   'BA01'.
+
+      wa_final-ybdg_ad_su =  (  wa_fmbdt-hslvt + wa_fmbdt-hsl01 + wa_fmbdt-hsl02 +
+                          wa_fmbdt-hsl03 + wa_fmbdt-hsl04 + wa_fmbdt-hsl05 +
+                          wa_fmbdt-hsl06 +  wa_fmbdt-hsl07 +  wa_fmbdt-hsl08 +
+                          wa_fmbdt-hsl09 +  wa_fmbdt-hsl10 + wa_fmbdt-hsl11 +
+                          wa_fmbdt-hsl12 + wa_fmbdt-hsl13 + wa_fmbdt-hsl14 +
+                          wa_fmbdt-hsl15 + wa_fmbdt-hsl16 ) * -1.
+
+    ENDIF.
+
+
+    READ TABLE it_fmci INTO DATA(ls_fmci) WITH KEY fipex = wa_fmbdt-rcmmtitem .
+
+    IF sy-subrc = 0.
+      wa_final-text1 = ls_fmci-text1.
+
+    ENDIF.
+
+    READ TABLE it_fmfctr INTO DATA(wa_fmfctr) WITH KEY fikrs = wa_fmbdt-rfikrs
+      fictr = wa_fmbdt-rfundsctr.
+    IF sy-subrc = 0.
+      wa_final-beschr = wa_fmfctr-beschr.
+
+    ENDIF.
+
+    LOOP AT  it_fmit INTO DATA(wa_fmit) WHERE fikrs = wa_fmbdt-rfikrs
+                     AND  rfistl = wa_fmbdt-rfundsctr AND rfipex = wa_fmbdt-rcmmtitem.
+
+*      IF sy-subrc = 0.
+      IF wa_fmit-rwrttp = '50' OR wa_fmit-rwrttp = '51' OR wa_fmit-rwrttp = '52' OR wa_fmit-rwrttp = '65'
+         OR wa_fmit-rwrttp =  '81' OR wa_fmit-rwrttp =  '82'  .
+
+        amt_com = amt_com + ( wa_fmit-hslvt + wa_fmit-hsl01 + wa_fmit-hsl02 +
+                            wa_fmit-hsl03 + wa_fmit-hsl04 + wa_fmit-hsl05 +
+                            wa_fmit-hsl06 +  wa_fmit-hsl07 +  wa_fmit-hsl08 +
+                            wa_fmit-hsl09 +  wa_fmit-hsl10 + wa_fmit-hsl11 +
+                            wa_fmit-hsl12 + wa_fmit-hsl13 + wa_fmit-hsl14 +
+                            wa_fmit-hsl15 + wa_fmit-hsl16 ) * -1."wa_final-ycommitment
+
+
+      ENDIF.
+*      ENDIF.
+
+    ENDLOOP.
+    wa_final-ycommitment = amt_com.
+
+    CLEAR:wa_fmit,amt_com.
+
+    LOOP AT it_fmit_1 INTO wa_fmit WHERE fikrs = wa_fmbdt-rfikrs
+      AND  rfistl = wa_fmbdt-rfundsctr AND rfipex = wa_fmbdt-rcmmtitem.
+
+
+      IF wa_fmit-rwrttp = '54' OR wa_fmit-rwrttp =  '57' OR wa_fmit-rwrttp =  '58' OR
+        wa_fmit-rwrttp =  '61' OR wa_fmit-rwrttp =  '66' OR wa_fmit-rwrttp =  '6B'.
+
+        amt_fm =   amt_fm + ( wa_fmit-hslvt + wa_fmit-hsl01 + wa_fmit-hsl02 +
+                           wa_fmit-hsl03 + wa_fmit-hsl04 + wa_fmit-hsl05 +
+                           wa_fmit-hsl06 +  wa_fmit-hsl07 +  wa_fmit-hsl08 +
+                           wa_fmit-hsl09 +  wa_fmit-hsl10 + wa_fmit-hsl11 +
+                           wa_fmit-hsl12 + wa_fmit-hsl13 + wa_fmit-hsl14 +
+                           wa_fmit-hsl15 + wa_fmit-hsl16 ) * -1.
+
+*        wa_final-ybdg_avlb = wa_final-ybdg_tot  - wa_final-yactual_fm.
+
+      ENDIF.
+*    ENDIF.
+
+    ENDLOOP.
+    wa_final-yactual_fm = amt_fm.
+    CLEAR: amt_fm.
+    IF ywith_fi EQ abap_true.
+      READ TABLE it_t001 INTO DATA(wa_t001) WITH KEY fikrs = wa_fmfctr-fikrs.
+
+
+      LOOP AT it_bseg INTO DATA(wa_bseg) WHERE gjahr = wa_fmbdt-ryear
+      AND fipos = wa_fmbdt-rcmmtitem AND fistl = wa_fmbdt-rfundsctr..
+* SOC Kartik gupta/ Brijesh charm; 2000000837 REPORTS & VALIDATION IN BCS 29.07.2024
+        READ TABLE it_ska1 INTO DATA(wa_ska1) WITH KEY saknr = wa_bseg-hkont.
+* EOC Kartik gupta/ Brijesh charm; 2000000837 REPORTS & VALIDATION IN BCS 29.07.2024
+        IF sy-subrc = 0.
+          CASE wa_bseg-shkzg .
+            WHEN 'S'.
+
+              yactual_s = yactual_s + wa_bseg-dmbtr.
+            WHEN 'H' .
+              yactual_h = yactual_h + wa_bseg-dmbtr.
+
+          ENDCASE.
+
+
+        ENDIF.
+      ENDLOOP.
+      wa_final-yactual_fi = yactual_s - yactual_h.
+      CLEAR: yactual_s,yactual_h.
+    ENDIF.
+    AT END OF comb.
+
+      wa_final-ybdg_tot = wa_final-ybdg_tot + wa_final-ybdg_or +  wa_final-ybdg_re_rt + wa_final-ybdg_re_su
+                        + wa_final-ybdg_tr_re + wa_final-ybdg_tr_se +  wa_final-ybdg_ad_rt
+                        + wa_final-ybdg_ad_su.
+      wa_final-ytot_cons = wa_final-yactual_fm + wa_final-ycommitment.
+      wa_final-ybdg_avlb = wa_final-ybdg_avlb + wa_final-ybdg_tot  - wa_final-ycommitment - wa_final-yactual_fm.
+
+      APPEND wa_final TO it_final.
+      CLEAR: wa_final,wa_t001,wa_bseg,wa_fmit,
+     wa_fmfctr,ls_fmci,wa_fmbdt,yactual_s,yactual_h.
+
+    ENDAT.
+
+  ENDLOOP.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  DISPLAY_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+
+
+FORM display_data .
+
+  DATA: gr_salv      TYPE REF TO cl_salv_table,
+        gr_functions TYPE REF TO cl_salv_functions,
+        gr_display   TYPE REF TO cl_salv_display_settings,
+        gr_columns   TYPE REF TO cl_salv_columns_table,
+        gr_column    TYPE REF TO cl_salv_column,
+        lo_function  TYPE REF TO cl_salv_functions_list,
+        lo_evnt      TYPE REF TO  cl_salv_events_table,
+        lr_layout    TYPE REF TO cl_salv_layout,
+        key          TYPE salv_s_layout_key,
+        lo_obj       TYPE REF TO evnt.
+
+
+  IF it_final[] IS NOT INITIAL  .
+
+    TRY.
+        CALL METHOD cl_salv_table=>factory
+          IMPORTING
+            r_salv_table = gr_salv
+          CHANGING
+            t_table      = it_final[].
+
+************************ for double click on alv
+        CALL METHOD gr_salv->get_functions
+          RECEIVING
+            value = lo_function.
+        .
+
+        CALL METHOD lo_function->set_all
+          EXPORTING
+            value = if_salv_c_bool_sap=>true.
+
+        CALL METHOD gr_salv->get_event
+          RECEIVING
+            value = lo_evnt.
+        DATA: lo_object TYPE REF TO evnt.
+        CREATE OBJECT lo_object.
+        SET HANDLER lo_object->handler FOR lo_evnt.
+
+******************************************************************
+** Display Sort, Filter, Export etc buttons
+        gr_functions = gr_salv->get_functions( ).
+
+        gr_functions->set_all( abap_true ).
+        gr_display = gr_salv->get_display_settings( ).
+
+        lr_layout = gr_salv->get_layout( ).
+        key-report = sy-repid.
+        lr_layout->set_key( key ).
+        lr_layout->set_save_restriction( if_salv_c_layout=>restrict_none ).
+*        lr_layout->GET_DEFAULT_LAYOUT( abap_true ).
+
+
+
+        gr_columns = gr_salv->get_columns( ).
+
+        gr_column = gr_columns->get_column( 'YFYEAR' ).
+        gr_column->set_short_text( 'Fisc Year' ).
+        gr_column->set_medium_text( 'Fiscal Year' ).
+        gr_column->set_long_text( 'Fiscal Year' ).
+
+        gr_column = gr_columns->get_column( 'FICTR' ).
+        gr_column->set_short_text( 'Funds' ).
+        gr_column->set_medium_text( 'Funds Center' ).
+        gr_column->set_long_text( 'Funds Center' ).
+
+        gr_column = gr_columns->get_column( 'BESCHR' ).
+        gr_column->set_short_text( 'Funds desc' ).
+        gr_column->set_medium_text( 'Funds Cent Descri' ).
+        gr_column->set_long_text( 'Funds Center Description' ).
+
+        gr_column = gr_columns->get_column( 'FIPEX' ).
+        gr_column->set_short_text( 'Comm Item' ).
+        gr_column->set_medium_text( 'Commitment Item' ).
+        gr_column->set_long_text( 'Commitment Item' ).
+
+        gr_column = gr_columns->get_column( 'TEXT1' ).
+        gr_column->set_short_text( 'Commi Desc' ).
+*        gr_column->set_medium_text( 'Commit Item Descri' ).
+        gr_column->set_long_text( 'Commitment Item Description' ).
+
+        gr_column = gr_columns->get_column( 'YBDG_OR' ).
+        gr_column->set_short_text( 'Orig Bud' ).
+        gr_column->set_medium_text( 'Original Budget' ).
+        gr_column->set_long_text( 'Original Budget' ).
+        gr_columns->get_hyperlink_entry_column(  ).
+
+        gr_column = gr_columns->get_column( 'YBDG_RE_RT' ).
+        gr_column->set_short_text( 'Revi Bud' ).
+        gr_column->set_medium_text( 'Revised Bud-Return' ).
+        gr_column->set_long_text( 'Revised Budget-Return' ).
+
+        gr_column = gr_columns->get_column( 'YBDG_RE_SU' ).
+        gr_column->set_short_text( 'Revi Supp' ).
+        gr_column->set_medium_text( 'Revised Bud-Supple' ).
+        gr_column->set_long_text( 'Revised Budget-Supplement' ).
+
+        gr_column = gr_columns->get_column( 'YBDG_TR_RE' ).
+        gr_column->set_short_text( 'Bud Rece' ).
+        gr_column->set_medium_text( 'Budget Tras Received' ).
+        gr_column->set_long_text( 'Budget Transfer-Received' ).
+
+        gr_column = gr_columns->get_column( 'YBDG_TR_SE' ).
+        gr_column->set_short_text( 'Bud sent' ).
+        gr_column->set_medium_text( 'Budget Transfer-Sent' ).
+        gr_column->set_long_text( 'Budget Transfer-Sent' ).
+
+        gr_column = gr_columns->get_column( 'YBDG_AD_RT' ).
+        gr_column->set_short_text( 'Ad Retu' ).
+        gr_column->set_medium_text( 'Ad-Hoc Bud Return' ).
+        gr_column->set_long_text( 'Ad-Hoc Budget-Return' ).
+
+
+
+        gr_column = gr_columns->get_column( 'YBDG_AD_SU' ).
+        gr_column->set_short_text( 'Ad Suppl' ).
+        gr_column->set_medium_text( 'Ad-Hoc Bud-Suppl' ).
+        gr_column->set_long_text( 'Ad-Hoc Budget-Supplement' ).
+
+        gr_column = gr_columns->get_column( 'YBDG_TOT' ).
+        gr_column->set_short_text( 'Total Bud' ).
+        gr_column->set_medium_text( 'Total Budget' ).
+        gr_column->set_long_text( 'Total Budget' ).
+
+
+        gr_column = gr_columns->get_column( 'YCOMMITMENT' ).
+        gr_column->set_short_text( 'Commitm' ).
+        gr_column->set_medium_text( 'Commitments' ).
+        gr_column->set_long_text( 'Commitments' ).
+
+        gr_column = gr_columns->get_column( 'YACTUAL_FM' ).
+        gr_column->set_short_text( 'Actuals–FM' ).
+        gr_column->set_medium_text( 'Actuals–FM' ).
+        gr_column->set_long_text( 'Actuals–FM' ).
+
+        gr_column = gr_columns->get_column( 'YTOT_CONS' ).
+        gr_column->set_short_text( 'Tot Consm' ).
+        gr_column->set_medium_text( 'Total Bud Consum' ).
+        gr_column->set_long_text( 'Total Budget Consumption' ).
+
+        gr_column = gr_columns->get_column( 'YBDG_AVLB' ).
+        gr_column->set_short_text( 'Tot Avail' ).
+        gr_column->set_medium_text( 'Total Bud Avail' ).
+        gr_column->set_long_text( 'Total Budget Available' ).
+
+        gr_column = gr_columns->get_column( 'YACTUAL_FI' ).
+        gr_column->set_short_text( 'Actuals–FI' ).
+        gr_column->set_medium_text( 'Actuals–FI' ).
+        gr_column->set_long_text( 'Actuals–FI' ).
+
+
+        gr_columns->set_optimize( ).
+
+** Display ALV
+        gr_salv->display( ).
+
+      CATCH cx_salv_msg .
+    ENDTRY.
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  YFYEAR_F4
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM yfyear_f4 .
+** -> Begin of changes by of Jatin on 18Oct24 for ATC
+*  SELECT ryear FROM fmbdt  INTO TABLE @DATA(it_fmbdt).
+  SELECT ryear FROM pfmbdt  INTO TABLE @DATA(it_fmbdt).
+** <- End changes by of Jatin on 18Oct24 for ATC
+  SORT it_fmbdt BY  ryear.
+  DELETE ADJACENT DUPLICATES FROM it_fmbdt COMPARING ryear.
+  CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
+    EXPORTING
+*     DDIC_STRUCTURE  = ' '
+      retfield        = 'RYEARS'
+*     PVALKEY         = ' '
+      dynpprog        = sy-repid
+      dynpnr          = '1000'
+      dynprofield     = 'S_YFYEAR'
+*     STEPL           = 0
+*     WINDOW_TITLE    =
+*     VALUE           = ' '
+      value_org       = 'S'
+    TABLES
+      value_tab       = it_fmbdt
+*     FIELD_TAB       =
+      return_tab      = it_return
+*     DYNPFLD_MAPPING =
+    EXCEPTIONS
+      parameter_error = 1
+      no_values_found = 2.
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  DRILL_DOWN_REP
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM drill_down_rep USING row TYPE salv_de_row col TYPE salv_de_column.
+  REFRESH :it_drill ,
+           it_commit_drill,
+           it_actfm_drill ,
+           it_fi_drill .
+
+  CASE col.
+    WHEN 'YCOMMITMENT'.
+      PERFORM ycommitment_drill  USING row col.
+
+    WHEN 'YACTUAL_FM'.
+
+      PERFORM yactual_fm_drill  USING row col.
+    WHEN 'YACTUAL_FI'.
+      PERFORM fi_drill  USING row col .
+
+    WHEN 'YTOT_CONS'.
+      PERFORM ytot_cons_drill  USING row col .
+
+    WHEN OTHERS.
+
+      READ TABLE it_final INTO DATA(ls_final) INDEX row.
+
+      SELECT fm_area,docnr,docyear,docln,fiscyear,fundsctr,cmmtitem,
+      budcat,process,budtype, lval01, lval02, lval03, lval04, lval05,
+      lval06, lval07, lval08, lval09, lval10, lval11, lval12, lval13,
+      lval14, lval15, lval16,text50
+      FROM fmbl INTO TABLE @DATA(it_fmbl)" FOR ALL ENTRIES IN @it_final
+      WHERE fm_area = @ls_final-fikrs AND fiscyear = @ls_final-yfyear AND
+      budcat = '9F' AND fundsctr  = @ls_final-fictr AND cmmtitem = @ls_final-fipex .
+
+  ENDCASE.
+
+  LOOP AT it_fmbl INTO DATA(wa_fmbl) .
+    wa_drill-fm_area = wa_fmbl-fm_area.
+    wa_drill-docnr = wa_fmbl-docnr.
+    wa_drill-docyear = wa_fmbl-docyear.
+    wa_drill-docln = wa_fmbl-docln.
+    wa_drill-fiscyear = wa_fmbl-fiscyear.
+    wa_drill-fundsctr = wa_fmbl-fundsctr.
+    wa_drill-cmmtitem = wa_fmbl-cmmtitem.
+    wa_drill-process = wa_fmbl-process.
+    wa_drill-budcat = wa_fmbl-budcat.
+    wa_drill-budtype = wa_fmbl-budtype.
+    wa_drill-text = wa_fmbl-text50.
+
+    CASE  col .
+      WHEN 'YBDG_OR' .
+        IF  wa_fmbl-process  = 'ENTR' AND wa_fmbl-budtype =   'BE01' .
+          wa_drill-amt =   ( wa_fmbl-lval01 + wa_fmbl-lval02 + wa_fmbl-lval03 +
+                               wa_fmbl-lval04 + wa_fmbl-lval05 + wa_fmbl-lval06 +
+                               wa_fmbl-lval07 +  wa_fmbl-lval08 +  wa_fmbl-lval09 +
+                               wa_fmbl-lval10 +  wa_fmbl-lval11 + wa_fmbl-lval12 +
+                               wa_fmbl-lval13 + wa_fmbl-lval14 + wa_fmbl-lval15 +
+                               wa_fmbl-lval16  ) * -1.
+          APPEND wa_drill TO it_drill.
+        ENDIF.
+      WHEN 'YBDG_RE_RT'.
+        IF wa_fmbl-process = 'RETN' AND wa_fmbl-budtype =   'BR01'.
+          wa_drill-amt =   ( wa_fmbl-lval01 + wa_fmbl-lval02 + wa_fmbl-lval03 +
+                                     wa_fmbl-lval04 + wa_fmbl-lval05 + wa_fmbl-lval06 +
+                                     wa_fmbl-lval07 +  wa_fmbl-lval08 +  wa_fmbl-lval09 +
+                                     wa_fmbl-lval10 +  wa_fmbl-lval11 + wa_fmbl-lval12 +
+                                     wa_fmbl-lval13 + wa_fmbl-lval14 + wa_fmbl-lval15 +
+                                     wa_fmbl-lval16  ) * -1.
+          APPEND wa_drill TO it_drill.
+        ENDIF.
+
+      WHEN 'YBDG_RE_SU' .
+        IF wa_fmbl-process = 'SUPL' AND wa_fmbl-budtype =   'BS01'.
+          wa_drill-amt =   ( wa_fmbl-lval01 + wa_fmbl-lval02 + wa_fmbl-lval03 +
+                                     wa_fmbl-lval04 + wa_fmbl-lval05 + wa_fmbl-lval06 +
+                                     wa_fmbl-lval07 +  wa_fmbl-lval08 +  wa_fmbl-lval09 +
+                                     wa_fmbl-lval10 +  wa_fmbl-lval11 + wa_fmbl-lval12 +
+                                     wa_fmbl-lval13 + wa_fmbl-lval14 + wa_fmbl-lval15 +
+                                     wa_fmbl-lval16  ) * -1.
+          APPEND wa_drill TO it_drill.
+
+        ENDIF.
+
+      WHEN 'YBDG_TR_RE'.
+        IF wa_fmbl-process  = 'RECV' AND wa_fmbl-budtype =   'BT01'.
+          wa_drill-amt =   ( wa_fmbl-lval01 + wa_fmbl-lval02 + wa_fmbl-lval03 +
+                                     wa_fmbl-lval04 + wa_fmbl-lval05 + wa_fmbl-lval06 +
+                                     wa_fmbl-lval07 +  wa_fmbl-lval08 +  wa_fmbl-lval09 +
+                                     wa_fmbl-lval10 +  wa_fmbl-lval11 + wa_fmbl-lval12 +
+                                     wa_fmbl-lval13 + wa_fmbl-lval14 + wa_fmbl-lval15 +
+                                     wa_fmbl-lval16  ) * -1.
+          APPEND wa_drill TO it_drill.
+        ENDIF.
+
+      WHEN 'YBDG_TR_SE'.
+        IF wa_fmbl-process  = 'SEND' AND wa_fmbl-budtype =   'BT01'.
+
+          wa_drill-amt =   ( wa_fmbl-lval01 + wa_fmbl-lval02 + wa_fmbl-lval03 +
+                                     wa_fmbl-lval04 + wa_fmbl-lval05 + wa_fmbl-lval06 +
+                                     wa_fmbl-lval07 +  wa_fmbl-lval08 +  wa_fmbl-lval09 +
+                                     wa_fmbl-lval10 +  wa_fmbl-lval11 + wa_fmbl-lval12 +
+                                     wa_fmbl-lval13 + wa_fmbl-lval14 + wa_fmbl-lval15 +
+                                     wa_fmbl-lval16  ) * -1.
+          APPEND wa_drill TO it_drill.
+        ENDIF.
+      WHEN 'YBDG_AD_RT'.
+        IF wa_fmbl-process  = 'RETN' AND wa_fmbl-budtype =   'BA01'.
+
+          wa_drill-amt =   ( wa_fmbl-lval01 + wa_fmbl-lval02 + wa_fmbl-lval03 +
+                                     wa_fmbl-lval04 + wa_fmbl-lval05 + wa_fmbl-lval06 +
+                                     wa_fmbl-lval07 +  wa_fmbl-lval08 +  wa_fmbl-lval09 +
+                                     wa_fmbl-lval10 +  wa_fmbl-lval11 + wa_fmbl-lval12 +
+                                     wa_fmbl-lval13 + wa_fmbl-lval14 + wa_fmbl-lval15 +
+                                     wa_fmbl-lval16  ) * -1.
+          APPEND wa_drill TO it_drill.
+        ENDIF.
+
+      WHEN 'YBDG_AD_SU'.
+        IF wa_fmbl-process  = 'SUPL ' AND wa_fmbl-budtype =   'BA01'.
+          wa_drill-amt =   ( wa_fmbl-lval01 + wa_fmbl-lval02 + wa_fmbl-lval03 +
+                                     wa_fmbl-lval04 + wa_fmbl-lval05 + wa_fmbl-lval06 +
+                                     wa_fmbl-lval07 +  wa_fmbl-lval08 +  wa_fmbl-lval09 +
+                                     wa_fmbl-lval10 +  wa_fmbl-lval11 + wa_fmbl-lval12 +
+                                     wa_fmbl-lval13 + wa_fmbl-lval14 + wa_fmbl-lval15 +
+                                     wa_fmbl-lval16  ) * -1.
+          APPEND wa_drill TO it_drill.
+        ENDIF.
+
+      WHEN 'YBDG_TOT'.
+        wa_drill-amt =   ( wa_fmbl-lval01 + wa_fmbl-lval02 + wa_fmbl-lval03 +
+                                   wa_fmbl-lval04 + wa_fmbl-lval05 + wa_fmbl-lval06 +
+                                   wa_fmbl-lval07 +  wa_fmbl-lval08 +  wa_fmbl-lval09 +
+                                   wa_fmbl-lval10 +  wa_fmbl-lval11 + wa_fmbl-lval12 +
+                                   wa_fmbl-lval13 + wa_fmbl-lval14 + wa_fmbl-lval15 +
+                                   wa_fmbl-lval16  ) * -1.
+        APPEND wa_drill TO it_drill.
+
+    ENDCASE.
+
+    CLEAR:wa_drill,wa_fmbl.
+  ENDLOOP.
+  CLEAR:wa_drill,wa_fmbl.
+
+  IF it_drill[] IS NOT INITIAL  .
+    DATA: gr_salv      TYPE REF TO cl_salv_table,
+          gr_functions TYPE REF TO cl_salv_functions,
+          gr_display   TYPE REF TO cl_salv_display_settings,
+          gr_columns   TYPE REF TO cl_salv_columns_table,
+          gr_column    TYPE REF TO cl_salv_column,
+          lo_function  TYPE REF TO cl_salv_functions_list,
+          lo_evnt      TYPE REF TO  cl_salv_events_table,
+          lr_layout    TYPE REF TO cl_salv_layout,
+          key          TYPE salv_s_layout_key,
+          lo_obj       TYPE REF TO evnt.
+
+    TRY.
+        CALL METHOD cl_salv_table=>factory
+          IMPORTING
+            r_salv_table = gr_salv
+          CHANGING
+            t_table      = it_drill[].
+
+
+** Display Sort, Filter, Export etc buttons
+        gr_functions = gr_salv->get_functions( ).
+
+        gr_functions->set_all( abap_true ).
+        gr_display = gr_salv->get_display_settings( ).
+
+        lr_layout = gr_salv->get_layout( ).
+        key-report = sy-repid.
+        lr_layout->set_key( key ).
+        lr_layout->set_save_restriction( if_salv_c_layout=>restrict_none ).
+*        lr_layout->set_default( abap_true ).
+*        lr_columns->set_hyperlink_entry_column( 'T_HYPERLINK' ).
+
+
+        gr_columns = gr_salv->get_columns( ).
+
+        gr_column = gr_columns->get_column( 'FM_AREA' ).
+        gr_column->set_short_text( 'FM Area' ).
+        gr_column->set_medium_text( 'FM Area' ).
+        gr_column->set_long_text( 'FM Area' ).
+
+        gr_column = gr_columns->get_column( 'DOCNR' ).
+        gr_column->set_short_text( 'Doc.No' ).
+        gr_column->set_medium_text( 'Document Number' ).
+        gr_column->set_long_text( 'Document Number' ).
+
+        gr_column = gr_columns->get_column( 'DOCYEAR' ).
+        gr_column->set_short_text( 'Doc. Year' ).
+*        gr_column->set_medium_text( 'Funds Center Description' ).
+        gr_column->set_long_text( ' Document Year' ).
+
+        gr_column = gr_columns->get_column( 'DOCLN' ).
+        gr_column->set_short_text( 'Doc Item' ).
+        gr_column->set_medium_text( 'Document Line Item' ).
+        gr_column->set_long_text( 'Document Line Item' ).
+
+        gr_column = gr_columns->get_column( 'FISCYEAR' ).
+        gr_column->set_short_text( 'Fisc Year' ).
+*        gr_column->set_medium_text( 'Commitment Item Description' ).
+        gr_column->set_long_text( 'Fiscal Year' ).
+
+        gr_column = gr_columns->get_column( 'FUNDSCTR' ).
+        gr_column->set_short_text( 'Funds Cent' ).
+        gr_column->set_medium_text( 'Funds Center' ).
+        gr_column->set_long_text( 'Funds Center' ).
+        gr_columns->get_hyperlink_entry_column(  ).
+
+        gr_column = gr_columns->get_column( 'CMMTITEM' ).
+        gr_column->set_short_text( 'Commi Item' ).
+*        gr_column->set_medium_text( 'Revised Budget-Return' ).
+        gr_column->set_long_text( 'Commitment Item' ).
+
+        gr_column = gr_columns->get_column( 'BUDCAT' ).
+        gr_column->set_short_text( 'Bud Cat' ).
+*        gr_column->set_medium_text( 'Revised Budget-Supplement' ).
+        gr_column->set_long_text( 'Budget Category' ).
+
+        gr_column = gr_columns->get_column( 'PROCESS' ).
+        gr_column->set_short_text( 'Process' ).
+*        gr_column->set_medium_text( 'Budget Transfer-Received' ).
+        gr_column->set_long_text( 'Process' ).
+
+        gr_column = gr_columns->get_column( 'BUDTYPE' ).
+        gr_column->set_short_text( 'Bud Type' ).
+*       gr_column->set_medium_text( 'Budget Transfer-Sent' ).
+        gr_column->set_long_text( 'Budget Type' ).
+
+        gr_column = gr_columns->get_column( 'AMT' ).
+        gr_column->set_short_text( 'Amount' ).
+*        gr_column->set_medium_text( 'Ad-Hoc Budget-Return' ).
+        gr_column->set_long_text( 'Amount' ).
+
+
+
+        gr_column = gr_columns->get_column( 'TEXT' ).
+        gr_column->set_short_text( 'Text' ).
+        gr_column->set_medium_text( 'Text' ).
+        gr_column->set_long_text( 'Text' ).
+
+
+
+        gr_columns->set_optimize( ).
+
+** Display ALV
+        gr_salv->display( ).
+
+      CATCH cx_salv_msg .
+    ENDTRY.
+  ENDIF.
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  YCOMMITMENT_DRILL
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM ycommitment_drill  USING row TYPE salv_de_row col TYPE salv_de_column..
+  READ TABLE it_final INTO DATA(ls_final) INDEX row.
+  SELECT * FROM fmioi INTO TABLE @DATA(it_fmioi)
+    WHERE rldnr = '9A' AND gjahr  = @ls_final-yfyear AND fikrs = @ls_final-fikrs
+    AND fistl = @ls_final-fictr AND fipex = @ls_final-fipex .
+
+  LOOP AT it_fmioi INTO DATA(wa_fmioi).
+    IF wa_fmioi-wrttp = '50' OR   wa_fmioi-wrttp = '51' OR  wa_fmioi-wrttp =  '52' OR
+       wa_fmioi-wrttp =  '65' OR  wa_fmioi-wrttp = '81' OR  wa_fmioi-wrttp =  '82'.
+
+      MOVE-CORRESPONDING wa_fmioi TO wa_commit_drill.
+      wa_commit_drill-fkbtr = wa_fmioi-fkbtr * -1.
+
+      APPEND wa_commit_drill TO  it_commit_drill.
+      CLEAR: wa_fmioi,wa_commit_drill.
+
+    ENDIF.
+  ENDLOOP.
+  CLEAR: wa_fmioi,wa_commit_drill.
+*  APPEND wa_commit_drill TO  it_commit_drill.
+
+  IF it_commit_drill[] IS NOT INITIAL  .
+    DATA: gr_salv      TYPE REF TO cl_salv_table,
+          gr_functions TYPE REF TO cl_salv_functions,
+          gr_display   TYPE REF TO cl_salv_display_settings,
+          gr_columns   TYPE REF TO cl_salv_columns_table,
+          gr_column    TYPE REF TO cl_salv_column,
+          lo_function  TYPE REF TO cl_salv_functions_list,
+          lo_evnt      TYPE REF TO  cl_salv_events_table,
+          lr_layout    TYPE REF TO cl_salv_layout,
+          key          TYPE salv_s_layout_key,
+          lo_obj       TYPE REF TO evnt.
+*-> Begin of changes by of VIPUL on 10/23/2024 for ATC
+    sort it_commit_drill[].
+*    ** -> End of changes by of VIPUL on 10/23/2024 for ATC
+    TRY.
+        CALL METHOD cl_salv_table=>factory
+          IMPORTING
+            r_salv_table = gr_salv
+          CHANGING
+            t_table      = it_commit_drill[].
+
+
+** Display Sort, Filter, Export etc buttons
+        gr_functions = gr_salv->get_functions( ).
+
+        gr_functions->set_all( abap_true ).
+        gr_display = gr_salv->get_display_settings( ).
+
+        lr_layout = gr_salv->get_layout( ).
+        key-report = sy-repid.
+        lr_layout->set_key( key ).
+        lr_layout->set_save_restriction( if_salv_c_layout=>restrict_none ).
+*        lr_layout->set_default( abap_true ).
+*        lr_columns->set_hyperlink_entry_column( 'T_HYPERLINK' ).
+
+
+        gr_columns = gr_salv->get_columns( ).
+
+        gr_column = gr_columns->get_column( 'FIKRS' ).
+        gr_column->set_short_text( 'FM Area' ).
+        gr_column->set_medium_text( 'FM Area' ).
+        gr_column->set_long_text( 'FM Area' ).
+
+        gr_column = gr_columns->get_column( 'REFBN' ).
+        gr_column->set_short_text( 'Ref.doc No' ).
+        gr_column->set_medium_text( 'Ref. document number' ).
+        gr_column->set_long_text( 'Ref. document number' ).
+
+        gr_column = gr_columns->get_column( 'RFPOS' ).
+        gr_column->set_short_text( 'Ref item' ).
+*        gr_column->set_medium_text( 'Funds Center Description' ).
+        gr_column->set_long_text( ' Reference item' ).
+
+        gr_column = gr_columns->get_column( 'RFTYP' ).
+        gr_column->set_short_text( 'Ref proc' ).
+        gr_column->set_medium_text( 'Reference procedure' ).
+        gr_column->set_long_text( 'Reference procedure' ).
+
+        gr_column = gr_columns->get_column( 'BTART' ).
+        gr_column->set_short_text( 'Amt type' ).
+*        gr_column->set_medium_text( 'Commitment Item Description' ).
+        gr_column->set_long_text( 'Amount type' ).
+
+        gr_column = gr_columns->get_column( 'RLDNR' ).
+        gr_column->set_short_text( 'Ledger' ).
+        gr_column->set_medium_text( 'Ledger' ).
+        gr_column->set_long_text( 'Ledger' ).
+        gr_columns->get_hyperlink_entry_column(  ).
+
+        gr_column = gr_columns->get_column( 'GJAHR' ).
+        gr_column->set_short_text( 'Fisc Year' ).
+*        gr_column->set_medium_text( 'Revised Budget-Return' ).
+        gr_column->set_long_text( 'Fiscal Year' ).
+
+        gr_column = gr_columns->get_column( 'ZHLDT' ).
+        gr_column->set_short_text( 'FM post dt' ).
+*        gr_column->set_medium_text( 'Revised Budget-Supplement' ).
+        gr_column->set_long_text( 'FM posting date' ).
+
+        gr_column = gr_columns->get_column( 'PERIO' ).
+        gr_column->set_short_text( 'Period' ).
+*        gr_column->set_medium_text( 'Budget Transfer-Received' ).
+        gr_column->set_long_text( 'Period' ).
+
+        gr_column = gr_columns->get_column( 'FISTL' ).
+        gr_column->set_short_text( 'Fund Centr' ).
+*        gr_column->set_medium_text( 'Budget Transfer-Sent' ).
+        gr_column->set_long_text( 'Funds Center' ).
+
+        gr_column = gr_columns->get_column( 'FIPEX' ).
+        gr_column->set_short_text( 'Comm item' ).
+*        gr_column->set_medium_text( 'Ad-Hoc Budget-Return' ).
+        gr_column->set_long_text( 'Commitment item' ).
+
+
+
+        gr_column = gr_columns->get_column( 'WRTTP' ).
+        gr_column->set_short_text( 'Value Type' ).
+*        gr_column->set_medium_text( 'Ad-Hoc Budget - Supplement' ).
+        gr_column->set_long_text( 'Value Type' ).
+
+
+        gr_column = gr_columns->get_column( 'VRGNG' ).
+        gr_column->set_short_text( 'Busi Trans' ).
+*        gr_column->set_medium_text( 'Ad-Hoc Budget - Supplement' ).
+        gr_column->set_long_text( 'Business Transaction' ).
+
+
+        gr_column = gr_columns->get_column( 'BUKRS' ).
+        gr_column->set_short_text( 'Comp Code' ).
+*        gr_column->set_medium_text( 'Ad-Hoc Budget - Supplement' ).
+        gr_column->set_long_text( 'Company Code' ).
+
+
+        gr_column = gr_columns->get_column( 'BUDAT' ).
+        gr_column->set_short_text( 'Post Date' ).
+*        gr_column->set_medium_text( 'Ad-Hoc Budget - Supplement' ).
+        gr_column->set_long_text( 'Posting Date' ).
+
+        gr_column = gr_columns->get_column( 'TCODE' ).
+        gr_column->set_short_text( 'Trans Code' ).
+*        gr_column->set_medium_text( 'Ad-Hoc Budget - Supplement' ).
+        gr_column->set_long_text( 'Transaction Code' ).
+
+
+        gr_column = gr_columns->get_column( 'FKBTR' ).
+        gr_column->set_short_text( 'Amount' ).
+*        gr_column->set_medium_text( 'Ad-Hoc Budget - Supplement' ).
+        gr_column->set_long_text( 'Amount' ).
+
+        gr_column = gr_columns->get_column( 'SGTXT' ).
+        gr_column->set_short_text( 'Text' ).
+*        gr_column->set_medium_text( 'Ad-Hoc Budget - Supplement' ).
+        gr_column->set_long_text( 'Text' ).
+
+
+
+
+        gr_columns->set_optimize( ).
+
+** Display ALV
+        gr_salv->display( ).
+
+      CATCH cx_salv_msg .
+    ENDTRY.
+  ENDIF.
+  REFRESH: it_commit_drill.
+
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  YACTUAL_FM_DRILL
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM yactual_fm_drill  USING row TYPE salv_de_row col TYPE salv_de_column. .
+  READ TABLE it_final INTO DATA(ls_final) INDEX row.
+
+  SELECT * FROM fmifiit  INTO TABLE @DATA(it_fmifiit)
+  WHERE rldnr = '9A' AND gjahr  = @ls_final-yfyear AND fikrs = @ls_final-fikrs
+  AND fistl = @ls_final-fictr  AND fipex = @ls_final-fipex.
+
+  LOOP AT it_fmifiit INTO DATA(wa_fmifiit).
+    IF wa_fmifiit-wrttp = '54'  OR  wa_fmifiit-wrttp =  '57' OR
+       wa_fmifiit-wrttp =  '58' OR  wa_fmifiit-wrttp = '61'
+       OR  wa_fmifiit-wrttp =  '62' OR  wa_fmifiit-wrttp =  '6B'.
+
+      MOVE-CORRESPONDING wa_fmifiit TO wa_actfm_drill.
+
+      wa_actfm_drill-fkbtr = wa_fmifiit-fkbtr * -1.
+
+      APPEND wa_actfm_drill TO  it_actfm_drill.
+      CLEAR:wa_fmifiit, wa_actfm_drill.
+
+    ENDIF.
+  ENDLOOP.
+  CLEAR:wa_fmifiit, wa_actfm_drill.
+
+  IF it_actfm_drill[] IS NOT INITIAL  .
+    DATA: gr_salv      TYPE REF TO cl_salv_table,
+          gr_functions TYPE REF TO cl_salv_functions,
+          gr_display   TYPE REF TO cl_salv_display_settings,
+          gr_columns   TYPE REF TO cl_salv_columns_table,
+          gr_column    TYPE REF TO cl_salv_column,
+          lo_function  TYPE REF TO cl_salv_functions_list,
+          lo_evnt      TYPE REF TO  cl_salv_events_table,
+          lr_layout    TYPE REF TO cl_salv_layout,
+          key          TYPE salv_s_layout_key,
+          lo_obj       TYPE REF TO evnt.
+
+*    -> Begin of changes by of VIPUL on 10/23/2024 for ATC
+    sort it_actfm_drill[].
+*    ** -> End of changes by of VIPUL on 10/23/2024 for ATC
+
+    TRY.
+        CALL METHOD cl_salv_table=>factory
+          IMPORTING
+            r_salv_table = gr_salv
+          CHANGING
+            t_table      = it_actfm_drill[].
+
+
+
+** Display Sort, Filter, Export etc buttons
+        gr_functions = gr_salv->get_functions( ).
+
+        gr_functions->set_all( abap_true ).
+        gr_display = gr_salv->get_display_settings( ).
+
+        lr_layout = gr_salv->get_layout( ).
+        key-report = sy-repid.
+        lr_layout->set_key( key ).
+        lr_layout->set_save_restriction( if_salv_c_layout=>restrict_none ).
+*        lr_layout->set_default( abap_true ).
+**        lr_columns->set_hyperlink_entry_column( 'T_HYPERLINK' ).
+*
+*
+        gr_columns = gr_salv->get_columns( ).
+
+        gr_column = gr_columns->get_column( 'FIKRS' ).
+        gr_column->set_short_text( 'FM Area' ).
+        gr_column->set_medium_text( 'FM Area' ).
+        gr_column->set_long_text( 'FM Area' ).
+
+        gr_column = gr_columns->get_column( 'FMBELNR' ).
+        gr_column->set_short_text( 'FM Doc No' ).
+        gr_column->set_medium_text( 'FM Document Number' ).
+        gr_column->set_long_text( 'FM Document Number' ).
+
+        gr_column = gr_columns->get_column( 'FMBUZEI' ).
+        gr_column->set_short_text( 'Item' ).
+*        gr_column->set_medium_text( 'Funds Center Description' ).
+        gr_column->set_long_text( ' Item' ).
+
+        gr_column = gr_columns->get_column( 'BTART' ).
+        gr_column->set_short_text( 'Amt type' ).
+        gr_column->set_medium_text( 'Amount type' ).
+        gr_column->set_long_text( 'Amount type' ).
+
+
+        gr_column = gr_columns->get_column( 'RLDNR' ).
+        gr_column->set_short_text( 'Ledger' ).
+        gr_column->set_medium_text( 'Ledger' ).
+        gr_column->set_long_text( 'Ledger' ).
+        gr_columns->get_hyperlink_entry_column(  ).
+
+        gr_column = gr_columns->get_column( 'GJAHR' ).
+        gr_column->set_short_text( 'Fisc Year' ).
+        gr_column->set_medium_text( 'Fiscal Year' ).
+        gr_column->set_long_text( 'Fiscal Year' ).
+
+        gr_column = gr_columns->get_column( 'ZHLDT' ).
+        gr_column->set_short_text( 'FM post dt' ).
+        gr_column->set_medium_text( 'FM posting date' ).
+        gr_column->set_long_text( 'FM posting date' ).
+
+        gr_column = gr_columns->get_column( 'PERIO' ).
+        gr_column->set_short_text( 'Period' ).
+        gr_column->set_medium_text( 'Period' ).
+        gr_column->set_long_text( 'Period' ).
+
+        gr_column = gr_columns->get_column( 'FISTL' ).
+        gr_column->set_short_text( 'Fund Centr' ).
+        gr_column->set_medium_text( 'Funds Center' ).
+        gr_column->set_long_text( 'Funds Center' ).
+
+        gr_column = gr_columns->get_column( 'FIPEX' ).
+        gr_column->set_short_text( 'Comm item' ).
+        gr_column->set_medium_text( 'Commitment item' ).
+        gr_column->set_long_text( 'Commitment item' ).
+
+
+
+        gr_column = gr_columns->get_column( 'WRTTP' ).
+        gr_column->set_short_text( 'Value Type' ).
+        gr_column->set_medium_text( 'Commitment item' ).
+        gr_column->set_long_text( 'Value Type' ).
+
+
+        gr_column = gr_columns->get_column( 'VRGNG' ).
+        gr_column->set_short_text( 'Busi Trans' ).
+        gr_column->set_medium_text( 'Business Trans' ).
+        gr_column->set_long_text( 'Business Transaction' ).
+
+
+        gr_column = gr_columns->get_column( 'BUKRS' ).
+        gr_column->set_short_text( 'Comp Code' ).
+        gr_column->set_medium_text( 'Company Code' ).
+        gr_column->set_long_text( 'Company Code' ).
+
+
+        gr_column = gr_columns->get_column( 'KNGJAHR' ).
+*      gr_column->set_short_text( 'FI doc.no.fisc.year' ).
+        gr_column->set_medium_text( 'FI doc.no.fis' ).
+        gr_column->set_long_text( 'FI doc.no.fisc.year' ).
+
+        gr_column = gr_columns->get_column( 'KNBELNR' ).
+        gr_column->set_short_text( 'FI doc no' ).
+        gr_column->set_medium_text( 'FI Docu. No' ).
+        gr_column->set_long_text( 'FI Document Number' ).
+
+
+        gr_column = gr_columns->get_column( 'KNBUZEI' ).
+*      gr_column->set_short_text( 'Amount' ).
+        gr_column->set_medium_text( 'FI docu no. item' ).
+        gr_column->set_long_text( 'FI document no. item' ).
+
+        gr_column = gr_columns->get_column( 'FKBTR' ).
+        gr_column->set_short_text( 'Amount' ).
+        gr_column->set_medium_text( 'Amount' ).
+        gr_column->set_long_text( 'Amount' ).
+
+        gr_column = gr_columns->get_column( 'SGTXT' ).
+        gr_column->set_short_text( 'Text' ).
+        gr_column->set_medium_text( 'Text' ).
+        gr_column->set_long_text( 'Text' ).
+
+
+        gr_columns->set_optimize( ).
+
+** Display ALV
+        gr_salv->display( ).
+        REFRESH: it_actfm_drill.
+
+      CATCH cx_salv_msg .
+    ENDTRY.
+  ENDIF.
+  REFRESH: it_actfm_drill.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FI_DRILL
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM fi_drill  USING row TYPE salv_de_row col TYPE salv_de_column..
+
+  READ TABLE it_final INTO DATA(ls_final) INDEX row.
+*  SELECT bukrs, fikrs FROM t001 INTO TABLE @DATA(it_t001) FOR ALL ENTRIES IN @it_final WHERE fikrs = @it_final-fikrs.
+  SELECT  bukrs, fikrs FROM t001 INTO TABLE @DATA(it_t001) WHERE fikrs = @ls_final-fikrs.
+  RANGES: r_bukrs FOR t001-bukrs,
+          r_fictr FOR bseg-fistl,
+          r_fipex FOR bseg-fipos.
+  DATA   : fipex TYPE bseg-fipos.
+
+  fipex = ls_final-fipex.
+  CONDENSE fipex.
+
+  SELECT fikrs,fmbelnr,knbelnr ,gjahr,kngjahr, fmbuzei,knbuzei ,bukrs FROM fmifiit  FOR ALL ENTRIES IN @lt_bseg
+    WHERE bukrs = @lt_bseg-bukrs  AND knbelnr = @lt_bseg-belnr
+    AND  kngjahr = @lt_bseg-gjahr
+  AND  knbuzei = @lt_bseg-buzei INTO TABLE @DATA(it_fmit).
+
+
+  LOOP AT lt_bseg INTO DATA(wa_bseg) WHERE fistl = ls_final-fictr AND fipos = fipex" in @r_fipex
+      AND gjahr = ls_final-yfyear .
+* SOC Kartik gupta/ Brijesh charm; 2000000837 REPORTS & VALIDATION IN BCS 29.07.2024
+    READ TABLE lt_ska1 INTO DATA(wa_ska1) WITH KEY saknr = wa_bseg-hkont.
+* EOC Kartik gupta/ Brijesh charm; 2000000837 REPORTS & VALIDATION IN BCS 29.07.2024
+    IF sy-subrc = 0.
+
+      READ TABLE it_t001 INTO DATA(ls_t001) WITH KEY bukrs = wa_bseg-bukrs .
+      IF sy-subrc =  0.
+        wa_fi_drill-fikrs  =  ls_t001-fikrs.
+      ENDIF.
+*
+      wa_fi_drill-bukrs    =  wa_bseg-bukrs.
+      wa_fi_drill-belnr  =   wa_bseg-belnr.
+      wa_fi_drill-gjahr   =  wa_bseg-gjahr.
+      wa_fi_drill-buzei    =  wa_bseg-buzei.
+      wa_fi_drill-shkzg    =  wa_bseg-shkzg.
+      wa_fi_drill-koart    =  wa_bseg-koart.
+      IF  wa_bseg-shkzg = 'S'.
+        wa_fi_drill-dmbtr    =  wa_bseg-dmbtr .
+      ELSEIF wa_bseg-shkzg = 'H'.
+        wa_fi_drill-dmbtr    =  wa_bseg-dmbtr * -1.
+      ENDIF.
+
+      wa_fi_drill-vorgn    =  wa_bseg-vorgn.
+      wa_fi_drill-hkont   =   wa_bseg-hkont.
+      wa_fi_drill-kunnr   =   wa_bseg-kunnr.
+      wa_fi_drill-lifnr   =   wa_bseg-lifnr.
+      wa_fi_drill-fistl  =    wa_bseg-fistl.
+      wa_fi_drill-fipos  =    wa_bseg-fipos.
+      wa_fi_drill-sgtxt  =    wa_bseg-sgtxt.
+
+
+      READ TABLE it_fmit INTO DATA(wa_fmit) WITH KEY bukrs = wa_bseg-bukrs
+                                                   knbelnr = wa_bseg-belnr
+                                                   kngjahr = wa_bseg-gjahr
+                                                   knbuzei = wa_bseg-buzei.
+
+      IF sy-subrc = 0.
+        wa_fi_drill-fmbelnr  = wa_fmit-fmbelnr.
+        wa_fi_drill-fm_gjahr  = wa_fmit-gjahr.
+        wa_fi_drill-fmbuzei = wa_fmit-fmbuzei.
+
+      ENDIF.
+
+      APPEND wa_fi_drill TO it_fi_drill.
+      CLEAR:wa_bseg,wa_fi_drill,ls_t001.
+    ENDIF.
+  ENDLOOP.
+
+  IF it_fi_drill[] IS NOT INITIAL  .
+    DATA: gr_salv         TYPE REF TO cl_salv_table,
+          gr_functions    TYPE REF TO cl_salv_functions,
+          gr_display      TYPE REF TO cl_salv_display_settings,
+          gr_columns      TYPE REF TO cl_salv_columns_table,
+          gr_column       TYPE REF TO cl_salv_column,
+          lo_function     TYPE REF TO cl_salv_functions_list,
+          lo_evnt         TYPE REF TO  cl_salv_events_table,
+          lr_layout       TYPE REF TO cl_salv_layout,
+          key             TYPE salv_s_layout_key,
+          lo_obj          TYPE REF TO evnt,
+          lr_aggregations TYPE REF TO cl_salv_aggregations.
+
+
+    TRY.
+        CALL METHOD cl_salv_table=>factory
+          IMPORTING
+            r_salv_table = gr_salv
+          CHANGING
+            t_table      = it_fi_drill[].
+
+
+** Display Sort, Filter, Export etc buttons
+        gr_functions = gr_salv->get_functions( ).
+
+        gr_functions->set_all( abap_true ).
+        gr_display = gr_salv->get_display_settings( ).
+
+        lr_layout = gr_salv->get_layout( ).
+        key-report = sy-repid.
+        lr_layout->set_key( key ).
+        lr_layout->set_save_restriction( if_salv_c_layout=>restrict_none ).
+
+        lr_aggregations = gr_salv->get_aggregations( ).
+
+        TRY.
+
+            CALL METHOD lr_aggregations->add_aggregation(
+                columnname  = 'DMBTR'
+                aggregation = if_salv_c_aggregation=>total ).
+        ENDTRY.
+
+*        gr_salv->get_sorts( )->add_sort(  total = 'X' )."columnname = 'DMBTR'
+*        gr_salv->get_aggregations( )->add_aggregation( columnname = 'DMBTR' ).
+
+        gr_columns = gr_salv->get_columns( ).
+
+        gr_column = gr_columns->get_column( 'FIKRS' ).
+*        gr_column->set_short_text( 'FM Area' ).
+*        gr_column->set_medium_text( 'FM Area' ).
+*        gr_column->set_long_text( 'FM Area' ).
+
+        gr_column = gr_columns->get_column( 'BUKRS' ).
+*        gr_column->set_short_text( 'FM Doc No' ).
+*        gr_column->set_medium_text( 'FM Document Number' ).
+*        gr_column->set_long_text( 'FM Document Number' ).
+
+        gr_column = gr_columns->get_column( 'BELNR' ).
+*        gr_column->set_short_text( 'Item' ).
+**        gr_column->set_medium_text( 'Funds Center Description' ).
+*        gr_column->set_long_text( ' Item' ).
+
+        gr_column = gr_columns->get_column( 'GJAHR' ).
+*        gr_column->set_short_text( 'Amt type' ).
+*        gr_column->set_medium_text( 'Amount type' ).
+*        gr_column->set_long_text( 'Amount type' ).
+
+
+        gr_column = gr_columns->get_column( 'BUZEI' ).
+*        gr_column->set_short_text( 'Ledger' ).
+*        gr_column->set_medium_text( 'Ledger' ).
+*        gr_column->set_long_text( 'Ledger' ).
+
+
+        gr_column = gr_columns->get_column( 'SHKZG' ).
+*        gr_column->set_short_text( 'Fisc Year' ).
+**        gr_column->set_medium_text( 'Revised Budget-Return' ).
+*        gr_column->set_long_text( 'Fiscal Year' ).
+
+        gr_column = gr_columns->get_column( 'KOART' ).
+*        gr_column->set_short_text( 'FM post dt' ).
+**        gr_column->set_medium_text( 'Revised Budget-Supplement' ).
+*        gr_column->set_long_text( 'FM posting date' ).
+
+        gr_column = gr_columns->get_column( 'DMBTR' ).
+*        gr_column->set_short_text( 'Period' ).
+**        gr_column->set_medium_text( 'Budget Transfer-Received' ).
+*        gr_column->set_long_text( 'Period' ).
+
+        gr_column = gr_columns->get_column( 'VORGN' ).
+*        gr_column->set_short_text( 'Fund Centr' ).
+**        gr_column->set_medium_text( 'Budget Transfer-Sent' ).
+*        gr_column->set_long_text( 'Funds Center' ).
+
+        gr_column = gr_columns->get_column( 'HKONT' ).
+*        gr_column->set_short_text( 'Comm item' ).
+**        gr_column->set_medium_text( 'Ad-Hoc Budget-Return' ).
+*        gr_column->set_long_text( 'Commitment item' ).
+
+
+
+        gr_column = gr_columns->get_column( 'KUNNR' ).
+*        gr_column->set_short_text( 'Value Type' ).
+**        gr_column->set_medium_text( 'Ad-Hoc Budget - Supplement' ).
+*        gr_column->set_long_text( 'Value Type' ).
+
+
+        gr_column = gr_columns->get_column( 'LIFNR' ).
+*        gr_column->set_short_text( 'Vendor' ).
+*        gr_column->set_medium_text( 'Vendor' ).
+*        gr_column->set_long_text( 'Vendor' ).
+
+
+        gr_column = gr_columns->get_column( 'FISTL' ).
+*        gr_column->set_short_text( 'Comp Code' ).
+**        gr_column->set_medium_text( 'Ad-Hoc Budget - Supplement' ).
+*        gr_column->set_long_text( 'Company Code' ).
+
+
+        gr_column = gr_columns->get_column( 'FIPOS' ).
+*      gr_column->set_short_text( 'FI doc.no.fisc.year' ).
+**        gr_column->set_medium_text( 'Ad-Hoc Budget - Supplement' ).
+*        gr_column->set_long_text( 'FI doc.no.fisc.year' ).
+
+        gr_column = gr_columns->get_column( 'SGTXT' ).
+*        gr_column->set_short_text( 'FI doc no' ).
+**        gr_column->set_medium_text( 'Ad-Hoc Budget - Supplement' ).
+*        gr_column->set_long_text( 'FI document number' ).
+
+        gr_column = gr_columns->get_column( 'FMBELNR' ).
+        gr_column = gr_columns->get_column( 'FM_GJAHR' ).
+        gr_column = gr_columns->get_column( 'FMBUZEI' ).
+
+
+        gr_columns->set_optimize( ).
+
+** Display ALV
+        gr_salv->display( ).
+        REFRESH: it_fi_drill.
+
+      CATCH cx_salv_msg .
+    ENDTRY.
+  ENDIF.
+  REFRESH: it_fi_drill.
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  YTOT_CONS_DRILL
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_ROW  text
+*      -->P_COL  text
+*----------------------------------------------------------------------*
+FORM ytot_cons_drill  USING row TYPE salv_de_row col TYPE salv_de_column.
+
+  READ TABLE it_final INTO DATA(ls_final) INDEX row.
+
+  SELECT
+    fikrs  ,
+    refbn ,
+    rfpos ,
+    btart  ,
+    rldnr  ,
+    zhldt  ,
+    perio  ,
+    fistl  ,
+    fipex  ,
+    wrttp  ,
+    vrgng  ,
+    bukrs  ,
+    gjahr ,
+    fkbtr  ,
+    sgtxt
+     FROM fmioi INTO CORRESPONDING FIELDS OF TABLE @it_fmioi
+    WHERE rldnr = '9A' AND gjahr  = @ls_final-yfyear AND fikrs = @ls_final-fikrs
+    AND fistl = @ls_final-fictr AND fipex = @ls_final-fipex
+    AND wrttp IN ( '50','51','52', '65','81','82' ).
+
+  SELECT
+    fikrs  ,
+    fmbelnr,
+    fmbuzei,
+    btart  ,
+    rldnr  ,
+    gjahr  ,
+    zhldt  ,
+    perio  ,
+    fistl  ,
+    fipex  ,
+    wrttp  ,
+    vrgng  ,
+    bukrs  ,
+    kngjahr,
+    knbelnr,
+    knbuzei,
+    fkbtr  ,
+    sgtxt
+
+     FROM fmifiit  APPENDING CORRESPONDING FIELDS OF TABLE @it_fmioi"(it_fmifiit)
+  WHERE rldnr = '9A' AND gjahr  = @ls_final-yfyear AND fikrs = @ls_final-fikrs
+  AND fistl = @ls_final-fictr  AND fipex = @ls_final-fipex
+ AND wrttp IN ( '54','57', '58','61','62','6B' ) .
+
+
+  LOOP AT it_fmioi INTO DATA(wa_fmifiit).
+
+    MOVE-CORRESPONDING wa_fmifiit TO wa_tot_drill.
+    wa_tot_drill-fkbtr = wa_fmifiit-fkbtr * -1.
+
+    APPEND wa_tot_drill TO it_totcons_drill.
+
+  ENDLOOP.
+
+  IF it_totcons_drill[] IS NOT INITIAL  .
+    DATA: gr_salv      TYPE REF TO cl_salv_table,
+          gr_functions TYPE REF TO cl_salv_functions,
+          gr_display   TYPE REF TO cl_salv_display_settings,
+          gr_columns   TYPE REF TO cl_salv_columns_table,
+          gr_column    TYPE REF TO cl_salv_column,
+          lo_function  TYPE REF TO cl_salv_functions_list,
+          lo_evnt      TYPE REF TO  cl_salv_events_table,
+          lr_layout    TYPE REF TO cl_salv_layout,
+          key          TYPE salv_s_layout_key,
+          lo_obj       TYPE REF TO evnt.
+*-> Begin of changes by of VIPUL on 10/23/2024 for ATC
+    sort it_totcons_drill[].
+*    ** -> End of changes by of VIPUL on 10/23/2024 for ATC
+    TRY.
+        CALL METHOD cl_salv_table=>factory
+          IMPORTING
+            r_salv_table = gr_salv
+          CHANGING
+            t_table      = it_totcons_drill[].
+
+
+** Display Sort, Filter, Export etc buttons
+        gr_functions = gr_salv->get_functions( ).
+
+        gr_functions->set_all( abap_true ).
+        gr_display = gr_salv->get_display_settings( ).
+
+        lr_layout = gr_salv->get_layout( ).
+        key-report = sy-repid.
+        lr_layout->set_key( key ).
+        lr_layout->set_save_restriction( if_salv_c_layout=>restrict_none ).
+*        lr_layout->set_default( abap_true ).
+**        lr_columns->set_hyperlink_entry_column( 'T_HYPERLINK' ).
+*
+*
+        gr_columns = gr_salv->get_columns( ).
+
+        gr_column = gr_columns->get_column( 'FIKRS' ).
+        gr_column->set_short_text( 'FM Area' ).
+        gr_column->set_medium_text( 'FM Area' ).
+        gr_column->set_long_text( 'FM Area' ).
+
+        gr_column = gr_columns->get_column( 'FMBELNR' ).
+        gr_column->set_short_text( 'FM Doc No' ).
+        gr_column->set_medium_text( 'FM Document Number' ).
+        gr_column->set_long_text( 'FM Document Number' ).
+
+        gr_column = gr_columns->get_column( 'FMBUZEI' ).
+        gr_column->set_short_text( 'Item' ).
+*        gr_column->set_medium_text( 'Funds Center Description' ).
+        gr_column->set_long_text( ' Item' ).
+
+        gr_column = gr_columns->get_column( 'BTART' ).
+        gr_column->set_short_text( 'Amt type' ).
+        gr_column->set_medium_text( 'Amount type' ).
+        gr_column->set_long_text( 'Amount type' ).
+
+
+        gr_column = gr_columns->get_column( 'RLDNR' ).
+        gr_column->set_short_text( 'Ledger' ).
+        gr_column->set_medium_text( 'Ledger' ).
+        gr_column->set_long_text( 'Ledger' ).
+        gr_columns->get_hyperlink_entry_column(  ).
+
+        gr_column = gr_columns->get_column( 'GJAHR' ).
+        gr_column->set_short_text( 'Fisc Year' ).
+        gr_column->set_medium_text( 'Fiscal Year' ).
+        gr_column->set_long_text( 'Fiscal Year' ).
+
+        gr_column = gr_columns->get_column( 'ZHLDT' ).
+        gr_column->set_short_text( 'FM post dt' ).
+        gr_column->set_medium_text( 'FM posting date' ).
+        gr_column->set_long_text( 'FM posting date' ).
+
+        gr_column = gr_columns->get_column( 'PERIO' ).
+        gr_column->set_short_text( 'Period' ).
+        gr_column->set_medium_text( 'Period' ).
+        gr_column->set_long_text( 'Period' ).
+
+        gr_column = gr_columns->get_column( 'FISTL' ).
+        gr_column->set_short_text( 'Fund Centr' ).
+        gr_column->set_medium_text( 'Funds Center' ).
+        gr_column->set_long_text( 'Funds Center' ).
+
+        gr_column = gr_columns->get_column( 'FIPEX' ).
+        gr_column->set_short_text( 'Comm item' ).
+        gr_column->set_medium_text( 'Commitment item' ).
+        gr_column->set_long_text( 'Commitment item' ).
+
+
+
+        gr_column = gr_columns->get_column( 'WRTTP' ).
+        gr_column->set_short_text( 'Value Type' ).
+        gr_column->set_medium_text( 'Commitment item' ).
+        gr_column->set_long_text( 'Value Type' ).
+
+
+        gr_column = gr_columns->get_column( 'VRGNG' ).
+        gr_column->set_short_text( 'Busi Trans' ).
+        gr_column->set_medium_text( 'Business Trans' ).
+        gr_column->set_long_text( 'Business Transaction' ).
+
+
+        gr_column = gr_columns->get_column( 'BUKRS' ).
+        gr_column->set_short_text( 'Comp Code' ).
+        gr_column->set_medium_text( 'Company Code' ).
+        gr_column->set_long_text( 'Company Code' ).
+
+
+        gr_column = gr_columns->get_column( 'KNGJAHR' ).
+*      gr_column->set_short_text( 'FI doc.no.fisc.year' ).
+        gr_column->set_medium_text( 'FI doc.no.fis' ).
+        gr_column->set_long_text( 'FI doc.no.fisc.year' ).
+
+        gr_column = gr_columns->get_column( 'KNBELNR' ).
+        gr_column->set_short_text( 'FI doc no' ).
+        gr_column->set_medium_text( 'FI Docu. No' ).
+        gr_column->set_long_text( 'FI Document Number' ).
+
+
+        gr_column = gr_columns->get_column( 'KNBUZEI' ).
+*      gr_column->set_short_text( 'Amount' ).
+        gr_column->set_medium_text( 'FI docu no. item' ).
+        gr_column->set_long_text( 'FI document no. item' ).
+
+        gr_column = gr_columns->get_column( 'FKBTR' ).
+        gr_column->set_short_text( 'Amount' ).
+        gr_column->set_medium_text( 'Amount' ).
+        gr_column->set_long_text( 'Amount' ).
+
+        gr_column = gr_columns->get_column( 'SGTXT' ).
+        gr_column->set_short_text( 'Text' ).
+        gr_column->set_medium_text( 'Text' ).
+        gr_column->set_long_text( 'Text' ).
+
+
+
+
+        gr_columns->set_optimize( ).
+
+** Display ALV
+        gr_salv->display( ).
+        REFRESH: it_totcons_drill.
+
+      CATCH cx_salv_msg .
+    ENDTRY.
+  ENDIF.
+  REFRESH: it_totcons_drill.
+
+ENDFORM.

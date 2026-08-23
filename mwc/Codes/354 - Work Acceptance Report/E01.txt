@@ -1,0 +1,30 @@
+*&---------------------------------------------------------------------*
+*& Include          ZIN_S2P_WORK_ACC_RPT_E01
+*&---------------------------------------------------------------------*
+*& Requirement Id: DID_S2P_354                                          *
+*& Title: Work Accomplishment Report                                    *
+*& Date Created: 25.07.2025                                             *
+*& Programmer: Sarfraz Sayyad Ali (SARFRAZS)                            *
+*& Program Objective: Displays WAR report for service line items       *
+*& Orig Request: DS4K903120                                             *
+*&----------------------------------------------------------------------*
+*& Modification History                                                 *
+*&----------------------------------------------------------------------*
+*& Modified By:                                                         *
+*& Date:                                                                *
+*& Modification TR:                                                     *
+*& Reason:                                                              *
+*&----------------------------------------------------------------------*
+
+************************************************************************
+* INITIALIZATION - Set up screen defaults and dropdowns on load
+************************************************************************
+INITIALIZATION.
+  PERFORM f_dropdown.       " Populate dropdown values for selection screen
+
+************************************************************************
+* START-OF-SELECTION - Main logic begins after user input
+************************************************************************
+START-OF-SELECTION.
+  PERFORM f_get_data.       " Retrieve and process report data
+  PERFORM f_display_alv.    " Present results using ALV grid

@@ -1,0 +1,77 @@
+*&---------------------------------------------------------------------*
+*& Include          ZIN_R2R_PROCESS_PAYMENT_E01
+*&---------------------------------------------------------------------*
+************************************************************************
+* Requirement Id: DID_M2C_180                                          *
+* Title: Program to process the payment acknowledgement files          *
+* Date Created: 27.05.2025                                             *
+* Programmer:  TAMBOLIV                                                *
+* Program Objective: This program will process the payment             *
+* acknowledgement files                                                *
+* Orig Request: DS4K900847                                             *
+************************************************************************
+* Modification History                                                 *
+************************************************************************
+* Modified By:                                                         *
+* Date:                                                                *
+* Modification TR:                                                     *
+* Reason:                                                              *
+************************************************************************
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_path.
+
+  CLEAR p_path.
+  CALL FUNCTION '/SAPDMC/LSM_F4_SERVER_FILE'
+    EXPORTING
+      directory  = '/'
+      filemask   = '*'
+    IMPORTING
+      serverfile = p_path
+    EXCEPTIONS
+      OTHERS     = 1.  " Catch any unexpected errors
+
+  IF sy-subrc <> 0.
+    MESSAGE TEXT-119 TYPE 'I'.
+    CLEAR p_path.
+    RETURN.
+  ENDIF.
+
+AT SELECTION-SCREEN OUTPUT.
+  IF rb1 = 'X'.
+    gv_radiob = 'RB1'.
+  ELSEIF rb2 = 'X'.
+    gv_radiob = 'RB2'.
+  ELSEIF rb3 = 'X'.
+    gv_radiob = 'RB3'.
+  ELSE.
+    gv_radiob = 'RB4'.
+  ENDIF.
+  IF gv_radiob NE gv_rb.
+    CLEAR: p_file.
+    CLEAR: p_path.
+  ENDIF.
+
+  IF rb1 = 'X'.
+    gv_rb = 'RB1'.
+  ELSEIF rb2 = 'X'.
+    gv_rb = 'RB2'.
+  ELSEIF rb3 = 'X'.
+    gv_rb = 'RB3'.
+  ELSE.
+    gv_rb = 'RB4'.
+  ENDIF.
+
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_file.
+
+  CLEAR: p_file.
+  CALL FUNCTION 'F4_FILENAME'
+    EXPORTING
+      program_name  = syst-cprog
+      dynpro_number = syst-dynnr
+      field_name    = ' '
+    IMPORTING
+      file_name     = p_file.
+
+START-OF-SELECTION.
+  PERFORM get_data.
+*  PERFORM process_data.

@@ -1,0 +1,32 @@
+TABL - 
+
+MANDT	MANDT	CLNT	3	0	0	Client
+EBELN	EBELN	CHAR	10	0	0	Purchasing Document Number
+EBELP	EBELP	NUMC	5	0	0	Item Number of Purchasing Document
+ZEKKN	DZEKKN	NUMC	2	0	0	Sequential Number of Account Assignment
+KDATB	KDATB	DATS	8	0	0	Start of Validity Period
+KDATE	KDATE	DATS	8	0	0	End of Validity Period
+ZFLAG	ZDE_FLAG	CHAR	1	0	0	Flag
+
+FUGR - 
+* regenerated at 23.07.2025 14:44:38
+*******************************************************************
+*   System-defined Include-files.                                 *
+*******************************************************************
+  INCLUDE LYFI_ACCRUAL_POTOP.                " Global Declarations
+  INCLUDE LYFI_ACCRUAL_POUXX.                " Function Modules
+
+*******************************************************************
+*   User-defined Include-files (if necessary).                    *
+*******************************************************************
+* INCLUDE LYFI_ACCRUAL_POF...                " Subroutines
+* INCLUDE LYFI_ACCRUAL_POO...                " PBO-Modules
+* INCLUDE LYFI_ACCRUAL_POI...                " PAI-Modules
+* INCLUDE LYFI_ACCRUAL_POE...                " Events
+* INCLUDE LYFI_ACCRUAL_POP...                " Local class implement.
+* INCLUDE LYFI_ACCRUAL_POT99.                " ABAP Unit tests
+  INCLUDE LYFI_ACCRUAL_POF00                      . " subprograms
+  INCLUDE LYFI_ACCRUAL_POI00                      . " PAI modules
+  INCLUDE LSVIMFXX                                . " subprograms
+  INCLUDE LSVIMOXX                                . " PBO modules
+  INCLUDE LSVIMIXX                                . " PAI modules

@@ -1,0 +1,13 @@
+PROCESS BEFORE OUTPUT.
+  MODULE status_9003.
+*
+PROCESS AFTER INPUT.
+  MODULE user_command_9003 AT EXIT-COMMAND.
+  MODULE validate_record.
+  MODULE update_record.
+
+PROCESS ON VALUE-REQUEST.
+  FIELD p_esdate MODULE f4_sdate.
+  FIELD p_eedate MODULE f4_edate.
+  FIELD p_eplant MODULE f4_plant.
+  FIELD p_ewtype MODULE f4_wtype.

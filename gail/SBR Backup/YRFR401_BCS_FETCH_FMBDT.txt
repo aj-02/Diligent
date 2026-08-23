@@ -1,0 +1,151 @@
+@AbapCatalog.viewEnhancementCategory: [#NONE]
+
+
+@AccessControl.authorizationCheck: #NOT_REQUIRED
+
+
+@EndUserText.label: 'Fetch records from FMBDT'
+
+
+@Metadata.ignorePropagatedAnnotations: true
+
+
+@ObjectModel.usageType:{
+
+
+    serviceQuality: #X,
+
+
+    sizeCategory: #S,
+
+
+    dataClass: #MIXED
+
+
+}
+
+
+define view entity YRFR401_BCS_FETCH_FMBDT
+
+
+with parameters
+
+
+    s_fikrs : fikrs,
+
+
+    s_gjahr : gjahr
+
+
+as select from fmit as pf
+
+
+{
+
+
+      pf.ryear,
+
+
+      pf.fikrs,
+
+
+      pf.rfistl as rfundsctr,
+
+
+      pf.rfipex as rcmmtitem,
+
+
+      cast( pf.hslvt as abap.dec(17,2) )                                           as hslvt,
+
+
+      cast( pf.hsl01 as abap.dec(17,2) )                                           as hsl01,
+
+
+      cast( pf.hsl02 as abap.dec(17,2) )                                           as hsl02,
+
+
+      cast( pf.hsl03 as abap.dec(17,2) )                                           as hsl03,
+
+
+      cast( pf.hsl04 as abap.dec(17,2) )                                           as hsl04,
+
+
+      cast( pf.hsl05 as abap.dec(17,2) )                                           as hsl05,
+
+
+      cast( pf.hsl06 as abap.dec(17,2) )                                           as hsl06,
+
+
+      cast( pf.hsl07 as abap.dec(17,2) )                                           as hsl07,
+
+
+      cast( pf.hsl08 as abap.dec(17,2) )                                           as hsl08,
+
+
+      cast( pf.hsl09 as abap.dec(17,2) )                                           as hsl09,
+
+
+      cast( pf.hsl10 as abap.dec(17,2) )                                           as hsl10,
+
+
+      cast( pf.hsl11 as abap.dec(17,2) )                                           as hsl11,
+
+
+      cast( pf.hsl12 as abap.dec(17,2) )                                           as hsl12,
+
+
+      cast( pf.hsl13 as abap.dec(17,2) )                                           as hsl13,
+
+
+      cast( pf.hsl14 as abap.dec(17,2) )                                           as hsl14,
+
+
+      cast( pf.hsl15 as abap.dec(17,2) )                                           as hsl15,
+
+
+      cast( pf.hsl16 as abap.dec(17,2) )                                           as hsl16
+
+
+}
+
+
+where
+
+
+  pf.rldnr = '9A' and
+
+
+  (
+
+
+       pf.rwrttp = '50'
+
+
+    or pf.rwrttp = '51'
+
+
+    or pf.rwrttp = '52'
+
+
+    or pf.rwrttp = '65'
+
+
+    or pf.rwrttp = '81'
+
+
+    or pf.rwrttp = '82'
+
+
+    or pf.rwrttp = '54'
+
+
+    or pf.rwrttp = '57'
+
+
+    or pf.rwrttp = '58'
+
+
+    or pf.rwrttp = '61'
+
+
+    or pf.rwrttp = '66'

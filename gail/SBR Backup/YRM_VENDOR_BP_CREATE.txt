@@ -1,0 +1,621 @@
+*&---------------------------------------------------------------------*
+*& Report YRM_VENDOR_BP_CREATE
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+REPORT yrm_vendor_bp_create.
+
+*-------------------------Modification Log-----------------------------*
+* Date         Author              Transport                Release    *
+* 11/06/25     AB_GAIL             SBRK901719                          *
+* Description: BP creation for Vendor                                  *
+*----------------------------------------------------------------------*
+
+*&----------------------------------------------------------------*
+* TYPES                                               *
+*&----------------------------------------------------------------*
+
+TYPES: BEGIN OF ty_bp,
+         bp_num     TYPE bu_partner,
+         comp_code  TYPE bukrs,
+         pur_org    TYPE ekorg,
+         acc_grp    TYPE ktokk,
+         title      TYPE ad_title,
+         name1      TYPE bu_nameor1,
+         name2      TYPE bu_nameor2,
+         sort1      TYPE bu_sort1,
+         sort2      TYPE bu_sort2,
+         str_suppl1 TYPE ad_strspp1,
+         str_suppl2 TYPE ad_strspp2,
+         street	    TYPE ad_street,
+         postl_cod1 TYPE ad_pstcd1,
+         city       TYPE ad_city1,
+         district   TYPE ad_city2,
+         country    TYPE land1,
+         region     TYPE regio,
+         languiso   TYPE laiso,
+         tel_num    TYPE ad_tlnmbr,
+         mob_num    TYPE ad_tlnmbr,
+         fax_num    TYPE ad_fxnmbr,
+         email      TYPE ad_smtpadr,
+         def_comm   TYPE char3,
+         pan_num    TYPE j_1ipanno,
+         gstin      TYPE stcd3,
+*         gstin_cls        TYPE ven_class,
+
+* Bank details
+         banks      TYPE banks,
+         bankl      TYPE bankl,
+         bankn      TYPE bankn,
+         koinh      TYPE bu_koinh,
+         banka      TYPE banka,
+         bkref      TYPE bu_bkref,
+         iban       TYPE iban,
+
+* Company Code
+         akont      TYPE akont,
+         fdgrv      TYPE fdgrv,
+         togru      TYPE togru,
+         zuawa      TYPE dzuawa,
+         frgrp      TYPE frgrp,
+         reprf      TYPE reprf,
+         zwels      TYPE dzwels,
+         hbkid      TYPE hbkid,
+         zterm      TYPE dzterm,
+         kunnr      TYPE kunnr,
+
+* Withholding Tax
+         qland      TYPE qland,
+         witht      TYPE witht,
+         withcd     TYPE wt_withcd,
+         subjct     TYPE wt_subjct,
+         qsrec      TYPE qsrec,
+         wtstcd     TYPE wt_wtstcd,
+         exnr       TYPE wt_exnr,
+         exrt       TYPE wt_exrt,
+         wtexrs     TYPE wt_wtexrs,
+         exdf       TYPE wt_exdf,
+         exdt       TYPE wt_exdt,
+
+* Purchasing Org
+         waers      TYPE waers,
+         term_pay   TYPE dzterm,
+         inco1      TYPE inco1,
+         inco2      TYPE inco2,
+         kalsk      TYPE kalsk,
+         webre      TYPE webre,
+         lebre      TYPE lebre,
+
+       END OF  ty_bp.
+
+*&----------------------------------------------------------------*
+* SELECTION-SCREEN                                                *
+*&----------------------------------------------------------------*
+
+DATA: ls_bp     TYPE ty_bp,
+      lt_bp     TYPE TABLE OF ty_bp,
+      lifnr_out TYPE bu_partner.
+
+DATA: ld_tcode    TYPE tstc-tcode,
+      ld_field    TYPE string,
+      ld_number   TYPE i,
+      ld_number_x TYPE string.
+DATA:
+  lr_strucdescr  TYPE REF TO cl_abap_structdescr,
+  lv_bp_category TYPE bapibus1006_head-partn_cat,
+  lv_bp_guid_32  TYPE bapibus1006_head-partnguid,
+  ls_bp_central  TYPE bapibus1006_central,
+  ls_bp_address  TYPE bapibus1006_address,
+  ls_bp_cent_org TYPE bapibus1006_central_organ,
+  lt_bapiret     TYPE STANDARD TABLE OF bapiret2,
+  ls_bapiret     TYPE bapiret2,
+  lt_bapiadtel   LIKE TABLE OF bapiadtel WITH HEADER LINE,
+  lt_bapiemail   LIKE TABLE OF bapiadsmtp WITH HEADER LINE,
+  lt_message     TYPE bapiret2_tab_kk.
+
+CONSTANTS:
+  c_task_insert TYPE bus_ei_object_task VALUE 'I',
+  c_task_update TYPE bus_ei_object_task VALUE 'U'.
+
+DATA:
+  s_bp            TYPE cvis_ei_extern,
+  t_bp            TYPE cvis_ei_extern_t,
+  t_address       TYPE bus_ei_bupa_address_t,
+  t_role          TYPE bus_ei_bupa_roles_t,
+  t_ident_numbers TYPE bus_ei_bupa_identification_t,
+  t_taxnumbers    TYPE bus_ei_bupa_taxnumber_t,
+  t_return        TYPE bapiretm,
+  v_bu_partner    TYPE bu_partner,
+  v_error         TYPE abap_bool.
+
+
+DATA:
+  lt_phone TYPE bus_ei_bupa_telephone_t,
+  ls_phone TYPE bus_ei_bupa_telephone.
+
+DATA: lt_data     TYPE TABLE OF alsmex_tabline,
+      ls_tab      TYPE alsmex_tabline,
+      lv_filename TYPE rlgrap-filename,
+      data_table  TYPE TABLE OF string.
+
+DATA: ls_company_data    TYPE vmds_ei_company_data,
+      ls_company_datax   TYPE vmds_ei_company_datax,
+      ls_withholding_tax TYPE vmds_ei_wtax_type_s,
+      ls_company_bukrs   TYPE vmds_ei_company_key,
+      ls_company         TYPE vmds_ei_company,
+      lt_company         TYPE vmds_ei_company_t.
+
+DATA: ls_purchasing_data  TYPE vmds_ei_purchasing_data,
+      ls_purchasing_datax TYPE vmds_ei_purchasing_datax,
+      ls_purchasing_ekorg TYPE vmds_ei_purchasing_key,
+      ls_purchasing       TYPE vmds_ei_purchasing,
+      lt_purchasing       TYPE vmds_ei_purchasing_t.
+
+*&----------------------------------------------------------------*
+* SELECTION-SCREEN                                                *
+*&----------------------------------------------------------------*
+SELECTION-SCREEN BEGIN OF BLOCK file WITH FRAME.
+  PARAMETERS: p_file TYPE rlgrap-filename.
+SELECTION-SCREEN END OF BLOCK file.
+
+*&----------------------------------------------------------------*
+* AT SELECTION-SCREEN ON VALUE-REQUEST                            *
+*&----------------------------------------------------------------*
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_file.
+  PERFORM get_filename CHANGING p_file.
+
+*&----------------------------------------------------------------*
+*&      Form  GET_FILENAME                                        *
+*&----------------------------------------------------------------*
+FORM get_filename CHANGING po_p_file.
+
+  DATA: ls_field_name TYPE dynpread-fieldname.
+
+  ls_field_name = 'P_FILE'.
+
+  CALL FUNCTION 'F4_FILENAME'
+    EXPORTING
+      program_name  = syst-cprog
+      dynpro_number = syst-dynnr
+      field_name    = ls_field_name
+    IMPORTING
+      file_name     = po_p_file.
+
+  lv_filename = po_p_file.
+
+ENDFORM.                    " GET_FILENAME
+
+START-OF-SELECTION.
+
+  CALL FUNCTION 'ALSM_EXCEL_TO_INTERNAL_TABLE'
+    EXPORTING
+      filename    = lv_filename
+      i_begin_col = 1
+      i_begin_row = 5
+      i_end_col   = 256
+      i_end_row   = 65536
+    TABLES
+      intern      = lt_data.
+  IF sy-subrc <> 0.
+* Implement suitable error handling here
+  ENDIF.
+
+  LOOP AT lt_data INTO DATA(ls_data).
+    IF ls_data-col = '0001'.
+      ls_bp-bp_num = ls_data-value.
+    ELSEIF ls_data-col = '0002'.
+      ls_bp-comp_code = ls_data-value.
+    ELSEIF ls_data-col = '0005'.
+      ls_bp-title = ls_data-value.
+    ELSEIF ls_data-col = '0006'.
+      ls_bp-name1 = ls_data-value.
+    ELSEIF ls_data-col = '0007'.
+      ls_bp-name2 = ls_data-value.
+    ELSEIF ls_data-col = '0008'.
+      ls_bp-sort1 = ls_data-value.
+    ELSEIF ls_data-col = '0009'.
+      ls_bp-sort2 = ls_data-value.
+    ELSEIF ls_data-col = '0010'.
+      ls_bp-str_suppl1 = ls_data-value.
+    ELSEIF ls_data-col = '0011'.
+      ls_bp-str_suppl2 = ls_data-value.
+    ELSEIF ls_data-col = '0012'.
+      ls_bp-street = ls_data-value.
+    ELSEIF ls_data-col = '0014'.
+      ls_bp-postl_cod1 = ls_data-value.
+    ELSEIF ls_data-col = '0015'.
+      ls_bp-city = ls_data-value.
+    ELSEIF ls_data-col = '0016'.
+      ls_bp-district = ls_data-value.
+    ELSEIF ls_data-col = '0017'.
+*      ls_bp-country = ls_data-value.
+    ELSEIF ls_data-col = '0018'.
+      ls_bp-region = ls_data-value.
+    ELSEIF ls_data-col = '0019'.
+      ls_bp-mob_num = ls_data-value.
+    ELSEIF ls_data-col = '0020'.
+      ls_bp-email = ls_data-value.
+    ELSEIF ls_data-col = '0021'.
+      ls_bp-pan_num = ls_data-value.
+    ELSEIF ls_data-col = '0022'.
+      ls_bp-gstin = ls_data-value.
+    ELSEIF ls_data-col = '0023'.
+*      ls_bp-gstin = ls_data-value.
+    ELSEIF ls_data-col = '0024'.
+*      ls_bp-banks = ls_data-value.
+    ELSEIF ls_data-col = '0025'.
+      ls_bp-bankl = ls_data-value.
+    ELSEIF ls_data-col = '0026'.
+      ls_bp-bankn = ls_data-value.
+    ELSEIF ls_data-col = '0027'.
+      ls_bp-koinh = ls_data-value.
+    ELSEIF ls_data-col = '0028'.
+      ls_bp-banka = ls_data-value.
+    ELSEIF ls_data-col = '0029'.
+      ls_bp-bkref = ls_data-value.
+    ELSEIF ls_data-col = '0030'.
+      ls_bp-akont = ls_data-value.
+    ELSEIF ls_data-col = '0031'.
+      ls_bp-qland = ls_data-value.
+    ELSEIF ls_data-col = '0032'.
+      ls_bp-witht = ls_data-value.
+    ELSEIF ls_data-col = '0033'.
+      ls_bp-withcd = ls_data-value.
+    ELSEIF ls_data-col = '0034'.
+      ls_bp-subjct = ls_data-value.
+    ELSEIF ls_data-col = '0035'.
+      ls_bp-qsrec = ls_data-value.
+    ELSEIF ls_data-col = '0036'.
+      ls_bp-waers = ls_data-value.
+    ELSEIF ls_data-col = '0037'.
+      ls_bp-term_pay = ls_data-value.
+    ENDIF.
+
+    AT END OF row.
+
+      ls_bp-pur_org = 'PHCP'.
+      ls_bp-acc_grp = 'NGAS'.
+      ls_bp-country = 'IN'.
+      ls_bp-languiso = 'EN'.
+      ls_bp-def_comm = 'INT'.
+      ls_bp-banks = 'IN'.
+      ls_bp-reprf = 'X'.
+      ls_bp-kalsk = 'NG'.
+      ls_bp-webre = 'X'.
+      ls_bp-lebre = 'X'.
+
+      APPEND ls_bp TO lt_bp.
+      CLEAR: ls_bp.
+    ENDAT.
+  ENDLOOP.
+
+  DATA: lv_bp_num     TYPE bu_partner.
+
+  LOOP AT lt_bp INTO ls_bp.
+    IF ls_bp-bp_num = lv_bp_num.
+      lv_bp_num = ls_bp-bp_num.
+      CONTINUE.
+    ENDIF.
+
+    CLEAR: ls_bp_central, ls_bp_cent_org, ls_bp_address,
+           lt_bapiadtel[], lt_bapiadtel[], lt_bapiret.
+
+    CLEAR: ls_purchasing_data, ls_purchasing_datax, ls_purchasing_ekorg,
+           ls_purchasing, lt_purchasing[].
+
+    CLEAR: ls_company_data, ls_company_datax, ls_withholding_tax,
+          ls_company_bukrs, ls_company, lt_company.
+
+    CLEAR: s_bp, t_bp.
+
+    ls_bp_central-searchterm1       = ls_bp-sort1.
+    ls_bp_central-searchterm2       = ls_bp-sort2.
+    ls_bp_central-partnerlanguage   = ls_bp-languiso.
+    ls_bp_central-partnerlanguageiso = ls_bp-languiso.
+*    ls_bp_central-title_key         = ls_bp-title.
+    ls_bp_cent_org-name1            = ls_bp-name1.
+    ls_bp_cent_org-name2            = ls_bp-name2.
+    ls_bp_address-langu             = ls_bp-languiso.
+    ls_bp_address-city              = ls_bp-city.
+    ls_bp_address-country           = ls_bp-country.
+    ls_bp_address-street            = ls_bp-street.
+    ls_bp_address-str_suppl1        = ls_bp-str_suppl1.
+    ls_bp_address-str_suppl2        = ls_bp-str_suppl2.
+    ls_bp_address-district          = ls_bp-district.
+    ls_bp_address-region            = ls_bp-region.
+    ls_bp_address-postl_cod1        = ls_bp-postl_cod1.
+
+    CLEAR lt_bapiadtel.
+    lt_bapiadtel-country = ls_bp-country.
+    lt_bapiadtel-std_no = 'X'.
+    lt_bapiadtel-home_flag = 'X'.
+    lt_bapiadtel-telephone = ls_bp-mob_num.
+    APPEND lt_bapiadtel.
+
+    CLEAR lt_bapiemail.
+    lt_bapiemail-std_no = 'X'.
+    lt_bapiemail-e_mail = ls_bp-email.
+    APPEND lt_bapiemail.
+
+    CALL FUNCTION 'BAPI_BUPA_CREATE_FROM_DATA'
+      EXPORTING
+        partnercategory         = '2'
+        partnergroup            = ls_bp-acc_grp
+        centraldata             = ls_bp_central
+        centraldataorganization = ls_bp_cent_org
+        addressdata             = ls_bp_address
+      IMPORTING
+        businesspartner         = lifnr_out
+      TABLES
+        telefondata             = lt_bapiadtel
+        e_maildata              = lt_bapiemail
+        return                  = lt_bapiret.
+
+    IF lifnr_out IS NOT INITIAL.
+      CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+        EXPORTING
+          wait = 'X'.
+
+      IF ls_bp-gstin IS NOT INITIAL.
+        CALL FUNCTION 'BAPI_BUPA_TAX_ADD'
+          EXPORTING
+            businesspartner = lifnr_out
+            taxtype         = 'IN3'
+            taxnumber       = ls_bp-gstin
+          TABLES
+            return          = lt_message.
+      ENDIF.
+
+      CALL FUNCTION 'BAPI_BUPA_ROLE_ADD_2'
+        EXPORTING
+          businesspartner     = lifnr_out
+          businesspartnerrole = 'FLVN00'.
+
+      CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+        EXPORTING
+          wait = 'X'.
+
+      CALL FUNCTION 'BAPI_BUPA_ROLE_ADD_2'
+        EXPORTING
+          businesspartner     = lifnr_out
+          businesspartnerrole = 'FLVN01'.
+
+      CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+        EXPORTING
+          wait = 'X'.
+    ENDIF.
+
+*------------------------------------------------------------------------------
+* Header and common central data
+*------------------------------------------------------------------------------
+    SELECT SINGLE partner_guid FROM but000 INTO @DATA(lv_guid) WHERE partner = @lifnr_out.
+    s_bp-partner-header-object_instance-bpartner = lifnr_out.
+    s_bp-partner-header-object_instance-bpartnerguid = lv_guid.
+    s_bp-partner-header-object_task = c_task_update.
+
+    s_bp-vendor-header-object_instance-lifnr = lifnr_out.
+    s_bp-vendor-header-object_task = c_task_update.
+
+    IF ls_bp-kunnr IS NOT INITIAL.
+      s_bp-vendor-central_data-central-data-kunnr = ls_bp-kunnr.
+      s_bp-vendor-central_data-central-datax-kunnr = 'X'.
+    ENDIF.
+
+    IF ls_bp-pan_num IS NOT INITIAL.
+      s_bp-vendor-central_data-central-data-j_1ipanno = ls_bp-pan_num.
+      s_bp-vendor-central_data-central-datax-j_1ipanno = 'X'.
+    ENDIF.
+
+*------------------------------------------------------------------------------
+* Company Data
+*------------------------------------------------------------------------------
+
+    ls_company-task = c_task_insert.
+
+    ls_company_bukrs-bukrs = '2000'.
+    ls_company-data_key = ls_company_bukrs.
+
+    IF ls_bp-akont IS NOT INITIAL.
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+        EXPORTING
+          input  = ls_bp-akont
+        IMPORTING
+          output = ls_company_data-akont.
+      ls_company_datax-akont = 'X'.
+    ENDIF.
+
+    IF ls_bp-fdgrv IS NOT INITIAL.
+      ls_company_data-fdgrv = ls_bp-fdgrv.
+      ls_company_datax-fdgrv = 'X'.
+    ENDIF.
+
+    IF ls_bp-togru IS NOT INITIAL.
+      ls_company_data-togru = ls_bp-togru.
+      ls_company_datax-togru = 'X'.
+    ENDIF.
+
+    IF ls_bp-zuawa IS NOT INITIAL.
+      ls_company_data-zuawa = ls_bp-zuawa.
+      ls_company_datax-zuawa = 'X'.
+    ENDIF.
+
+    IF ls_bp-frgrp IS NOT INITIAL.
+      ls_company_data-frgrp = ls_bp-frgrp.
+      ls_company_datax-frgrp = 'X'.
+    ENDIF.
+
+    IF ls_bp-reprf IS NOT INITIAL.
+      ls_company_data-reprf = ls_bp-reprf.
+      ls_company_datax-reprf = 'X'.
+    ENDIF.
+
+    IF ls_bp-zwels IS NOT INITIAL.
+      ls_company_data-zwels = ls_bp-zwels.
+      ls_company_datax-zwels = 'X'.
+    ENDIF.
+
+    IF ls_bp-hbkid IS NOT INITIAL.
+      ls_company_data-hbkid = ls_bp-hbkid.
+      ls_company_datax-hbkid = 'X'.
+    ENDIF.
+
+    IF ls_bp-zterm IS NOT INITIAL.
+      ls_company_data-zterm = ls_bp-zterm.
+      ls_company_datax-zterm = 'X'.
+    ENDIF.
+
+    IF ls_bp-qland IS NOT INITIAL.
+      ls_company_data-qland = ls_bp-qland.
+      ls_company_datax-qland = 'X'.
+    ENDIF.
+
+    ls_company-data = ls_company_data.
+    ls_company-datax = ls_company_datax.
+
+
+*------------------------------------------------------------------------------
+* Withholding Tax
+*------------------------------------------------------------------------------
+
+    DATA ls_wtax_type TYPE vmds_ei_wtax_type.
+
+    LOOP AT lt_bp INTO DATA(ls_bp_temp) WHERE bp_num = ls_bp-bp_num.
+
+      IF ls_bp_temp-witht IS NOT INITIAL.
+        ls_wtax_type-task = c_task_insert.
+        ls_wtax_type-data_key-witht = ls_bp_temp-witht.
+
+        IF ls_bp_temp-subjct IS NOT INITIAL.
+          ls_wtax_type-data-wt_subjct = ls_bp_temp-subjct.
+          ls_wtax_type-datax-wt_subjct = 'X'.
+        ENDIF.
+
+        IF ls_bp_temp-qsrec IS NOT INITIAL.
+          ls_wtax_type-data-qsrec = ls_bp_temp-qsrec.
+          ls_wtax_type-datax-qsrec = 'X'.
+        ENDIF.
+
+        IF ls_bp_temp-withcd IS NOT INITIAL.
+          ls_wtax_type-data-wt_withcd = ls_bp_temp-withcd.
+          ls_wtax_type-datax-wt_withcd = 'X'.
+        ENDIF.
+
+        APPEND ls_wtax_type TO ls_withholding_tax-wtax_type.
+
+        CLEAR: ls_wtax_type.
+      ENDIF.
+
+    ENDLOOP.
+    ls_company-wtax_type = ls_withholding_tax.
+
+    APPEND ls_company TO lt_company.
+    s_bp-vendor-company_data-company = lt_company.
+
+*------------------------------------------------------------------------------
+* Purchasing Data
+*------------------------------------------------------------------------------
+
+    IF ls_bp-pur_org NE ''.
+      ls_purchasing-task = c_task_insert.
+      ls_purchasing_ekorg-ekorg = ls_bp-pur_org.
+
+      IF ls_bp-waers IS NOT INITIAL.
+        ls_purchasing_data-waers = ls_bp-waers.
+        ls_purchasing_datax-waers = 'X'.
+      ENDIF.
+
+      IF ls_bp-term_pay IS NOT INITIAL.
+        ls_purchasing_data-zterm = ls_bp-term_pay.
+        ls_purchasing_datax-zterm = 'X'.
+      ENDIF.
+
+      IF ls_bp-inco1 IS NOT INITIAL.
+        ls_purchasing_data-inco1 = ls_bp-inco1.
+        ls_purchasing_datax-inco1 = 'X'.
+      ENDIF.
+
+      IF ls_bp-inco2 IS NOT INITIAL.
+        ls_purchasing_data-inco2 = ls_bp-inco2.
+        ls_purchasing_datax-inco2 = 'X'.
+      ENDIF.
+
+      IF ls_bp-kalsk IS NOT INITIAL.
+        ls_purchasing_data-kalsk = ls_bp-kalsk.
+        ls_purchasing_datax-kalsk = 'X'.
+      ENDIF.
+
+      IF ls_bp-webre IS NOT INITIAL.
+        ls_purchasing_data-webre = ls_bp-webre.
+        ls_purchasing_datax-webre = 'X'.
+      ENDIF.
+
+      IF ls_bp-lebre IS NOT INITIAL.
+        ls_purchasing_data-lebre = ls_bp-lebre.
+        ls_purchasing_datax-lebre = 'X'.
+      ENDIF.
+
+      ls_purchasing-data_key = ls_purchasing_ekorg.
+      ls_purchasing-data = ls_purchasing_data.
+      ls_purchasing-datax = ls_purchasing_datax.
+      APPEND ls_purchasing TO lt_purchasing.
+
+      s_bp-vendor-purchasing_data-purchasing = lt_purchasing.
+    ENDIF.
+
+*------------------------------------------------------------------------------
+* Validate data
+*------------------------------------------------------------------------------
+    cl_md_bp_maintain=>validate_single(
+      EXPORTING
+        i_data        = s_bp
+      IMPORTING
+        et_return_map = DATA(t_return_map)
+    ).
+
+    IF line_exists( t_return_map[ type = 'E' ] ) OR
+       line_exists( t_return_map[ type = 'A' ] ).
+      LOOP AT t_return_map INTO DATA(s_return_map).
+        WRITE:/ s_return_map-message.
+        ls_bapiret-type = s_return_map-type.
+        ls_bapiret-message = s_return_map-message.
+        APPEND ls_bapiret TO lt_message.
+      ENDLOOP.
+      EXIT.
+    ENDIF.
+
+
+*------------------------------------------------------------------------------
+* Call API
+*------------------------------------------------------------------------------
+* Add single BP to IMPORTING table
+    INSERT s_bp INTO TABLE t_bp.
+
+    cl_md_bp_maintain=>maintain(
+      EXPORTING
+        i_data     = t_bp
+        i_test_run = ''
+      IMPORTING
+        e_return   = t_return
+    ).
+
+* Check result
+    LOOP AT t_return INTO DATA(s_return).
+      LOOP AT s_return-object_msg INTO DATA(s_msg).
+        IF s_msg-type = 'E' OR s_msg-type = 'A'.
+*       Error occurred
+          v_error = abap_true.
+        ENDIF.
+        WRITE:/ s_msg-message.
+      ENDLOOP.
+    ENDLOOP.
+
+    IF v_error IS INITIAL.
+      CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'.
+
+      CONCATENATE 'BP' lifnr_out 'is created successfully' INTO s_msg-message SEPARATED BY space.
+      WRITE: / s_msg-message.
+    ENDIF.
+
+      lv_bp_num = ls_bp-bp_num.
+
+  ENDLOOP.

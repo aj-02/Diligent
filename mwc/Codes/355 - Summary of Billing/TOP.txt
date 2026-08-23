@@ -1,0 +1,78 @@
+*&---------------------------------------------------------------------*
+*& Include          ZIN_M2C_SUM_BILL_PROCESS_TOP
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*& Requirement Id: DID_S2P_355                                          *
+*& Title: Summary of Billing Report                                     *
+*& Date Created: 25.07.2025                                             *
+*& Programmer: Sarfraz Sayyad Ali (SARFRAZS)                            *
+*& Program Objective: Extract the SOB report per project and per PO     *
+*& Orig Request: DS4K905320                                             *
+*&----------------------------------------------------------------------*
+*& Modification History                                                 *
+*&----------------------------------------------------------------------*
+*& Modified By:                                                         *
+*& Date:                                                                *
+*& Modification TR:                                                     *
+*& Reason:                                                              *
+*&----------------------------------------------------------------------*
+
+*-- Type definition for report header details
+TYPES: BEGIN OF ty_heading,
+         proj_num         TYPE ekko-ebeln,        "Project Number (PO)
+         proj_code        TYPE proj-pspnr,        "Project Code (WBS)
+         proj_desc        TYPE proj-post1,        "Project Description
+         vendor           TYPE lfa1-name1,        "Vendor Name
+         currency         TYPE ekko-waers,        "Currency Key
+         po_date          TYPE ekko-bedat,        "PO Creation Date
+         adv_pay          TYPE ekko-retpc,        "Advance Payment %
+         retension        TYPE ekko-dppct,        "Retention %
+         balance          TYPE int4,              "Balance Value
+         contract         TYPE ekpo-effwr,        "Contract Amount
+         addition         TYPE ekpo-effwr,        "Addition Value
+         deletion         TYPE ekpo-effwr,        "Deletion Value
+         cont_with_change TYPE ekpo-effwr,        "Contract with Change
+       END OF ty_heading.
+
+*-- Type definition for billing summary data
+TYPES: BEGIN OF ty_data,
+         process_billing TYPE int4,               "Billing Process No.
+         period_covered  TYPE char23,             "Billing Period Covered
+         date_sub        TYPE char10,             "Submission Date
+         po              TYPE ekko-ebeln,         "Purchase Order No.
+         invoice         TYPE char10,             "Invoice Number
+         year            TYPE /accgo/e_year,      "Invoice Year
+         inv_status      TYPE rbkp-rbstat,        "Invoice Status
+         inv_desc        TYPE ddtext,             "Invoice Status Description
+         inv_no          TYPE rbkp-xblnr,         "Reference Document No.
+         prev_billing    TYPE rbkp-rmwwr,         "Previous Billing Amount
+         curr_billing    TYPE rbkp-rmwwr,         "Current Billing Amount
+         to_date         TYPE rbkp-rmwwr,         "Cumulative Billing Amount
+         balance         TYPE ekpo-effwr,         "Balance Amount
+         ret_witheld     TYPE bseg-wrbtr,         "Retention Withheld
+         ret_released    TYPE bseg-wrbtr,         "Retention Released
+         advances        TYPE p LENGTH 16 DECIMALS 2, "Advance Amount
+       END OF ty_data.
+
+*-- Type definition for belnr type conflict
+TYPES: BEGIN OF ty_belnr,
+         belnr TYPE char16,
+       END OF ty_belnr.
+
+*-- Global data declarations
+DATA: gs_heading TYPE ty_heading ##NEEDED,
+      gt_output  TYPE TABLE OF ty_data ##NEEDED,
+      gs_output  TYPE ty_data ##NEEDED,
+      gt_output1 TYPE TABLE OF ty_data ##NEEDED,
+      gs_output1 TYPE ty_data ##NEEDED.
+
+*-- Selection screen parameters
+SELECTION-SCREEN: BEGIN OF BLOCK b1.
+  PARAMETERS: r1       TYPE c RADIOBUTTON GROUP r1,   "Report by Project
+              p_pspnr  TYPE proj-pspnr,               "Project Code (WBS)
+              p_waers  TYPE ekko-waers,               "Currency Key
+              p_ebeln  TYPE ekko-ebeln,               "Purchase Order
+              r2       TYPE c RADIOBUTTON GROUP r1 ##NEEDED, "Report by PO
+              p_ebeln1 TYPE ekko-ebeln,               "PO Number for R2
+              p_cpudt  TYPE rbkp-cpudt.               "Posting Date
+SELECTION-SCREEN: END OF BLOCK b1.

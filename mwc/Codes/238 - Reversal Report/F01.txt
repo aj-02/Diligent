@@ -1,0 +1,2084 @@
+*&---------------------------------------------------------------------*
+*& Include          ZI_M2C_REVERSAL_F01
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*& Form MASTER_DATA
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+************************************************************************
+* Requirement Id: DID_M2C_238                                          *
+* Title: Program ZAB_M2C_REVERSAL_RPT                                  *
+* Date Created: 23.07.2025                                             *
+* Programmer:  TAMBOLIV                                                *
+* Program Objective: This program will fetch the reversal documents    *
+* and store them in local system or AL11                               *
+* Orig Request: DS4K901922                                             *
+************************************************************************
+* Modification History                                                 *
+************************************************************************
+* Modified By:                                                         *
+* Date:                                                                *
+* Modification TR:                                                     *
+* Reason:                                                              *
+************************************************************************
+
+FORM master_data .
+
+  DATA: lt_basic_reversal    TYPE TABLE OF dberchz1,
+        lt_fcda_reversal     TYPE TABLE OF dberchz1,
+        lt_envi_reversal     TYPE TABLE OF dberchz1,
+        lt_sewer_reversal    TYPE TABLE OF dberchz1,
+        lt_msc_reversal      TYPE TABLE OF dberchz1,
+        lt_discount_reversal TYPE TABLE OF dberchz1.
+
+  TYPES : BEGIN OF ty_belnr,
+            belnr    TYPE char12,
+            opbel    TYPE e_printdoc,
+            budat    TYPE dats,
+            intcpudt TYPE dats,
+          END OF ty_belnr.
+
+  DATA: lt_dberchv TYPE TABLE OF ty_belnr.
+
+
+  DATA: lt_lity_filter TYPE  TABLE OF dberchz1-belzart ##NEEDED.
+  DATA value TYPE sy-datum.
+
+  DATA ls_final TYPE ty_final_1.
+
+  APPEND TEXT-065 TO lt_lity_filter.
+
+  APPEND TEXT-067 TO lt_lity_filter.
+
+  APPEND TEXT-066 TO lt_lity_filter.
+
+  READ TABLE s_date INTO DATA(ls_date) INDEX 1.
+  IF sy-subrc IS INITIAL.
+    IF ls_date-high IS INITIAL.
+      ls_date-high = ls_date-low.
+    ENDIF.
+    "Fetch master data from CDS based on the given date range
+    SELECT * FROM zi_m2c_reversal_cds( p_erdat_l = @ls_date-low ,p_erdat_h = @ls_date-high ) INTO TABLE @DATA(it_cds) WHERE
+            budat >= @ls_date-low AND budat <= @ls_date-high .
+    IF sy-subrc IS INITIAL.
+      DELETE  it_cds WHERE bukrs <> p_bukrs.
+      DELETE it_cds WHERE belnr NOT IN s_belnr.
+      DELETE it_cds WHERE vkont NOT IN s_vkont.
+      IF it_cds IS INITIAL.
+        MESSAGE: TEXT-016 TYPE 'E'.
+      ENDIF.
+
+      IF it_cds IS NOT INITIAL.
+        " Select data from DBERCHZ table for records
+        SELECT * FROM dberchz1
+         INTO TABLE lt_basic_reversal FOR ALL ENTRIES IN it_cds
+         WHERE belnr = it_cds-belnr
+         AND ( belzart = 'ZWTBAT' OR belzart = 'ZBASIC'  OR  belzart = 'ZWRCAT' ) .
+        IF sy-subrc = 0.
+          "select amount from table
+          SELECT belnr , belzeile , nettobtr FROM dberchz3 "#EC CI_NO_TRANSFORM
+          INTO TABLE @DATA(lt_basic_reversal_1) FOR ALL ENTRIES IN @lt_basic_reversal
+          WHERE belnr = @lt_basic_reversal-belnr AND belzeile = @lt_basic_reversal-belzeile.
+
+        ENDIF.
+      ENDIF.
+
+
+
+      IF it_cds IS NOT INITIAL.
+        SELECT * FROM dberchz1
+     INTO TABLE lt_fcda_reversal FOR ALL ENTRIES IN it_cds
+     WHERE belnr = it_cds-belnr
+     AND  ( belzart = 'ZFCDA' OR belzart = 'ZFCCAT' ).
+        IF sy-subrc = 0.
+
+          SELECT belnr , belzeile , nettobtr FROM dberchz3 "#EC CI_NO_TRANSFORM
+          INTO TABLE @DATA(lt_fcda_reversal_1) FOR ALL ENTRIES IN @lt_fcda_reversal
+          WHERE belnr = @lt_fcda_reversal-belnr AND  belzeile = @lt_fcda_reversal-belzeile .
+
+        ENDIF.
+      ENDIF.
+
+      IF it_cds IS NOT INITIAL.
+        SELECT * FROM dberchz1
+          INTO TABLE lt_envi_reversal FOR ALL ENTRIES IN it_cds
+          WHERE belnr = it_cds-belnr
+          AND ( belzart = 'ZENV' ).
+        IF sy-subrc = 0.
+
+          SELECT belnr , belzeile , nettobtr FROM dberchz3 "#EC CI_NO_TRANSFORM
+          INTO TABLE @DATA(lt_envi_reversal_1) FOR ALL ENTRIES IN @lt_envi_reversal
+          WHERE belnr = @lt_envi_reversal-belnr AND belzeile = @lt_envi_reversal-belzeile.
+
+        ENDIF.
+      ENDIF.
+
+      IF it_cds IS NOT INITIAL.
+        SELECT * FROM dberchz1
+        INTO TABLE lt_sewer_reversal FOR ALL ENTRIES IN it_cds
+        WHERE belnr = it_cds-belnr
+        AND  ( belzart = 'ZSWRAT' OR belzart = 'ZSRCAT' OR belzart =  'ZSEWER' )
+      .
+        IF sy-subrc IS INITIAL.
+
+          SELECT belnr , belzeile , nettobtr FROM dberchz3 "#EC CI_NO_TRANSFORM
+         INTO TABLE @DATA(lt_sewer_reversal_1) FOR ALL ENTRIES IN @lt_sewer_reversal
+         WHERE belnr = @lt_sewer_reversal-belnr AND  belzeile = @lt_sewer_reversal-belzeile.
+
+        ENDIF.
+      ENDIF.
+
+      IF it_cds IS NOT INITIAL.
+        SELECT * FROM dberchz1
+        INTO TABLE  lt_msc_reversal FOR ALL ENTRIES IN it_cds
+        WHERE belnr = it_cds-belnr
+        AND ( belzart = 'ZMSC' OR belzart = 'ZCHMCL' )
+      .
+        IF sy-subrc IS INITIAL.
+
+          SELECT belnr , belzeile , nettobtr FROM dberchz3 "#EC CI_NO_TRANSFORM
+          INTO TABLE @DATA(lt_msc_reversal_1) FOR ALL ENTRIES IN @lt_msc_reversal
+          WHERE belnr = @lt_msc_reversal-belnr AND  belzeile = @lt_msc_reversal-belzeile .
+
+        ENDIF.
+      ENDIF.
+
+      IF it_cds IS NOT INITIAL.
+        SELECT * FROM dberchz1
+         INTO TABLE lt_discount_reversal FOR ALL ENTRIES IN it_cds
+         WHERE belnr = it_cds-belnr
+         AND ( belzart = 'ZDISAM' OR belzart = 'ZSCZAT' OR belzart =  'ZCHTD' ).
+        IF  sy-subrc IS INITIAL.
+
+          SELECT  belnr , belzeile , nettobtr FROM dberchz3 "#EC CI_NO_TRANSFORM
+         INTO TABLE @DATA(lt_discount_reversal_1) FOR ALL ENTRIES IN @lt_discount_reversal
+         WHERE belnr = @lt_discount_reversal-belnr AND  belzeile = @lt_discount_reversal-belzeile.
+
+
+        ENDIF.
+      ENDIF.
+
+      SELECT nettobtr, buchrel, ktosl, printdoc  FROM dberdl INTO TABLE @DATA(lt_dberdl). "#EC CI_NOWHERE
+      "Loop at master data to generate final records
+      LOOP AT it_cds INTO DATA(ls_cds) ##INTO_OK.
+
+        SELECT  belnr ,stornodat FROM erch INTO @DATA(ls_new_bel) UP TO 1 ROWS WHERE vertrag = @ls_cds-vertrag AND begabrpe = @ls_cds-begabrpe
+                                                                  AND endabrpe = @ls_cds-endabrpe AND stornodat = '00000000' ORDER BY PRIMARY KEY.
+        ENDSELECT.
+
+        ls_final-bukrs = ls_cds-bukrs.
+        ls_final-service_area = ls_cds-gsber.
+        ls_final-bus_place = ls_cds-bupla.
+        ls_final-can = ls_cds-vkont.
+        ls_final-mru = ls_cds-mru.
+        ls_final-rate_code = ls_cds-rate_code.
+        ls_final-billing_class = ls_cds-billing_class.
+        ls_final-account_name = ls_cds-account_name.
+        ls_final-reversal_code = ls_cds-icreason.
+        ls_final-reversal_reason = ls_cds-reversal_reason.
+        ls_final-reversal_date = ls_cds-reversal_dat.
+        ls_final-invoice_date = ls_cds-budat.
+        ls_final-doc_typ = TEXT-068.
+
+        SELECT SINGLE adatsoll INTO @DATA(lv_adatsoll) FROM erch WHERE belnr = @ls_cds-belnr.
+        IF sy-subrc IS INITIAL.
+
+          ls_final-mru_date = lv_adatsoll.
+          CONCATENATE lv_adatsoll+4(2) '.' lv_adatsoll+0(4) INTO ls_final-bill_date.
+        ENDIF.
+
+        ls_final-pres_mru_type_reinv = ls_cds-istablart.
+        ls_final-pres_mru_reinv = ls_cds-v_zwstand + ls_cds-n_zwstand.
+        ls_final-consumption_rev = ls_cds-consuption_reversal.
+        ls_final-reversed_by = ls_cds-aenam.
+        ls_final-dmz = ls_cds-regiogrp.
+        value = ls_cds-begabrpe - 1.
+
+        SELECT  belnr  FROM erch INTO @DATA(ls_erch) UP TO 1 ROWS  WHERE endabrpe = @value ORDER BY PRIMARY KEY . "#EC CI_NOFIELD
+        ENDSELECT.
+        SELECT  ablbelnr, belnr , ez_abrmenge , istablartva,istablart,ez_zwstand,ez_zwstvor FROM dberchv INTO @DATA(ls_dberchv) UP TO 1 ROWS WHERE belnr = @ls_cds-belnr AND ablbelnr <> ' ' ORDER BY PRIMARY KEY.
+        ENDSELECT.
+
+        SELECT  adat, ablbelnr, istablart,v_zwstand, n_zwstand FROM eabl  INTO @DATA(ls_eabl) UP TO 1 ROWS WHERE ablbelnr = @ls_dberchv-ablbelnr ORDER BY PRIMARY KEY.
+        ENDSELECT.
+
+        ls_final-prev_mru_type = ls_dberchv-istablartva.
+        ls_final-prev_mru = ls_dberchv-ez_zwstvor.
+        ls_final-pres_mru_type_rev = ls_dberchv-istablart.
+        ls_final-pres_mru_rev = ls_dberchv-ez_zwstand.
+
+        SELECT  budat FROM erdk INTO @DATA(LV_budat) UP TO 1 ROWS WHERE sto_opbel = @ls_cds-opbel ORDER BY PRIMARY KEY. "#EC CI_NOFIELD
+        ENDSELECT.
+        SELECT belnr,opbel,budat,intcpudt FROM erchc INTO @DATA(lv_belnr) UP TO 1 ROWS  WHERE belnr = @ls_new_bel-belnr AND intcpudt = '00000000' ORDER BY PRIMARY KEY .
+        ENDSELECT.
+        IF sy-subrc IS INITIAL AND lv_belnr-intcpudt IS INITIAL .
+          APPEND lv_belnr TO lt_dberchv.
+
+        ENDIF.
+        IF sy-subrc IS INITIAL.
+
+          SELECT  ablbelnr belnr FROM dberchv INTO ls_dberchv UP TO 1 ROWS WHERE belnr = ls_erch AND ablbelnr <> ' ' ORDER BY PRIMARY KEY.
+          ENDSELECT.
+
+          IF  sy-subrc IS INITIAL.
+            CLEAR: ls_dberchv.
+            SELECT SINGLE adat ablbelnr istablart v_zwstand n_zwstand FROM eabl  INTO ls_eabl WHERE ablbelnr = ls_dberchv-ablbelnr.
+            IF sy-subrc IS INITIAL.
+              CLEAR: ls_eabl.
+              SELECT SINGLE adat ablbelnr istablart v_zwstand  n_zwstand FROM eabl  INTO ls_eabl WHERE ablbelnr = ls_dberchv-ablbelnr.
+              IF sy-subrc IS INITIAL.
+                ls_final-pres_mru_type_reinv = ls_eabl-istablart.
+                ls_final-pres_mru_reinv = ls_eabl-n_zwstand + ls_eabl-V_zwstand.
+                ls_final-consumption_reinv = ls_dberchv-ez_abrmenge.
+              ENDIF.
+            ENDIF.
+          ENDIF.
+        ENDIF.
+
+        ls_final-invoice_doc_number = lv_belnr-opbel.
+        ls_final-inv_doc_no = ls_cds-opbel.
+        "Fetch total basic amount
+        LOOP AT lt_basic_reversal_1 INTO DATA(ls_lt_basic_reversal_1) WHERE belnr = ls_cds-belnr.
+          ls_final-basic_rev = ls_final-basic_rev + ls_lt_basic_reversal_1-nettobtr.
+          CLEAR: ls_lt_basic_reversal_1.
+        ENDLOOP.
+
+        "Fetch total fcda amount
+        LOOP AT lt_fcda_reversal_1 INTO DATA(ls_lt_fcda_reversal_1) WHERE belnr = ls_cds-belnr.
+          ls_final-fcda_rev = ls_final-fcda_rev + ls_lt_fcda_reversal_1-nettobtr.
+          CLEAR: ls_lt_fcda_reversal_1.
+        ENDLOOP.
+
+        "Fetch total envi amount
+        LOOP AT lt_envi_reversal_1 INTO DATA(ls_lt_envi_reversal_1) WHERE belnr = ls_cds-belnr.
+          ls_final-envi_rev = ls_final-envi_rev + ls_lt_envi_reversal_1-nettobtr.
+          CLEAR: ls_lt_envi_reversal_1.
+        ENDLOOP.
+
+        "Fetch total sewer amount
+        LOOP AT lt_sewer_reversal_1 INTO DATA(ls_lt_sewer_reversal_1) WHERE belnr = ls_cds-belnr.
+          ls_final-sewer_rev = ls_final-sewer_rev + ls_lt_sewer_reversal_1-nettobtr.
+          CLEAR: ls_lt_sewer_reversal_1.
+        ENDLOOP.
+
+        "Fetch total msc amount
+        LOOP AT lt_msc_reversal_1 INTO DATA(ls_lt_msc_reversal_1) WHERE belnr = ls_cds-belnr.
+          ls_final-msc_rev = ls_final-msc_rev + ls_lt_msc_reversal_1-nettobtr.
+          CLEAR: ls_lt_envi_reversal_1.
+        ENDLOOP.
+
+        "Fetch total discount amount
+        LOOP AT lt_discount_reversal_1 INTO DATA(ls_lt_discount_reversal_1) WHERE belnr = ls_cds-belnr.
+          ls_final-discount_rev = ls_final-discount_rev + ls_lt_discount_reversal_1-nettobtr.
+          CLEAR: ls_lt_envi_reversal_1.
+        ENDLOOP.
+
+
+
+
+        ls_final-reinvoiced_date = lv_budat.
+        ls_final-doctype = TEXT-069.
+
+        ls_final-variance_basic = ls_final-basic_reinv - ls_final-basic_rev.
+        ls_final-variance_discount = ls_final-discount_reinv - ls_final-discount_rev.
+        ls_final-variance_envi = ls_final-envi_reinv - ls_final-envi_rev.
+        ls_final-variance_fcda = ls_final-fcda_reinv - ls_final-fcda_rev.
+        ls_final-variance_lft = ls_final-lft_reinv - ls_final-lft_rev.
+        ls_final-variance_msc = ls_final-msc_reinv - ls_final-msc_rev.
+        ls_final-variance_nft = ls_final-nft_reinv - ls_final-nft_rev.
+        ls_final-variance_sewer = ls_final-sewer_reinv - ls_final-sewer_rev.
+        ls_final-variance_total_amount = ls_final-total_amount_reinv - ls_final-total_amount_rev.
+        ls_final-reinvoiced_by = ls_cds-ernam.
+
+        "Fetch lft for reversal
+        READ TABLE lt_dberdl INTO DATA(ls_dberdl) WITH KEY buchrel = 'X' ktosl = 'ZLF' printdoc = ls_cds-opbel. "ls_cds-opbel.
+        IF sy-subrc = 0.
+          ls_final-lft_rev = ls_dberdl-nettobtr.
+        ENDIF.
+
+        "Fetch lft for reinvoiced
+        READ TABLE lt_dberdl INTO DATA(ls_dberdl_) WITH KEY buchrel = 'X' ktosl = 'ZLF' printdoc = ls_final-invoice_doc_number. "ls_cds-opbel.
+        IF sy-subrc = 0.
+          ls_final-lft_reinv = ls_dberdl_-nettobtr.
+        ENDIF.
+
+        "Fetch nft for reversal
+        READ TABLE lt_dberdl INTO ls_dberdl WITH KEY buchrel = 'X' ktosl = 'ZNF' printdoc = ls_cds-opbel.
+        IF sy-subrc = 0.
+          ls_final-nft_rev = ls_dberdl-nettobtr.
+        ENDIF.
+
+        "Fetch nft for reinvoiced
+        READ TABLE lt_dberdl INTO ls_dberdl_ WITH KEY buchrel = 'X' ktosl = 'ZNF' printdoc = ls_final-invoice_doc_number.
+        IF sy-subrc IS INITIAL.
+          ls_final-nft_reinv = ls_dberdl_-nettobtr.
+        ENDIF.
+
+        "Fetch vat for reversal
+        READ TABLE lt_dberdl INTO ls_dberdl WITH KEY buchrel = 'X' ktosl = 'MWS' printdoc = ls_cds-opbel.
+        IF sy-subrc = 0.
+          ls_final-vat_rev = ls_dberdl-nettobtr.
+        ENDIF.
+
+         "Fetch vat for reinvoiced
+        READ TABLE lt_dberdl INTO ls_dberdl_ WITH KEY buchrel = 'X' ktosl = 'MWS' printdoc = ls_final-invoice_doc_number.
+        IF sy-subrc IS INITIAL.
+          ls_final-vat_reinv = ls_dberdl_-nettobtr.
+
+        ENDIF.
+        ls_final-total_amount_rev =  ls_final-basic_rev + ls_final-discount_rev
+                                      + ls_final-msc_rev + ls_final-envi_rev + ls_final-fcda_rev + ls_final-lft_rev
+                                      +  ls_final-nft_rev + ls_final-vat_rev.
+
+
+        APPEND ls_final TO gt_final.
+        CLEAR: ls_final, lv_adatsoll, ls_new_bel, LS_ERCH, LS_DBERCHV, LS_EABL, LV_BUDAT,
+         ls_lt_basic_reversal_1, lv_adatsoll, ls_new_bel, LS_ERCH, LS_DBERCHV, LS_EABL, LV_BUDAT,
+          ls_lt_basic_reversal_1, ls_lt_envi_reversal_1, ls_lt_sewer_reversal_1, ls_lt_msc_reversal_1,
+           ls_lt_discount_reversal_1, ls_dberdl, ls_dberdl_, LV_BELNR.
+      ENDLOOP.
+
+      """""""""""""""""""""""""""""""""""""""""""
+      CLEAR: lt_fcda_reversal,lt_fcda_reversal_1,lt_envi_reversal,lt_envi_reversal_1,
+             lt_sewer_reversal, lt_sewer_reversal_1,lt_msc_reversal,lt_msc_reversal_1,
+             lt_discount_reversal,lt_discount_reversal_1,ls_dberchv.
+
+
+      IF lt_dberchv IS NOT INITIAL.
+
+
+
+
+        SELECT * FROM dberchz1
+        INTO TABLE lt_basic_reversal FOR ALL ENTRIES IN lt_dberchv
+        WHERE belnr = lt_dberchv-belnr
+        AND ( belzart = 'ZWTBAT' OR belzart = 'ZBASIC'  OR  belzart = 'ZWRCAT' ) .
+        IF sy-subrc = 0.
+          SELECT belnr , belzeile , nettobtr FROM dberchz3 "#EC CI_NO_TRANSFORM
+         INTO TABLE @lt_basic_reversal_1 FOR ALL ENTRIES IN @lt_basic_reversal
+         WHERE belnr = @lt_basic_reversal-belnr AND belzeile = @lt_basic_reversal-belzeile.
+        ENDIF.
+
+        SELECT * FROM dberchz1
+       INTO TABLE lt_fcda_reversal FOR ALL ENTRIES IN lt_dberchv
+       WHERE belnr = lt_dberchv-belnr
+       AND  ( belzart = 'ZFCDA' OR belzart = 'ZFCCAT' ).
+        IF sy-subrc = 0.
+
+          SELECT belnr , belzeile , nettobtr FROM dberchz3 "#EC CI_NO_TRANSFORM
+            INTO TABLE @lt_fcda_reversal_1 FOR ALL ENTRIES IN @lt_fcda_reversal
+            WHERE belnr = @lt_fcda_reversal-belnr AND  belzeile = @lt_fcda_reversal-belzeile .
+
+        ENDIF.
+        SELECT * FROM dberchz1
+          INTO TABLE lt_envi_reversal FOR ALL ENTRIES IN lt_dberchv
+          WHERE belnr = lt_dberchv-belnr
+          AND ( belzart = 'ZENV' ).
+        IF sy-subrc = 0.
+
+          SELECT belnr , belzeile , nettobtr FROM dberchz3 "#EC CI_NO_TRANSFORM
+          INTO TABLE @lt_envi_reversal_1 FOR ALL ENTRIES IN @lt_envi_reversal
+          WHERE belnr = @lt_envi_reversal-belnr AND belzeile = @lt_envi_reversal-belzeile.
+
+        ENDIF.
+
+
+        SELECT * FROM dberchz1
+        INTO TABLE lt_sewer_reversal FOR ALL ENTRIES IN lt_dberchv
+        WHERE belnr = lt_dberchv-belnr
+        AND  ( belzart = 'ZSWRAT' OR belzart = 'ZSRCAT' OR belzart =  'ZSEWER' )
+      .
+        IF sy-subrc IS INITIAL.
+
+          SELECT belnr , belzeile , nettobtr FROM dberchz3 "#EC CI_NO_TRANSFORM
+          INTO TABLE @lt_sewer_reversal_1 FOR ALL ENTRIES IN @lt_sewer_reversal
+          WHERE belnr = @lt_sewer_reversal-belnr AND  belzeile = @lt_sewer_reversal-belzeile.
+
+        ENDIF.
+
+        SELECT * FROM dberchz1
+        INTO TABLE  lt_msc_reversal FOR ALL ENTRIES IN lt_dberchv
+        WHERE belnr = lt_dberchv-belnr
+        AND ( belzart = 'ZMSC' OR belzart = 'ZCHMCL' )
+      .
+        IF sy-subrc IS INITIAL.
+
+          SELECT belnr , belzeile , nettobtr FROM dberchz3 "#EC CI_NO_TRANSFORM
+          INTO TABLE @lt_msc_reversal_1 FOR ALL ENTRIES IN @lt_msc_reversal
+          WHERE belnr = @lt_msc_reversal-belnr AND  belzeile = @lt_msc_reversal-belzeile .
+
+        ENDIF.
+
+        SELECT * FROM dberchz1
+    INTO TABLE lt_discount_reversal FOR ALL ENTRIES IN lt_dberchv
+    WHERE belnr = lt_dberchv-belnr
+    AND ( belzart = 'ZDISAM' OR belzart = 'ZSCZAT' OR belzart =  'ZCHTD' )
+  .
+
+        IF  sy-subrc IS INITIAL.
+
+          SELECT belnr , belzeile , nettobtr FROM dberchz3 "#EC CI_NO_TRANSFORM
+         INTO TABLE @lt_discount_reversal_1 FOR ALL ENTRIES IN @lt_discount_reversal
+         WHERE belnr = @lt_discount_reversal-belnr AND  belzeile = @lt_discount_reversal-belzeile.
+
+        ENDIF.
+
+      ENDIF.
+
+      LOOP AT gt_final ASSIGNING FIELD-SYMBOL(<fs_final>).
+        READ TABLE lt_dberchv INTO DATA(ls_db) WITH KEY opbel = <fs_final>-invoice_doc_number.
+        IF sy-subrc IS INITIAL.
+
+          SELECT  ablbelnr, belnr , ez_abrmenge , istablartva,istablart,ez_zwstand,ez_zwstvor FROM dberchv INTO @DATA(ls_dberchv_1) UP TO 1 ROWS WHERE belnr = @ls_db-belnr
+    AND ablbelnr <> ' ' ORDER BY PRIMARY KEY.
+          ENDSELECT.
+          LOOP AT lt_basic_reversal_1 INTO ls_lt_basic_reversal_1 WHERE belnr = ls_db-belnr.
+            <fs_final>-basic_reinv = <fs_final>-basic_reinv + ls_lt_basic_reversal_1-nettobtr.
+            CLEAR: ls_lt_basic_reversal_1.
+          ENDLOOP.
+
+          LOOP AT lt_fcda_reversal_1 INTO ls_lt_fcda_reversal_1 WHERE belnr = ls_db-belnr.
+            <fs_final>-fcda_reinv = <fs_final>-fcda_reinv + ls_lt_fcda_reversal_1-nettobtr.
+            CLEAR: ls_lt_fcda_reversal_1.
+          ENDLOOP.
+
+          LOOP AT lt_envi_reversal_1 INTO ls_lt_envi_reversal_1 WHERE belnr = ls_db-belnr.
+            <fs_final>-envi_reinv = <fs_final>-envi_reinv + ls_lt_envi_reversal_1-nettobtr.
+            CLEAR: ls_lt_envi_reversal_1.
+          ENDLOOP.
+
+          LOOP AT lt_sewer_reversal_1 INTO ls_lt_sewer_reversal_1 WHERE belnr = ls_db-belnr.
+            <fs_final>-sewer_reinv = <fs_final>-sewer_reinv + ls_lt_sewer_reversal_1-nettobtr.
+            CLEAR: ls_lt_sewer_reversal_1.
+          ENDLOOP.
+
+          LOOP AT lt_msc_reversal_1 INTO ls_lt_msc_reversal_1 WHERE belnr = ls_db-belnr.
+            <fs_final>-msc_reinv = <fs_final>-msc_reinv + ls_lt_msc_reversal_1-nettobtr.
+            CLEAR: ls_lt_envi_reversal_1.
+          ENDLOOP.
+
+          LOOP AT lt_discount_reversal_1 INTO ls_lt_discount_reversal_1 WHERE belnr = ls_db-belnr.
+            <fs_final>-discount_reinv = <fs_final>-discount_reinv + ls_lt_discount_reversal_1-nettobtr.
+            CLEAR: ls_lt_envi_reversal_1.
+          ENDLOOP.
+
+        ENDIF.
+        <fs_final>-total_amount_reinv =  <fs_final>-basic_reinv + <fs_final>-discount_reinv
+                                      + <fs_final>-msc_reinv + <fs_final>-envi_reinv + <fs_final>-fcda_reinv +
+                                         <fs_final>-lft_reinv +  <fs_final>-nft_reinv  +  <fs_final>-vat_reinv.
+        <fs_final>-variance_basic = <fs_final>-basic_reinv - <fs_final>-basic_rev.
+        <fs_final>-variance_discount = <fs_final>-discount_reinv - <fs_final>-discount_rev.
+        <fs_final>-variance_envi = <fs_final>-envi_reinv - <fs_final>-envi_rev.
+        <fs_final>-variance_fcda = <fs_final>-fcda_reinv - <fs_final>-fcda_rev.
+
+        <fs_final>-variance_lft = <fs_final>-lft_reinv - <fs_final>-lft_rev.
+        <fs_final>-variance_msc = <fs_final>-msc_reinv - <fs_final>-msc_rev.
+        <fs_final>-variance_nft = <fs_final>-nft_reinv - <fs_final>-nft_rev.
+        <fs_final>-variance_sewer = <fs_final>-sewer_reinv - <fs_final>-sewer_rev.
+        <fs_final>-pres_mru_type_reinv =  ls_dberchv_1-istablart.
+        <fs_final>-pres_mru_reinv =  ls_dberchv_1-ez_zwstand.
+        <fs_final>-reinvoiced_date = ls_db-budat.
+        SELECT ernam FROM erdk INTO @DATA(ls_ernam_1) UP TO 1 ROWS WHERE opbel = @ls_db-opbel ORDER BY PRIMARY KEY.
+        ENDSELECT.
+        IF sy-subrc IS INITIAL.
+          <fs_final>-reinvoiced_by = ls_ernam_1.
+        ENDIF.
+        SELECT ez_abrmenge FROM dberchv INTO @DATA(con_1) UP TO 1 ROWS WHERE belnr = @ls_db-belnr AND ablbelnr <> '' ORDER BY PRIMARY KEY.
+        ENDSELECT.
+        IF sy-subrc IS INITIAL.
+          <fs_final>-consumption_reinv = con_1.
+          <fs_final>-variance_cons = <fs_final>-consumption_reinv - <fs_final>-consumption_rev.
+
+        ENDIF.
+        <fs_final>-variance_total_amount = <fs_final>-total_amount_reinv - <fs_final>-total_amount_rev.
+        <fs_final>-variance_vat = <fs_final>-vat_reinv - <fs_final>-vat_rev.
+        clear: ls_dberchv_1, con_1,ls_ernam_1,LS_DB,ls_dberchv_1.
+      ENDLOOP.
+
+
+    ELSE.
+      MESSAGE: TEXT-011 TYPE 'E'.
+    ENDIF.
+
+
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form al11_data
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM al11_data .
+  DATA: lv_check    TYPE c,
+        lv_fullpath TYPE string,
+        lr_table    TYPE REF TO cl_salv_table.
+
+*  lv_fullpath = p_path.
+  lv_fullpath = p_al11.
+  IF gt_final IS NOT INITIAL.
+    TRY.
+
+        cl_salv_table=>factory(
+          IMPORTING
+            r_salv_table = lr_table
+          CHANGING
+            t_table      = gt_final ).
+
+      CATCH cx_salv_msg.                                "#EC NO_HANDLER
+
+    ENDTRY.
+
+    lr_functions = lr_table->get_functions( ).
+
+    lr_functions->set_all( abap_true ).
+
+    lr_layout = lr_table->get_layout( ).
+
+    ls_key-report = sy-repid.
+
+    lo_columns = lr_table->get_columns( ).
+
+    PERFORM modify_file_heading.
+
+    lv_xml_type =  if_salv_bs_xml=>c_type_xlsx. "if_salv_bs_xml=>c_type_mhtml.
+
+    lv_xml      = lr_table->to_xml( xml_type = lv_xml_type ).
+    CONCATENATE lv_fullpath TEXT-070 sy-datum '_' sy-uzeit '.xlsx' INTO lv_fullpath ##NO_TEXT.
+    "Converting to binary to store in excel file
+    CALL FUNCTION 'SCMS_XSTRING_TO_BINARY'
+      EXPORTING
+        buffer        = lv_xml
+      IMPORTING
+        output_length = lt_len
+      TABLES
+        binary_tab    = lt_srctab.
+    TRY.
+        OPEN DATASET lv_fullpath FOR OUTPUT IN BINARY MODE.
+      CATCH cx_sy_file_open INTO DATA(lv_msg1).
+        MESSAGE lv_msg1 TYPE 'E'.
+      CATCH cx_sy_pipes_not_supported INTO DATA(lv_msg2).
+        MESSAGE lv_msg2 TYPE 'E'.
+      CATCH cx_sy_file_authority INTO DATA(lv_msg3).
+        MESSAGE lv_msg3 TYPE 'E'.
+      CATCH cx_sy_conversion_codepage INTO DATA(lv_msg4).
+        MESSAGE lv_msg4 TYPE 'E'.
+      CATCH cx_sy_codepage_converter_init INTO DATA(lv_msg5).
+        MESSAGE lv_msg5 TYPE 'E'.
+    ENDTRY.
+    IF sy-subrc = 0 ##FM_SUBRC_OK.
+      LOOP AT lt_srctab ASSIGNING FIELD-SYMBOL(<ls_bin>).
+        TRANSFER <ls_bin> TO lv_fullpath.
+        IF sy-subrc = 0.
+          lv_check = abap_true.
+        ENDIF.
+      ENDLOOP.
+      UNASSIGN: <ls_bin>.
+      TRY.
+          CLOSE DATASET lv_fullpath.
+        CATCH cx_sy_file_close INTO DATA(lv_msg6).
+          MESSAGE lv_msg6 TYPE 'E'.
+      ENDTRY.
+    ENDIF.
+    IF lv_check = abap_true.
+      MESSAGE: TEXT-017 TYPE 'S'.
+    ENDIF.
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form modify_file_heading
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM modify_file_heading .
+  "Column heading to display
+  DATA: lv_col_name_M TYPE char20.
+  DATA: lv_col_name_S TYPE char10.
+  DATA: lv_col_name_L TYPE char40.
+  DATA : lv_col_name TYPE char30.
+  lv_col_name = TEXT-041.
+  TRY.
+      lo_column = lo_columns->get_column(  lv_col_name ) .
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg7).
+      MESSAGE lv_msg7 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg8).
+      MESSAGE lv_msg8 TYPE 'E'.
+  ENDTRY.
+  lv_col_name_L = TEXT-042.
+  lv_col_name_M = TEXT-018.
+  lv_col_name_S = TEXT-043.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+
+  TRY.
+      lv_col_name = TEXT-044.
+      lo_column = lo_columns->get_column( lv_col_name ) .
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg9).
+      MESSAGE lv_msg9 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg10).
+      MESSAGE lv_msg10 TYPE 'E'.
+  ENDTRY.
+  lv_col_name_L = TEXT-045.
+  lv_col_name_M = TEXT-046.
+  lo_column->set_long_text( TEXT-045 ).
+  lo_column->set_medium_text( TEXT-046 ) .
+
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+      lv_col_name = TEXT-047.
+      lo_column = lo_columns->get_column( lv_col_name ).
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg11).
+      MESSAGE lv_msg11 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg12).
+      MESSAGE lv_msg12 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-048.
+  lv_col_name_M = TEXT-049.
+  lv_col_name_S = TEXT-049.
+
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+      lv_col_name = TEXT-050.
+      lo_column = lo_columns->get_column( lv_col_name ).
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg13).
+      MESSAGE lv_msg13 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg14).
+      MESSAGE lv_msg14 TYPE 'E'.
+  ENDTRY.
+  lv_col_name_L = TEXT-050.
+  lv_col_name_M =  TEXT-050.
+  lv_col_name_S =  TEXT-050.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+      lv_col_name = TEXT-051.
+
+      lo_column = lo_columns->get_column( lv_col_name ) .
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg15).
+      MESSAGE lv_msg15 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg16).
+      MESSAGE lv_msg16 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-051.
+  lv_col_name_M =  TEXT-051.
+  lv_col_name_S =  TEXT-051.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+      lv_col_name = TEXT-052.
+      lo_column = lo_columns->get_column( lv_col_name ) .
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg17).
+      MESSAGE lv_msg17 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg18).
+      MESSAGE lv_msg18 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-052.
+  lv_col_name_M =  TEXT-052.
+  lv_col_name_S =  TEXT-052.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+      lv_col_name = TEXT-053.
+      lo_column = lo_columns->get_column( lv_col_name ).
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg19).
+      MESSAGE lv_msg19 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg20).
+      MESSAGE lv_msg20 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-054.
+  lv_col_name_M =  TEXT-054.
+  lv_col_name_S =  TEXT-054.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+
+  TRY.
+
+
+      lv_col_name = TEXT-055.
+      lo_column = lo_columns->get_column( lv_col_name ).
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg21).
+      MESSAGE lv_msg21 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg22).
+      MESSAGE lv_msg22 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-056.
+  lv_col_name_M =  TEXT-056.
+  lv_col_name_S =  TEXT-056.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+      lv_col_name = TEXT-057.
+      lo_column = lo_columns->get_column( lv_col_name ) .
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg23).
+      MESSAGE lv_msg23 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg24).
+      MESSAGE lv_msg24 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-058.
+  lv_col_name_M =  TEXT-058.
+
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+
+
+
+  TRY.
+      lv_col_name = TEXT-059.
+      lo_column = lo_columns->get_column( lv_col_name ) .
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg25).
+      MESSAGE lv_msg25 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg26).
+      MESSAGE lv_msg26 TYPE 'E'.
+  ENDTRY.
+
+
+
+  lv_col_name_L = TEXT-060.
+  lv_col_name_M =  TEXT-060.
+
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+
+      lv_col_name = TEXT-061.
+      lo_column = lo_columns->get_column( lv_col_name ) .
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg27).
+      MESSAGE lv_msg27 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg28).
+      MESSAGE lv_msg28 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-062.
+  lv_col_name_M =  TEXT-062.
+
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+
+
+  TRY.
+      lv_col_name = TEXT-063.
+      lo_column = lo_columns->get_column( lv_col_name ) .
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg29).
+      MESSAGE lv_msg29 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg30).
+      MESSAGE lv_msg30 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-064.
+  lv_col_name_M =  TEXT-064.
+
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+      lv_col_name = TEXT-071.
+      lo_column = lo_columns->get_column( lv_col_name ) .
+
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg31).
+      MESSAGE lv_msg31 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg32).
+      MESSAGE lv_msg32 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-217.
+  lv_col_name_M =  TEXT-071.
+  lv_col_name_S =  TEXT-072.
+
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+      lv_col_name = TEXT-073.
+      lo_column = lo_columns->get_column( lv_col_name ) .
+
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg33).
+      MESSAGE lv_msg33 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg34).
+      MESSAGE lv_msg34 TYPE 'E'.
+  ENDTRY.
+
+
+  lv_col_name_L = TEXT-074.
+  lv_col_name_M =  TEXT-075.
+  lv_col_name_S =  TEXT-076.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+      lv_col_name = TEXT-077.
+      lo_column = lo_columns->get_column( lv_col_name ).
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg35).
+      MESSAGE lv_msg35 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg36).
+      MESSAGE lv_msg36 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-077.
+  lv_col_name_M =  TEXT-077.
+  lv_col_name_S =  TEXT-077.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+
+      lv_col_name = TEXT-078.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg37).
+      MESSAGE lv_msg37 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg38).
+      MESSAGE lv_msg38 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-079.
+  lv_col_name_M =  TEXT-079.
+  lv_col_name_S =  TEXT-080.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+      lv_col_name = TEXT-081.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg39).
+      MESSAGE lv_msg39 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg40).
+      MESSAGE lv_msg40 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-218.
+  lv_col_name_M =  TEXT-218.
+  lv_col_name_S =  TEXT-218.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+
+
+  TRY.
+      lv_col_name = TEXT-082.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg41).
+      MESSAGE lv_msg41 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg42).
+      MESSAGE lv_msg42 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-083.
+  lv_col_name_M =  TEXT-084.
+  lv_col_name_S =  TEXT-085.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+      lv_col_name = TEXT-086.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg43).
+      MESSAGE lv_msg43 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg44).
+      MESSAGE lv_msg44 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-087.
+  lv_col_name_M =  TEXT-088.
+  lv_col_name_S =  TEXT-088.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+      lv_col_name = TEXT-089.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg45).
+      MESSAGE lv_msg45 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg46).
+      MESSAGE lv_msg46 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-090.
+  lv_col_name_M =  TEXT-091.
+  lv_col_name_S =  TEXT-092.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+
+      lv_col_name = TEXT-093.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg47).
+      MESSAGE lv_msg47 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg48).
+      MESSAGE lv_msg48 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-094.
+  lv_col_name_M =  TEXT-095.
+  lv_col_name_S =  TEXT-096.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+      lv_col_name = TEXT-097.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg49).
+      MESSAGE lv_msg49 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg50).
+      MESSAGE lv_msg50 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-098.
+  lv_col_name_M =  TEXT-099.
+  lv_col_name_S =  TEXT-099.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+      lv_col_name = TEXT-100.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg51).
+      MESSAGE lv_msg51 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg52).
+      MESSAGE lv_msg52 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-101.
+  lv_col_name_M =  TEXT-102.
+  lv_col_name_S =  TEXT-103.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+
+
+  TRY.
+      lv_col_name = TEXT-104.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg53).
+      MESSAGE lv_msg53 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg54).
+      MESSAGE lv_msg54 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-105.
+  lv_col_name_M =  TEXT-222.
+  lv_col_name_S =  TEXT-222.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+
+  TRY.
+      lv_col_name = TEXT-106.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg55).
+      MESSAGE lv_msg55 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg56).
+      MESSAGE lv_msg56 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-107.
+  lv_col_name_M =  TEXT-106.
+  lv_col_name_S =  TEXT-106.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+      lv_col_name = TEXT-108.
+      lo_column = lo_columns->get_column( lv_col_name ).
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg57).
+      MESSAGE lv_msg57 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg58).
+      MESSAGE lv_msg58 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-109.
+  lv_col_name_M =  TEXT-108.
+  lv_col_name_S =  TEXT-108.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+      lv_col_name = TEXT-110.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg59).
+      MESSAGE lv_msg59 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg60).
+      MESSAGE lv_msg60 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-111.
+  lv_col_name_M =  TEXT-110.
+  lv_col_name_S =  TEXT-110.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+      lv_col_name = TEXT-112.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg61).
+      MESSAGE lv_msg61 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg62).
+      MESSAGE lv_msg62 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-112.
+  lv_col_name_M =  TEXT-112.
+  lv_col_name_S =  TEXT-112.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+      lv_col_name = TEXT-113.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg101).
+      MESSAGE lv_msg101 TYPE 'E'.
+    CATCH cx_salv_not_found  INTO DATA(lv_msg102).
+      MESSAGE lv_msg102 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-114.
+  lv_col_name_M =  TEXT-113.
+  lv_col_name_S =  TEXT-115.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+      lv_col_name = TEXT-116.
+      lo_column = lo_columns->get_column( lv_col_name ).
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg63).
+      MESSAGE lv_msg63 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg64).
+      MESSAGE lv_msg64 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-117.
+  lv_col_name_M =  TEXT-116.
+  lv_col_name_S =  TEXT-116.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+      lv_col_name = TEXT-118.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg65).
+      MESSAGE lv_msg65 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg66).
+      MESSAGE lv_msg66 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-119.
+  lv_col_name_M =  TEXT-118.
+  lv_col_name_S =  TEXT-118.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+
+
+  TRY.
+      lv_col_name = TEXT-120.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg67).
+      MESSAGE lv_msg67 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg68).
+      MESSAGE lv_msg68 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-121.
+  lv_col_name_M =  TEXT-120.
+  lv_col_name_S =  TEXT-120.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+      lv_col_name = TEXT-122.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg69).
+      MESSAGE lv_msg69 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg70).
+      MESSAGE lv_msg70 TYPE 'E'.
+  ENDTRY.
+  lv_col_name_L = TEXT-122.
+  lv_col_name_M =  TEXT-123.
+  lv_col_name_S =  TEXT-123.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+
+
+  TRY.
+      lv_col_name = TEXT-124.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg71).
+      MESSAGE lv_msg71 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg72).
+      MESSAGE lv_msg72 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-124.
+  lv_col_name_M =  TEXT-125.
+  lv_col_name_S =  TEXT-125.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+      lv_col_name = TEXT-126.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg73).
+      MESSAGE lv_msg73 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg74).
+      MESSAGE lv_msg74 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-127.
+  lv_col_name_M =  TEXT-128.
+  lv_col_name_S =  TEXT-129.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+      lv_col_name = TEXT-130.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg75).
+      MESSAGE lv_msg75 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg76).
+      MESSAGE lv_msg76 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-131.
+  lv_col_name_M =  TEXT-131.
+  lv_col_name_S =  TEXT-131.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+
+  TRY.
+
+      lv_col_name = TEXT-132.
+      lo_column = lo_columns->get_column( lv_col_name ).
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg77).
+      MESSAGE lv_msg77 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg78).
+      MESSAGE lv_msg78 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-133.
+  lv_col_name_M =  TEXT-134.
+  lv_col_name_S =  TEXT-135.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+      lv_col_name = TEXT-136.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg79).
+      MESSAGE lv_msg79 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg80).
+      MESSAGE lv_msg80 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-137.
+  lv_col_name_M =  TEXT-138.
+  lv_col_name_S =  TEXT-139.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+
+  TRY.
+      lv_col_name = TEXT-140.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg81).
+      MESSAGE lv_msg81 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg82).
+      MESSAGE lv_msg82 TYPE 'E'.
+  ENDTRY.
+
+
+  lv_col_name_L = TEXT-141.
+  lv_col_name_M =  TEXT-142.
+  lv_col_name_S =  TEXT-143.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+      lv_col_name = TEXT-144.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg83).
+      MESSAGE lv_msg83 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg84).
+      MESSAGE lv_msg84 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-145.
+  lv_col_name_M =  TEXT-146.
+  lv_col_name_S =  TEXT-147.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+
+  TRY.
+      lv_col_name = TEXT-148.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg85).
+      MESSAGE lv_msg85 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg86).
+      MESSAGE lv_msg86 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-149.
+  lv_col_name_M =  TEXT-148.
+  lv_col_name_S =  TEXT-150.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+
+  TRY.
+
+      lv_col_name = TEXT-151.
+      lo_column = lo_columns->get_column( lv_col_name ).
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg87).
+      MESSAGE lv_msg87 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg88).
+      MESSAGE lv_msg88 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-152.
+  lv_col_name_M =  TEXT-154.
+  lv_col_name_S =  TEXT-153.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+
+  TRY.
+      lv_col_name = TEXT-155.
+      lo_column = lo_columns->get_column( lv_col_name ).
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg89).
+      MESSAGE lv_msg89 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg90).
+      MESSAGE lv_msg90 TYPE 'E'.
+  ENDTRY.
+  lv_col_name_L = TEXT-156.
+  lv_col_name_M =  TEXT-157.
+  lv_col_name_S =  TEXT-158.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+
+  TRY.
+      lv_col_name = TEXT-159.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg91).
+      MESSAGE lv_msg91 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg92).
+      MESSAGE lv_msg92 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-160.
+  lv_col_name_M =  TEXT-161.
+  lv_col_name_S =  TEXT-162.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+
+  TRY.
+      lv_col_name = TEXT-163.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg93).
+      MESSAGE lv_msg93 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg94).
+      MESSAGE lv_msg94 TYPE 'E'.
+  ENDTRY.
+
+
+  lv_col_name_L = TEXT-164.
+  lv_col_name_M =  TEXT-165.
+  lv_col_name_S =  TEXT-166.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+      lv_col_name = TEXT-167.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg95).
+      MESSAGE lv_msg95 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg96).
+      MESSAGE lv_msg96 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-168.
+  lv_col_name_M =  TEXT-169.
+  lv_col_name_S =  TEXT-170.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+
+  TRY.
+      lv_col_name = TEXT-171.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg97).
+      MESSAGE lv_msg97 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg98).
+      MESSAGE lv_msg98 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-172.
+  lv_col_name_M =  TEXT-173.
+  lv_col_name_S =  TEXT-173.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+      lv_col_name = TEXT-174.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg99).
+      MESSAGE lv_msg99 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg100).
+      MESSAGE lv_msg100 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-175.
+  lv_col_name_M =  TEXT-176.
+  lv_col_name_S =  TEXT-176.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+
+  TRY.
+      lv_col_name = TEXT-177.
+      lo_column = lo_columns->get_column( lv_col_name ).
+    CATCH cx_salv_api_contract_violation  INTO DATA(lv_msg103).
+      MESSAGE lv_msg103 TYPE 'E'.
+    CATCH cx_salv_not_found  INTO DATA(lv_msg104).
+      MESSAGE lv_msg104 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-178.
+  lv_col_name_M =  TEXT-179.
+  lv_col_name_S =  TEXT-179.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+
+
+  TRY.
+      lv_col_name = TEXT-180.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+    CATCH cx_salv_api_contract_violation  INTO DATA(lv_msg105).
+      MESSAGE lv_msg105 TYPE 'E'.
+    CATCH cx_salv_not_found  INTO DATA(lv_msg106).
+      MESSAGE lv_msg106 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-181.
+  lv_col_name_M =  TEXT-182.
+  lv_col_name_S =  TEXT-182.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+      lv_col_name = TEXT-183.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+    CATCH cx_salv_api_contract_violation  INTO DATA(lv_msg107).
+      MESSAGE lv_msg107 TYPE 'E'.
+    CATCH cx_salv_not_found  INTO DATA(lv_msg108).
+      MESSAGE lv_msg108 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-184.
+  lv_col_name_M =  TEXT-185.
+  lv_col_name_S =  TEXT-185.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+
+
+  TRY.
+      lv_col_name = TEXT-186.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+
+    CATCH cx_salv_api_contract_violation  INTO DATA(lv_msg109).
+      MESSAGE lv_msg109 TYPE 'E'.
+    CATCH cx_salv_not_found  INTO DATA(lv_msg110).
+      MESSAGE lv_msg110 TYPE 'E'.
+  ENDTRY.
+*
+  lv_col_name_L = TEXT-187.
+  lv_col_name_M =  TEXT-188.
+  lv_col_name_S =  TEXT-189.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+      lv_col_name = TEXT-190.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg111).
+      MESSAGE lv_msg111 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg112).
+      MESSAGE lv_msg112 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-191.
+  lv_col_name_M =  TEXT-192.
+  lv_col_name_S =  TEXT-192.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+  TRY.
+      lv_col_name = TEXT-193.
+      lo_column = lo_columns->get_column( lv_col_name ).
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg113).
+      MESSAGE lv_msg113 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg114).
+      MESSAGE lv_msg114 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-194.
+  lv_col_name_M =  TEXT-195.
+  lv_col_name_S =  TEXT-195.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+      lv_col_name = TEXT-196.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg115).
+      MESSAGE lv_msg115 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg116).
+      MESSAGE lv_msg116 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-197.
+  lv_col_name_M =  TEXT-198.
+  lv_col_name_S =  TEXT-198.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+      lv_col_name = TEXT-199.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg117).
+      MESSAGE lv_msg117 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg118).
+      MESSAGE lv_msg118 TYPE 'E'.
+  ENDTRY.
+
+
+  lv_col_name_L = TEXT-200.
+  lv_col_name_M =  TEXT-201.
+  lv_col_name_S =  TEXT-201.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+      lv_col_name = TEXT-202.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg119).
+      MESSAGE lv_msg119 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg120).
+      MESSAGE lv_msg120 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-203.
+  lv_col_name_M =  TEXT-204.
+  lv_col_name_S =  TEXT-204.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+      lv_col_name = TEXT-205.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg121).
+      MESSAGE lv_msg121 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg122).
+      MESSAGE lv_msg122 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-206.
+  lv_col_name_M =  TEXT-207.
+  lv_col_name_S =  TEXT-207.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+  CLEAR : lv_col_name_L , lv_col_name_M, lv_col_name_S, lv_col_name.
+
+  TRY.
+      lv_col_name = TEXT-208.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg123).
+      MESSAGE lv_msg123 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg124).
+      MESSAGE lv_msg124 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-209.
+  lv_col_name_M =  TEXT-210.
+  lv_col_name_S =  TEXT-210.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+
+  TRY.
+      lv_col_name = TEXT-211.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg125).
+      MESSAGE lv_msg125 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg126).
+      MESSAGE lv_msg126 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-212.
+  lv_col_name_M =  TEXT-213.
+  lv_col_name_S =  TEXT-213.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+
+
+
+
+  TRY.
+      lv_col_name = TEXT-214.
+      lo_column = lo_columns->get_column( lv_col_name ).
+
+
+    CATCH cx_salv_api_contract_violation INTO DATA(lv_msg127).
+      MESSAGE lv_msg127 TYPE 'E'.
+    CATCH cx_salv_not_found INTO DATA(lv_msg128).
+      MESSAGE lv_msg128 TYPE 'E'.
+  ENDTRY.
+
+  lv_col_name_L = TEXT-215.
+  lv_col_name_M =  TEXT-216.
+  lv_col_name_S =  TEXT-216.
+  lo_column->set_long_text( lv_col_name_L ).
+  lo_column->set_medium_text( lv_col_name_M ) .
+  lo_column->set_short_text( lv_col_name_S ).
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form download_data
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM download_data .
+  "To download data to local system
+  DATA: lv_filename TYPE string.
+
+  TYPES: BEGIN OF ty_heading,
+           text TYPE char50,
+         END OF ty_heading.
+
+  DATA: it_heading TYPE TABLE OF ty_heading.
+  DATA: wa_heading TYPE ty_heading.
+  DATA : lv_object TYPE char50.
+
+  lv_object = TEXT-042.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+
+  lv_object = TEXT-045.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-048.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+
+  lv_object = TEXT-050.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+
+  lv_object = TEXT-051.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+
+  lv_object = TEXT-052.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-054.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-056.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-058.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-060.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+
+  lv_object = TEXT-062.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-064.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-217.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-074.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-131.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-079.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-218.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-083.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-087.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-090.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-094.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-098.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-101.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-105.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-107.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-109.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-111.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-219.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-114.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-117.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-119.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+
+  lv_object = TEXT-121.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-122.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-124.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-127.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-131.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-133.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-137.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-141.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-145.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-149.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-152.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-156.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-160.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-164.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-168.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-172.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-175.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-178.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-181.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-184.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-187.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-191.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-194.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-197.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-200.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-203.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-220.  "check
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+  lv_object = TEXT-209.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+
+  lv_object = TEXT-212.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+
+  lv_object = TEXT-215.
+  wa_heading-text = lv_object. APPEND wa_heading TO it_heading.
+  CLEAR lv_object.
+  CLEAR wa_heading-text.
+
+  CONCATENATE p_path TEXT-221 sy-datum '_' sy-uzeit '.xls' INTO lv_filename ##NO_TEXT.
+  "Download file
+  CALL FUNCTION 'GUI_DOWNLOAD'
+    EXPORTING
+      filename                = lv_filename
+      filetype                = 'DAT'
+    TABLES
+      data_tab                = gt_final
+      fieldnames              = it_heading[]
+    EXCEPTIONS
+      file_write_error        = 1
+      no_batch                = 2
+      gui_refuse_filetransfer = 3
+      invalid_type            = 4
+      no_authority            = 5
+      unknown_error           = 6
+      header_not_allowed      = 7
+      separator_not_allowed   = 8
+      filesize_not_allowed    = 9
+      header_too_long         = 10
+      dp_error_create         = 11
+      dp_error_send           = 12
+      dp_error_write          = 13
+      unknown_dp_error        = 14
+      access_denied           = 15
+      dp_out_of_memory        = 16
+      disk_full               = 17
+      dp_timeout              = 18
+      file_not_found          = 19
+      dataprovider_exception  = 20
+      control_flush_error     = 21
+      OTHERS                  = 22.
+
+  IF sy-subrc <> 0.
+
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+
+    WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+
+  ENDIF.
+ENDFORM.

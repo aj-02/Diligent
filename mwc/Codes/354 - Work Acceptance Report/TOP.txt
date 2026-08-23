@@ -1,0 +1,85 @@
+*&---------------------------------------------------------------------*
+*& Include          ZIN_S2P_WORK_ACC_RPT_TOP
+*&---------------------------------------------------------------------*
+*& Requirement Id: DID_S2P_354                                          *
+*& Title: Work Accomplishment Report                                    *
+*& Date Created: 25.07.2025                                             *
+*& Programmer: Sarfraz Sayyad Ali (SARFRAZS)                            *
+*& Program Objective: Displays WAR report for service line items       *
+*& Orig Request: DS4K903120                                             *
+*&----------------------------------------------------------------------*
+*& Modification History                                                 *
+*&----------------------------------------------------------------------*
+*& Modified By:                                                         *
+*& Date:                                                                *
+*& Modification TR:                                                     *
+*& Reason:                                                              *
+*&----------------------------------------------------------------------*
+
+*----------------------------------------------------------------------*
+*            Type Definitions for Header and Line Item Data           *
+*----------------------------------------------------------------------*
+REPORT ZAB_S2P_WORK_ACC_RPT.
+*-- Structure for report header details
+TYPES: BEGIN OF ty_heading,
+         from                    TYPE mmpur_ses_item-performancedate,          "Start of accomplishment period
+         to                      TYPE mmpur_ses_item-performanceenddate,       "End of accomplishment period
+         job_order_no            TYPE ekko-ebeln,                              "Job order number
+         project_code            TYPE afko-pronr,                              "Project code
+         description             TYPE proj-post1,                              "Project description
+         contractor              TYPE lfa1-name1,                              "Contractor name
+         purpose                 TYPE char20,                                  "Purpose of work
+         war_no                  TYPE mmpur_ses_header-serviceentrysheet,      "Work Accomplishment Report number
+         no_of_entries           TYPE int4,                                    "Number of line items
+         contract_duration       TYPE int4,                                    "Contract duration in days
+         start_date              TYPE proj-plfaz,                              "Project start date
+         expiry_date             TYPE proj-plfaz,                              "Contract expiry date
+         approved_time_extension TYPE int4,                                    "Approved time extension
+         finish_date             TYPE proj-plfaz,                              "Final completion date
+       END OF ty_heading.
+
+*-- Structure for each report line item
+TYPES: BEGIN OF ty_item,
+         item_code                  TYPE mmpur_ses_item-service,               "Service item code
+         description                TYPE mmpur_ses_item-description,           "Item description
+         unit                       TYPE mmpur_ses_item-unit,                  "Unit of measure
+         unit_bid_price             TYPE ekpo-netpr,                           "Agreed unit price
+         contract_qty               TYPE ekpo-menge,                           "Total contracted quantity
+         contract_cost              TYPE ekpo-netwr,                           "Total contract cost
+         accomplished_previous_qty  TYPE mmpur_ses_item-quantity,              "Qty done previously
+         accomplished_previous_cost TYPE mmpur_ses_item-netamount,             "Cost done previously
+         accomplished_current_qty   TYPE mmpur_ses_item-quantity,              "Qty done this period
+         accomplished_current_cost  TYPE mmpur_ses_item-netamount,             "Cost done this period
+         accomplished_td_qty        TYPE mmpur_ses_item-quantity,              "Total qty to-date
+         accomplished_td_cost       TYPE mmpur_ses_item-netamount,             "Total cost to-date
+         parked_posted_cost         TYPE rseg-wrbtr,                           "Parked or posted cost
+         payment_billable_cost      TYPE rseg-wrbtr,                           "Billable cost for payment
+         payment_td_cost            TYPE rseg-wrbtr,                           "Total payment to-date
+       END OF ty_item.
+
+*-- Structure for RSEG key fields
+TYPES: BEGIN OF ty_rseg,
+         belnr TYPE rseg-belnr,                                                "Invoice document number
+         gjahr TYPE rseg-gjahr,                                                "Fiscal year
+         buzei TYPE rseg-buzei,                                                "Line item number
+       END OF ty_rseg.
+
+*----------------------------------------------------------------------*
+*                        Global Data Declarations                      *
+*----------------------------------------------------------------------*
+DATA: gt_output TYPE TABLE OF ty_item ##NEEDED,                                " Final ALV output data
+      gs_output TYPE ty_item ##NEEDED,                                         " Work area for line item
+      gs_header TYPE ty_heading ##NEEDED,                                      " Work area for header data
+      gt_rseg   TYPE TABLE OF ty_rseg ##NEEDED,                                " All matched RSEG entries
+      gt_rseg1  TYPE TABLE OF ty_rseg ##NEEDED,                                " Parked entries
+      gt_rseg2  TYPE TABLE OF ty_rseg ##NEEDED.                                " Posted entries
+
+*----------------------------------------------------------------------*
+*                      Selection Screen Parameters                     *
+*----------------------------------------------------------------------*
+SELECTION-SCREEN: BEGIN OF BLOCK b1.
+  PARAMETERS: p_ebeln  TYPE ekko-ebeln                              OBLIGATORY, "Purchase order number
+              p_seshdr TYPE mmpur_ses_item-serviceentrysheet        OBLIGATORY, "Service Entry Sheet
+              p_purp   TYPE char20 AS LISTBOX VISIBLE LENGTH 20     OBLIGATORY, "Purpose listbox
+              p_time   TYPE int4                                     OBLIGATORY."Time extension in days
+SELECTION-SCREEN: END OF BLOCK b1.

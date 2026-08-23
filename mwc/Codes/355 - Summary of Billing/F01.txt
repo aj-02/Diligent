@@ -1,0 +1,1330 @@
+*&---------------------------------------------------------------------*
+*& Include          ZIN_M2C_SUM_BILL_PROCESS_F01
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*& Requirement Id: DID_S2P_355                                          *
+*& Title: Summary of Billing Report                                     *
+*& Date Created: 25.07.2025                                             *
+*& Programmer: Sarfraz Sayyad Ali (SARFRAZS)                            *
+*& Program Objective: Extract the SOB report per project and per PO     *
+*& Orig Request: DS4K905320                                             *
+*&----------------------------------------------------------------------*
+*& Modification History                                                 *
+*&----------------------------------------------------------------------*
+*& Modified By:                                                         *
+*& Date:                                                                *
+*& Modification TR:                                                     *
+*& Reason:                                                              *
+*&----------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*& Form f_get_data
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+
+FORM f_get_data .
+
+  DATA: lv_prev_curr_bill TYPE rbkp-rmwwr,
+        lt_belnr          TYPE TABLE OF ty_belnr,
+        ls_belnr          TYPE ty_belnr,
+        lv_row            TYPE int4 VALUE 1.
+
+  IF r1 = abap_true.
+
+    "Get project description and number from PROJ
+    SELECT SINGLE
+      post1,
+      pspnr
+      FROM proj
+      INTO @DATA(ls_proj)
+      WHERE pspnr = @p_pspnr.
+
+    "Get vendor, PO date, and retention details from EKKO
+    SELECT SINGLE
+      lifnr,
+      bedat,
+      retpc,
+      dppct
+      FROM ekko
+      INTO @DATA(ls_ekko)
+      WHERE ebeln = @p_ebeln.
+
+    IF sy-subrc IS INITIAL.
+
+      "Get vendor name from LFA1
+      SELECT SINGLE
+        lifnr,
+        name1
+        FROM lfa1
+        INTO @DATA(ls_lfa1)
+        WHERE lifnr = @ls_ekko-lifnr.
+
+    ENDIF.
+
+    "Get total contract value (sum of effective value) from EKPO
+    SELECT SUM( effwr )
+      FROM ekpo
+      INTO @DATA(lv_ekpo)
+      WHERE ebeln = @p_ebeln.
+
+    "Get currency for PO from EKKO
+    SELECT SINGLE waers
+      FROM ekko
+      INTO @DATA(lv_curr)
+      WHERE ebeln = @p_ebeln.
+
+    "Get all WBS elements under selected project from PRPS
+    SELECT
+      psphi,
+      pspnr
+      FROM prps
+      INTO TABLE @DATA(lt_prps)
+      WHERE psphi = @p_pspnr.
+
+    IF sy-subrc IS INITIAL.
+
+      "Get PO and item numbers linked to WBS from EKKN
+      SELECT
+        ebeln,
+        ebelp                          "#EC CI_NO_TRANSFORM
+        FROM ekkn
+        INTO TABLE @DATA(lt_final)
+        FOR ALL ENTRIES IN @lt_prps
+        WHERE ps_psp_pnr = @lt_prps-pspnr.
+
+      "Get PO and item numbers linked to WBS from EKKN
+      SELECT
+        ebeln,
+        ebelp                          "#EC CI_NO_TRANSFORM
+        FROM ekkn
+        INTO TABLE @DATA(lt_ekkn)
+        FOR ALL ENTRIES IN @lt_prps
+        WHERE ps_psp_pnr = @lt_prps-pspnr.
+
+      IF sy-subrc IS INITIAL.
+
+        "Get currency for all related POs from EKKO
+        SELECT
+          ebeln,
+          waers                        "#EC CI_NO_TRANSFORM
+          FROM ekko
+          INTO TABLE @DATA(lt_waers)
+          FOR ALL ENTRIES IN @lt_ekkn
+          WHERE ebeln = @lt_ekkn-ebeln.
+
+        "Get PO item values (excluding current PO) from EKPO
+        SELECT effwr                               "#EC CI_NO_TRANSFORM
+          FROM ekpo
+          INTO TABLE @DATA(lt_ekpo)
+          FOR ALL ENTRIES IN @lt_ekkn
+          WHERE ebeln = @lt_ekkn-ebeln
+          AND ebelp = @lt_ekkn-ebelp
+          AND ebeln NE @p_ebeln.
+
+        "Get deleted/closed PO items from EKPO
+        SELECT
+          ebeln,
+          ebelp,
+          effwr                 "#EC CI_NO_TRANSFORM
+          FROM ekpo
+          INTO TABLE @DATA(lt_ekpo_d)
+          FOR ALL ENTRIES IN @lt_ekkn
+          WHERE ebeln = @lt_ekkn-ebeln
+          AND ebelp = @lt_ekkn-ebelp
+          AND ( loekz = 'L' OR loekz = 'S' ).
+
+      ENDIF.
+
+    ENDIF.
+
+    "Get order and project linkages from AFKO
+    SELECT
+      aufnr,
+      pronr
+      FROM afko
+      INTO TABLE @DATA(lt_afko)
+      WHERE pronr = @p_pspnr.
+
+    IF sy-subrc IS INITIAL.
+
+      "Get PO items linked to networks from EKKN
+      SELECT
+        ebeln,
+        ebelp                          "#EC CI_NO_TRANSFORM
+       FROM ekkn
+       APPENDING TABLE @lt_final
+       FOR ALL ENTRIES IN @lt_afko
+       WHERE nplnr = @lt_afko-aufnr.
+
+      "Get related EKKN entries for AFKO orders
+      SELECT
+        ebeln,
+        ebelp                          "#EC CI_NO_TRANSFORM
+        FROM ekkn
+        INTO TABLE @DATA(lt_ekkn_a)
+        FOR ALL ENTRIES IN @lt_afko
+        WHERE nplnr = @lt_afko-aufnr.
+
+      IF sy-subrc IS INITIAL.
+
+        "Append EKPO values for network-based POs (excluding current)
+        SELECT effwr                               "#EC CI_NO_TRANSFORM
+          FROM ekpo
+          APPENDING TABLE @lt_ekpo
+          FOR ALL ENTRIES IN @lt_ekkn_a
+          WHERE ebeln = @lt_ekkn_a-ebeln
+          AND ebelp = @lt_ekkn_a-ebelp
+          AND ebeln NE @p_ebeln.
+
+        "Append deleted/closed PO items for AFKO-linked entries
+        SELECT
+          ebeln,
+          ebelp,
+          effwr                 "#EC CI_NO_TRANSFORM
+        FROM ekpo
+        APPENDING TABLE @lt_ekpo_d
+        FOR ALL ENTRIES IN @lt_ekkn_a
+        WHERE ebeln = @lt_ekkn_a-ebeln
+        AND ebelp = @lt_ekkn_a-ebelp
+        AND ( loekz = 'L' OR loekz = 'S' ).
+
+      ENDIF.
+
+    ENDIF.
+
+    IF lt_final IS NOT INITIAL.
+
+      "Fetch approved SES headers
+      SELECT referencepurchaseorder                "#EC CI_NO_TRANSFORM
+        FROM mmpur_ses_header
+        INTO TABLE @DATA(lt_ses_hdr)
+        FOR ALL ENTRIES IN @lt_final
+        WHERE referencepurchaseorder = @lt_final-ebeln
+        AND approvalstatus = '30'.
+
+      "Fetch SES item details
+      SELECT
+        performancedate,
+        performanceenddate,
+        serviceentrysheet,
+        referencepurchaseorder,
+        referencepurchaseorderitem "#EC CI_NOFIELD
+          FROM mmpur_ses_item                      "#EC CI_NO_TRANSFORM
+          INTO TABLE @DATA(lt_ses_item)
+          FOR ALL ENTRIES IN @lt_final
+          WHERE referencepurchaseorder = @lt_final-ebeln
+          AND referencepurchaseorderitem = @lt_final-ebelp.
+
+      IF sy-subrc IS INITIAL.
+
+        "Fetch SES-related GR documents
+        SELECT
+          lfbnr,
+          cpudt,
+          belnr,
+          gjahr          "#EC CI_NO_TRANSFORM
+          FROM ekbe
+          INTO TABLE @DATA(lt_ekbe)
+          FOR ALL ENTRIES IN @lt_ses_item
+          WHERE lfbnr = @lt_ses_item-serviceentrysheet
+          AND bewtp = 'Q'.
+
+        IF sy-subrc IS INITIAL.
+
+          "Fetch invoice header data
+          SELECT
+            rbstat,
+            gjahr,
+            belnr,
+            xblnr,
+            rmwwr,
+            vgart,
+            lifnr,
+            waers "#EC CI_NO_TRANSFORM
+            FROM rbkp
+            FOR ALL ENTRIES IN @lt_ekbe
+            WHERE belnr = @lt_ekbe-belnr
+            AND gjahr = @lt_ekbe-gjahr
+            AND stblg IS INITIAL
+            INTO TABLE @DATA(lt_rbkp).
+
+          IF sy-subrc IS INITIAL.
+
+            "Fetch RT accounting document headers
+            SELECT
+              belnr,
+              gjahr,
+              xblnr             "#EC CI_NO_TRANSFORM
+              FROM bkpf
+              INTO TABLE @DATA(lt_bkpf)
+              FOR ALL ENTRIES IN @lt_rbkp
+              WHERE xblnr = @lt_rbkp-xblnr
+              AND gjahr = @lt_rbkp-gjahr
+              AND blart = 'RT'.
+
+            IF sy-subrc IS INITIAL.
+
+              "Fetch RT accounting document items for expense GLs
+              SELECT              "#EC CI_NOORDER
+                belnr,
+                gjahr,
+                ktosl,
+                buzei,
+                wrbtr,
+                lifnr,
+                h_waers "#EC CI_NO_TRANSFORM
+                FROM bseg
+                INTO TABLE @DATA(lt_bseg)
+                FOR ALL ENTRIES IN @lt_bkpf
+                WHERE belnr = @lt_bkpf-belnr
+                AND gjahr = @lt_bkpf-gjahr
+                AND ktosl = 'EGX'.
+
+            ENDIF.
+
+            "Collect invoice document numbers
+            LOOP AT lt_rbkp INTO DATA(ls_rbkp) ##INTO_OK.
+              ls_belnr-belnr = ls_rbkp-belnr.
+              APPEND ls_belnr TO lt_belnr.
+            ENDLOOP.
+
+            "Fetch KZ accounting documents for reversals
+            SELECT
+              belnr,
+              gjahr,
+              xblnr            "#EC CI_NO_TRANSFORM
+              FROM bkpf
+              INTO TABLE @DATA(lt_bkpf1)
+              FOR ALL ENTRIES IN @lt_belnr
+              WHERE xblnr = @lt_belnr-belnr
+              AND blart = 'KZ'.
+
+            IF sy-subrc IS INITIAL.
+
+              "Fetch reversal BSEG data
+              SELECT
+                wrbtr,
+                belnr,
+                gjahr,
+                lifnr,
+                h_waers "#EC CI_NO_TRANSFORM
+                FROM bseg
+                INTO TABLE @DATA(lt_bseg1)
+                FOR ALL ENTRIES IN @lt_bkpf1
+                WHERE belnr = @lt_bkpf1-belnr
+                AND gjahr = @lt_bkpf1-gjahr
+                AND umskz = 'H'.
+
+            ENDIF.
+
+          ENDIF.
+
+        ENDIF.
+
+      ENDIF.
+
+    ENDIF.
+
+    "Fetch RBSTAT domain texts
+    SELECT
+      ddtext,
+      domname,
+      ddlanguage,
+      valpos
+      FROM dd07t
+      INTO TABLE @DATA(lt_dd07t)
+      WHERE domname = 'RBSTAT'
+      AND ddlanguage = 'E'.
+
+  ELSE. "Case 2: When PO number is entered
+
+    "Fetch EKKN entries for PO
+    SELECT
+      ebeln,
+      ps_psp_pnr,
+      nplnr
+      FROM ekkn
+      INTO TABLE @DATA(lt_ekkn1)
+      WHERE ebeln = @p_ebeln1.
+
+    IF sy-subrc IS INITIAL.
+
+      "Fetch WBS elements for PO
+      SELECT
+        pspnr,
+        psphi                          "#EC CI_NO_TRANSFORM
+        FROM prps
+        INTO TABLE @DATA(lt_prps1)
+        FOR ALL ENTRIES IN @lt_ekkn1
+        WHERE pspnr = @lt_ekkn1-ps_psp_pnr.
+
+      IF sy-subrc IS NOT INITIAL.
+
+        "Fetch AFKO if WBS missing
+        SELECT
+          aufnr,
+          pronr                        "#EC CI_NO_TRANSFORM
+          FROM afko
+          INTO TABLE @DATA(lt_afko1)
+          FOR ALL ENTRIES IN @lt_ekkn1
+          WHERE aufnr = @lt_ekkn1-nplnr.
+
+        IF sy-subrc IS INITIAL.
+
+          "Fetch project header for AFKO link
+          SELECT
+            post1,
+            pspnr                      "#EC CI_NO_TRANSFORM
+            FROM proj
+            INTO TABLE @DATA(lt_proj1)
+            FOR ALL ENTRIES IN @lt_afko1
+            WHERE pspnr = @lt_afko1-pronr.
+
+        ENDIF.
+
+      ELSE.
+
+        "Fetch project header for PRPS link
+        SELECT
+          post1,
+          pspnr                        "#EC CI_NO_TRANSFORM
+        FROM proj
+        INTO TABLE @lt_proj1
+              FOR ALL ENTRIES IN @lt_prps1
+              WHERE pspnr = @lt_prps1-psphi.
+
+      ENDIF.
+
+    ENDIF.
+
+    "Fetch PO header data
+    SELECT SINGLE
+      lifnr,
+      waers,
+      bedat,
+      retpc,
+      dppct
+      FROM ekko
+      INTO @DATA(ls_ekko1)
+      WHERE ebeln = @p_ebeln1.
+
+    IF sy-subrc IS INITIAL.
+
+      "Fetch vendor name
+      SELECT SINGLE
+        lifnr,
+        name1
+        FROM lfa1
+        INTO @DATA(ls_lfa1_1)
+        WHERE lifnr = @ls_ekko1-lifnr.
+
+    ENDIF.
+
+    "Fetch PO total effective value
+    SELECT SUM( effwr )
+     FROM ekpo
+     INTO @DATA(lv_ekpo1)
+     WHERE ebeln = @p_ebeln1.
+
+    "Fetch deleted or closed PO items
+    SELECT effwr
+      FROM ekpo
+      INTO TABLE @DATA(lt_ekpo_2)
+      WHERE ebeln = @p_ebeln1
+      AND ( loekz = 'L' OR loekz = 'S' ).
+
+    "Fetch PO items for linking with SES
+    SELECT
+      ebeln,
+      ebelp
+      FROM ekkn
+      INTO TABLE @lt_final
+      WHERE ebeln = @p_ebeln1.
+
+    IF sy-subrc IS INITIAL.
+
+      "Fetch approved SES headers for PO
+      SELECT referencepurchaseorder                "#EC CI_NO_TRANSFORM
+      FROM mmpur_ses_header
+      INTO TABLE @lt_ses_hdr
+      FOR ALL ENTRIES IN @lt_final
+      WHERE referencepurchaseorder = @lt_final-ebeln
+      AND approvalstatus = '30'.
+
+      "Fetch SES item details for PO
+      SELECT
+        performancedate,
+        performanceenddate,
+        serviceentrysheet,
+        referencepurchaseorder,
+        referencepurchaseorderitem "#EC CI_NOFIELD
+        FROM mmpur_ses_item                        "#EC CI_NO_TRANSFORM
+        INTO TABLE @lt_ses_item
+        FOR ALL ENTRIES IN @lt_final
+        WHERE referencepurchaseorder = @lt_final-ebeln
+        AND referencepurchaseorderitem = @lt_final-ebelp.
+
+      IF sy-subrc IS INITIAL.
+
+        "Fetch SES-related GR documents
+        SELECT
+          lfbnr,
+          cpudt,
+          belnr,
+          gjahr          "#EC CI_NO_TRANSFORM
+          FROM ekbe
+          INTO TABLE @lt_ekbe
+          FOR ALL ENTRIES IN @lt_ses_item
+          WHERE lfbnr = @lt_ses_item-serviceentrysheet
+          AND bewtp = 'Q'.
+
+        IF sy-subrc IS INITIAL.
+
+          "Fetch invoice header details
+          SELECT
+            rbstat,
+            gjahr,
+            belnr,
+            xblnr,
+            rmwwr,
+            vgart,
+            lifnr,
+            waers "#EC CI_NO_TRANSFORM
+            FROM rbkp
+            FOR ALL ENTRIES IN @lt_ekbe
+            WHERE belnr = @lt_ekbe-belnr
+            AND gjahr = @lt_ekbe-gjahr
+            AND stblg IS INITIAL
+            INTO TABLE @lt_rbkp.
+
+          IF sy-subrc IS INITIAL.
+
+            "Fetch RT accounting documents
+            SELECT
+              belnr,
+              gjahr,
+              xblnr             "#EC CI_NO_TRANSFORM
+              FROM bkpf
+              INTO TABLE @lt_bkpf
+              FOR ALL ENTRIES IN @lt_rbkp
+              WHERE xblnr = @lt_rbkp-xblnr
+              AND gjahr = @lt_rbkp-gjahr
+              AND blart = 'RT'.
+
+            IF sy-subrc IS INITIAL.
+
+              "Fetch expense line items from BSEG
+              SELECT        "#EC CI_NOORDER
+                belnr,
+                gjahr,
+                ktosl,
+                buzei,
+                wrbtr,
+                lifnr,
+                h_waers "#EC CI_NO_TRANSFORM
+                FROM bseg
+                INTO TABLE @lt_bseg
+                FOR ALL ENTRIES IN @lt_bkpf
+                WHERE belnr = @lt_bkpf-belnr
+                AND gjahr = @lt_bkpf-gjahr
+                AND ktosl = 'EGX'.
+
+            ENDIF.
+
+            "Prepare BELNR list from RBKP entries
+            LOOP AT lt_rbkp INTO ls_rbkp ##INTO_OK.
+              ls_belnr-belnr = ls_rbkp-belnr.
+              APPEND ls_belnr TO lt_belnr.
+            ENDLOOP.
+
+            "Fetch BKPF entries for vendor payments with document type KZ
+            SELECT
+              belnr,
+              gjahr,
+              xblnr            "#EC CI_NO_TRANSFORM
+              FROM bkpf
+              INTO TABLE @lt_bkpf1
+              FOR ALL ENTRIES IN @lt_belnr
+              WHERE xblnr = @lt_belnr-belnr
+              AND blart = 'KZ'.
+
+            IF sy-subrc IS INITIAL.
+
+              "Fetch BSEG entries for the above payment documents (UMSKZ = H)
+              SELECT
+                wrbtr,
+                belnr,
+                gjahr,
+                lifnr,
+                h_waers "#EC CI_NO_TRANSFORM
+                FROM bseg
+                INTO TABLE @lt_bseg1
+                FOR ALL ENTRIES IN @lt_bkpf1
+                WHERE belnr = @lt_bkpf1-belnr
+                AND gjahr = @lt_bkpf1-gjahr
+                AND umskz = 'H'.
+
+            ENDIF.
+
+          ENDIF.
+
+        ENDIF.
+
+      ENDIF.
+
+    ENDIF.
+
+    "Fetch text descriptions for invoice status domain RBSTAT
+    SELECT
+      ddtext,
+      domname,
+      ddlanguage,
+      valpos
+      FROM dd07t
+      INTO TABLE @lt_dd07t
+      WHERE domname = 'RBSTAT'
+      AND ddlanguage = 'E'.
+  ENDIF.
+
+  "Start processing for report when Radio button R1 is selected
+  IF r1 = abap_true.
+
+    gs_heading-proj_num = p_ebeln.                              "Assign project number to heading
+    gs_heading-proj_code = p_pspnr.                             "Assign project code to heading
+    gs_heading-proj_desc = ls_proj-post1.                       "Assign project description to heading
+    gs_heading-vendor = ls_lfa1-name1.                          "Assign vendor name to heading
+    gs_heading-currency = p_waers.                              "Assign currency to heading
+    gs_heading-po_date = ls_ekko-bedat.                         "Assign PO date to heading
+    gs_heading-adv_pay = ls_ekko-dppct.                         "Assign advance payment percentage
+    gs_heading-retension = ls_ekko-retpc.                       "Assign retention percentage
+    gs_heading-balance = 100 - gs_heading-retension.            "Calculate balance percentage (100 - retention)
+
+    "If both local and foreign currencies are available, convert PO amount
+    IF p_waers IS NOT INITIAL AND lv_curr IS NOT INITIAL.
+
+      perform f_convert_value using lv_curr p_waers changing lv_ekpo.
+
+    ENDIF.
+
+
+    gs_heading-contract = lv_ekpo.                              "Assign converted contract value
+
+    "Loop through all additions from EKPO
+    LOOP AT lt_ekpo INTO DATA(ls_ekpo).
+      gs_heading-addition = gs_heading-addition + ls_ekpo-effwr.
+    ENDLOOP.
+
+    "Convert addition amount to local currency if needed
+    IF p_waers IS NOT INITIAL.
+      READ TABLE lt_waers INTO DATA(ls_waers) INDEX 1.  "#EC CI_NOORDER
+      IF  ls_waers-waers IS NOT INITIAL.
+
+        PERFORM F_CONVERT_VALUE USING ls_waers-waers p_waers CHANGING gs_heading-addition.
+
+      ENDIF.
+
+    ENDIF.
+
+    "Loop through deletion records
+    LOOP AT lt_ekpo_d INTO DATA(ls_ekpo_d).
+      gs_heading-deletion = gs_heading-deletion + ls_ekpo_d-effwr.
+    ENDLOOP.
+
+    IF p_waers IS NOT INITIAL.
+      READ TABLE lt_waers INTO ls_waers INDEX 1.        "#EC CI_NOORDER
+      IF  ls_waers-waers IS NOT INITIAL.
+
+        PERFORM F_CONVERT_VALUE using ls_waers-waers p_waers changing gs_heading-deletion.
+
+      ENDIF.
+    ENDIF.
+
+    "Calculate final contract with additions and deletions
+    gs_heading-cont_with_change = gs_heading-contract + gs_heading-addition - gs_heading-deletion.
+
+    "Loop through SES item entries for billing
+    LOOP AT lt_ses_item INTO DATA(ls_ses_item).
+
+      "Check if SES header exists for reference PO
+      READ TABLE lt_ses_hdr TRANSPORTING NO FIELDS WITH KEY referencepurchaseorder = ls_ses_item-referencepurchaseorder.
+      IF sy-subrc <> 0.
+        CONTINUE.
+      ENDIF.
+
+      "Set process billing number
+      gs_output-process_billing = lv_row.
+
+      "Format and assign billing period
+      CONCATENATE ls_ses_item-performancedate+4(2) '/' ls_ses_item-performancedate+6(2) '/' ls_ses_item-performancedate+0(4) '-'
+      ls_ses_item-performanceenddate+4(2) '/' ls_ses_item-performanceenddate+6(2) '/' ls_ses_item-performanceenddate+0(4) INTO gs_output-period_covered.
+
+      "Find invoice (EKBE) entries linked to SES
+      LOOP AT lt_ekbe INTO DATA(ls_ekbe) WHERE lfbnr = ls_ses_item-serviceentrysheet.
+        READ TABLE lt_rbkp INTO ls_rbkp WITH KEY belnr = ls_ekbe-belnr gjahr = ls_ekbe-gjahr.
+        IF sy-subrc IS INITIAL.
+          EXIT. "#EC CI_NOORDER "Exit when matching RBKP found
+        ENDIF.
+      ENDLOOP.
+
+      "Format submission date as DD/MM/YYYY
+      CONCATENATE ls_ekbe-cpudt+4(2) '/' ls_ekbe-cpudt+6(2) '/' ls_ekbe-cpudt+0(4) '/' INTO gs_output-date_sub.
+
+      gs_output-invoice = ls_ekbe-belnr.                 "Assign invoice number and fiscal year
+      gs_output-year = ls_ekbe-gjahr.                    "Assign fiscal year
+
+      "If RBKP entry exists, process further
+      IF ls_rbkp IS NOT INITIAL.
+
+        "Assign invoice status and description
+        gs_output-inv_status = ls_rbkp-rbstat.
+        READ TABLE lt_dd07t INTO DATA(ls_dd07t) WITH KEY valpos = gs_output-inv_status ##WARN_OK.
+        gs_output-inv_desc = ls_dd07t-ddtext.
+
+        "Assign vendor invoice number
+        gs_output-inv_no = ls_rbkp-xblnr.
+
+        "Determine billing amount sign based on document type
+        IF ls_rbkp-vgart = 'RD'.
+          gs_output-curr_billing = ls_rbkp-rmwwr.
+        ELSEIF ls_rbkp-vgart = 'RS'.
+          gs_output-curr_billing = ls_rbkp-rmwwr * -1.
+        ENDIF.
+
+        IF p_waers IS NOT INITIAL AND ls_rbkp-waers IS NOT INITIAL.
+
+          PERFORM F_CONVERT_VALUE USING ls_rbkp-waers p_waers CHANGING gs_output-curr_billing.
+
+        ENDIF.
+
+        "Fetch BKPF entry for invoice reference
+        READ TABLE lt_bkpf INTO DATA(ls_bkpf) WITH KEY xblnr = ls_rbkp-xblnr gjahr = ls_rbkp-gjahr.
+
+        IF sy-subrc IS INITIAL.
+
+          LOOP AT lt_bseg INTO DATA(ls_bseg) WHERE belnr = ls_bkpf-belnr AND gjahr = ls_bkpf-gjahr AND lifnr = ls_rbkp-lifnr.
+            gs_output-ret_witheld = gs_output-ret_witheld + ls_bseg-wrbtr.
+          ENDLOOP.
+
+          IF p_waers IS NOT INITIAL AND ls_bseg-h_waers IS NOT INITIAL.
+
+            PERFORM F_CONVERT_VALUE USING ls_bseg-h_waers p_waers CHANGING gs_output-ret_witheld.
+
+          ENDIF.
+
+        ENDIF.
+
+
+        "Check for retention release via payment documents
+        READ TABLE lt_bkpf1 INTO DATA(ls_bkpf1) WITH KEY xblnr = ls_rbkp-belnr.
+
+        IF sy-subrc IS INITIAL.
+
+          READ TABLE lt_bseg1 INTO DATA(ls_bseg1) WITH KEY belnr = ls_bkpf1-belnr gjahr = ls_rbkp-gjahr lifnr = ls_rbkp-lifnr.
+
+          IF sy-subrc IS INITIAL.
+
+            gs_output-ret_released = ls_bseg1-wrbtr.              "Assign retention released amount
+
+            IF p_waers IS NOT INITIAL AND ls_bseg1-h_waers IS NOT INITIAL.
+
+              PERFORM F_CONVERT_VALUE USING ls_bseg1-h_waers p_waers CHANGING gs_output-ret_released.
+
+            ENDIF.
+
+          ENDIF.
+
+        ENDIF.
+
+      ELSE.
+
+        CONTINUE.
+
+      ENDIF.
+
+      "Assign PO number to output
+      gs_output-po = ls_ses_item-referencepurchaseorder.
+
+      "Check if invoice already exists in final output
+      READ TABLE gt_output TRANSPORTING NO FIELDS WITH KEY invoice = ls_ekbe-belnr.
+
+      IF sy-subrc IS NOT INITIAL.
+
+        gs_output-prev_billing = gs_output-prev_billing + lv_prev_curr_bill.
+        lv_prev_curr_bill = gs_output-curr_billing.
+
+      ENDIF.
+
+      "Calculate cumulative total to-date
+      gs_output-to_date = gs_output-prev_billing + gs_output-curr_billing.
+
+      "Compute balance remaining from contract
+      gs_output-balance = gs_heading-contract - gs_output-to_date.
+
+      "Compute advances based on advance percentage
+      gs_output-advances = gs_output-curr_billing * gs_heading-adv_pay / 100.
+
+      lv_row = lv_row + 1.
+
+      APPEND gs_output TO gt_output.
+      CLEAR: gs_output-ret_witheld.
+
+    ENDLOOP.
+
+    "Sort final output by invoice number
+    SORT gt_output BY invoice ASCENDING.
+
+    DATA: lv_sno TYPE i VALUE 1.
+    CLEAR: lv_prev_curr_bill .
+
+    "Remove duplicate invoices and number billing records
+    LOOP AT gt_output INTO gs_output.
+      READ TABLE gt_output1 INTO gs_output1 WITH KEY inv_no = gs_output-inv_no.
+      IF sy-subrc IS NOT INITIAL.
+        gs_output-process_billing = lv_sno.
+
+        APPEND gs_output TO gt_output1.
+        lv_sno = lv_sno + 1.
+      ENDIF.
+    ENDLOOP.
+
+    "Recalculate cumulative values for clean output
+    CLEAR: lv_prev_curr_bill.
+    LOOP AT gt_output1 INTO gs_output.
+      gs_output-prev_billing = lv_prev_curr_bill.
+      gs_output-to_date = gs_output-prev_billing + gs_output-curr_billing.
+      lv_prev_curr_bill = gs_output-to_date.
+      gs_output-balance = gs_heading-contract - gs_output-to_date.
+      MODIFY gt_output1 FROM gs_output INDEX sy-tabix.
+      lv_sno = lv_sno + 1.
+    ENDLOOP.
+
+
+  ELSE.
+
+    gs_heading-proj_num = p_ebeln1.
+
+    READ TABLE lt_ekkn1 INTO DATA(ls_ekkn1) WITH KEY ebeln = p_ebeln1.
+
+    IF sy-subrc IS INITIAL.
+
+      READ TABLE lt_prps1 INTO DATA(ls_prps1) WITH KEY pspnr = ls_ekkn1-ps_psp_pnr.
+
+      IF sy-subrc IS INITIAL.
+
+        gs_heading-proj_code = ls_prps1-psphi.
+        READ TABLE lt_proj1 INTO DATA(ls_proj1) WITH KEY pspnr = ls_prps1-psphi.
+        IF sy-subrc IS INITIAL.
+          gs_heading-proj_desc = ls_proj1-post1.
+        ENDIF.
+
+      ELSE.
+
+        READ TABLE lt_afko1 INTO DATA(ls_afko1) WITH KEY aufnr = ls_ekkn1-nplnr.
+        IF sy-subrc IS INITIAL.
+          gs_heading-proj_code = ls_afko1-pronr.
+        ENDIF.
+
+      ENDIF.
+
+    ENDIF.
+
+
+    gs_heading-vendor = ls_lfa1_1-name1.
+    gs_heading-currency = ls_ekko1-waers.
+    gs_heading-po_date = ls_ekko1-bedat.
+    gs_heading-adv_pay = ls_ekko1-dppct.
+    gs_heading-retension = ls_ekko1-retpc.
+    gs_heading-balance = 100 - gs_heading-retension.
+    gs_heading-contract = lv_ekpo1.
+    gs_heading-addition = 0.
+
+    LOOP AT lt_ekpo_2 INTO DATA(ls_ekpo_2).
+      gs_heading-deletion = gs_heading-deletion + ls_ekpo_2-effwr.
+    ENDLOOP.
+
+    gs_heading-cont_with_change = gs_heading-contract + gs_heading-addition - gs_heading-deletion.
+
+    lv_row = 1.
+    LOOP AT lt_ses_item INTO ls_ses_item.
+
+      CLEAR: ls_ekbe, ls_rbkp, ls_dd07t, ls_bkpf, ls_bseg, ls_bkpf1, ls_bseg1.
+
+      READ TABLE lt_ses_hdr TRANSPORTING NO FIELDS WITH KEY referencepurchaseorder = ls_ses_item-referencepurchaseorder.
+      IF sy-subrc <> 0.
+        CONTINUE.
+      ENDIF.
+
+      gs_output-process_billing = lv_row.
+
+      CONCATENATE ls_ses_item-performancedate ls_ses_item-performanceenddate INTO gs_output-period_covered SEPARATED BY '-'.
+
+      IF p_cpudt IS INITIAL.
+
+        READ TABLE lt_ekbe INTO ls_ekbe WITH KEY lfbnr = ls_ses_item-serviceentrysheet.
+        IF sy-subrc IS INITIAL.
+          CONCATENATE ls_ekbe-cpudt+4(2) '/' ls_ekbe-cpudt+6(2) '/' ls_ekbe-cpudt+0(4) '/' INTO gs_output-date_sub.
+          CLEAR: ls_ekbe.
+        ENDIF.
+
+      ELSE.
+
+        CONCATENATE p_cpudt+4(2) '/' p_cpudt+6(2) '/' p_cpudt+0(4) '/' INTO gs_output-date_sub.
+
+      ENDIF.
+
+      READ TABLE lt_ekbe INTO ls_ekbe WITH KEY lfbnr = ls_ses_item-serviceentrysheet.
+      IF sy-subrc IS INITIAL.
+        gs_output-invoice = ls_ekbe-belnr.
+        gs_output-year = ls_ekbe-gjahr.
+
+        READ TABLE lt_rbkp INTO ls_rbkp WITH KEY belnr = ls_ekbe-belnr gjahr = ls_ekbe-gjahr.
+        IF sy-subrc IS INITIAL.
+
+          gs_output-inv_status = ls_rbkp-rbstat.
+
+          READ TABLE lt_dd07t INTO ls_dd07t WITH KEY valpos = gs_output-inv_status ##WARN_OK.
+          gs_output-inv_desc = ls_dd07t-ddtext.
+
+          gs_output-inv_no = ls_rbkp-xblnr.
+
+          IF ls_rbkp-vgart = 'RD'.
+            gs_output-curr_billing = ls_rbkp-rmwwr.
+          ELSEIF ls_rbkp-vgart = 'RS'.
+            gs_output-curr_billing = ls_rbkp-rmwwr * -1.
+          ENDIF.
+
+          READ TABLE lt_bkpf INTO ls_bkpf WITH KEY xblnr = ls_rbkp-xblnr gjahr = ls_rbkp-gjahr.
+          IF sy-subrc IS INITIAL.
+            LOOP AT lt_bseg INTO ls_bseg WHERE belnr = ls_bkpf-belnr AND gjahr = ls_bkpf-gjahr AND lifnr = ls_rbkp-lifnr.
+              gs_output-ret_witheld = gs_output-ret_witheld + ls_bseg-wrbtr.
+            ENDLOOP.
+          ENDIF.
+
+          READ TABLE lt_bkpf1 INTO ls_bkpf1 WITH KEY xblnr = ls_rbkp-belnr.
+          IF sy-subrc IS INITIAL.
+            READ TABLE lt_bseg1 INTO ls_bseg1 WITH KEY belnr = ls_bkpf1-belnr gjahr = ls_rbkp-gjahr lifnr = ls_rbkp-lifnr.
+            IF sy-subrc IS INITIAL.
+              gs_output-ret_released = ls_bseg1-wrbtr.
+            ENDIF.
+          ENDIF.
+
+        ELSE.
+
+          CONTINUE.
+
+        ENDIF.
+
+      ENDIF.
+
+      gs_output-po = ls_ses_item-referencepurchaseorder.
+
+      READ TABLE gt_output TRANSPORTING NO FIELDS WITH KEY invoice = ls_ekbe-belnr.
+      IF sy-subrc IS NOT INITIAL.
+        gs_output-prev_billing = gs_output-prev_billing + lv_prev_curr_bill.
+        lv_prev_curr_bill = gs_output-curr_billing.
+      ENDIF.
+
+      gs_output-to_date = gs_output-prev_billing + gs_output-curr_billing.
+      gs_output-balance = gs_heading-contract - gs_output-to_date.
+      gs_output-advances = gs_output-curr_billing * gs_heading-adv_pay / 100.
+      lv_row = lv_row + 1.
+
+      APPEND gs_output TO gt_output.
+      CLEAR: gs_output-ret_witheld.
+
+    ENDLOOP.
+
+    SORT gt_output BY invoice ASCENDING.
+    CLEAR: gs_output.
+
+    LOOP AT gt_output INTO gs_output.
+
+      READ TABLE gt_output1 INTO gs_output1 WITH KEY inv_no = gs_output-inv_no.
+      IF sy-subrc IS NOT INITIAL.
+        gs_output-process_billing = lv_sno.
+        APPEND gs_output TO gt_output1.
+        lv_sno = lv_sno + 1.
+      ENDIF.
+
+    ENDLOOP.
+
+    DELETE gt_output1 WHERE invoice IS INITIAL.
+    CLEAR: lv_prev_curr_bill.
+
+    LOOP AT gt_output1 INTO gs_output.
+
+      gs_output-prev_billing = lv_prev_curr_bill.
+      gs_output-to_date = gs_output-prev_billing + gs_output-curr_billing.
+      lv_prev_curr_bill = gs_output-to_date.
+      gs_output-balance = gs_heading-contract - gs_output-to_date.
+      MODIFY gt_output1 FROM gs_output INDEX sy-tabix.
+      lv_sno = lv_sno + 1.
+
+    ENDLOOP.
+
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form f_display_alv
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM f_display_alv .
+  DATA lo_alv               TYPE REF TO cl_salv_table.
+  DATA lex_message          TYPE REF TO cx_salv_msg.
+  DATA lo_layout_settings   TYPE REF TO cl_salv_layout.
+  DATA lo_layout_key        TYPE        salv_s_layout_key.
+  DATA lo_columns           TYPE REF TO cl_salv_columns_table.
+  DATA lo_column            TYPE REF TO cl_salv_column.
+  DATA lex_not_found        TYPE REF TO cx_salv_not_found.
+  DATA lo_functions         TYPE REF TO cl_salv_functions_list.
+  DATA lo_display_settings  TYPE REF TO cl_salv_display_settings.
+  DATA : obj_header      TYPE REF TO cl_salv_form_layout_grid,
+         sp_obj_header   TYPE REF TO cl_salv_form_layout_grid,
+         lv_data_error   TYPE REF TO cx_salv_data_error,
+         lv_not_found    TYPE REF TO cx_salv_not_found,
+         lv_existing     TYPE REF TO cx_salv_existing,
+         lr_aggregations TYPE REF TO cl_salv_aggregations.
+  " Initialize the ALV using the CL_SALV_TABLE=>factory
+  "-----------------------------------------------------------"
+  TRY.
+      cl_salv_table=>factory(
+        IMPORTING
+          r_salv_table = lo_alv
+        CHANGING
+          t_table      = gt_output1 ).
+      "@ the ABAP Internal Table to display in ALV with ABAP
+      "@ LT_ITAB to be defined and filled of course
+    CATCH cx_salv_msg INTO lex_message.
+      MESSAGE: lex_message TYPE 'E'.
+  ENDTRY.
+
+  " Set the ALV Layouts
+  "-----------------------------------------------------------"
+  lo_layout_settings   = lo_alv->get_layout( ).
+  lo_layout_key-report = sy-repid.
+  lo_layout_settings->set_key( lo_layout_key ).
+  lo_layout_settings->set_save_restriction( if_salv_c_layout=>restrict_none ).
+  " set the ALV Toolbars
+  "-----------------------------------------------------------"
+  lo_functions = lo_alv->get_functions( ).
+  lo_functions->set_all( ).
+
+  " Optimize ALV Columns size
+  "-----------------------------------------------------------"
+  lo_columns = lo_alv->get_columns( ).
+  lo_columns->set_optimize( ).
+
+  " Set Zebra Lines display
+  "-----------------------------------------------------------"
+  lo_display_settings = lo_alv->get_display_settings( ).
+  lo_display_settings->set_striped_pattern( if_salv_c_bool_sap=>true ).
+
+  " Set ALV Header title
+  "-----------------------------------------------------------"
+  lo_display_settings->set_list_header( TEXT-000 ).  "Summary of Billing Progress Report
+
+  lo_columns = lo_alv->get_columns( ).
+
+  lr_aggregations = lo_alv->get_aggregations( ).
+  TRY.
+      CALL METHOD lr_aggregations->add_aggregation
+        EXPORTING
+          columnname  = TEXT-001                                "PREV_BILLING
+          aggregation = if_salv_c_aggregation=>total.
+    CATCH cx_salv_data_error INTO lv_data_error.
+      MESSAGE lv_data_error TYPE 'E'.
+    CATCH cx_salv_not_found INTO lv_not_found.
+      MESSAGE lv_not_found TYPE 'E'.
+    CATCH cx_salv_existing INTO lv_existing.
+      MESSAGE lv_existing TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      CALL METHOD lr_aggregations->add_aggregation
+        EXPORTING
+          columnname  = TEXT-002                                "CURR_BILLING
+          aggregation = if_salv_c_aggregation=>total.
+    CATCH cx_salv_data_error INTO lv_data_error.
+      MESSAGE lv_data_error TYPE 'E'.
+    CATCH cx_salv_not_found INTO lv_not_found.
+      MESSAGE lv_not_found TYPE 'E'.
+    CATCH cx_salv_existing INTO lv_existing.
+      MESSAGE lv_existing TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      CALL METHOD lr_aggregations->add_aggregation
+        EXPORTING
+          columnname  = TEXT-003                                "RET_WITHELD
+          aggregation = if_salv_c_aggregation=>total.
+    CATCH cx_salv_data_error INTO lv_data_error.
+      MESSAGE lv_data_error TYPE 'E'.
+    CATCH cx_salv_not_found INTO lv_not_found.
+      MESSAGE lv_not_found TYPE 'E'.
+    CATCH cx_salv_existing INTO lv_existing.
+      MESSAGE lv_existing TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      CALL METHOD lr_aggregations->add_aggregation
+        EXPORTING
+          columnname  = TEXT-004                                "RET_RELEASED
+          aggregation = if_salv_c_aggregation=>total.
+    CATCH cx_salv_data_error INTO lv_data_error.
+      MESSAGE lv_data_error TYPE 'E'.
+    CATCH cx_salv_not_found INTO lv_not_found.
+      MESSAGE lv_not_found TYPE 'E'.
+    CATCH cx_salv_existing INTO lv_existing.
+      MESSAGE lv_existing TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      CALL METHOD lr_aggregations->add_aggregation
+        EXPORTING
+          columnname  = TEXT-005                                "ADVANCES
+          aggregation = if_salv_c_aggregation=>total.
+    CATCH cx_salv_data_error INTO lv_data_error.
+      MESSAGE lv_data_error TYPE 'E'.
+    CATCH cx_salv_not_found INTO lv_not_found.
+      MESSAGE lv_not_found TYPE 'E'.
+    CATCH cx_salv_existing INTO lv_existing.
+      MESSAGE lv_existing TYPE 'E'.
+  ENDTRY.
+
+
+  TRY.
+      lo_column = lo_columns->get_column( TEXT-006 ).
+      lo_column->set_short_text( TEXT-007 ).
+      lo_column->set_medium_text( TEXT-008 ).
+      lo_column->set_long_text( TEXT-009 ).
+    CATCH cx_salv_not_found INTO lex_not_found.
+      MESSAGE: lex_not_found TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      lo_column = lo_columns->get_column( TEXT-010 ).
+      lo_column->set_short_text( TEXT-011 ).
+      lo_column->set_medium_text( TEXT-012 ).
+      lo_column->set_long_text( TEXT-012 ).
+    CATCH cx_salv_not_found INTO lex_not_found.
+      MESSAGE: lex_not_found TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      lo_column = lo_columns->get_column( TEXT-013 ).
+      lo_column->set_short_text( TEXT-014 ).
+      lo_column->set_medium_text( TEXT-015 ).
+      lo_column->set_long_text( TEXT-015 ).
+    CATCH cx_salv_not_found INTO lex_not_found.
+      MESSAGE: lex_not_found TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      lo_column = lo_columns->get_column( TEXT-016 ).
+      lo_column->set_short_text( TEXT-016 ).
+      lo_column->set_medium_text( TEXT-016 ).
+      lo_column->set_long_text( TEXT-016 ).
+    CATCH cx_salv_not_found INTO lex_not_found.
+      MESSAGE: lex_not_found TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      lo_column = lo_columns->get_column( TEXT-021 ).
+      lo_column->set_short_text( TEXT-022 ).
+      lo_column->set_medium_text( TEXT-022 ).
+      lo_column->set_long_text( TEXT-022 ).
+    CATCH cx_salv_not_found INTO lex_not_found.
+      MESSAGE: lex_not_found TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      lo_column = lo_columns->get_column( TEXT-023 ).
+      lo_column->set_short_text( TEXT-024 ).
+      lo_column->set_medium_text( TEXT-025 ).
+      lo_column->set_long_text( TEXT-025 ).
+    CATCH cx_salv_not_found INTO lex_not_found.
+      MESSAGE: lex_not_found TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      lo_column = lo_columns->get_column( TEXT-026 ).
+      lo_column->set_short_text( TEXT-027 ).
+      lo_column->set_medium_text( TEXT-027 ).
+      lo_column->set_long_text( TEXT-027 ).
+    CATCH cx_salv_not_found INTO lex_not_found.
+      MESSAGE: lex_not_found TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      lo_column = lo_columns->get_column( TEXT-028 ).
+      lo_column->set_short_text( TEXT-029 ).
+      lo_column->set_medium_text( TEXT-030 ).
+      lo_column->set_long_text( TEXT-030 ).
+    CATCH cx_salv_not_found INTO lex_not_found.
+      MESSAGE: lex_not_found TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      lo_column = lo_columns->get_column( TEXT-031 ).
+      lo_column->set_short_text( TEXT-032 ).
+      lo_column->set_medium_text( TEXT-033 ).
+      lo_column->set_long_text( TEXT-033 ).
+    CATCH cx_salv_not_found INTO lex_not_found.
+      MESSAGE: lex_not_found TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      lo_column = lo_columns->get_column( TEXT-034 ).
+      lo_column->set_short_text( TEXT-035 ).
+      lo_column->set_medium_text( TEXT-035 ).
+      lo_column->set_long_text( TEXT-035 ).
+    CATCH cx_salv_not_found INTO lex_not_found.
+      MESSAGE: lex_not_found TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      lo_column = lo_columns->get_column( TEXT-036 ).
+      lo_column->set_short_text( TEXT-037 ).
+      lo_column->set_medium_text( TEXT-037 ).
+      lo_column->set_long_text( TEXT-037 ).
+    CATCH cx_salv_not_found INTO lex_not_found.
+      MESSAGE: lex_not_found TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      lo_column = lo_columns->get_column( TEXT-038 ).
+      lo_column->set_short_text( TEXT-039 ).
+      lo_column->set_medium_text( TEXT-040 ).
+      lo_column->set_long_text( TEXT-040 ).
+    CATCH cx_salv_not_found INTO lex_not_found.
+      MESSAGE: lex_not_found TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      lo_column = lo_columns->get_column( TEXT-041 ).
+      lo_column->set_short_text( TEXT-042 ).
+      lo_column->set_medium_text( TEXT-043 ).
+      lo_column->set_long_text( TEXT-043 ).
+    CATCH cx_salv_not_found INTO lex_not_found.
+      MESSAGE: lex_not_found TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      lo_column = lo_columns->get_column( TEXT-044 ).
+      lo_column->set_short_text( TEXT-045 ).
+      lo_column->set_medium_text( TEXT-045 ).
+      lo_column->set_long_text( TEXT-045 ).
+    CATCH cx_salv_not_found INTO lex_not_found.
+      MESSAGE: lex_not_found TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      lo_column = lo_columns->get_column( TEXT-046 ).
+      lo_column->set_short_text( TEXT-047 ).
+      lo_column->set_medium_text( TEXT-047 ).
+      lo_column->set_long_text( TEXT-047 ).
+    CATCH cx_salv_not_found INTO lex_not_found.
+      MESSAGE: lex_not_found TYPE 'E'.
+  ENDTRY.
+
+  TRY.
+      lo_column = lo_columns->get_column( TEXT-048 ).
+      lo_column->set_short_text( TEXT-049 ).
+      lo_column->set_medium_text( TEXT-049 ).
+      lo_column->set_long_text( TEXT-049 ).
+    CATCH cx_salv_not_found INTO lex_not_found.
+      MESSAGE: lex_not_found TYPE 'E'.
+  ENDTRY.
+
+
+  " Create a header grid with required column and rows
+  "-----------------------------------------------------------"
+  CREATE OBJECT sp_obj_header.
+
+  obj_header = sp_obj_header->create_grid( row = 8  column = 2  colspan = 10 ).
+
+  obj_header->create_label(  row = 1  column = 1  text = TEXT-050 ).
+  obj_header->create_label(  row = 1  column = 2  text = gs_heading-proj_num ).
+  obj_header->create_label(  row = 2  column = 1  text = TEXT-051 ).
+  obj_header->create_label(  row = 2  column = 2  text = gs_heading-proj_code ).
+  obj_header->create_label(  row = 3  column = 1  text = TEXT-052 ).
+  obj_header->create_label(  row = 3  column = 2  text = gs_heading-proj_desc ).
+  obj_header->create_label(  row = 4  column = 1  text = TEXT-053 ).
+  obj_header->create_label(  row = 4  column = 2  text = gs_heading-vendor ).
+  obj_header->create_label(  row = 5  column = 1  text = TEXT-054 ).
+  obj_header->create_label(  row = 5  column = 2  text = gs_heading-currency ).
+  obj_header->create_label(  row = 6  column = 1  text = TEXT-055 ).
+  obj_header->create_label(  row = 6  column = 2  text = gs_heading-po_date ).
+  obj_header->create_label(  row = 7  column = 1  text = TEXT-056 ).
+
+  DATA: lv_adv_pay TYPE string.
+  lv_adv_pay = gs_heading-adv_pay.
+  CONCATENATE lv_adv_pay '%' INTO lv_adv_pay.
+  obj_header->create_label(  row = 7  column = 2  text = lv_adv_pay ).
+  obj_header->create_label(  row = 8  column = 1  text = TEXT-057 ).
+
+  DATA: lv_ret TYPE string.
+  lv_ret = gs_heading-retension.
+  CONCATENATE lv_ret '%' INTO lv_ret.
+
+  obj_header->create_label(  row = 8  column = 2  text = lv_ret ).
+  obj_header->create_label(  row = 9  column = 1  text = TEXT-058 ).
+
+  DATA: lv_bal TYPE string.
+  lv_bal = gs_heading-balance.
+  CONCATENATE lv_bal '%' INTO lv_bal.
+
+  obj_header->create_label(  row = 9  column = 2  text = lv_bal ).
+  obj_header->create_label(  row = 10  column = 1  text = TEXT-059 ).
+  obj_header->create_label(  row = 10  column = 2  text = gs_heading-contract ).
+  obj_header->create_label(  row = 11  column = 1  text = TEXT-060 ) ##NUMBER_OK.
+  obj_header->create_label(  row = 11  column = 2  text = gs_heading-addition ) ##NUMBER_OK.
+  obj_header->create_label(  row = 12  column = 1  text = TEXT-061 ) ##NUMBER_OK.
+  obj_header->create_label(  row = 12  column = 2  text = gs_heading-deletion ) ##NUMBER_OK.
+  obj_header->create_label(  row = 13  column = 1  text = TEXT-062 ) ##NUMBER_OK.
+  obj_header->create_label(  row = 13  column = 2  text = gs_heading-cont_with_change ) ##NUMBER_OK.
+*   lo_alv->set_top_of_list_height( 50 ).
+  lo_alv->set_top_of_list( obj_header ).
+
+  " Display the ALV in ABAP in the whole main screen
+  "-----------------------------------------------------------"
+  lo_alv->display( ).
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form f_convert_value
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> LV_CURR
+*&      --> P_WAERS
+*&      <-- LV_EKPO
+*&---------------------------------------------------------------------*
+FORM f_convert_value  USING    p_lv_curr
+                               p_p_waers
+                      CHANGING p_lv_value.
+  "Convert amount from foreign to local currency
+  CALL FUNCTION 'CONVERT_AMOUNT_TO_CURRENCY'
+        EXPORTING
+          foreign_currency = P_lv_curr
+          foreign_amount   = P_lv_value
+          local_currency   = P_p_waers
+        IMPORTING
+          local_amount     = P_lv_value
+        EXCEPTIONS
+          error            = 1
+          OTHERS           = 2.
+
+      IF sy-subrc <> 0.
+        MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+                   WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+      ENDIF.
+
+ENDFORM.

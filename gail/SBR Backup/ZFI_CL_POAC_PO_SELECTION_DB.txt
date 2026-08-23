@@ -1,0 +1,29 @@
+  METHOD IF_POAC_PO_SELECTION_FROM_DB~CHANGE_SELECTION_FROM_DB.
+
+    o_poheaderselectedfields = i_poheaderselectedfields.
+    o_poitemselectedfields = i_poitemselectedfields.
+    o_poitemassignmtselectedfields = i_poitemassignmtselectedfields.
+    o_poitemscheduleselectedfields = i_poitemscheduleselectedfields.
+    o_poheaderselectoptions = i_poheaderselectoptions.
+    o_poitemselectoptions = i_poitemselectoptions.
+
+* The following example shows how to add a field to the list of selected fields for EKPO
+    DATA: lv_selectedfield LIKE LINE OF o_poitemselectedfields.
+
+    lv_selectedfield = 'KUNNR'.
+    READ TABLE o_poitemselectedfields TRANSPORTING NO FIELDS
+      WITH KEY table_line = lv_selectedfield.
+    IF sy-subrc <> 0.
+
+      APPEND lv_selectedfield TO o_poitemselectedfields.
+    ENDIF.
+
+* The following example shows how to remove the hardcoded restriction for the selection from table EKKO
+    READ TABLE O_POITEMSELECTOPTIONS TRANSPORTING NO FIELDS
+      WITH KEY fieldname = 'KNTTP' SIGN = 'E' OPTION = 'EQ' LOW = 'U' HIGH = ' '.
+    IF sy-subrc = 0.
+      DELETE O_POITEMSELECTOPTIONS INDEX sy-tabix.
+    ENDIF.
+
+
+  ENDMETHOD.

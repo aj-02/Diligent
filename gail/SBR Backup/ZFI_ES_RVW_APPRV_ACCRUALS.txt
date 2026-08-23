@@ -1,0 +1,17 @@
+  METHOD if_facra_adjust_result~adjust_result.
+    ASSIGN ct_output_tab->* TO FIELD-SYMBOL(<fs_data>).
+
+    READ TABLE it_cust_sel_criteria INTO DATA(ls_sel) WITH KEY fieldname = 'P_PAR1'.
+
+    LOOP AT <fs_data> ASSIGNING FIELD-SYMBOL(<fs_line>).
+      ASSIGN COMPONENT 'REF_KEY' OF STRUCTURE <fs_line> TO FIELD-SYMBOL(<fs_ref_key>).
+      IF <fs_ref_key> IS ASSIGNED.
+        SELECT SINGLE ebeln FROM ekko WHERE ebeln = @<fs_ref_key> AND oid_extbol IN @ls_sel-selopt_t
+          INTO @data(ls_ekko).
+        IF sy-subrc <> 0.
+          DELETE TABLE <fs_data> FROM <fs_line>.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+
+  ENDMETHOD.

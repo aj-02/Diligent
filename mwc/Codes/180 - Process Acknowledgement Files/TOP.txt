@@ -1,0 +1,215 @@
+*&---------------------------------------------------------------------*
+*& Include          ZIN_R2R_PROCESS_PAYMENT_TOP
+*&---------------------------------------------------------------------*
+************************************************************************
+* Requirement Id: DID_M2C_180                                          *
+* Title: Program to process the payment acknowledgement files          *
+* Date Created: 27.05.2025                                             *
+* Programmer:  TAMBOLIV                                                *
+* Program Objective: This program will process the payment             *
+* acknowledgement files                                                *
+* Orig Request: DS4K900847                                             *
+************************************************************************
+* Modification History                                                 *
+************************************************************************
+* Modified By:                                                         *
+* Date:                                                                *
+* Modification TR:                                                     *
+* Reason:                                                              *
+************************************************************************
+"Type declared for internal table containing data.
+TYPES: BEGIN OF ty_bansta,
+         line_type(1) TYPE c,
+         field1(25)   TYPE c,
+         field2(2)    TYPE c,
+         field3(10)   TYPE c,
+         field4       TYPE dats,
+         field5       TYPE dats,
+         field6       TYPE dats,
+         field7       TYPE dats,
+         field8(10)   TYPE c,
+         field9(16)   TYPE p DECIMALS 2,
+         field10      TYPE waers,
+         field11(10)  TYPE c,
+         field12(10)  TYPE c,
+         field13(10)  TYPE c,
+         field14(10)  TYPE c,
+         field15(10)  TYPE c,
+         field16      TYPE numc10,
+         field17(10)  TYPE c,
+         field18(10)  TYPE c,
+         field19(10)  TYPE c,
+         field20(80)  TYPE c,
+         field21(10)  TYPE c,
+         field22(10)  TYPE c,
+         field23(10)  TYPE c,
+         field24(10)  TYPE c,
+         field25(10)  TYPE c,
+         field26(10)  TYPE c,
+         field27(10)  TYPE c,
+         field28(10)  TYPE c,
+         field29      TYPE bankn,
+         field30(10)  TYPE c,
+         field31(10)  TYPE c,
+         field32(10)  TYPE c,
+         field33      TYPE bankn,
+         field34(10)  TYPE c,
+         field35(10)  TYPE c,
+         field36(13)  TYPE c,
+         field37(10)  TYPE c,
+         field38(10)  TYPE c,
+         bukrs        TYPE bukrs,
+         hbkid        TYPE hbkid,
+         hktid        TYPE hktid,
+         status       TYPE string,
+       END OF ty_bansta.
+"Type declared for internal table containing headers.
+TYPES: BEGIN OF ty_bansta_hdr,
+         field1  TYPE c LENGTH 20,
+         field2  TYPE c LENGTH 20,
+         field3  TYPE c LENGTH 20,
+         field4  TYPE c LENGTH 20,
+         field5  TYPE c LENGTH 20,
+         field6  TYPE c LENGTH 20,
+         field7  TYPE c LENGTH 20,
+         field8  TYPE c LENGTH 20,
+         field9  TYPE c LENGTH 20,
+         field10 TYPE c LENGTH 20,
+         field11 TYPE c LENGTH 20,
+         field12 TYPE c LENGTH 20,
+         field13 TYPE c LENGTH 20,
+         field14 TYPE c LENGTH 20,
+         field15 TYPE c LENGTH 20,
+         field16 TYPE c LENGTH 20,
+         field17 TYPE c LENGTH 20,
+         field18 TYPE c LENGTH 20,
+         field19 TYPE c LENGTH 20,
+         field20 TYPE c LENGTH 20,
+         field21 TYPE c LENGTH 20,
+         field22 TYPE c LENGTH 20,
+         field23 TYPE c LENGTH 20,
+         field24 TYPE c LENGTH 20,
+         field25 TYPE c LENGTH 20,
+         field26 TYPE c LENGTH 20,
+         field27 TYPE c LENGTH 20,
+         field28 TYPE c LENGTH 20,
+         field29 TYPE c LENGTH 20,
+         field30 TYPE c LENGTH 20,
+         field31 TYPE c LENGTH 20,
+         field32 TYPE c LENGTH 20,
+         field33 TYPE c LENGTH 20,
+         field34 TYPE c LENGTH 20,
+         field35 TYPE c LENGTH 20,
+         field36 TYPE c LENGTH 20,
+         field37 TYPE c LENGTH 20,
+         field38 TYPE c LENGTH 20,
+         field39 TYPE c LENGTH 20,
+         field40 TYPE c LENGTH 20,
+       END OF ty_bansta_hdr.
+
+TYPES: BEGIN OF ty_ack,
+         field1(4)   TYPE c,
+         field2(14)  TYPE c,
+         field3(200) TYPE c,
+         field4(25)  TYPE c,
+         field5(8)   TYPE c,
+         field6(3)   TYPE c,
+         field7(5)   TYPE c,
+         field8(100) TYPE c,
+         field9(100) TYPE c,
+         rundate     TYPE laufd,
+         runid       TYPE laufi,
+         status      TYPE char10,
+       END OF ty_ack.
+
+TYPES: BEGIN OF ty_scb,
+         check_no(13)     TYPE c,
+         processing_date  TYPE dats,
+         payee_name(80)   TYPE c,
+         payee_amnt       TYPE dmbtr,
+         batch_ref(8)     TYPE c,
+         payement_ref(8)  TYPE c,
+         customer_ref(10) TYPE c,
+         comp_code        TYPE bukrs,
+         house_bank       TYPE hbkid,
+         account_id       TYPE hktid,
+         vblnr            TYPE vblnr,
+       END OF ty_scb.
+
+TYPES: BEGIN OF ty_msg,
+         msgid TYPE sy-msgid,
+         msgno TYPE sy-msgno,
+         msgty TYPE sy-msgty,
+         msgv1 TYPE sy-msgv1,
+         msgv2 TYPE sy-msgv2,
+         msgv3 TYPE sy-msgv3,
+         msgv4 TYPE sy-msgv4,
+       END OF ty_msg.
+
+DATA: ls_first_error_msg   TYPE ty_msg ##NEEDED,
+      lv_first_error_shown TYPE abap_bool VALUE abap_false ##NEEDED.
+
+DATA: gv_index TYPE i ##NEEDED. "Variable to store the index while traversing in a loop.
+DATA: gv_fullpath TYPE string ##NEEDED,
+      gt_data     TYPE TABLE OF string ##NEEDED,
+      gs_data     TYPE string ##NEEDED,
+      gt_fields   TYPE TABLE OF string ##NEEDED,
+      gs_fields   TYPE string ##NEEDED,
+      l_fileline  TYPE string ##NEEDED.
+DATA: gt_bansta TYPE TABLE OF ty_bansta ##NEEDED,
+      gs_bansta TYPE ty_bansta ##NEEDED.
+DATA: gt_bansta_HDR TYPE TABLE OF ty_bansta_hdr ##NEEDED,
+      gs_bansta_HDR TYPE ty_bansta_hdr ##NEEDED.
+DATA: gt_ack TYPE TABLE OF ty_ack ##NEEDED,
+      gs_ack TYPE ty_ack ##NEEDED.
+DATA: gt_scb TYPE TABLE OF ty_scb ##NEEDED,
+      gs_scb TYPE ty_scb ##NEEDED.
+DATA: gv_string TYPE string ##NEEDED.
+DATA: gv_filename TYPE rlgrap-filename ##NEEDED.
+DATA: gt_values TYPE TABLE OF alsmex_tabline ##NEEDED.
+DATA: it_raw TYPE truxs_t_text_data ##NEEDED.
+DATA: gv_bankn TYPE bankn ##NEEDED.
+DATA: gt_bdcdata TYPE TABLE OF bdcdata ##NEEDED.
+DATA: gs_bdcdata TYPE bdcdata ##NEEDED.
+DATA: gs_messtab TYPE bdcmsgcoll ##NEEDED,
+      gt_messtab TYPE TABLE OF bdcmsgcoll ##NEEDED.
+DATA: gv_archive_path TYPE string VALUE '/BANKUPW12R2/H2H/PR1/REPORTING/Check_Payment_Posting/DONE/' ##NEEDED,
+*      gv_error_path   TYPE string VALUE '/BANKUPW12R2/H2H/PR1/REPORTING/Check_Payment_Posting/' ##NEEDED,
+      gv_pos          TYPE i ##NEEDED,
+      gv_offset       TYPE i ##NEEDED,
+      gv_file_path    TYPE string ##NEEDED,
+      gv_data         TYPE string ##NEEDED,
+      gv_radiob       type char3,
+      gv_rb           type char3.
+
+FIELD-SYMBOLS: <fs_field>  TYPE any ##NEEDED,
+               <ls_bansta> TYPE ty_bansta ##NEEDED,
+               <fs_ack>    TYPE ty_ack ##NEEDED,
+               <fs_scb>    TYPE ty_scb ##NEEDED.
+FIELD-SYMBOLS: <fs_value>  TYPE any ##NEEDED,
+               <fs_bansta> TYPE ty_bansta ##NEEDED.
+
+CONSTANTS:
+  gc_num1       TYPE i VALUE zcl_abap_utility=>zif_r2r_constant~gc_r2r_180-num1,
+  gc_num2       TYPE i VALUE zcl_abap_utility=>zif_r2r_constant~gc_r2r_180-num2,
+*  gc_split1  TYPE c VALUE zcl_abap_utility=>zif_m2c_constant~gc_m2c_180-split1,
+  gc_error(1)   TYPE c VALUE zcl_abap_utility=>zif_r2r_constant~gc_r2r_180-error,
+  gc_rldnr(2)   TYPE c VALUE zcl_abap_utility=>zif_r2r_constant~gc_r2r_180-rldnr,
+  gc_koart(1)   TYPE c VALUE zcl_abap_utility=>zif_r2r_constant~gc_r2r_180-koart,
+  gc_stgrd(2)   TYPE c VALUE zcl_abap_utility=>zif_r2r_constant~gc_r2r_180-stgrd,
+  gc_rej3(4)    TYPE c VALUE zcl_abap_utility=>zif_r2r_constant~gc_r2r_180-rej3,
+  gc_reason(2)  TYPE c VALUE zcl_abap_utility=>zif_r2r_constant~gc_r2r_180-reason,
+  gc_success(1) TYPE c VALUE zcl_abap_utility=>zif_r2r_constant~gc_r2r_180-success,
+  gc_h(3)       TYPE c VALUE zcl_abap_utility=>zif_r2r_constant~gc_r2r_180-h,
+  gc_d(3)       TYPE c VALUE zcl_abap_utility=>zif_r2r_constant~gc_r2r_180-d,
+  gc_split2(7)  TYPE c VALUE zcl_abap_utility=>zif_r2r_constant~gc_r2r_180-split2.
+
+SELECTION-SCREEN: BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
+    PARAMETERS: rb1 RADIOBUTTON GROUP g1 USER-COMMAND btn1 DEFAULT 'X',
+              rb2 RADIOBUTTON GROUP g1,
+              rb3 RADIOBUTTON GROUP g1,
+              rb4 RADIOBUTTON GROUP g1.
+  PARAMETERS: p_path TYPE zde_filename , "filename-fileextern,
+  p_file TYPE ibipparms-path.
+
+SELECTION-SCREEN END OF BLOCK b1.

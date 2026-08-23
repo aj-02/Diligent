@@ -1,0 +1,143 @@
+*&---------------------------------------------------------------------*
+*& Include YEHS_MANAGE_WORK_HOURS_PBO
+*&---------------------------------------------------------------------*
+
+*&---------------------------------------------------------------------*
+*& Module FETCH_DATA OUTPUT
+*&---------------------------------------------------------------------*
+MODULE fetch_data OUTPUT.
+  "Set the function key/status and title bar
+  SET PF-STATUS 'SCREEN_1'.
+  SET TITLEBAR 'TITLE1'.
+
+  "Define selection ranges for plants and dates
+  DATA r_plant TYPE RANGE OF char4.
+  DATA r_date  TYPE RANGE OF dats.
+  clear: r_plant, r_date.
+  "Build plant selection range if parameter p_plant is provided
+  IF p_plant IS NOT INITIAL.
+    APPEND VALUE #( sign = 'I' option = 'EQ' low = p_plant ) TO r_plant.
+  ENDIF.
+
+  "Build date selection range if start date is provided
+  IF p_sdate IS NOT INITIAL.
+    IF p_edate IS INITIAL.
+      p_edate = sy-datum.
+    ENDIF.
+    APPEND VALUE #( sign = 'I' option = 'BT' low = p_sdate high = p_edate ) TO r_date.
+  else.
+    IF p_edate IS not INITIAL.
+      clear: p_edate.
+    endif.
+  ENDIF.
+
+  "Clear previous work hours table
+  CLEAR gt_hourworked.
+
+  "Fetch work hours based on plant and date ranges
+  SELECT *
+    FROM yehs_work_hours
+    INTO TABLE @gt_hourworked
+    WHERE plant_id IN @r_plant
+      AND start_date IN @r_date
+      AND end_date   IN @r_date.
+
+  "Fetch worker type descriptions
+  SELECT ddtext, domvalue_l
+    FROM dd07t
+    INTO TABLE @gt_worker_type
+    WHERE domname   = 'YEHHSS_HWRK_WORKER_TYPE_CODE'
+      AND ddlanguage = 'E'.
+
+  "Sort the work hours table by start and end date
+  SORT gt_hourworked BY start_date end_date.
+
+ENDMODULE.
+*&---------------------------------------------------------------------*
+
+
+*&---------------------------------------------------------------------*
+*& Module DATA_MAPPING OUTPUT
+*&---------------------------------------------------------------------*
+MODULE data_mapping OUTPUT.
+*  SET PF-STATUS 'xxxxxxxx'.
+
+
+  "Map work hours to final table using CORRESPONDING expression
+  gt_final = CORRESPONDING #( gt_hourworked ).
+
+  "Replace worker type codes with descriptions
+  LOOP AT gt_final ASSIGNING FIELD-SYMBOL(<fs_final>).
+    READ TABLE gt_worker_type INTO DATA(ls_worker_type)
+         WITH KEY domvalue_l = <fs_final>-worker_type.
+    IF sy-subrc = 0.
+      <fs_final>-worker_type = ls_worker_type-ddtext.
+    ENDIF.
+  ENDLOOP.
+
+  "Refresh ALV control with updated data
+  REFRESH CONTROL 'TC_RECORDS' FROM SCREEN '9001'.
+ENDMODULE.
+*&---------------------------------------------------------------------*
+
+
+*&---------------------------------------------------------------------*
+*& Module STATUS_9002 OUTPUT
+*&---------------------------------------------------------------------*
+MODULE status_9002 OUTPUT.
+  SET PF-STATUS 'SCREEN_9002'.
+
+ENDMODULE.
+*&---------------------------------------------------------------------*
+
+
+*&---------------------------------------------------------------------*
+*& Module STATUS_9003 OUTPUT
+*&---------------------------------------------------------------------*
+MODULE status_9003 OUTPUT.
+  DATA lt_exclude TYPE TABLE OF syucomm.
+  CLEAR: LT_EXCLUDE.
+
+  IF SY-UCOMM = 'EDIT'.
+
+  APPEND 'SAVE' TO lt_exclude.
+  SET PF-STATUS 'SCREEN_9003' EXCLUDING lt_exclude.
+
+  ELSEIF SY-UCOMM = 'UPDATE'.
+
+    APPEND 'UPDATE' TO lt_exclude.
+    APPEND 'DELETE' TO lt_exclude.
+
+    SET PF-STATUS 'SCREEN_9003' EXCLUDING lt_exclude.
+
+  ENDIF.
+
+  "Enable/disable fields depending on EDIT mode
+  LOOP AT SCREEN.
+    IF sy-ucomm = 'EDIT'.
+      IF screen-name = 'SAVE_BTN'
+        OR screen-name = 'P_EPLANT'
+        OR screen-name = 'P_ESDATE'
+        OR screen-name = 'P_EEDATE'
+        OR screen-name = 'P_EWHOUR'
+        OR screen-name = 'P_EWORKER'
+        OR screen-name = 'P_EWTYPE'.
+        screen-input = 0.
+        screen-required = 0.
+      ENDIF.
+    ELSE.
+      IF screen-name = 'SAVE_BTN'
+        OR screen-name = 'P_EPLANT'
+        OR screen-name = 'P_ESDATE'
+        OR screen-name = 'P_EEDATE'
+        OR screen-name = 'P_EWHOUR'
+        OR screen-name = 'P_EWORKER'
+        OR screen-name = 'P_EWTYPE'.
+        screen-input    = 1.
+        screen-required = 1.
+      ENDIF.
+    ENDIF.
+    MODIFY SCREEN.
+  ENDLOOP.
+ENDMODULE.
+*&---------------------------------------------------------------------*

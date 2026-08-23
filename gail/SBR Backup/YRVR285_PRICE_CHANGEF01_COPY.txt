@@ -1,0 +1,1374 @@
+*&---------------------------------------------------------------------*
+*&  Include           YRVR285_PRICE_CHANGEF01
+*&---------------------------------------------------------------------*
+*&  Program Name          : YRVR285_PRICE_CHANGE_MAIL                 *&
+*&  Module                : SD                                        *&
+*&  Package               : YV01                                      *&
+*&  Developed By          : SHIVANI MISHRA -BIRLASOFT LTD             *&
+*&  Version               : 1.0                                       *&
+*&  Type                  : Executable                                *&
+*&  Functional Consultant : Priyanka Singh                            *&
+*&  CHARM and TR          : 2000000423 (DVRK9A0SMM)                   *&
+*&  Recived Date          : 26.10.2021                                *&
+*&---------------------------------------------------------------------*
+*&---------------- M o d o f i c a t i o n   L o g s ------------------*
+*&---------------------------------------------------------------------*
+*&DATE        :
+*&CHANGED BY  :
+*&CHARM       :
+*&DESCRIPTION :
+*&---------------------------------------------------------------------*
+
+
+*&---------------------------------------------------------------------*
+*&      Form  READ_FILE
+*&---------------------------------------------------------------------*
+FORM READ_FILE.
+  DATA: LV_DATA  TYPE STRING,
+        LS_FINAL TYPE GTY_CUSTNUM.
+
+  IF P_FILE1 IS INITIAL.
+
+    LV_FILE = '/tmp/activecustomer.csv'.
+    OPEN DATASET LV_FILE FOR INPUT IN TEXT MODE ENCODING DEFAULT.
+    IF SY-SUBRC NE 0.
+      MESSAGE 'unable to open the file' TYPE 'I'.
+    ELSE.
+*// Read the data from app server and put into variable
+      DO.
+        READ DATASET LV_FILE INTO LV_DATA.
+        IF SY-SUBRC EQ 0.
+*// Append workarea to internal table
+          APPEND LV_DATA TO GT_CUSTNUM.
+*        CLEAR ls_final.
+        ELSE.
+          EXIT.
+        ENDIF.
+      ENDDO.
+    ENDIF.
+  ENDIF.
+
+  IF P_FILE1 IS NOT INITIAL.
+
+
+    DATA: LT_EXCEL_DATA  TYPE STANDARD TABLE OF ALSMEX_TABLINE,
+          LWA_EXCEL_DATA TYPE ALSMEX_TABLINE,
+          LWA_CUSTNUM    TYPE GTY_CUSTNUM.
+
+    CALL FUNCTION 'ALSM_EXCEL_TO_INTERNAL_TABLE'
+      EXPORTING
+        FILENAME    = P_FILE1
+        I_BEGIN_COL = 1
+        I_BEGIN_ROW = 1
+        I_END_COL   = 1
+        I_END_ROW   = 65536
+      TABLES
+        INTERN      = LT_EXCEL_DATA.
+    IF SY-SUBRC <> 0.
+* Implement suitable error handling here
+    ENDIF.
+
+    IF LT_EXCEL_DATA IS NOT INITIAL.
+      LOOP AT LT_EXCEL_DATA INTO LWA_EXCEL_DATA.
+        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+          EXPORTING
+            INPUT  = LWA_EXCEL_DATA-VALUE
+          IMPORTING
+            OUTPUT = LWA_CUSTNUM-KUNNR.
+        APPEND LWA_CUSTNUM TO GT_CUSTNUM.
+      ENDLOOP.
+    ENDIF.
+  ENDIF.
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  GET_DATA
+*&---------------------------------------------------------------------*
+FORM GET_DATA.
+
+* Selecting the address numbers of the customers
+  IF GT_CUSTNUM[] IS NOT INITIAL.
+    SELECT KUNNR ADRNR
+      FROM KNA1
+      INTO TABLE GT_KNA1
+      FOR ALL ENTRIES IN GT_CUSTNUM[]
+      WHERE KUNNR = GT_CUSTNUM-KUNNR.
+    IF SY-SUBRC <> 0.
+      CLEAR: GT_KNA1.
+    ELSE.
+      SORT GT_KNA1 BY KUNNR.
+    ENDIF.
+  ENDIF.
+
+* Fetching the email ids
+  IF GT_KNA1[] IS NOT INITIAL.
+    SELECT ADDRNUMBER SMTP_ADDR
+      FROM ADR6
+      INTO TABLE GT_ADR6
+      FOR ALL ENTRIES IN GT_KNA1[]
+      WHERE ADDRNUMBER = GT_KNA1-ADRNR
+      AND   FLGDEFAULT = GC_X
+      AND   HOME_FLAG  = GC_X.
+    IF SY-SUBRC <> 0.
+      CLEAR: GT_ADR6.
+    ENDIF.
+  ENDIF.
+
+* SOC by Chilukuri Tripura Reddy/Archna/Vishal charm:4000006667 TR:DVRK9A135V
+***Fetching mobile number
+  IF GT_KNA1[] IS NOT INITIAL.
+    SELECT ADDRNUMBER
+*           FLGDEFAULT
+           TEL_NUMBER
+           R3_USER
+      FROM ADR2
+      INTO CORRESPONDING FIELDS OF TABLE GT_ADR2
+      FOR ALL ENTRIES IN GT_KNA1[]
+      WHERE ADDRNUMBER = GT_KNA1-ADRNR
+* SOC Commenetd by Chilukuri Tripura Reddy/Archna/Vishal charm:4000006667  TR:DVRK9A135V
+*        AND FLGDEFAULT = GC_AD.
+* EOC Commented by Chilukuri Tripura Reddy/Archna/Vishal charm:4000006667  TR:DVRK9A135V
+        AND R3_USER    = GC_N.
+    IF SY-SUBRC <> 0.
+      CLEAR: GT_ADR2.
+    ENDIF.
+  ENDIF.
+  LOOP AT GT_ADR2 INTO DATA(GS_ADR2).
+    READ TABLE GT_KNA1 INTO DATA(LWA_KNA1) WITH  KEY ADRNR = GS_ADR2-ADDRNUMBER.
+    IF SY-SUBRC = 0.
+      GS_ADR2-KUNNR = LWA_KNA1-KUNNR.
+      MODIFY GT_ADR2 FROM GS_ADR2 TRANSPORTING KUNNR.
+    ENDIF.
+    CLEAR : GS_ADR2, LWA_KNA1.
+  ENDLOOP.
+* Adding sales office
+  REFRESH LT_KNVV[].
+  SELECT KUNNR VKBUR FROM KNVV INTO TABLE LT_KNVV
+    FOR ALL ENTRIES IN GT_CUSTNUM[]
+      WHERE KUNNR = GT_CUSTNUM-KUNNR.
+  LOOP AT GT_ADR2 INTO DATA(GS_ADR4).
+    READ TABLE LT_KNVV INTO DATA(LWA_KNVV) WITH  KEY KUNNR = GS_ADR4-KUNNR.
+    IF SY-SUBRC = 0.
+      GS_ADR4-VKBUR = LWA_KNVV-VKBUR.
+      MODIFY GT_ADR2 FROM GS_ADR4 TRANSPORTING VKBUR.
+    ENDIF.
+    CLEAR : GS_ADR4.
+  ENDLOOP.
+* EOC by Chilukuri Tripura Reddy/Archna/Vishal charm:4000006667 TR:DVRK9A135V
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  INITIALIZE_MAIL
+*&---------------------------------------------------------------------*
+FORM INITIALIZE_MAIL.
+  DATA:  LWA_TXT LIKE LINE OF GT_TXT.
+  CLEAR: GT_MESSAGE.
+
+  LOOP AT GT_TXT INTO LWA_TXT.
+    APPEND LWA_TXT TO GT_MESSAGE.
+  ENDLOOP.
+
+ENDFORM.                    "INITIALIZE_MAIL
+
+*&---------------------------------------------------------------------*
+*&      Form  SEND_EMAIL
+*&---------------------------------------------------------------------*
+FORM SEND_EMAIL.
+
+  PERFORM: INITIALIZE_MAIL.
+  PERFORM: HTML_BODY.
+
+*  p_sender = ' gailpmg@gail.co.in '.
+  TRY.
+
+      SELECT * FROM YRVA_ZO_EMAIL
+      INTO TABLE @Y_ZO_EMAIL_CO
+        WHERE YY_PURPOSE = 'IP'.
+** -> Begin of changes by of <Aditi> on <23/10/24> for ATC
+      READ TABLE GT_ADR6 INTO DATA(LWA_ADR6_CC) INDEX 1.  "#EC CI_NOORDER
+** <- End changes by of <Aditi> on <23/10/24> for ATC
+      IF SY-SUBRC EQ 0.
+        LOOP AT Y_ZO_EMAIL_CO INTO DATA(LWA_EMAIL_UPD).
+          LWA_ADR6_CC-SMTP_ADDR = LWA_EMAIL_UPD-YY_MAIL_ID.
+          LWA_ADR6_CC-ADDRNUMBER = '00000'.
+          APPEND LWA_ADR6_CC TO GT_ADR6.
+        ENDLOOP.
+      ENDIF.
+
+      LOOP AT GT_ADR6 INTO DATA(LWA_ADR6).
+        "lwa_adr6-smtp_addr.
+        CLEAR: GO_SEND_REQUEST, GO_DOCUMENT,  LO_RECIPIENT.
+        GO_SEND_REQUEST = CL_BCS=>CREATE_PERSISTENT( ).
+        GO_DOCUMENT = CL_DOCUMENT_BCS=>CREATE_DOCUMENT(
+        I_TYPE = 'HTM'
+        I_TEXT = IT_CONTENTS
+* i_length = '12'
+        I_SUBJECT = P_SUBJ
+*      i_sender = p_sender
+         ).
+
+        LV_SMTP_ADDR = 'gailpmg@gail.co.in'.
+
+        IF LV_SMTP_ADDR IS NOT INITIAL.
+          LO_REF_SENDER = CL_CAM_ADDRESS_BCS=>CREATE_INTERNET_ADDRESS(
+          I_ADDRESS_STRING = LV_SMTP_ADDR
+          I_ADDRESS_NAME = LV_SMTP_ADDR ).
+
+          CALL METHOD GO_SEND_REQUEST->SET_SENDER
+            EXPORTING
+              I_SENDER = LO_REF_SENDER.
+        ENDIF.
+
+*        "For email subject more than 50 Char
+**      gv_sub = 'Email from SAP with multiple attachment in any format and HTML Email Body !'.
+**      CALL METHOD go_send_request->set_message_subject
+**        EXPORTING
+**          ip_subject = gv_sub.
+        PERFORM EMAIL_ATTACHMENTS.
+*DATA: lv_sender_email TYPE ADR6-SMTP_ADDR.
+*      lv_sender_email = 'gailpmg@gail.co.in'.
+*
+*      IF NOT lv_sender_email IS INITIAL.
+*        lo_sender = cl_cam_address_bcs=>create_internet_address(
+*                  i_address_string = lv_sender_email ).
+*      ENDIF.
+* add document to send request
+        CALL METHOD GO_SEND_REQUEST->SET_DOCUMENT( GO_DOCUMENT ).
+*      LOOP AT gt_adr6 INTO DATA(lwa_adr6).           "lwa_adr6-smtp_addr.
+        LO_RECIPIENT = CL_CAM_ADDRESS_BCS=>CREATE_INTERNET_ADDRESS(
+         LWA_ADR6-SMTP_ADDR ).
+        CALL METHOD GO_SEND_REQUEST->ADD_RECIPIENT
+          EXPORTING
+            I_RECIPIENT = LO_RECIPIENT
+            I_EXPRESS   = 'X'.
+        CLEAR : LWA_ADR6.
+*      ENDLOOP.
+
+* ---------- send document ---------------------------------------
+        CALL METHOD GO_SEND_REQUEST->SET_SEND_IMMEDIATELY
+          EXPORTING
+            I_SEND_IMMEDIATELY = 'X'.
+        CALL METHOD GO_SEND_REQUEST->SEND(
+          EXPORTING
+            I_WITH_ERROR_SCREEN = 'X'
+          RECEIVING
+            RESULT              = LV_SENT_TO_ALL ).
+
+      ENDLOOP.
+
+      IF LV_SENT_TO_ALL = 'X'.
+
+        MESSAGE I000(8I) WITH 'Email sent succesfully' .   ##NO_TEXT
+        COMMIT WORK.
+
+*        CALL TRANSACTION 'YRVR287'.
+        PERFORM TABLE_ENTRY.
+        SUBMIT YRVR285_PRICE_CHANGE_MAIL VIA SELECTION-SCREEN.
+
+      ELSEIF LV_SENT_TO_ALL IS INITIAL.
+        MESSAGE I000(8I) WITH 'Email not sent'. ##NO_TEXT
+      ENDIF.
+
+    CATCH CX_BCS INTO LO_BCS_EXCEPTION.
+  ENDTRY.
+
+ENDFORM. " END OF FORM SEND EMAIL.
+
+
+*&---------------------------------------------------------------------*
+*&      Form  SEND_MAIL
+*&---------------------------------------------------------------------*
+FORM SEND_MAIL.
+  IF GT_ADR6[] IS NOT INITIAL.
+    PERFORM SEND_EMAIL.
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  PREPARE_REPORT
+*&---------------------------------------------------------------------*
+FORM PREPARE_REPORT.
+
+  DATA: LWA_FIELDCAT     TYPE SLIS_FIELDCAT_ALV,
+        LWA_FIELDCAT_SMS TYPE SLIS_FIELDCAT_ALV,  "Added by Chilukuri Tripura Reddy/Archna/Vishal charm:4000006667
+        LV_COUNT         TYPE CHAR2,
+        LV_COUNT_SMS     TYPE CHAR2,         "Added by Chilukuri Tripura Reddy/Archna/Vishal charm:4000006667
+        LWA_PRICE_FINAL  TYPE YRVA_PRICE_CHANG.
+
+  CONSTANTS: LC_CUSTOMER(8)      TYPE C VALUE 'CUSTOMER',
+             LC_DATE_MAIL(9)     TYPE C VALUE 'DATE_MAIL',
+*             lc_time         TYPE c VALUE 'TIME_MAIL',
+             LC_EMAIL_ID(8)      TYPE C VALUE 'EMAIL_ID',
+             LC_MESSAGE(8)       TYPE C VALUE 'MESSAGE1',
+             LC_STAT(8)          TYPE C VALUE 'STATUS',
+* SOC by Chilukuri Tripura Reddy/Archna/Vishal charm:4000006667
+             LC_CUSTOMER_SMS(10) TYPE C VALUE 'CUSTOMER',
+             LC_SENT_DATE(8)     TYPE C VALUE 'Y_DATE',
+             LC_SENT_TIME(6)     TYPE C VALUE 'Y_TIME',
+             LC_VKBUR(8)         TYPE C VALUE 'Y_VKBUR',
+             LC_CREATED(12)      TYPE C VALUE 'Y_CREATED_BY',
+             LC_MOB_NO(10)       TYPE C VALUE 'Y_MOB_NUM',
+             LC_STATUS(50)       TYPE C VALUE 'Y_STATUS',
+             LC_SMS_STATUS(50)   TYPE C VALUE 'Y_SMS_STATUS',
+             LC_SMS_TEXT(1000)   TYPE C VALUE 'Y_SMS_TEXT'.
+* EOC by Chilukuri Tripura Reddy/Archna/Vishal charm:4000006667
+
+* Get data for a Date from Table: YRVA_PRICE_CHANG
+  IF S_DATE[] IS NOT INITIAL.
+    SELECT * FROM YRVA_PRICE_CHANG
+    INTO TABLE GT_PRICE_FINAL
+    WHERE DATE_MAIL IN S_DATE.
+    IF SY-SUBRC <> 0.
+      CLEAR: GT_PRICE_FINAL.
+    ELSE.
+      SORT GT_PRICE_FINAL BY CUSTOMER ASCENDING TIME_MAIL DESCENDING.
+    ENDIF.
+  ENDIF.
+* SOC by Chilukuri Tripura Reddy/Archna/Vishal charm:4000006667
+* Get data for a Date from Table: YRVA_SMS_REPORT
+  IF T_DATE[] IS NOT INITIAL.
+    SELECT * FROM YRVA_SMS_REPORT
+ INTO TABLE GT_YRVA_SMS_REPORT
+ WHERE Y_DATE IN T_DATE.
+    IF SY-SUBRC <> 0.
+      CLEAR: GT_YRVA_SMS_REPORT.
+    ELSE.
+      SORT GT_YRVA_SMS_REPORT BY CUSTOMER ASCENDING Y_DATE DESCENDING.
+    ENDIF.
+  ENDIF.
+* EOC by Chilukuri Tripura Reddy/Archna/Vishal charm:4000006667
+* Prepare the Field Catalog
+  CLEAR LV_COUNT.
+  LV_COUNT = '1'.
+
+* Customer
+  CLEAR LWA_FIELDCAT.
+  LWA_FIELDCAT-FIELDNAME = LC_CUSTOMER.
+  LWA_FIELDCAT-SELTEXT_L = TEXT-002.
+  LWA_FIELDCAT-KEY       = GC_X.
+  LWA_FIELDCAT-OUTPUTLEN = 10.
+  LWA_FIELDCAT-COL_POS   = LV_COUNT.
+  APPEND LWA_FIELDCAT TO GT_FIELDCAT.
+  LV_COUNT = LV_COUNT + 1.
+
+* Mailing Date
+  CLEAR LWA_FIELDCAT.
+  LWA_FIELDCAT-FIELDNAME = LC_DATE_MAIL.
+  LWA_FIELDCAT-SELTEXT_L = TEXT-003.
+  LWA_FIELDCAT-KEY       = GC_X.
+  LWA_FIELDCAT-OUTPUTLEN = 10.
+  LWA_FIELDCAT-COL_POS   = LV_COUNT.
+  APPEND LWA_FIELDCAT TO GT_FIELDCAT.
+  LV_COUNT = LV_COUNT + 1.
+
+  CLEAR LWA_FIELDCAT.
+  LWA_FIELDCAT-FIELDNAME = LC_STAT.
+  LWA_FIELDCAT-SELTEXT_L = TEXT-008.
+  LWA_FIELDCAT-KEY       = GC_X.
+  LWA_FIELDCAT-OUTPUTLEN = 10.
+  LWA_FIELDCAT-COL_POS   = LV_COUNT.
+  APPEND LWA_FIELDCAT TO GT_FIELDCAT.
+  LV_COUNT = LV_COUNT + 1.
+
+** TIME_MAIL
+*  CLEAR lwa_fieldcat.
+*  lwa_fieldcat-fieldname = lc_time.
+*  lwa_fieldcat-seltext_l = 'TIME STAMP'.
+*  lwa_fieldcat-outputlen = 100.
+*  lwa_fieldcat-col_pos   = lv_count.
+*  lwa_fieldcat-hotspot = 'X'.
+*  APPEND lwa_fieldcat TO gt_fieldcat.
+*  lv_count = lv_count + 1.
+
+* User ID
+  CLEAR LWA_FIELDCAT.
+  LWA_FIELDCAT-FIELDNAME = LC_EMAIL_ID.
+  LWA_FIELDCAT-SELTEXT_L = TEXT-004.
+  LWA_FIELDCAT-OUTPUTLEN = 30.
+  LWA_FIELDCAT-COL_POS   = LV_COUNT.
+  APPEND LWA_FIELDCAT TO GT_FIELDCAT.
+  LV_COUNT = LV_COUNT + 1.
+
+* Message
+  CLEAR LWA_FIELDCAT.
+  LWA_FIELDCAT-FIELDNAME = LC_MESSAGE.
+  LWA_FIELDCAT-SELTEXT_L = TEXT-005.
+  LWA_FIELDCAT-OUTPUTLEN = 100.
+  LWA_FIELDCAT-COL_POS   = LV_COUNT.
+  LWA_FIELDCAT-HOTSPOT = 'X'.
+  APPEND LWA_FIELDCAT TO GT_FIELDCAT.
+  LV_COUNT = LV_COUNT + 1.
+* SOC by Chilukuri Tripura Reddy/Archna/Vishal charm:4000006667
+  IF T_DATE[] IS NOT INITIAL.
+    CLEAR LV_COUNT_SMS.
+    LV_COUNT_SMS = '1'.
+* Customer
+    CLEAR LWA_FIELDCAT_SMS.
+    LWA_FIELDCAT_SMS-FIELDNAME = LC_CUSTOMER_SMS.
+    LWA_FIELDCAT_SMS-SELTEXT_L = TEXT-038.
+    LWA_FIELDCAT_SMS-OUTPUTLEN = 10.
+    LWA_FIELDCAT_SMS-COL_POS   = LV_COUNT_SMS.
+    APPEND LWA_FIELDCAT_SMS TO GT_FIELDCAT_SMS.
+    LV_COUNT_SMS = LV_COUNT_SMS + 1.
+* SMS Sent Date
+    CLEAR LWA_FIELDCAT_SMS.
+    LWA_FIELDCAT_SMS-FIELDNAME = LC_SENT_DATE.
+    LWA_FIELDCAT_SMS-SELTEXT_L = TEXT-031.
+    LWA_FIELDCAT_SMS-OUTPUTLEN = 12.
+    LWA_FIELDCAT_SMS-COL_POS   = LV_COUNT_SMS.
+    APPEND LWA_FIELDCAT_SMS TO GT_FIELDCAT_SMS.
+    LV_COUNT_SMS = LV_COUNT_SMS + 1.
+* SMS Sent Time
+    CLEAR LWA_FIELDCAT_SMS.
+    LWA_FIELDCAT_SMS-FIELDNAME = LC_SENT_TIME.
+    LWA_FIELDCAT_SMS-SELTEXT_L = TEXT-032.
+    LWA_FIELDCAT_SMS-OUTPUTLEN = 12.
+    LWA_FIELDCAT_SMS-COL_POS   = LV_COUNT_SMS.
+    APPEND LWA_FIELDCAT_SMS TO GT_FIELDCAT_SMS.
+    LV_COUNT_SMS = LV_COUNT_SMS + 1.
+* Sales Office
+    CLEAR LWA_FIELDCAT_SMS.
+    LWA_FIELDCAT_SMS-FIELDNAME = LC_VKBUR.
+    LWA_FIELDCAT_SMS-SELTEXT_L = TEXT-040.
+    LWA_FIELDCAT_SMS-OUTPUTLEN = 10.
+    LWA_FIELDCAT_SMS-COL_POS   = LV_COUNT_SMS.
+    APPEND LWA_FIELDCAT_SMS TO GT_FIELDCAT_SMS.
+    LV_COUNT_SMS = LV_COUNT_SMS + 1.
+* Created By
+    CLEAR LWA_FIELDCAT_SMS.
+    LWA_FIELDCAT_SMS-FIELDNAME = LC_CREATED.
+    LWA_FIELDCAT_SMS-SELTEXT_L = TEXT-033.
+    LWA_FIELDCAT_SMS-OUTPUTLEN = 15.
+    LWA_FIELDCAT_SMS-COL_POS   = LV_COUNT_SMS.
+    APPEND LWA_FIELDCAT_SMS TO GT_FIELDCAT_SMS.
+    LV_COUNT_SMS = LV_COUNT_SMS + 1.
+* Mobile No
+    CLEAR LWA_FIELDCAT_SMS.
+    LWA_FIELDCAT_SMS-FIELDNAME = LC_MOB_NO.
+    LWA_FIELDCAT_SMS-SELTEXT_L = TEXT-034.
+    LWA_FIELDCAT_SMS-OUTPUTLEN = 12.
+    LWA_FIELDCAT_SMS-COL_POS   = LV_COUNT_SMS.
+    APPEND LWA_FIELDCAT_SMS TO GT_FIELDCAT_SMS.
+    LV_COUNT_SMS = LV_COUNT_SMS + 1.
+* Status
+    CLEAR LWA_FIELDCAT_SMS.
+    LWA_FIELDCAT_SMS-FIELDNAME =  LC_STATUS.
+    LWA_FIELDCAT_SMS-SELTEXT_L = TEXT-035.
+    LWA_FIELDCAT_SMS-OUTPUTLEN = 20.
+    LWA_FIELDCAT_SMS-COL_POS   = LV_COUNT_SMS.
+    APPEND LWA_FIELDCAT_SMS TO GT_FIELDCAT_SMS.
+    LV_COUNT_SMS = LV_COUNT_SMS + 1.
+* SMS Status
+    CLEAR LWA_FIELDCAT_SMS.
+    LWA_FIELDCAT_SMS-FIELDNAME = LC_SMS_STATUS.
+    LWA_FIELDCAT_SMS-SELTEXT_L = TEXT-036.
+    LWA_FIELDCAT_SMS-OUTPUTLEN = 60.
+    LWA_FIELDCAT_SMS-COL_POS   = LV_COUNT_SMS.
+    APPEND LWA_FIELDCAT_SMS TO GT_FIELDCAT_SMS.
+    LV_COUNT_SMS = LV_COUNT_SMS + 1.
+* SMS Content
+    CLEAR LWA_FIELDCAT_SMS.
+    LWA_FIELDCAT_SMS-FIELDNAME = LC_SMS_TEXT.
+    LWA_FIELDCAT_SMS-SELTEXT_L = TEXT-037.
+    LWA_FIELDCAT_SMS-OUTPUTLEN = 200.
+    LWA_FIELDCAT_SMS-COL_POS   = LV_COUNT_SMS.
+    APPEND LWA_FIELDCAT_SMS TO GT_FIELDCAT_SMS.
+    LV_COUNT_SMS = LV_COUNT_SMS + 1.
+  ENDIF.
+* EOC by Chilukuri Tripura Reddy/Archna/Vishal charm:4000006667
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  DISPLAY_REPORT
+*&---------------------------------------------------------------------*
+FORM DISPLAY_REPORT.
+  DATA: LV_REPID   LIKE SY-REPID,
+        LWA_LAYOUT TYPE SLIS_LAYOUT_ALV,
+        LV_STATUS  TYPE SLIS_FORMNAME.
+
+  CONSTANTS: LC_STATUS(13) TYPE C VALUE 'PF_STATUS_SET'.
+
+  LV_REPID  = SY-REPID.
+  LV_STATUS = LC_STATUS.
+
+
+*  gt_price_final_line = gt_price_final.
+*
+*  SORT gt_price_final BY mandt
+*customer
+*date_mail
+*time_mail
+*line.
+*
+*  DELETE ADJACENT DUPLICATES FROM gt_price_final COMPARING mandt
+*customer
+*date_mail
+*time_mail
+*.
+  IF M_EMAIL = GC_X. "Added by Chilukuri Tripura Reddy/Archna/Vishal charm:4000006667
+*  SORT gt_price_final BY customer ASCENDING time_mail DESCENDING .
+    IF P7 EQ GC_X.
+
+*    CLEAR gt_price_final_line.
+
+      SELECT * FROM YRVA_PRICE_CHANG
+        INTO TABLE @DATA(GT_PRICE_FINALDIS)
+        WHERE STATUS EQ 'DISCOUNT'
+        AND DATE_MAIL IN @S_DATE.
+
+      GT_PRICE_FINAL_LINE = GT_PRICE_FINALDIS.
+
+      SORT GT_PRICE_FINALDIS BY MANDT
+    CUSTOMER
+    DATE_MAIL
+    TIME_MAIL
+    LINE.
+
+      DELETE ADJACENT DUPLICATES FROM GT_PRICE_FINALDIS COMPARING MANDT
+    CUSTOMER
+    DATE_MAIL
+    TIME_MAIL
+    .
+
+      SORT GT_PRICE_FINALDIS BY TIME_MAIL ASCENDING .
+*    SORT gt_price_finaldis BY customer ASCENDING  DESCENDING .
+      SORT GT_PRICE_FINALDIS BY DATE_MAIL DESCENDING .
+      GT_PRICE_FINAL = GT_PRICE_FINALDIS.
+
+    ELSEIF P8 EQ GC_X.
+
+*    CLEAR gt_price_final_line.
+      SELECT * FROM YRVA_PRICE_CHANG
+          INTO TABLE @DATA(GT_PRICE_FINALPRIC)
+          WHERE STATUS EQ 'PRICING'
+        AND DATE_MAIL IN @S_DATE.
+
+      GT_PRICE_FINAL_LINE = GT_PRICE_FINALPRIC.
+
+      SORT GT_PRICE_FINALPRIC BY MANDT
+    CUSTOMER
+    DATE_MAIL
+    TIME_MAIL
+    LINE.
+
+      DELETE ADJACENT DUPLICATES FROM GT_PRICE_FINALPRIC COMPARING MANDT
+    CUSTOMER
+    DATE_MAIL
+    TIME_MAIL
+    .
+      SORT GT_PRICE_FINALPRIC BY  TIME_MAIL ASCENDING .
+*    SORT gt_price_finalpric BY customer ASCENDING time_mail DESCENDING .
+      SORT GT_PRICE_FINALPRIC BY DATE_MAIL DESCENDING .
+      GT_PRICE_FINAL = GT_PRICE_FINALPRIC.
+
+    ENDIF.
+    IF P7 EQ GC_X.
+
+      CALL FUNCTION 'REUSE_ALV_LIST_DISPLAY'
+        EXPORTING
+          I_CALLBACK_PROGRAM      = SY-REPID
+*         i_callback_pf_status_set = lv_status
+*         is_layout               = lwa_layout
+          IT_FIELDCAT             = GT_FIELDCAT[]
+          I_CALLBACK_USER_COMMAND = 'ON_SELECT1'
+*         I_STRUCTURE_NAME        =
+*         IS_LAYOUT               =
+        TABLES
+          T_OUTTAB                = GT_PRICE_FINALDIS
+        EXCEPTIONS
+          PROGRAM_ERROR           = 1
+          OTHERS                  = 2.
+      IF SY-SUBRC <> 0.
+        MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+                WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+      ENDIF.
+
+    ENDIF.
+
+    IF P8 EQ GC_X.
+
+      CALL FUNCTION 'REUSE_ALV_LIST_DISPLAY'
+        EXPORTING
+          I_CALLBACK_PROGRAM      = SY-REPID
+*         i_callback_pf_status_set = lv_status
+*         is_layout               = lwa_layout
+          IT_FIELDCAT             = GT_FIELDCAT[]
+          I_CALLBACK_USER_COMMAND = 'ON_SELECT1'
+*         I_STRUCTURE_NAME        =
+*         IS_LAYOUT               =
+        TABLES
+          T_OUTTAB                = GT_PRICE_FINALPRIC
+        EXCEPTIONS
+          PROGRAM_ERROR           = 1
+          OTHERS                  = 2.
+      IF SY-SUBRC <> 0.
+        MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+                WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+      ENDIF.
+    ENDIF.
+
+*  CALL FUNCTION 'REUSE_ALV_LIST_DISPLAY'
+*    EXPORTING
+*      i_callback_program      = sy-repid
+**     i_callback_pf_status_set = lv_status
+**     is_layout               = lwa_layout
+*      it_fieldcat             = gt_fieldcat[]
+*      i_callback_user_command = 'ON_SELECT1'
+**     I_STRUCTURE_NAME        =
+**     IS_LAYOUT               =
+*    TABLES
+*      t_outtab                = gt_price_final
+*    EXCEPTIONS
+*      program_error           = 1
+*      OTHERS                  = 2.
+*  IF sy-subrc <> 0.
+*    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+*            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+*  ENDIF.
+  ENDIF. "Added by Chilukuri Tripura Reddy/Archna/Vishal charm:4000006667
+* SOC by Chilukuri Tripura Reddy/Archna/Vishal charm:4000006667
+  IF M_SMS = GC_X.
+    IF P7 = GC_X.
+      DELETE GT_YRVA_SMS_REPORT WHERE Y_STATUS =  'Pricing Announcement 1' OR Y_STATUS = 'Pricing Announcement 2'.
+    ELSEIF P8 = GC_X.
+      DELETE GT_YRVA_SMS_REPORT WHERE Y_STATUS = 'Discount Announcement'.
+    ENDIF.
+    SORT GT_YRVA_SMS_REPORT BY Y_DATE DESCENDING Y_TIME DESCENDING.
+    IF GT_YRVA_SMS_REPORT IS INITIAL.
+      MESSAGE 'List does not contain any data' TYPE 'I' DISPLAY LIKE 'E'.
+      LEAVE LIST-PROCESSING.
+    ENDIF.
+    CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+      EXPORTING
+        I_CALLBACK_PROGRAM = SY-REPID
+*       I_CALLBACK_PF_STATUS_SET          = ' '
+*       IS_LAYOUT          =
+        IT_FIELDCAT        = GT_FIELDCAT_SMS[]
+      TABLES
+        T_OUTTAB           = GT_YRVA_SMS_REPORT
+      EXCEPTIONS
+        PROGRAM_ERROR      = 1
+        OTHERS             = 2.
+    IF SY-SUBRC <> 0.
+* Implement suitable error handling here
+    ENDIF.
+  ENDIF.
+* SOC by Chilukuri Tripura Reddy/Archna/Vishal charm:4000006667
+ENDFORM.
+
+
+.
+FORM ON_SELECT1 USING R_UCOMM LIKE SY-UCOMM
+                        RS_SELFIELD TYPE SLIS_SELFIELD.
+
+  DATA: YV_LENGTH TYPE I,
+        YS_LINE   TYPE TDLINE,
+        YS_LINE1  TYPE TXW_NOTE,
+        YT_LINE   TYPE TABLE OF TEXT72,
+        YT_STRING TYPE STRING.
+
+  CASE R_UCOMM.
+
+    WHEN '&IC1'.
+
+      CLEAR: YT_STRING, YT_LINE1 , YT_LINE[],  RS_SELFIELD-REFRESH.
+      READ TABLE GT_PRICE_FINAL INDEX RS_SELFIELD-TABINDEX INTO DATA(WA_GT_PRICE_FINAL).
+
+      IF SY-SUBRC = 0.
+        SORT GT_PRICE_FINAL_LINE BY CUSTOMER DATE_MAIL EMAIL_ID TIME_MAIL LINE.
+        LOOP AT GT_PRICE_FINAL_LINE INTO DATA(WA_GT_PRICE_FINAL_LINE) WHERE
+          CUSTOMER = WA_GT_PRICE_FINAL-CUSTOMER AND
+          DATE_MAIL = WA_GT_PRICE_FINAL-DATE_MAIL AND
+          EMAIL_ID = WA_GT_PRICE_FINAL-EMAIL_ID AND
+          TIME_MAIL = WA_GT_PRICE_FINAL-TIME_MAIL.
+
+          CONCATENATE YT_STRING WA_GT_PRICE_FINAL_LINE-MESSAGE1 INTO YT_STRING.
+
+        ENDLOOP.
+        CALL FUNCTION 'CONVERT_STRING_TO_TABLE'
+          EXPORTING
+            I_STRING         = YT_STRING
+            I_TABLINE_LENGTH = 72
+*           I_UNICODE        =
+          TABLES
+            ET_TABLE         = YT_LINE.
+
+        LOOP AT YT_LINE INTO YS_LINE.
+          YS_LINE1-LINE = YS_LINE.
+          APPEND YS_LINE1 TO YT_LINE1.
+        ENDLOOP.
+
+        CALL FUNCTION 'TXW_TEXTNOTE_EDIT'
+          EXPORTING
+            EDIT_MODE = ''
+          TABLES
+            T_TXWNOTE = YT_LINE1.
+
+*        CALL SCREEN '0100' .
+
+      ENDIF.
+
+  ENDCASE.
+  RS_SELFIELD-REFRESH = 'X'.
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  TABLE_ENTRY
+*&---------------------------------------------------------------------*
+FORM TABLE_ENTRY.
+  DATA: LWA_DATA_TAB LIKE LINE OF GT_PRICE_FINAL,
+        LWA_CUSTNUM  LIKE LINE OF GT_CUSTNUM,
+        LWA_KNA1     LIKE LINE OF GT_KNA1,
+        LWA_ADR6     LIKE LINE OF GT_ADR6,
+        YV_STRING    TYPE STRING,
+
+        LWA_TXT      LIKE LINE OF GT_TXT.
+
+  REFRESH GT_STRING_TABLE.
+  LOOP AT GT_CUSTNUM INTO LWA_CUSTNUM.
+    LWA_DATA_TAB-CUSTOMER  = LWA_CUSTNUM-KUNNR.           "Customer
+    LWA_DATA_TAB-DATE_MAIL = SY-DATUM.                    "Date
+    LWA_DATA_TAB-TIME_MAIL = SY-TIMLO.                    "Time
+    LWA_DATA_TAB-STATUS = LWA_TICK.                        "Status Abhinav
+
+    READ TABLE GT_KNA1 INTO LWA_KNA1
+      WITH KEY KUNNR = LWA_CUSTNUM-KUNNR.
+    IF SY-SUBRC = 0.
+      READ TABLE GT_ADR6 INTO LWA_ADR6
+        WITH KEY ADDRNUMBER = LWA_KNA1-ADRNR.
+      IF SY-SUBRC = 0.
+        LWA_DATA_TAB-EMAIL_ID = LWA_ADR6-SMTP_ADDR.         "Email ID
+      ENDIF.
+    ENDIF.
+
+    IF GT_STRING_TABLE IS INITIAL.
+
+      CLEAR:YV_STRING.
+      LOOP AT GT_TXT INTO LWA_TXT.
+        IF SY-TABIX = 1.
+          YV_STRING = LWA_TXT-TEXT1.
+        ELSE.
+          CONCATENATE YV_STRING LWA_TXT-TEXT1
+          INTO YV_STRING
+          SEPARATED BY CL_ABAP_CHAR_UTILITIES=>HORIZONTAL_TAB.  "Text (Message)
+        ENDIF.
+      ENDLOOP.
+
+      CALL FUNCTION 'CONVERT_STRING_TO_TABLE'
+        EXPORTING
+          I_STRING         = YV_STRING
+          I_TABLINE_LENGTH = 1000
+*         I_UNICODE        =
+        TABLES
+          ET_TABLE         = GT_STRING_TABLE.
+    ENDIF.
+
+
+    CLEAR:LWA_TXT.
+    LOOP AT GT_STRING_TABLE INTO DATA(LWA_STRING).
+      IF SY-TABIX = 1.
+        LWA_DATA_TAB-LINE = 1.
+      ELSE.
+        LWA_DATA_TAB-LINE = LWA_DATA_TAB-LINE + 1.
+*        CONCATENATE lwa_data_tab-message1 lwa_txt-text1
+*        INTO lwa_data_tab-message1
+*        SEPARATED BY cl_abap_char_utilities=>horizontal_tab.  "Text (Message)
+      ENDIF.
+      LWA_DATA_TAB-MESSAGE1 = LWA_STRING-TEXT1.
+
+*      REPLACE ALL OCCURRENCES OF '#' IN lwa_data_tab-message1 WITH space.
+
+      APPEND LWA_DATA_TAB TO GT_DATA_TAB.
+      CLEAR: LWA_STRING.
+    ENDLOOP.
+
+*    APPEND lwa_data_tab TO gt_data_tab.
+    CLEAR: LWA_CUSTNUM, LWA_KNA1, LWA_ADR6,
+           LWA_DATA_TAB, LWA_TXT.
+  ENDLOOP.
+
+* Maintain entries in Database Table 'YRVA_PRICE_CHANG'
+  LOOP AT GT_DATA_TAB INTO LWA_DATA_TAB.
+    INSERT YRVA_PRICE_CHANG FROM LWA_DATA_TAB.
+  ENDLOOP.
+
+ENDFORM.
+
+
+FORM SELECT_B1.
+  "form to select the brochure
+  CALL FUNCTION 'F4_FILENAME'
+    EXPORTING
+      PROGRAM_NAME  = SYST-CPROG
+      DYNPRO_NUMBER = SYST-DYNNR
+*     FIELD_NAME    = 'FILENAME'
+    IMPORTING
+      FILE_NAME     = P_B1.
+  CLEAR : GV_FILE1.
+  GV_FILE1 = P_B1.
+ENDFORM.
+FORM SELECT_B2.
+  "form to select the brochure
+  CALL FUNCTION 'F4_FILENAME'
+    EXPORTING
+      PROGRAM_NAME  = SYST-CPROG
+      DYNPRO_NUMBER = SYST-DYNNR
+*     FIELD_NAME    = 'FILENAME'
+    IMPORTING
+      FILE_NAME     = P_B2.
+  CLEAR : GV_FILE2.
+  GV_FILE2 = P_B2.
+ENDFORM.
+FORM SELECT_B3.
+  "form to select the brochure
+  CALL FUNCTION 'F4_FILENAME'
+    EXPORTING
+      PROGRAM_NAME  = SYST-CPROG
+      DYNPRO_NUMBER = SYST-DYNNR
+*     FIELD_NAME    = 'FILENAME'
+    IMPORTING
+      FILE_NAME     = P_B3.
+  CLEAR : GV_FILE3.
+  GV_FILE3 = P_B3.
+ENDFORM.
+FORM SELECT_B4.
+  "form to select the brochure
+  CALL FUNCTION 'F4_FILENAME'
+    EXPORTING
+      PROGRAM_NAME  = SYST-CPROG
+      DYNPRO_NUMBER = SYST-DYNNR
+*     FIELD_NAME    = 'FILENAME'
+    IMPORTING
+      FILE_NAME     = P_B4.
+  CLEAR : GV_FILE4.
+  GV_FILE4 = P_B4.
+ENDFORM.
+
+FORM SELECT_B5.
+  "form to select the brochure
+  CALL FUNCTION 'F4_FILENAME'
+    EXPORTING
+      PROGRAM_NAME  = SYST-CPROG
+      DYNPRO_NUMBER = SYST-DYNNR
+*     FIELD_NAME    = 'FILENAME'
+    IMPORTING
+      FILE_NAME     = P_B5.
+  CLEAR : GV_FILE5.
+  GV_FILE5 = P_B5.
+ENDFORM.
+
+
+FORM UPLOAD_FILE1.
+*-- Upload file 1 and store the data in binary format in it_bin_b1
+  CALL FUNCTION 'GUI_UPLOAD'
+    EXPORTING
+      FILENAME                = GV_FILE1
+      FILETYPE                = 'BIN'
+    TABLES
+      DATA_TAB                = IT_BIN_B1
+    EXCEPTIONS
+      FILE_OPEN_ERROR         = 1
+      FILE_READ_ERROR         = 2
+      NO_BATCH                = 3
+      GUI_REFUSE_FILETRANSFER = 4
+      INVALID_TYPE            = 5
+      NO_AUTHORITY            = 6
+      UNKNOWN_ERROR           = 7
+      BAD_DATA_FORMAT         = 8
+      HEADER_NOT_ALLOWED      = 9
+      SEPARATOR_NOT_ALLOWED   = 10
+      HEADER_TOO_LONG         = 11
+      UNKNOWN_DP_ERROR        = 12
+      ACCESS_DENIED           = 13
+      DP_OUT_OF_MEMORY        = 14
+      DISK_FULL               = 15
+      DP_TIMEOUT              = 16
+      OTHERS                  = 17.
+  IF SY-SUBRC <> 0.
+    MESSAGE I000(8I) WITH 'Error while uploading 1st file1'.   ##NO_TEXT
+  ENDIF.
+ENDFORM.
+FORM UPLOAD_FILE2.
+*-- Upload file 2 and store the data in binary format in it_bin_b2
+  CALL FUNCTION 'GUI_UPLOAD'
+    EXPORTING
+      FILENAME                = GV_FILE2
+      FILETYPE                = 'BIN'
+    TABLES
+      DATA_TAB                = IT_BIN_B2
+    EXCEPTIONS
+      FILE_OPEN_ERROR         = 1
+      FILE_READ_ERROR         = 2
+      NO_BATCH                = 3
+      GUI_REFUSE_FILETRANSFER = 4
+      INVALID_TYPE            = 5
+      NO_AUTHORITY            = 6
+      UNKNOWN_ERROR           = 7
+      BAD_DATA_FORMAT         = 8
+      HEADER_NOT_ALLOWED      = 9
+      SEPARATOR_NOT_ALLOWED   = 10
+      HEADER_TOO_LONG         = 11
+      UNKNOWN_DP_ERROR        = 12
+      ACCESS_DENIED           = 13
+      DP_OUT_OF_MEMORY        = 14
+      DISK_FULL               = 15
+      DP_TIMEOUT              = 16
+      OTHERS                  = 17.
+  IF SY-SUBRC <> 0.
+    MESSAGE I000(8I) WITH 'Error while uploading 1st file2'.    ##NO_TEXT
+  ENDIF.
+ENDFORM.
+FORM UPLOAD_FILE3.
+*-- Upload file 3 and store the data in binary format in it_bin_b3
+  CALL FUNCTION 'GUI_UPLOAD'
+    EXPORTING
+      FILENAME                = GV_FILE3
+      FILETYPE                = 'BIN'
+    TABLES
+      DATA_TAB                = IT_BIN_B3
+    EXCEPTIONS
+      FILE_OPEN_ERROR         = 1
+      FILE_READ_ERROR         = 2
+      NO_BATCH                = 3
+      GUI_REFUSE_FILETRANSFER = 4
+      INVALID_TYPE            = 5
+      NO_AUTHORITY            = 6
+      UNKNOWN_ERROR           = 7
+      BAD_DATA_FORMAT         = 8
+      HEADER_NOT_ALLOWED      = 9
+      SEPARATOR_NOT_ALLOWED   = 10
+      HEADER_TOO_LONG         = 11
+      UNKNOWN_DP_ERROR        = 12
+      ACCESS_DENIED           = 13
+      DP_OUT_OF_MEMORY        = 14
+      DISK_FULL               = 15
+      DP_TIMEOUT              = 16
+      OTHERS                  = 17.
+  IF SY-SUBRC <> 0.
+    MESSAGE I000(8I) WITH 'Error while uploading 1st file3'.   ##NO_TEXT
+  ENDIF.
+ENDFORM.
+FORM UPLOAD_FILE4.
+*-- Upload file 4 and store the data in binary format in it_bin_b4
+  CALL FUNCTION 'GUI_UPLOAD'
+    EXPORTING
+      FILENAME                = GV_FILE4
+      FILETYPE                = 'BIN'
+    TABLES
+      DATA_TAB                = IT_BIN_B4
+    EXCEPTIONS
+      FILE_OPEN_ERROR         = 1
+      FILE_READ_ERROR         = 2
+      NO_BATCH                = 3
+      GUI_REFUSE_FILETRANSFER = 4
+      INVALID_TYPE            = 5
+      NO_AUTHORITY            = 6
+      UNKNOWN_ERROR           = 7
+      BAD_DATA_FORMAT         = 8
+      HEADER_NOT_ALLOWED      = 9
+      SEPARATOR_NOT_ALLOWED   = 10
+      HEADER_TOO_LONG         = 11
+      UNKNOWN_DP_ERROR        = 12
+      ACCESS_DENIED           = 13
+      DP_OUT_OF_MEMORY        = 14
+      DISK_FULL               = 15
+      DP_TIMEOUT              = 16
+      OTHERS                  = 17.
+  IF SY-SUBRC <> 0.
+    MESSAGE I000(8I) WITH 'Error while uploading 1st file4'.    ##NO_TEXT
+  ENDIF.
+ENDFORM.
+
+FORM UPLOAD_FILE5.
+*-- Upload file 5 and store the data in binary format in it_bin_b4
+  CALL FUNCTION 'GUI_UPLOAD'
+    EXPORTING
+      FILENAME                = GV_FILE5
+      FILETYPE                = 'BIN'
+    TABLES
+      DATA_TAB                = IT_BIN_B5
+    EXCEPTIONS
+      FILE_OPEN_ERROR         = 1
+      FILE_READ_ERROR         = 2
+      NO_BATCH                = 3
+      GUI_REFUSE_FILETRANSFER = 4
+      INVALID_TYPE            = 5
+      NO_AUTHORITY            = 6
+      UNKNOWN_ERROR           = 7
+      BAD_DATA_FORMAT         = 8
+      HEADER_NOT_ALLOWED      = 9
+      SEPARATOR_NOT_ALLOWED   = 10
+      HEADER_TOO_LONG         = 11
+      UNKNOWN_DP_ERROR        = 12
+      ACCESS_DENIED           = 13
+      DP_OUT_OF_MEMORY        = 14
+      DISK_FULL               = 15
+      DP_TIMEOUT              = 16
+      OTHERS                  = 17.
+  IF SY-SUBRC <> 0.
+    MESSAGE I000(8I) WITH 'Error while uploading 1st file4'.   ##NO_TEXT
+  ENDIF.
+ENDFORM.
+
+
+FORM EMAIL_ATTACHMENTS.
+  "file 1 attachment
+  IF NOT IT_BIN_B1[] IS INITIAL.
+    CLEAR : EV_FILENAME, EV_EXTENSION, LV_FILENAME, LV_TEXT_LINE, LT_ATT_HEAD[].
+    "attachment subject
+    CALL FUNCTION 'CRM_EMAIL_SPLIT_FILENAME'
+      EXPORTING
+        IV_PATH      = GV_FILE1
+      IMPORTING
+        EV_FILENAME  = EV_FILENAME
+        EV_EXTENSION = EV_EXTENSION
+*       EV_MIMETYPE  =
+      .
+    SUBJ_B1 = EV_FILENAME.
+    ATT_B1 = EV_EXTENSION.
+    CONCATENATE SUBJ_B1 '.' EV_EXTENSION INTO LV_FILENAME.
+    CONCATENATE '&SO_FILENAME=' LV_FILENAME INTO LV_TEXT_LINE.
+    APPEND LV_TEXT_LINE TO LT_ATT_HEAD.
+    "end of subject atachment
+    TRY.
+*-- Add Attachment to the Document
+        CALL METHOD GO_DOCUMENT->ADD_ATTACHMENT
+          EXPORTING
+            I_ATTACHMENT_TYPE    = ATT_B1 "l_att_type
+            I_ATTACHMENT_SUBJECT = SUBJ_B1
+            I_ATT_CONTENT_HEX    = IT_BIN_B1[]
+            I_ATTACHMENT_HEADER  = LT_ATT_HEAD.
+      CATCH CX_DOCUMENT_BCS.
+    ENDTRY.
+  ENDIF.
+  "file 2 attachment
+  IF NOT IT_BIN_B2[] IS INITIAL.
+    CLEAR : EV_FILENAME, EV_EXTENSION, LV_FILENAME, LV_TEXT_LINE, LT_ATT_HEAD[].
+    "attachment subject
+    CALL FUNCTION 'CRM_EMAIL_SPLIT_FILENAME'
+      EXPORTING
+        IV_PATH      = GV_FILE2
+      IMPORTING
+        EV_FILENAME  = EV_FILENAME
+        EV_EXTENSION = EV_EXTENSION
+*       EV_MIMETYPE  =
+      .
+    SUBJ_B2 = EV_FILENAME.
+    ATT_B2 = EV_EXTENSION.
+    CONCATENATE SUBJ_B2 '.' EV_EXTENSION INTO LV_FILENAME.
+    CONCATENATE '&SO_FILENAME=' LV_FILENAME INTO LV_TEXT_LINE.
+    APPEND LV_TEXT_LINE TO LT_ATT_HEAD.
+    "end of subject atachment
+    TRY.
+*-- Add Attachment to the Document
+        CALL METHOD GO_DOCUMENT->ADD_ATTACHMENT
+          EXPORTING
+            I_ATTACHMENT_TYPE    = ATT_B2 "l_att_type
+            I_ATTACHMENT_SUBJECT = SUBJ_B2
+            I_ATT_CONTENT_HEX    = IT_BIN_B2[]
+            I_ATTACHMENT_HEADER  = LT_ATT_HEAD.
+      CATCH CX_DOCUMENT_BCS.
+    ENDTRY.
+  ENDIF.
+  "file 3 attachment
+  IF NOT IT_BIN_B3[] IS INITIAL.
+    CLEAR : EV_FILENAME, EV_EXTENSION, LV_FILENAME, LV_TEXT_LINE, LT_ATT_HEAD[].
+    "attachment subject
+    CALL FUNCTION 'CRM_EMAIL_SPLIT_FILENAME'
+      EXPORTING
+        IV_PATH      = GV_FILE3
+      IMPORTING
+        EV_FILENAME  = EV_FILENAME
+        EV_EXTENSION = EV_EXTENSION
+*       EV_MIMETYPE  =
+      .
+    SUBJ_B3 = EV_FILENAME.
+    ATT_B3 = EV_EXTENSION.
+    CONCATENATE SUBJ_B3 '.' EV_EXTENSION INTO LV_FILENAME.
+    CONCATENATE '&SO_FILENAME=' LV_FILENAME INTO LV_TEXT_LINE.
+    APPEND LV_TEXT_LINE TO LT_ATT_HEAD.
+    "end of subject atachment
+    TRY.
+*-- Add Attachment to the Document
+        CALL METHOD GO_DOCUMENT->ADD_ATTACHMENT
+          EXPORTING
+            I_ATTACHMENT_TYPE    = ATT_B3 "l_att_type
+            I_ATTACHMENT_SUBJECT = SUBJ_B3
+            I_ATT_CONTENT_HEX    = IT_BIN_B3[]
+            I_ATTACHMENT_HEADER  = LT_ATT_HEAD.
+      CATCH CX_DOCUMENT_BCS.
+    ENDTRY.
+  ENDIF.
+  "file 4 attachment
+  IF NOT IT_BIN_B4[] IS INITIAL.
+    CLEAR : EV_FILENAME, EV_EXTENSION, LV_FILENAME, LV_TEXT_LINE, LT_ATT_HEAD[].
+    "attachment subject
+    CALL FUNCTION 'CRM_EMAIL_SPLIT_FILENAME'
+      EXPORTING
+        IV_PATH      = GV_FILE4
+      IMPORTING
+        EV_FILENAME  = EV_FILENAME
+        EV_EXTENSION = EV_EXTENSION
+*       EV_MIMETYPE  =
+      .
+    SUBJ_B4 = EV_FILENAME.
+    ATT_B4 = EV_EXTENSION.
+    CONCATENATE SUBJ_B4 '.' EV_EXTENSION INTO LV_FILENAME.
+    CONCATENATE '&SO_FILENAME=' LV_FILENAME INTO LV_TEXT_LINE.
+    APPEND LV_TEXT_LINE TO LT_ATT_HEAD.
+    "end of subject atachment
+    TRY.
+*-- Add Attachment to the Document
+        CALL METHOD GO_DOCUMENT->ADD_ATTACHMENT
+          EXPORTING
+            I_ATTACHMENT_TYPE    = ATT_B4 "l_att_type
+            I_ATTACHMENT_SUBJECT = SUBJ_B4
+            I_ATT_CONTENT_HEX    = IT_BIN_B4[]
+            I_ATTACHMENT_HEADER  = LT_ATT_HEAD.
+      CATCH CX_DOCUMENT_BCS.
+    ENDTRY.
+  ENDIF.
+
+  "file 5 attachment
+  IF NOT IT_BIN_B5[] IS INITIAL.
+    CLEAR : EV_FILENAME, EV_EXTENSION, LV_FILENAME, LV_TEXT_LINE, LT_ATT_HEAD[].
+    "attachment subject
+    CALL FUNCTION 'CRM_EMAIL_SPLIT_FILENAME'
+      EXPORTING
+        IV_PATH      = GV_FILE5
+      IMPORTING
+        EV_FILENAME  = EV_FILENAME
+        EV_EXTENSION = EV_EXTENSION
+*       EV_MIMETYPE  =
+      .
+    SUBJ_B5 = EV_FILENAME.
+    ATT_B5 = EV_EXTENSION.
+    CONCATENATE SUBJ_B5 '.' EV_EXTENSION INTO LV_FILENAME.
+    CONCATENATE '&SO_FILENAME=' LV_FILENAME INTO LV_TEXT_LINE.
+    APPEND LV_TEXT_LINE TO LT_ATT_HEAD.
+    "end of subject atachment
+    TRY.
+*-- Add Attachment to the Document
+        CALL METHOD GO_DOCUMENT->ADD_ATTACHMENT
+          EXPORTING
+            I_ATTACHMENT_TYPE    = ATT_B5 "l_att_type
+            I_ATTACHMENT_SUBJECT = SUBJ_B5
+            I_ATT_CONTENT_HEX    = IT_BIN_B5[]
+            I_ATTACHMENT_HEADER  = LT_ATT_HEAD.
+      CATCH CX_DOCUMENT_BCS.
+    ENDTRY.
+  ENDIF.
+ENDFORM.
+
+
+FORM HTML_BODY.
+
+  CLEAR : WA_CONTENTS,IT_CONTENTS[].
+
+
+
+
+  "HTML opening tag
+  WA_CONTENTS-LINE = '<HTML> <BODY>'.
+  APPEND WA_CONTENTS TO IT_CONTENTS.
+  CLEAR : WA_CONTENTS.
+
+  LOOP AT GT_MESSAGE.
+    CONCATENATE GV_FONTA11 GT_MESSAGE-LINE '</P>' INTO WA_CONTENTS-LINE SEPARATED BY SPACE.
+    APPEND WA_CONTENTS TO IT_CONTENTS.
+    CLEAR : WA_CONTENTS, GT_MESSAGE.
+  ENDLOOP.
+
+  WA_CONTENTS-LINE = '</BODY> </HTML>'.
+  APPEND WA_CONTENTS TO IT_CONTENTS.
+  CLEAR : WA_CONTENTS.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  SEND_SMS
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM SEND_SMS .
+*  IF LV_VAL4 IS INITIAL AND LV_VAL5 IS INITIAL AND LV_VAL6 IS INITIAL AND LV_VAL7 IS INITIAL AND P8 = GC_X AND T1 = GC_X AND P_SMS IS NOT INITIAL.
+  IF LV_VAL4 IS INITIAL AND LV_VAL5 IS INITIAL AND LV_VAL6 IS INITIAL  AND P8 = GC_X AND T1 = GC_X AND P_SMS IS NOT INITIAL.
+    MESSAGE 'All variables are cannot be blank'   TYPE 'I'.
+    LEAVE LIST-PROCESSING.
+  ENDIF.
+  IF GT_ADR2[] IS NOT INITIAL.
+    PERFORM SEND_SMS_API.
+  ELSE.
+    MESSAGE | No data found for selection | TYPE 'I' DISPLAY LIKE 'I'.
+    LEAVE LIST-PROCESSING.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  SEND_SMS_API
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM SEND_SMS_API .
+
+  DATA : GT_LWA_YRVA_SMS_REPORT TYPE STANDARD TABLE OF YRVA_SMS_REPORT,
+         LWA_YRVA_SMS_REPORT    TYPE YRVA_SMS_REPORT.
+  DATA: LV_NO     TYPE YY_NUMBER,
+        lv_sms    TYPE string,
+        LV_USER   TYPE CHAR10,
+        LV_LENGTH TYPE I.
+**Get Gail officers mobile no's
+  SELECT * FROM YRVA_ZO_EMAIL
+  INTO TABLE @Y_ZO_EMAIL_CO
+    WHERE YY_PURPOSE = 'SF'.
+  DELETE Y_ZO_EMAIL_CO WHERE TELF2 IS INITIAL.
+  IF Y_ZO_EMAIL_CO IS NOT INITIAL.
+    LOOP AT Y_ZO_EMAIL_CO INTO DATA(LWA_TELE_UPD).
+      LWA_ADR2_CC-TEL_NUMBER = LWA_TELE_UPD-TELF2.
+      LWA_ADR2_CC-KUNNR      = LWA_TELE_UPD-YY_USNAM.
+      LWA_ADR2_CC-ADDRNUMBER = '00000'.
+      LWA_ADR2_CC-VKBUR      = LWA_TELE_UPD-YY_VKBUR.
+      APPEND LWA_ADR2_CC TO GT_ADR2.
+      CLEAR : LWA_ADR2_CC.
+    ENDLOOP.
+  ENDIF.
+  SORT GT_ADR2 BY TEL_NUMBER KUNNR ADDRNUMBER.
+  DELETE ADJACENT DUPLICATES FROM GT_ADR2 COMPARING KUNNR ADDRNUMBER TEL_NUMBER.
+***Send SMS to all customer/CS
+  LOOP AT GT_ADR2 INTO DATA(LWA_ADR2).
+    IF LWA_ADR2-TEL_NUMBER IS NOT INITIAL.
+      LV_LENGTH = STRLEN( LWA_ADR2-TEL_NUMBER ).
+      IF LV_LENGTH => '10'.
+        AT NEW TEL_NUMBER.
+          DATA(LV_DUPLI) = 'X'.
+          LV_NO = LWA_ADR2-TEL_NUMBER.
+          LV_USER = 'gailsd'.
+* Prepare SMS Content
+          IF P8 = GC_X AND T1 = GC_X AND T2 NE GC_X AND T5 NE GC_X AND P7 NE GC_X.
+            CONCATENATE 'Dear%20All%2C%20%0A%20%0APolymer%20prices%20is%20announced%20%20w.e.f%20'
+            LV_VAL4
+            '.%20HDPE%20'
+            LV_VAL5
+            '%20LLDPE%20'
+            LV_VAL6
+            '.%20Please%20contact%20concerned%20zonal%20office.%0A%20%0ARegards%20GAIL%20PMG%20Team'
+            INTO  LV_SMS.
+          ELSEIF P8 = GC_X AND T2 = GC_X AND T1 NE GC_X AND T5 NE GC_X AND P7 NE GC_X.
+            CONCATENATE 'Dear%20All%2C%20%0A%20%0APolymer%20prices%20is%20announced%20%20w.e.f%20'
+          LV_VAL8
+           '.%20Please%20contact%20concerned%20zonal%20office.%0A%20%0ARegards%20GAIL%20PMG%20Team'
+           INTO  LV_SMS.
+          ELSEIF P7 = GC_X AND T5 = GC_X AND T1 NE GC_X AND T2 NE GC_X  AND P8 NE GC_X.
+            CONCATENATE
+            'Dear%20All%2C%0A%20%0ADiscount%20circular%20'
+            LV_VAL9
+            '%20is%20released%2C%20please%20contact%20concerned%20zonal%20office.%0A%20%0ARegards%20GAIL%20PMG%20Team'
+            INTO LV_SMS.
+          ENDIF.
+***Prepare URL and send SMS
+*          CALL FUNCTION 'YFM_SEND_SMS_API'
+*            EXPORTING
+*              mobile_num    = lv_no
+*              lv_message    = lv_sms
+*              lv_hindi_flag = ''.
+*          IF SY-SUBRC EQ 0.
+*            COMMIT WORK.
+*            LWA_YRVA_SMS_REPORT-Y_SMS_STATUS   =  'SMS has been sent succesfully'.
+*            LS_FLAG = GC_X.
+*            APPEND LS_FLAG TO GT_FLAG.
+*          ELSE.
+*            LS_FLAG = SPACE.
+*            APPEND LS_FLAG TO GT_FLAG.
+*            LWA_YRVA_SMS_REPORT-Y_SMS_STATUS   =  'SMS has not been sent due to some HTTP error'.
+*          ENDIF.
+        ENDAT.
+        IF LV_DUPLI = SPACE.
+          LWA_YRVA_SMS_REPORT-Y_SMS_STATUS = 'SMS has been already sent succesfully'.
+        ENDIF.
+        LWA_YRVA_SMS_REPORT-Y_MOB_NUM        =  LWA_ADR2-TEL_NUMBER.
+      ELSE.
+        LS_FLAG = SPACE.
+        APPEND LS_FLAG TO GT_FLAG.
+        LWA_YRVA_SMS_REPORT-Y_MOB_NUM       =  LWA_ADR2-TEL_NUMBER.
+        LWA_YRVA_SMS_REPORT-Y_SMS_STATUS    =  'SMS has not been sent due to invalid number'.
+      ENDIF.
+    ELSE.
+      LS_FLAG = SPACE.
+      APPEND LS_FLAG TO GT_FLAG.
+      LWA_YRVA_SMS_REPORT-Y_SMS_STATUS   = 'SMS has not been sent due to mobile number has not been maintained'.
+      LWA_YRVA_SMS_REPORT-Y_MOB_NUM      =  SPACE.
+    ENDIF.
+** Prepairing SMS Log
+    LWA_YRVA_SMS_REPORT-MANDT            =  SY-MANDT.
+    LWA_YRVA_SMS_REPORT-CUSTOMER         =  LWA_ADR2-KUNNR.
+    LWA_YRVA_SMS_REPORT-Y_DATE           =  SY-DATUM.
+    LWA_YRVA_SMS_REPORT-Y_TIME           =  SY-UZEIT.
+    LWA_YRVA_SMS_REPORT-Y_VKBUR          =  LWA_ADR2-VKBUR.
+    LWA_YRVA_SMS_REPORT-Y_CREATED_BY     =  SY-UNAME.
+    IF T1 = GC_X .
+      CONCATENATE 'Dear All, Polymer prices is announced w.e.f' LV_VAL4N '. HDPE'
+      LV_VAL5N 'LLDPE' LV_VAL6N  '. Please contact concerned zonal office. Regards GAIL PMG Team.' INTO GV_TEXT_SMS_N SEPARATED BY SPACE.
+    ELSEIF T2 = GC_X .
+      CONCATENATE 'Dear All, Polymer prices is announced w.e.f' LV_VAL8N
+      '. Please contact concerned zonal office. Regards GAIL PMG Team.' INTO
+      GV_TEXT_SMS_N SEPARATED BY SPACE.
+    ELSEIF T5 = GC_X.
+      CONCATENATE 'Dear All, Discount circular' LV_VAL9N 'is released, Please contact concerned zonal office.' INTO
+      GV_TEXT_SMS_N SEPARATED BY SPACE.
+    ENDIF.
+    LWA_YRVA_SMS_REPORT-Y_SMS_TEXT       =  GV_TEXT_SMS_N.
+    IF P8 = GC_X AND T1 = GC_X AND T2 NE GC_X AND T5 NE GC_X AND P7 NE GC_X.
+      LWA_YRVA_SMS_REPORT-Y_STATUS         =  'Pricing Announcement 1'.
+    ELSEIF P8 = GC_X AND T2 = GC_X AND T1 NE GC_X AND T5 NE GC_X AND P7 NE GC_X.
+      LWA_YRVA_SMS_REPORT-Y_STATUS         =  'Pricing Announcement 2'.
+    ELSEIF P7 = GC_X AND T5 = GC_X AND T1 NE GC_X AND T2 NE GC_X  AND P8 NE GC_X.
+      LWA_YRVA_SMS_REPORT-Y_STATUS         =  'Discount Announcement'.
+    ENDIF.
+    INSERT YRVA_SMS_REPORT FROM LWA_YRVA_SMS_REPORT.
+    CLEAR: LWA_ADR2, LV_NO, LV_SMS, LWA_ADR2_CC, LS_FLAG, LV_USER, GV_TEXT_SMS_N,LWA_YRVA_SMS_REPORT, GV_TEXT_SMS, LV_LENGTH , LV_DUPLI.
+    DESCRIBE TABLE GT_ADR2 LINES DATA(LV_COUNT).
+    CALL METHOD CL_PROGRESS_INDICATOR=>PROGRESS_INDICATE
+      EXPORTING
+        I_TEXT               = | Processing : { SY-TABIX }/{ LV_COUNT } |
+        I_PROCESSED          = SY-TABIX
+        I_TOTAL              = LV_COUNT
+        I_OUTPUT_IMMEDIATELY = 'X'.
+  ENDLOOP.
+  GT_SENT[] = GT_FLAG[].
+  DELETE GT_SENT[] WHERE FLAG IS INITIAL.
+  GT_NOTSENT[] = GT_FLAG[].
+  DELETE GT_NOTSENT[] WHERE FLAG IS NOT INITIAL.
+  IF GT_SENT[] IS NOT INITIAL AND GT_NOTSENT[] IS NOT INITIAL.
+    MESSAGE 'SMS has been sent succesfully to some customers' TYPE 'S'.
+  ELSEIF GT_SENT[] IS NOT INITIAL AND GT_NOTSENT[] IS INITIAL.
+    MESSAGE 'SMS has been sent succesfully to all customers' TYPE 'S'.
+  ELSEIF GT_SENT[] IS INITIAL AND GT_NOTSENT[] IS NOT INITIAL.
+    MESSAGE 'SMS has not been sent' TYPE 'E' DISPLAY LIKE 'I'.
+    LEAVE LIST-PROCESSING.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  SMS_BODY
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM SMS_BODY .
+  CLEAR : WA_CONTENTS,IT_CONTENTS[].
+  IF GT_MESSAGE[] IS NOT INITIAL.
+    SORT GT_MESSAGE[] BY LINE.
+    DELETE ADJACENT DUPLICATES FROM GT_MESSAGE[] COMPARING LINE.
+    LOOP AT GT_MESSAGE.
+      WA_CONTENTS-LINE = GT_MESSAGE-LINE.
+      APPEND WA_CONTENTS TO IT_CONTENTS.
+      CLEAR: WA_CONTENTS.
+    ENDLOOP.
+  ENDIF.
+ENDFORM.

@@ -1,0 +1,10 @@
+data flows 
+businees logic
+integration pattern 
+sequel debugging 
+testing methodolies
+process
+data 
+control
+authority 
+exceptions

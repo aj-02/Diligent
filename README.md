@@ -2,8 +2,29 @@
 
 SAP ABAP work — Arnav Johri, Diligent Tech India Pvt. Ltd.
 
-Single consolidated repository. Everything lives on `main`; there are no per-topic
-branches. Organised client / project first, then object.
+**Single consolidated repository. Private.** Everything lives on `main`; there are no
+per-topic branches. Organised client / project first, then object.
+
+This repo is the only copy. Nothing of value is laptop-only.
+
+## Working with this repo
+
+`CLAUDE.md` at the root is the standing rulebook — change markers, correction rules,
+release constraints, how each object ships. It loads automatically in Claude Code.
+
+Skills in `.claude/skills/` drive the day-to-day work:
+
+| Skill | Does |
+|---|---|
+| `/triage` | Scans Outlook, writes a ranked work queue to `INBOX.md`. Thread-level, latest-state-only. |
+| `/fix-issue` | Diagnose → drift-check against a fresh SE80 download → targeted fix with BOC/EOC markers. |
+| `/ship-fix` | Gate on object type, then abapGit ZIP or paste sheet, commit, and import steps. |
+| `/from-fs` | FS document → working object + the TS deliverable. |
+| `/atc-fix` | ATC finding remediation (OVL; author tag `SAP_ABAP`). |
+| `/status` | Factual weekly rollup from commits and `ISSUES.md`, for status mail. |
+
+`incoming/` is the drop folder for fresh SE80 downloads awaiting triage.
+`COPILOT_CONTEXT_HANDOFF.md` is the deeper cross-project reference behind `CLAUDE.md`.
 
 ## Layout
 
@@ -13,56 +34,79 @@ kpmg/                            KPMG engagements
   zmm_vend_upload/               Vendor master upload — ZMM_VEND_MASTER (FSD 30)
   zsd_scheme/                    Scheme (Pipes) — SD, Astral / Project UDAY
   zpp_forecast/                  Adhesive forecasting — ZFORECAST, Astral / Project UDAY
+  zpp_forecast_v2/               Forecast rebuild — abapGit-serialised (DDIC + classes)
+  zmm_po_budget/                 PO budget check — BAdI + DDIC, abapGit-serialised
+  zmm_po_budget_deferred/        Deferred budget-check class
+  zmm_me35k_release/             ME35K release fix for S/4 conversion (standard-object mods)
+  zmmims/                        IMS module pool includes + GeM invoice display
+  abapgit_pilot/                 DDIC-via-abapGit import pilot (DOMA→DTEL→TABL proof)
+  _docs/                         FSDs and assumption/query documents
 
-ovl/                             OVL
+ovl/                             OVL / ONGC Videsh
   atc/                           ECC→S/4 ATC remediation
     kb/                          Knowledge base + session handover notes
     worklists/                   ATC run exports, error lists, program sheets
-    object-list/                 Objects in scope, by category (BDC / Dialog / Enhancement /
-                                 Reports / Smartforms)
+    object-list/                 Objects in scope, by category
     corrections/                 Corrected sources + manual-review list
-    sources/
-      modpool/                   Module pools and their includes (MZ* / SAPMZ*)
-      reports/                   Executable reports (Z* / Y*)
-      changedoc/                 Generated change-document includes (F*CD[CFTV])
+    sources/                     Pre-remediation snapshots (modpool / reports / changedoc)
   zpra_dpr/                      ZPRA Daily Production Report — analytical RAP / CPI
   jv-cash-call/                  SAPMZOVL_JV_CASH_CALL module pool
   ocv-to-ovl-transfer/           Colombia OCV → OVL document transfer
   zf01_exchange_rate/            Exchange rate OData V2 interface (CPI → TCURR)
   mm-fiori/                      MM programs assessed for Fiori tiles
   ztest_t001/                    abapGit round-trip test (importable repo)
-  COPILOT_CONTEXT_HANDOFF.md     Cross-project AI assistant context
+  _engagement/                   Transport lists, scope notes
+
+gail/                            GAIL — S2A project
+mwc/                             MWC
+rws/                             RWS
 ```
 
-Object folders use the same split where it applies:
+`gail/`, `mwc/` and `rws/` keep the delivered engagement structure:
+`Codes/`, `FSD/`, `TSD/`, `QCD/`, `TUT/`.
+
+Object folders use this split where it applies:
 
 | Folder | Holds |
 |---|---|
 | `src/` | Current ABAP source — what you'd paste or serialize into a system |
 | `docs/` | BRD / FSD / TS, technical object lists, screen layouts, build guides |
 | `drafts/` | Baselines, SE38 print listings, superseded deltas — history, not deliverables |
+| `NOTES.md` | What the object is, **how it ships**, gotchas, dependencies |
+| `ISSUES.md` | Running log: date, issue, root cause, files changed, commit, TR |
+
+## How objects ship
+
+Not everything can go back through abapGit. Read `NOTES.md` in the object folder, and
+the shipping table in `CLAUDE.md`, before packaging anything.
+
+- **abapGit ZIP** — reports, classes, DDIC sets. Have `.abapgit.xml` + `src/`:
+  `kpmg/zpp_forecast_v2`, `kpmg/zmm_po_budget`, `kpmg/abapgit_pilot`, `ovl/ztest_t001`.
+- **Paste only** — module pools with SE51 screens, modifications to standard SAP objects,
+  and Z copies of standard programs (they carry SAP standard includes under standard
+  names, which a serialised pull would put at risk): `kpmg/zmb5b`, `kpmg/zmmims`,
+  `kpmg/zmm_me35k_release`, `kpmg/zsd_scheme`, `kpmg/zpp_forecast`,
+  `kpmg/zmm_po_budget_deferred`.
+
+Never serialisable in any case: SE51 screens, SE41 GUI status, SE54 maintenance
+generation, SNRO number ranges, SU21 auth objects, SCDO change documents.
 
 ## Notes
 
 - **kpmg/zmb5b** — `src/zrm07mlbd.abap` is the working copy of the `RM07MLBD` clone.
-  `drafts/RM07MLBD_*.TXT` are SE38 print listings (tokens run together, page headers) and are
-  *not* compilable; they are the baseline record only.
+  `drafts/RM07MLBD_*.TXT` are SE38 print listings (tokens run together, page headers) and
+  are *not* compilable; baseline record only.
 - **kpmg/zmm_vend_upload** — delivered as a delta against a print-listing baseline; see
   `drafts/README.md` for the change-unit table.
-- **kpmg/zsd_scheme, kpmg/zpp_forecast** — `docs/00_TECHNICAL_OBJECTS.md` carries the full DDIC
-  definitions (domains, data elements, tables, structures, lock objects, number ranges) that the
-  ABAP in `src/` depends on. Read it before creating anything in a system.
-- **ovl/atc/sources** — raw downloads of in-scope objects, split by kind. Corrected versions live
-  in `ovl/atc/corrections/`, not here; treat `sources/` as the pre-remediation snapshot.
-- **ovl/ztest_t001** — abapGit format (`.abapgit.xml` + `src/*.prog.abap|xml`). To import, zip that
-  folder's contents (`.abapgit.xml` must be at the ZIP root) into an abapGit **offline** repo, or
-  point an **online** repo at a repository whose root holds `.abapgit.xml`.
+- **kpmg/zsd_scheme, kpmg/zpp_forecast** — `docs/00_TECHNICAL_OBJECTS.md` carries the DDIC
+  definitions the ABAP in `src/` depends on. Read it before creating anything in a system.
+- **ovl/atc/sources** — pre-remediation snapshot. Corrected versions live in
+  `ovl/atc/corrections/`.
+- The `abap-adt` MCP points at a **different** dev system (`192.168.11.21`) that is *not*
+  where these objects live. Never write to SAP through it. See `CLAUDE.md`.
 
 ## Not in this repo
 
-`.mcp.json` and `.claude/` hold system connection details — including a plaintext SAP password —
-and stay local by design. Two archives are also ignored because their contents are already tracked
-unpacked next to them (`final_code.zip`, `ZTEST_T001.zip`).
-
-Superseded history for zmb5b / zmm_vend_upload remains on the branches of `aj-02/KPMG`, kept
-untouched as a backup.
+`.mcp.json` and `.claude/settings.local.json` hold connection details including a
+plaintext SAP password, and stay local by design. `.claude/skills/` **is** tracked — it
+is work product.

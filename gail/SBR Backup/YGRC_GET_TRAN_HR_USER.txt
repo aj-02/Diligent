@@ -1,0 +1,22 @@
+FUNCTION ygrc_get_tran_hr_user.
+*"----------------------------------------------------------------------
+*"*"Local Interface:
+*"  EXPORTING
+*"     VALUE(ET_DATA) TYPE  YGRC_TT_TRAN_USER
+*"----------------------------------------------------------------------
+
+
+  SELECT * FROM ygrc_hr_user_transfer( sydat = @sy-datum ) INTO TABLE @DATA(lt_hr_tran).
+  IF sy-subrc = 0.
+    et_data = CORRESPONDING #( lt_hr_tran ).
+  ENDIF.
+
+  IF et_data IS NOT INITIAL.
+    SORT et_data BY pernr endda DESCENDING.
+    DELETE ADJACENT DUPLICATES FROM et_data COMPARING pernr.
+  ENDIF.
+
+
+ENDFUNCTION.
+
+export - ET_DATA	TYPE	YGRC_TT_TRAN_USER	Employee Transfer Data

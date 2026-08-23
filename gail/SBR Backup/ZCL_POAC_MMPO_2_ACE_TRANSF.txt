@@ -1,0 +1,68 @@
+IF_BADI_POAC_MMPO_2_ACE_TRANSF~MODIFY_POITEM_SEL_CRITERIA	Instance Method	Public	                               	Modify selected fields and sel. options for PO items
+IF_BADI_POAC_MMPO_2_ACE_TRANSF~DET_POITEM_ACCR_CLASSIFICATION	Instance Method	Public	                               	Determ. accr. classificatn, start- a. end of life f. PO item
+IF_BADI_POAC_MMPO_2_ACE_TRANSF~MODIFY_ACCRUAL_SUBOBJECT	Instance Method	Public	                               	Modify subobject before creation/update
+IF_BADI_POAC_MMPO_2_ACE_TRANSF~DEFINE_KEY_DATE	Instance Method	Public	                               	Define key date for posting
+IF_BADI_POAC_MMPO_2_ACE_TRANSF~MODIFY_LIFETIME_EVT_RESULT	Instance Method	Public	                               	Modify the result of the lifetime event evaluation
+IF_BADI_POAC_MMPO_2_ACE_TRANSF~MODIFY_TRANSFER_VARIANT	Instance Method	Public	                               	Modify the transfer variant
+
+
+  method IF_BADI_POAC_MMPO_2_ACE_TRANSF~MODIFY_POITEM_SEL_CRITERIA.
+    CT_EKKO_FIELDLIST = VALUE #( BASE CT_EKKO_FIELDLIST
+                                 ( 'KDATB' )
+                                 ( 'KDATE' ) ).
+        CT_EKPO_FIELDLIST = VALUE #( BASE CT_EKPO_FIELDLIST
+                                 ( 'LEWED' ) ).
+  endmethod.
+
+
+  METHOD if_badi_poac_mmpo_2_ace_transf~det_poitem_accr_classification.
+
+    cv_accr_classification = 'Z0001'.
+
+    SELECT
+      SINGLE
+      kdatb,
+      kdate,
+      zflag
+      FROM yfi_accrual_po
+      WHERE ebeln = @is_ekkn-ebeln
+      AND ebelp = @is_ekkn-ebelp
+      AND zekkn = @is_ekkn-zekkn
+      INTO @DATA(ls_yfi_accrual_po).
+
+       SELECT
+      SINGLE
+         EBELN ,
+     YY_CONTRACT_SDATE
+      FROM YRMA_NIVIDA_PO
+      WHERE ebeln = @is_ekkn-ebeln
+      INTO @DATA(ls_YRMA_NIVIDA_PO).
+
+    IF ls_yfi_accrual_po-zflag IS NOT INITIAL.
+      CLEAR cv_accr_classification.
+    ELSE.
+
+*    cv_accr_classification = 'Z0001'.
+
+
+      cv_validity_from =  COND #( WHEN ls_yfi_accrual_po-kdatb IS NOT INITIAL THEN ls_yfi_accrual_po-kdatb
+                                  WHEN ls_YRMA_NIVIDA_PO-YY_CONTRACT_SDATE IS NOT INITIAL THEN ls_YRMA_NIVIDA_PO-YY_CONTRACT_SDATE
+                                  WHEN is_ekko-kdatb IS NOT INITIAL THEN is_ekko-kdatb
+                                  WHEN it_eket IS NOT INITIAL and it_eket[ ebeln = is_ekko-ebeln ]-eindt IS NOT INITIAL
+                                        THEN VALUE #( it_eket[ ebeln = is_ekko-ebeln ]-eindt OPTIONAL ) ).
+
+      cv_validity_to   = COND #( WHEN ls_yfi_accrual_po-kdate IS NOT INITIAL THEN ls_yfi_accrual_po-kdate
+                                 WHEN is_ekpo-lewed IS NOT INITIAL THEN is_ekpo-lewed
+                                 WHEN is_ekko-kdate IS NOT INITIAL THEN is_ekko-kdate ).
+
+
+*    cv_validity_from =  COND #( WHEN is_ekko-kdatb IS NOT INITIAL THEN is_ekko-kdatb
+*                               ELSE VALUE #( it_eket[ ebeln = is_ekko-ebeln ]-eindt ) ).
+*
+*    cv_validity_to   = COND #( WHEN is_ekko-kdate IS NOT INITIAL THEN is_ekko-kdate
+*                                 ELSE VALUE #( it_eket[ ebeln = is_ekko-ebeln ]-eindt OPTIONAL ) ).
+      DATA(lv_msg) = COND #( WHEN cv_validity_from > cv_validity_to THEN 'Start date is Greater than End Date ').
+    ENDIF.
+
+
+  ENDMETHOD.

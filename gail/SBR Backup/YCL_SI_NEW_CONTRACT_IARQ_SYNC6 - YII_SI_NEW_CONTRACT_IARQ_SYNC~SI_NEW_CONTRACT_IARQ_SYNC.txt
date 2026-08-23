@@ -1,0 +1,1170 @@
+  method YII_SI_NEW_CONTRACT_IARQ_SYNC~SI_NEW_CONTRACT_IARQ_SYNC.
+*** **** INSERT IMPLEMENTATION HERE **** ***
+
+    TYPES : BEGIN OF ls_xdata,
+              line TYPE drao-orblk,
+            END OF ls_xdata.
+
+
+    DATA : lt_res          TYPE ydt_new_contract_res_recor_tab,
+           lw_res          TYPE  ydt_new_contract_res_records,
+           gv_kunnr        TYPE kunnr,
+           gv_plnt         TYPE oij_werk ,  "Added By Jainendra Gupta on 22.02.2024
+           gv_text1        TYPE c,  "Added By Jainendra Gupta on 20.02.2024
+           gv_text2        TYPE string,  "Added By Jainendra Gupta on 20.02.2024
+           gv_planloc      TYPE kunnr ,  "Added By Jainendra Gupta on 20.02.2024
+           gv_tsyst        TYPE oij_tsyst ,  "Added By Jainendra Gupta on 20.02.2024
+           gv_co_ship      TYPE oij_el_csh,
+           it_yrva_ct_date TYPE TABLE OF yrva_ct_date,
+           wa_yrva_ct_date TYPE yrva_ct_date,
+           gv_cntrt        TYPE vbeln_va,
+           gv_sdat         TYPE vbdat_veda,
+           gv_edat         TYPE vndat_veda.
+
+
+
+    DATA :
+*BAPIVBELN-VBELN
+      contract_header_in      TYPE  bapisdhd1,
+      contract_header_inx     TYPE  bapisdhd1x,
+      sender                  TYPE  bapi_sender,   "#EC CI_USAGE_OK[2214585]
+      binary_relationshiptype TYPE  bapireltype-reltype,
+      int_number_assignment   TYPE  bapiflag-bapiflag,
+      behave_when_error       TYPE  bapiflag-bapiflag,
+      logic_switch            TYPE  bapisdls,
+      testrun                 TYPE  bapiflag-bapiflag,
+      convert                 TYPE  bapiflag-bapiflag,
+      return                  TYPE TABLE OF bapiret2,
+      wa_ret                  TYPE bapiret2,
+      contract_items_in       TYPE TABLE OF  bapisditm,
+      contract_items_inx      TYPE  TABLE OF bapisditmx,
+      l_contract_items_in     TYPE bapisditm,
+      l_contract_items_inx    TYPE  bapisditmx,
+      contract_partners       TYPE TABLE OF  bapiparnr,
+*l_CONTRACT_ITEMS_INX  LIKE  line OF BAPISDITMX,
+      l_contract_partners     TYPE bapiparnr,
+      contract_conditions_in  TYPE  TABLE OF bapicond,
+      contract_conditions_inx TYPE  TABLE OF bapicondx,
+      contract_cfgs_ref       TYPE  TABLE OF bapicucfg,
+      contract_cfgs_inst      TYPE  TABLE OF bapicuins,
+      contract_cfgs_part_of   TYPE  TABLE OF bapicuprt,
+      contract_cfgs_value     TYPE  TABLE OF bapicuval,
+      contract_cfgs_blob      TYPE  TABLE OF bapicublb,
+      contract_cfgs_vk        TYPE  TABLE OF bapicuvk,
+      contract_cfgs_refinst   TYPE  TABLE OF bapicuref,
+      contract_data_in        TYPE  TABLE OF bapictr,
+      contract_data_inx       TYPE  TABLE OF bapictrx,
+      l_contract_data_in      TYPE  bapictr,
+      l_contract_data_inx     TYPE bapictrx,
+      contract_text           TYPE  TABLE OF bapisdtext,
+      contract_keys           TYPE  TABLE OF bapisdkey,
+      extensionin             TYPE  TABLE OF bapiparex,
+      partneraddresses        TYPE  TABLE OF bapiaddr1,
+      extensionex             TYPE  TABLE OF bapiparex,
+      extensionex1            TYPE  TABLE OF bapiparex,
+*return type TABLE OF BAPIRET2,
+      l_extensionex           TYPE bapiparex,
+      l_yyvbak                TYPE yybape_vbak,
+      l_yyvbakx               TYPE yybape_vbakx,
+      l_vbeln                 TYPE vbeln,
+      it_oij_el_doc_mot       TYPE TABLE OF roij_el_doc_mot, "OIJ_EL_DOC_MOT,
+      wa_oij_el_doc_mot       TYPE roij_el_doc_mot, "OIJ_EL_DOC_MOT,
+      it_oij_el_cp_layt       TYPE TABLE OF roij_el_cp_layt, "OIJ_EL_CP_LAYT,
+      wa_oij_el_cp_layt       TYPE roij_el_cp_layt, "OIJ_EL_CP_LAYT,
+      it_yrvt_contract        TYPE TABLE OF yrvt_contract,
+      wa_yrvt_contract        TYPE yrvt_contract,
+      it_1                    TYPE roij_el_cp_loc_t,
+      it_2                    TYPE roij_el_cp_prod_t,
+      it_3                    TYPE roij_el_layt_ev_t,
+      it_4                    TYPE roij_el_layt_inf_t,
+      it_5                    TYPE roij_el_doc_ev_t,
+      it_roij_el_doc_m_mot    TYPE TABLE OF roij_el_doc_m_mot,
+      wa_roij_el_doc_m_mot    TYPE roij_el_doc_m_mot,
+      l_header                TYPE thead,
+      it_line                 TYPE TABLE OF tline,
+      wa_line                 TYPE tline,
+      it_yrvt_cont_dcq        TYPE TABLE OF yrvt_cont_dcq,
+      wa_yrvt_cont_dcq        TYPE yrvt_cont_dcq,
+      it_date                 TYPE TABLE OF rke_dat,
+      wa_yrvt_contract_a      TYPE yrvt_contract_a,
+      it_yrvt_contract_a      TYPE TABLE OF  yrvt_contract_a,
+      l_seqnr                 TYPE oij_seqnr,
+      gv_payer                TYPE string,
+      gv_tq                   TYPE string,
+      lv_uname                TYPE persno,
+      error_msg               TYPE string,
+      ls_documentdatax        TYPE bapi_doc_drawx2,
+      ls_doc_data             TYPE bapi_doc_draw2,
+      lt_doc_drad             TYPE STANDARD TABLE OF bapi_doc_drad,
+      ls_doc_drad             TYPE bapi_doc_drad,
+      it_ret_doc_change       TYPE bapiret2.
+
+    DATA: record TYPE ydt_new_contract_req_recor_tab.
+    DATA: wa_record  TYPE ydt_new_contract_req_records,
+          record_dcq TYPE ydt_new_contract_req_daywi_tab.
+
+    DATA: lv_contrep_status(80),
+          lt_xdata              TYPE TABLE OF ls_xdata,
+          p_blfichero           TYPE fpcontent,
+          lv_size               TYPE i,
+          file_get              TYPE filep,
+          lv_zaehl              TYPE                    drao-zaehl,
+          lv_string             TYPE string,
+          pf_file               TYPE                    draw-filep,
+          ls_drao               TYPE                    drao,
+          lt_drao               TYPE TABLE OF           drao,
+          lt_files              TYPE                    cvapi_tbl_doc_files,
+          lv_storage_cat        TYPE                    cv_storage_cat,
+          ls_api_ctrl           TYPE                    cvapi_api_control,
+          ls_message_new        TYPE                    messages,
+          lv_documentnumber     TYPE                    draw-doknr,
+          lv_dms_doc_no         TYPE  draw-doknr,
+          lv_dms_doc_name       TYPE string,
+          ls_files              TYPE                    cvapi_doc_file,
+          lt_draw               TYPE STANDARD TABLE OF draw INITIAL SIZE 0,
+          ls_draw               TYPE draw,
+          ls_xdata              TYPE ls_xdata,
+          lt_message_body       TYPE bcsy_text VALUE IS INITIAL,
+          ls_message_body       TYPE soli, "LV_AMT        TYPE CHAR20,
+          lo_send_request       TYPE REF TO cl_bcs VALUE IS INITIAL,
+          lo_document           TYPE REF TO cl_document_bcs VALUE IS INITIAL,
+          ls_attach1            TYPE pin_file,
+          lt_attach             TYPE hressin_file_data,
+          lv_xstr               TYPE xstring,
+          lv_st_dt              TYPE char10,
+          lv_end_dt             TYPE char10,
+          lv_rec                TYPE yrva_gta_imb_sft.
+
+
+    DATA : wa_cent_plant TYPE yrxa_cent_plant.
+
+
+    record[] = input-mt_new_contract_req-records[].
+    record_dcq[] = input-mt_new_contract_req-daywise_dcq[].
+
+    CLEAR: lw_res.
+
+    LOOP AT record_dcq INTO DATA(wa_rec_dcq).
+      CONDENSE wa_rec_dcq-dcq_qty.
+      if wa_rec_dcq-dcq_qty is INITIAL.
+        lw_res-status = 'Error'.
+        lw_res-message = 'DCQ Quantity is invalid, Contract Id not created.'.
+        EXIT.
+      endif.
+    endloop.
+
+
+
+    DATA: w_succ TYPE syst_subrc.
+    CLEAR w_succ.
+
+*    CLEAR: p_date.
+*    p_date = sy-datum - 30.
+
+
+   if lw_res-status is INITIAL.
+
+
+    LOOP AT record INTO DATA(wa_req).
+
+***      Check for exisiting Contract for the CT number
+**  BEGIN OF CHANGES BY OF Vipul ON 04Feb25 FOR ATC
+      SELECT  CONTRACTID FROM YRVA_CT_DATE INTO @DATA(WA_EXISTING) UP TO 1 ROWS WHERE CT_REQ_NO = @wa_req-supplier ORDER BY PRIMARY KEY.ENDSELECT.
+** END CHANGES BY OF Vipul ON 04Feb25 FOR ATC
+        if sy-subrc <> 0 AND WA_EXISTING is INITIAL.
+
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+        EXPORTING
+          input  = wa_req-stp
+        IMPORTING
+          output = gv_kunnr.
+
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+        EXPORTING
+          input  = wa_req-plant
+        IMPORTING
+          output = gv_plnt.
+
+**  BEGIN OF CHANGES BY OF Vipul ON 04Feb25 FOR ATC
+      SELECT  locid FROM oijrra INTO ( gv_planloc ) UP TO 1 ROWS
+            WHERE cparid = gv_kunnr AND tsyst LIKE 'NGPL%' AND delind NE 'X' ORDER BY  PRIMARY KEY.ENDSELECT.
+*        * END CHANGES BY OF Vipul ON 04Feb25 FOR ATC
+
+      IF sy-subrc = 0 AND gv_planloc IS NOT INITIAL.
+        SPLIT gv_planloc AT 'C' INTO gv_text1 gv_text2 .
+        CONCATENATE '00000' gv_text2 INTO gv_co_ship . "OIJ_EL_DOC_MOT-CO_SHIP.
+
+
+
+*        wa_data-location = gv_planloc .
+*        wa_data-cs = gv_co_ship .
+*        wa_data-mt = 'YD' .
+**  BEGIN OF CHANGES BY OF Vipul ON 04Feb25 FOR ATC
+        SELECT  tsyst FROM oijts INTO gv_tsyst UP TO 1 ROWS
+            WHERE werk = gv_plnt ORDER BY PRIMARY KEY .ENDSELECT.
+*          * END CHANGES BY OF Vipul ON 04Feb25 FOR ATC
+
+*         wa_data-ts = gv_tsyst .
+      ENDIF.
+
+      SELECT * FROM yrva_ct_date INTO TABLE it_yrva_ct_date
+          WHERE contractid NE '' .
+
+      CLEAR : contract_header_in , contract_header_inx , contract_items_in , contract_items_inx,l_vbeln,
+              contract_data_inx , contract_data_inx ,extensionex,wa_yrvt_contract_a,l_seqnr.
+      REFRESH: contract_partners,extensionex,it_oij_el_doc_mot,it_oij_el_cp_layt,it_yrvt_contract,it_roij_el_doc_m_mot,it_line,it_yrvt_cont_dcq.
+
+      SELECT  * INTO TABLE it_yrvt_contract_a
+        FROM yrvt_contract_a
+        WHERE
+        auart = 'ZGT1'.
+
+      contract_header_inx-updateflag = 'I'.
+
+      contract_header_in-doc_type = 'ZGT1'.
+      contract_header_inx-doc_type = 'X'.
+
+      contract_header_in-sales_org = '3000'.
+      contract_header_inx-sales_org = 'X'.
+
+      contract_header_in-distr_chan = '10'.
+      contract_header_inx-distr_chan = 'X'.
+
+      contract_header_in-division = '40'.
+      contract_header_inx-division = 'X'.
+
+      contract_header_in-price_date = wa_req-ct_start_date.
+      contract_header_inx-price_date = 'X'.
+
+      CLEAR: lv_uname.
+
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+        EXPORTING
+          input  = wa_req-userid
+        IMPORTING
+          output = lv_uname.
+      sy-uname = lv_uname.
+
+      contract_header_in-created_by = lv_uname.
+*      contract_header_inx- = 'X'.
+
+
+*      contract_header_in-purch_no_c = wa_data-po.
+*      contract_header_inx-purch_no_c = 'X'.
+
+      contract_header_in-ct_valid_f = wa_req-ct_start_date.
+      contract_header_inx-ct_valid_f = 'X'.
+      contract_header_in-ct_valid_t = wa_req-ct_end_date.
+      contract_header_inx-ct_valid_t = 'X'.
+
+*      contract_header_in-line_time = sy-uzeit.
+
+
+
+
+*      contract_header_in-qt_valid_f = wa_req-ct_start_date.
+*      contract_header_inx-qt_valid_f = 'X'.
+*
+*      contract_header_in-qt_valid_t = wa_req-ct_end_date.
+*      contract_header_inx-qt_valid_t = 'X'.
+
+      CONDENSE wa_req-receiving_point.
+
+      SELECT SINGLE pblnr FROM oifspbl INTO @DATA(wa_rev) WHERE pbltyp = 'YDVN' AND delind <> 'X' AND pblnr = @wa_req-receiving_point AND pblnr NOT LIKE 'V%'.
+      IF sy-subrc <> 0.
+        lw_res-status = 'Error'.
+        lw_res-message = 'Receiving point is invalid.'.
+
+      ELSE.
+
+        contract_header_in-rec_point = wa_req-receiving_point.
+        contract_header_inx-rec_point = 'X'.
+
+        contract_header_in-cust_grp3 = 'Z01'.
+        contract_header_inx-cust_grp3 = 'X'.
+
+        contract_header_in-cust_grp4 = 'Z06'.
+        contract_header_inx-cust_grp4 = 'X'.
+        CONDENSE wa_req-customer_group_5.
+        contract_header_in-cust_grp5 = wa_req-customer_group_5.
+        contract_header_inx-cust_grp5 = 'X'.
+        CONDENSE wa_req-description.
+        contract_header_in-pp_search = wa_req-description.
+        contract_header_inx-pp_search = 'X'.
+        CONDENSE wa_req-imbalance_cumulation_indicator.
+
+        contract_header_in-dlvschduse = wa_req-imbalance_cumulation_indicator.
+        contract_header_inx-dlvschduse = 'X'.
+
+        contract_header_in-bill_sched = 'Z1'.
+        contract_header_inx-bill_sched = 'X'.
+        CONDENSE wa_req-master_contract.
+
+        contract_header_in-mast_contr = wa_req-master_contract.
+        contract_header_inx-mast_contr = 'X'.
+
+        contract_header_inx-line_time = 'X'.
+
+
+        SHIFT wa_req-stp LEFT DELETING LEADING '0'.
+        l_contract_partners-partn_role = 'AG'.
+*l_CONTRACT_PARTNERS-PARTN_NUMB = wa_data-sop.
+        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+          EXPORTING
+            input  = wa_req-stp
+          IMPORTING
+            output = l_contract_partners-partn_numb.
+
+        APPEND l_contract_partners TO contract_partners.
+
+        gv_payer  = |{ wa_req-payer ALPHA = IN }|.
+
+        SHIFT wa_req-stp LEFT DELETING LEADING '0'.
+
+        IF gv_payer IS NOT INITIAL.
+          SHIFT gv_payer LEFT DELETING LEADING '0'.
+          l_contract_partners-partn_role = 'RG'.
+          CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+            EXPORTING
+              input  = gv_payer
+            IMPORTING
+              output = l_contract_partners-partn_numb.
+*l_CONTRACT_PARTNERS-PARTN_NUMB = wa_data-payer.
+          APPEND l_contract_partners TO contract_partners.
+        ENDIF.
+
+        gv_tq = '1000'.
+        CONDENSE wa_req-material.
+        l_contract_items_in-material = wa_req-material.
+        l_contract_items_inx-material = 'X'.
+        REPLACE ALL OCCURRENCES OF ',' IN gv_tq WITH space .
+        CONDENSE gv_tq.
+        l_contract_items_in-departm_no = '3110'.
+        l_contract_items_inx-departm_no = 'X'.
+        l_contract_items_in-target_qty = gv_tq.
+        l_contract_items_inx-target_qty = 'X'.
+        l_contract_items_in-target_qu = 'MBG'.
+        l_contract_items_inx-target_qu = 'X'.
+        CONDENSE wa_req-plant.
+        l_contract_items_in-plant = wa_req-plant.
+        l_contract_items_inx-plant = 'X'.
+        CONDENSE wa_req-shipping_point.
+        l_contract_items_in-ship_point = wa_req-shipping_point.
+        l_contract_items_inx-ship_point = 'X'.
+        CONDENSE wa_req-uft_indicator.
+        l_contract_items_in-mat_pr_grp = wa_req-uft_indicator.
+        l_contract_items_inx-mat_pr_grp = 'X'.
+        CONDENSE wa_req-material_group_1.
+        l_contract_items_in-prc_group1 = wa_req-material_group_1.
+        l_contract_items_inx-prc_group1 = 'X'.
+        l_contract_items_in-prc_group2 = ''.
+        l_contract_items_inx-prc_group2 = 'X'.
+        l_contract_items_in-prc_group3 = ''.
+        l_contract_items_inx-prc_group3 = 'X'.
+        l_contract_items_in-prc_group4 = ''.
+        l_contract_items_inx-prc_group4 = 'X'.
+        CONDENSE wa_req-material_group_5.
+        l_contract_items_in-prc_group5 = wa_req-material_group_5.
+        l_contract_items_inx-prc_group5 = 'X'.
+        l_contract_items_in-itm_number = '000010'.
+        l_contract_items_inx-itm_number = '000010'.
+        l_contract_items_in-created_by = lv_uname.
+
+        APPEND l_contract_items_in TO contract_items_in.
+        APPEND l_contract_items_inx TO contract_items_inx.
+
+        l_contract_data_in-con_st_dat = wa_req-ct_start_date.
+        l_contract_data_inx-con_st_dat = 'X'.
+
+        l_contract_data_in-con_en_dat = wa_req-ct_end_date.
+        l_contract_data_inx-con_en_dat = 'X'.
+
+        l_contract_data_in-con_si_dat = wa_req-contract_sign_date.
+*l_CONTRACT_data_IN-con_si_dat = wa_data-csdate1.
+        l_contract_data_inx-con_si_dat = 'X'.
+
+        APPEND l_contract_data_in TO contract_data_in.
+        APPEND l_contract_data_inx TO contract_data_inx.
+        CONDENSE wa_req-input_inter_connection_point.
+        CONDENSE wa_req-output_inter_connection_point.
+
+        l_yyvbak-yy_iipo = wa_req-input_inter_connection_point.
+        l_yyvbak-yy_oipo = wa_req-output_inter_connection_point.
+
+
+        l_yyvbakx-yy_iipo = 'X'.
+        l_yyvbakx-yy_oipo = 'X'.
+        l_yyvbakx-yy_sup_pt = 'X'.
+        l_yyvbakx-yy_withdraw_pt = 'X'.
+        l_yyvbakx-yy_distance_km = 'X'.
+
+        l_yyvbakx-yygailpl1 = 'X'.
+        l_yyvbakx-yygailpl2 = 'X'.
+        l_yyvbakx-yygailpl3 = 'X'.
+        l_yyvbakx-yygailpl4 = 'X'.
+        l_yyvbakx-yygailpl5 = 'X'.
+
+        l_extensionex-structure = 'YYBAPE_VBAK'.
+        MOVE l_yyvbak TO l_extensionex-valuepart1 .
+
+
+        CLEAR l_yyvbak.
+
+
+        CONDENSE: wa_req-supply_point, wa_req-withdraw_point, wa_req-distance,
+        wa_req-gail_pl1, wa_req-gail_pl2, wa_req-gail_pl3, wa_req-gail_pl4, wa_req-gail_pl5.
+
+
+        l_extensionex-valuepart2+2(30) = wa_req-supply_point.
+        l_extensionex-valuepart2+32(30) = wa_req-withdraw_point.
+        l_extensionex-valuepart2+62(10) = wa_req-distance.
+
+        l_extensionex-valuepart2+72(2) = wa_req-gail_pl1.
+        l_extensionex-valuepart2+74(2) = wa_req-gail_pl2.
+        l_extensionex-valuepart2+76(2) = wa_req-gail_pl3.
+        l_extensionex-valuepart2+78(2) = wa_req-gail_pl4.
+        l_extensionex-valuepart2+80(2) = wa_req-gail_pl5.
+
+        APPEND l_extensionex TO extensionex.
+
+        CLEAR l_extensionex.
+        l_extensionex-structure = 'YYBAPE_VBAKX'.
+        MOVE l_yyvbakx TO l_extensionex-valuepart1.
+        APPEND l_extensionex TO extensionex1.
+
+        sy-tcode = 'SPROXY'.
+
+        DATA: yy_gailpipe1 TYPE vbak-yygailpl1.
+        yy_gailpipe1 = wa_req-gail_pl1.
+
+        EXPORT yy_gailpipe1 = yy_gailpipe1 TO MEMORY ID 'gailpipeline1'.
+
+        EXPORT yy_abtnr = '3110' TO MEMORY ID 'yy_vbkd_abtnr'.
+
+
+        DATA: yy_tcode TYPE string.
+
+        yy_tcode = 'SPROXY'.
+
+        EXPORT yy_tcode = yy_tcode TO MEMORY ID 'proxy_tcode'.
+
+
+        CALL FUNCTION 'BAPI_CONTRACT_CREATEFROMDATA'
+          EXPORTING
+*           SALESDOCUMENTIN       =
+            contract_header_in    = contract_header_in
+            contract_header_inx   = contract_header_inx
+*           SENDER                =
+*           BINARY_RELATIONSHIPTYPE       = ' '
+            int_number_assignment = 'X'
+*           BEHAVE_WHEN_ERROR     = ' '
+*           LOGIC_SWITCH          =
+*           TESTRUN               =
+*           CONVERT               = ' '
+          IMPORTING
+            salesdocument         = l_vbeln
+          TABLES
+            return                = return
+            contract_items_in     = contract_items_in
+            contract_items_inx    = contract_items_inx
+            contract_partners     = contract_partners
+*           CONTRACT_CONDITIONS_IN        =
+*           CONTRACT_CONDITIONS_INX       =
+*           CONTRACT_CFGS_REF     =
+*           CONTRACT_CFGS_INST    =
+*           CONTRACT_CFGS_PART_OF =
+*           CONTRACT_CFGS_VALUE   =
+*           CONTRACT_CFGS_BLOB    =
+*           CONTRACT_CFGS_VK      =
+*           CONTRACT_CFGS_REFINST =
+            contract_data_in      = contract_data_in
+            contract_data_inx     = contract_data_inx
+*           CONTRACT_TEXT         =
+*           CONTRACT_KEYS         =
+            extensionin           = extensionex
+*           PARTNERADDRESSES      =
+            extensionex           = extensionex1.
+
+        COMMIT WORK AND WAIT.
+        WAIT UP TO 2 SECONDS.
+        IF sy-subrc = 0.
+
+          IF l_vbeln IS NOT INITIAL.
+            lw_res-sap_contract_id = l_vbeln.
+*********************SOC Attach CT Document by Aishwarya & Muskan, Shweta Sharma on 10.05.2024
+            CALL FUNCTION 'SCMS_HTTP_SERVER_INFO'
+              EXPORTING
+                crep_id               = 'YDMS'
+              IMPORTING
+                contrep_status        = lv_contrep_status
+              EXCEPTIONS
+                bad_request           = 1
+                internal_server_error = 2
+                error_http            = 3
+                error_url             = 4
+                error_signature       = 5
+                contrep_not_found     = 6
+                OTHERS                = 7.
+
+            IF lv_contrep_status = 'OFFLINE' OR lv_contrep_status IS INITIAL.
+              LOOP AT return INTO wa_ret.
+                IF wa_ret-type = 'E'.
+                  lw_res-status = 'Error'.
+                ENDIF.
+              ENDLOOP.
+              IF lw_res-status IS INITIAL.
+                lw_res-status = 'Success'.
+                CLEAR: wa_ret.
+                wa_ret = VALUE #( return[ 3 ] ).
+                CONCATENATE lw_res-message wa_ret-message INTO lw_res-message SEPARATED BY space.
+                CONCATENATE lw_res-message ', DMS is down, failed to save the CT Attachment Document.' INTO lw_res-message SEPARATED BY space.
+              ENDIF.
+            ELSE.
+              CLEAR: ls_attach1.
+              ls_attach1-fdata = wa_req-ct_attachment.
+
+              CLEAR: lt_xdata, lv_size.
+
+              CALL FUNCTION 'SCMS_XSTRING_TO_BINARY'
+                EXPORTING
+                  buffer          = ls_attach1-fdata
+                  append_to_table = ' '
+                IMPORTING
+                  output_length   = lv_size
+                TABLES
+                  binary_tab      = lt_xdata.
+
+              CLEAR: lv_string.
+
+              CALL FUNCTION 'SCMS_BINARY_TO_STRING'
+                EXPORTING
+                  input_length = lv_size
+                IMPORTING
+                  text_buffer  = lv_string
+                TABLES
+                  binary_tab   = lt_xdata
+                EXCEPTIONS
+                  failed       = 1
+                  OTHERS       = 2.
+
+              CLEAR file_get.
+              CLEAR: ls_draw,ls_files,lt_files,lt_drao,ls_drao,ls_api_ctrl.
+              CONCATENATE l_vbeln 'SIGNEDCT' '.PDF' INTO file_get.
+
+
+              ls_attach1-fname = file_get.
+              ls_draw-dokar = 'S15'.
+*      ls_files-description = 'Imprest'.
+
+              ls_draw-dokvr           = '00'.
+              ls_draw-doktl           = '000'.
+              ls_draw-dwnam           = lv_uname.
+              ls_draw-dokst           = 'AT'.
+              ls_draw-filep           = ls_attach1-fname.
+              ls_draw-dappl           = 'PDF'.
+              ls_draw-begru           = '0001'.
+              lv_storage_cat          = 'Y_GAIL'.
+              ls_api_ctrl-tcode       = 'CV01N'.
+              ls_api_ctrl-commit_flag = 'X'.
+
+              lv_zaehl = '0001'.
+              LOOP AT lt_xdata INTO ls_xdata.
+                CLEAR ls_drao.
+                ls_drao-orblk = ls_xdata-line.
+                ls_drao-orln  = lv_size.
+                ls_drao-dokar = ls_draw-dokar.
+                ls_drao-dokvr = ls_draw-dokvr.
+                ls_drao-doktl = ls_draw-doktl.
+                ls_drao-appnr = '1'.
+                ls_drao-zaehl = lv_zaehl.
+*        ls_drao-orbkl = '2550'.
+                APPEND ls_drao TO lt_drao.
+                lv_zaehl = lv_zaehl + 1.
+              ENDLOOP.
+
+              pf_file = ls_attach1-fname.
+              CALL FUNCTION 'CV120_DOC_GET_APPL'
+                EXPORTING
+                  pf_file   = pf_file
+                IMPORTING
+                  pfx_dappl = ls_files-dappl.
+
+              ls_files-appnr        = '1'.
+              ls_files-filename     = ls_attach1-fname.
+              ls_files-updateflag   = 'I'.
+              ls_files-langu        = sy-langu.
+              ls_files-storage_cat  = 'Y_GAIL'.
+              ls_files-description    = 'blob'.
+              ls_files-checked_in     = 'X'.
+              ls_files-active_version = 'X'.
+              APPEND ls_files TO lt_files.
+
+              CLEAR: lv_documentnumber, ls_message_new.
+
+              CALL FUNCTION 'CVAPI_DOC_CREATE'
+                EXPORTING
+                  ps_draw            = ls_draw
+                  ps_api_control     = ls_api_ctrl
+                  pf_content_provide = 'TBL'
+                IMPORTING
+                  psx_message        = ls_message_new
+                  pfx_doknr          = lv_documentnumber
+                TABLES
+                  pt_files_x         = lt_files
+                  pt_content         = lt_drao.
+
+              IF ls_message_new-msg_type CA 'EA'.
+
+                LOOP AT return INTO wa_ret.
+                  IF wa_ret-type = 'E'.
+                    lw_res-status = 'Error'.
+                  ENDIF.
+                ENDLOOP.
+                IF lw_res-status IS INITIAL.
+                  lw_res-status = 'Success'.
+                  CLEAR: wa_ret.
+                  wa_ret = VALUE #( return[ 3 ] ).
+                  CONCATENATE lw_res-message wa_ret-message INTO lw_res-message SEPARATED BY space.
+                  CONCATENATE lw_res-message 'but failed to save the CT Attachment Document.' INTO lw_res-message SEPARATED BY space.
+                ENDIF.
+              ELSE.
+                COMMIT WORK AND WAIT.
+
+                ls_documentdatax-documenttype = 'X'.
+                ls_documentdatax-documentnumber = 'X'.
+                ls_documentdatax-documentversion = 'X'.
+                ls_documentdatax-documentpart = 'X'.
+                ls_documentdatax-description = 'X'.
+**  BEGIN OF CHANGES BY OF Vipul ON 04Feb25 FOR ATC
+                SELECT  vbeln, posnr FROM vbap INTO @DATA(wa_vbap) UP TO 1 ROWS WHERE vbeln = @l_vbeln ORDER BY PRIMARY KEY.ENDSELECT.
+                ls_doc_drad-objecttype = 'VBAP' .
+*                * END CHANGES BY OF Vipul ON 04Feb25 FOR ATC
+                CONCATENATE wa_vbap-vbeln wa_vbap-posnr INTO ls_doc_drad-objectkey.
+
+
+                CLEAR: ls_doc_data.
+                ls_doc_data-documenttype = ls_draw-dokar.
+                ls_doc_data-documentnumber = lv_documentnumber.
+                ls_doc_data-documentversion = ls_draw-dokvr.
+                ls_doc_data-documentpart = ls_draw-doktl.
+                CALL FUNCTION 'CONVERSION_EXIT_PDATE_OUTPUT'
+                  EXPORTING
+                    input  = wa_req-ct_start_date
+                  IMPORTING
+                    output = lv_st_dt.
+
+
+                CALL FUNCTION 'CONVERSION_EXIT_PDATE_OUTPUT'
+                  EXPORTING
+                    input  = wa_req-ct_end_date
+                  IMPORTING
+                    output = lv_end_dt.
+
+                CONCATENATE 'CT' wa_req-supplier 'from' lv_st_dt 'to' lv_end_dt INTO ls_doc_data-description SEPARATED BY space.
+
+
+
+                APPEND ls_doc_drad TO lt_doc_drad.
+
+
+                CALL FUNCTION 'BAPI_DOCUMENT_CHANGE2'    "#EC CI_USAGE_OK[2438131]
+                  EXPORTING
+                    documenttype    = ls_draw-dokar
+                    documentnumber  = lv_documentnumber
+                    documentpart    = ls_draw-doktl
+                    documentversion = ls_draw-dokvr
+                    documentdata    = ls_doc_data
+                    documentdatax   = ls_documentdatax
+*                   HOSTNAME        =
+*                   DOCBOMCHANGENUMBER         =
+*                   DOCBOMVALIDFROM =
+*                   DOCBOMREVISIONLEVEL        =
+*                   SENDCOMPLETEBOM = ' '
+*                   PF_FTP_DEST     = ' '
+*                   PF_HTTP_DEST    = ' '
+*                   CAD_MODE        = ' '
+*                   ACCEPT_EMPTY_BOM           = ' '
+                  IMPORTING
+                    return          = it_ret_doc_change
+                  TABLES
+*                   CHARACTERISTICVALUES       =
+*                   CLASSALLOCATIONS           =
+*                   DOCUMENTDESCRIPTIONS       =
+                    objectlinks     = lt_doc_drad
+*                   DOCUMENTSTRUCTURE          =
+*                   DOCUMENTFILES   =
+*                   LONGTEXTS       =
+*                   COMPONENTS      =
+                  .
+                IF sy-subrc = 0.
+                  CLEAR: lv_dms_doc_no, lv_dms_doc_name.
+                  lv_dms_doc_no = lv_documentnumber.
+                  lv_dms_doc_name = ls_attach1-fname.
+
+                  LOOP AT return INTO wa_ret.
+                    IF wa_ret-type = 'E'.
+                      lw_res-status = 'Error'.
+                    ENDIF.
+                  ENDLOOP.
+                  IF lw_res-status IS INITIAL.
+                    lw_res-status = 'Success'.
+                    CLEAR: wa_ret.
+                    wa_ret = VALUE #( return[ 3 ] ).
+                    CONCATENATE lw_res-message wa_ret-message INTO lw_res-message SEPARATED BY space.
+                    CONCATENATE lw_res-message 'and CT Atachment Document saved successfully.' INTO lw_res-message SEPARATED BY space.
+                  ENDIF.
+
+                ELSE.
+                  LOOP AT return INTO wa_ret.
+                    IF wa_ret-type = 'E'.
+                      lw_res-status = 'Error'.
+                    ENDIF.
+                  ENDLOOP.
+                  IF lw_res-status IS INITIAL.
+                    lw_res-status = 'Success'.
+                    CLEAR: wa_ret.
+                    wa_ret = VALUE #( return[ 3 ] ).
+                    CONCATENATE lw_res-message wa_ret-message INTO lw_res-message SEPARATED BY space.
+                    CONCATENATE lw_res-message 'and CT Atachment Document saved successfully, but could not be not linked to Contract ID.' INTO lw_res-message SEPARATED BY space.
+                  ENDIF.
+                ENDIF.
+              ENDIF.
+
+            ENDIF.
+
+
+**********************EOC Attach CT Document by Aishwarya & Muskan, Shweta Sharma on 10.05.2024
+
+
+
+
+*        DATA: p_objkey      TYPE swo_typeid,
+*              lw_returncode TYPE sysubrc.
+*
+*        p_objkey = l_vbeln.
+*
+*        CALL FUNCTION 'SAP_WAPI_CREATE_EVENT'
+*          EXPORTING
+*            object_type = 'BUS2034'
+*            object_key  = p_objkey
+*            event       = 'CREATED'
+*            commit_work = 'X'
+**           EVENT_LANGUAGE          = SY-LANGU
+**           LANGUAGE    = SY-LANGU
+*            user        = sy-uname
+**           IFS_XML_CONTAINER       =
+*          IMPORTING
+*            return_code = lw_returncode
+**           EVENT_ID    =
+**      TABLES
+**           INPUT_CONTAINER         =
+**           MESSAGE_LINES           =
+**           MESSAGE_STRUCT          =
+
+
+
+*          .
+            CLEAR: wa_cent_plant .
+            CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+              EXPORTING
+                input  = wa_req-stp
+              IMPORTING
+                output = wa_cent_plant-receiver.
+
+
+            SELECT SINGLE * FROM yrxa_cent_plant INTO @DATA(wa_cent) WHERE receiver = @wa_cent_plant-receiver AND werkrs = @wa_req-plant
+              AND lgort = 'PIPE' AND matnr = @wa_req-material AND vbeln = @l_vbeln.
+
+
+            IF wa_cent IS INITIAL.
+
+              wa_cent_plant-mandt     = sy-mandt.
+              wa_cent_plant-werkrs    = wa_req-plant . "xvbap-werks.
+              wa_cent_plant-lgort     = 'PIPE' .
+              wa_cent_plant-matnr     =   wa_req-material.
+              wa_cent_plant-vbeln =  l_vbeln.
+              wa_cent_plant-werkrs_cp = '3110'.
+              wa_cent_plant-lgort_cp = 'PIPE'.
+
+              MODIFY yrxa_cent_plant FROM wa_cent_plant.
+
+              IF sy-subrc IS INITIAL.
+                COMMIT WORK AND WAIT.
+              ENDIF.
+            ENDIF.
+
+
+            DATA: wa_vbak TYPE vbak.
+
+            wa_vbak-vbeln = l_vbeln.
+            wa_vbak-yy_iipo = wa_req-input_inter_connection_point.
+            wa_vbak-yy_oipo = wa_req-output_inter_connection_point.
+            wa_vbak-yy_sup_pt = wa_req-supply_point.
+            wa_vbak-yy_withdraw_pt = wa_req-withdraw_point.
+            wa_vbak-yy_distance_km = wa_req-distance.
+***********************************************
+***SOC By Jainendra Gupta on 13.03.2024 on TR : DVRK9A15F1
+            wa_vbak-yygailpl1 = wa_req-gail_pl1 .
+            wa_vbak-yygailpl2 = wa_req-gail_pl2 .
+            wa_vbak-yygailpl3 = wa_req-gail_pl3 .
+            wa_vbak-yygailpl4 = wa_req-gail_pl4 .
+            wa_vbak-yygailpl5 = wa_req-gail_pl5 .
+*          wa_vbak-ernam = lv_uname.
+
+*          UPDATE vbak FROM wa_vbak WHERE vbeln = l_vbeln.
+            UPDATE vbak SET yy_iipo = wa_req-input_inter_connection_point
+                            yy_oipo = wa_req-output_inter_connection_point
+                            yy_sup_pt = wa_req-supply_point
+                            yy_withdraw_pt = wa_req-withdraw_point
+                            yy_distance_km = wa_req-distance
+                            yygailpl1 = wa_req-gail_pl1
+                            yygailpl2 = wa_req-gail_pl2
+                            yygailpl3 = wa_req-gail_pl3
+                            yygailpl4 = wa_req-gail_pl4
+                            yygailpl5 = wa_req-gail_pl5
+*                          ernam  = wa_vbak-ernam
+                            WHERE vbeln = l_vbeln.
+
+
+
+
+
+            wa_oij_el_doc_mot-vbeln = l_vbeln.
+            wa_oij_el_doc_mot-vbtyp = 'G'.
+            wa_oij_el_doc_mot-posnr  = '000010'.
+            wa_oij_el_doc_mot-kwmeng = '10000'.
+            wa_oij_el_doc_mot-vrkme = 'MBG'.
+            CONDENSE wa_req-material.
+            wa_oij_el_doc_mot-matnr = wa_req-material.
+
+            wa_oij_el_doc_mot-locid = gv_planloc . "wa_data-location.
+            wa_oij_el_doc_mot-planloc = gv_planloc . "wa_data-location.
+            wa_oij_el_doc_mot-tsyst = gv_tsyst . "wa_data-ts.
+            wa_oij_el_doc_mot-co_ship = gv_co_ship .
+
+            wa_oij_el_doc_mot-updateflag = 'H'.
+            wa_oij_el_doc_mot-tswrelv = 'X'.
+
+            wa_oij_el_doc_mot-refvbeln =  wa_req-ref_doc.
+            wa_oij_el_doc_mot-ernam = lv_uname.
+            wa_oij_el_doc_mot-aenam = lv_uname.
+            wa_oij_el_doc_mot-erdat = sy-datum.
+            wa_oij_el_doc_mot-erzeit = sy-uzeit.
+            wa_oij_el_doc_mot-aedat = sy-datum.
+            wa_oij_el_doc_mot-aezeit = sy-uzeit.
+
+            wa_oij_el_doc_mot-dealno =  wa_req-ref_contract_no.
+
+
+
+            IF wa_oij_el_doc_mot-fromdate IS INITIAL OR
+                 wa_oij_el_doc_mot-fromdate LT wa_req-ct_start_date OR
+                 wa_oij_el_doc_mot-fromdate GT wa_req-ct_end_date .
+              wa_oij_el_doc_mot-fromdate =  wa_req-ct_start_date.
+            ENDIF.
+
+            IF wa_oij_el_doc_mot-todate IS INITIAL OR
+               wa_oij_el_doc_mot-todate GT wa_req-ct_start_date OR
+               wa_oij_el_doc_mot-todate LT wa_req-ct_end_date .
+              wa_oij_el_doc_mot-todate   =  wa_req-ct_end_date.
+            ENDIF.
+
+            IF NOT wa_oij_el_doc_mot-fromdate IS INITIAL.
+              wa_oij_el_doc_mot-edatu = wa_req-ct_start_date.
+            ENDIF.
+
+            MODIFY oij_el_doc_mot FROM wa_oij_el_doc_mot.
+
+*          APPEND wa_oij_el_doc_mot TO it_oij_el_doc_mot.
+
+
+
+
+            SELECT SINGLE lifnr FROM kna1 INTO @DATA(wa_shipper) WHERE kunnr = @gv_kunnr.
+            DATA(wa_dcq_quan) = VALUE #( record_dcq[ 1 ] OPTIONAL ).
+
+
+            wa_oij_el_cp_layt-vbeln = l_vbeln.
+            wa_oij_el_cp_layt-vbtyp = 'G'.
+            wa_oij_el_cp_layt-posnr = '000010'.
+            wa_oij_el_cp_layt-servtype = 'FIRM'.
+            wa_oij_el_cp_layt-mdq_quan = wa_dcq_quan-dcq_qty.
+            wa_oij_el_cp_layt-trantyp = wa_req-rank.
+            wa_oij_el_cp_layt-updateflag  = 'H'.
+            wa_oij_el_cp_layt-tsyst = gv_tsyst.
+            wa_oij_el_cp_layt-mdq_uom = 'MBG'.
+            wa_oij_el_cp_layt-ernam = lv_uname.
+            wa_oij_el_cp_layt-aenam = lv_uname.
+            wa_oij_el_cp_layt-erdat = sy-datum.
+            wa_oij_el_cp_layt-erzeit = sy-uzeit.
+            wa_oij_el_cp_layt-aedat = sy-datum.
+            wa_oij_el_cp_layt-aezeit = sy-uzeit.
+            wa_oij_el_cp_layt-shipper = wa_shipper.
+
+*        wa_oij_el_cp_layt-shipper = .
+
+
+
+*          APPEND wa_oij_el_cp_layt TO it_oij_el_cp_layt.
+            MODIFY  oij_el_cp_layt FROM wa_oij_el_cp_layt.
+
+
+            wa_roij_el_doc_m_mot-vbeln = l_vbeln.
+            wa_roij_el_doc_m_mot-vbtyp = 'G'.
+            wa_roij_el_doc_m_mot-posnr = '000010'.
+            wa_roij_el_doc_m_mot-seqnr = '00001'.
+            wa_roij_el_doc_m_mot-vktra = 'YD'.
+            wa_roij_el_doc_m_mot-updateflag = 'H'.
+            wa_roij_el_doc_m_mot-ernam = lv_uname.
+            wa_roij_el_doc_m_mot-aenam = lv_uname.
+            wa_roij_el_doc_m_mot-erdat = sy-datum.
+            wa_roij_el_doc_m_mot-erzeit = sy-uzeit.
+            wa_roij_el_doc_m_mot-aedat = sy-datum.
+            wa_roij_el_doc_m_mot-aezeit = sy-uzeit.
+
+            MODIFY  oij_el_doc_m_mot FROM wa_roij_el_doc_m_mot.
+
+*          APPEND wa_roij_el_doc_m_mot TO it_roij_el_doc_m_mot.
+
+            wa_yrvt_contract-vbeln = l_vbeln.
+            wa_yrvt_contract-vbtyp = 'G'.
+            wa_yrvt_contract-posnr = '000010'.
+
+            l_seqnr = 1.
+
+            wa_yrvt_contract-value_from = wa_req-ct_start_date.
+            wa_yrvt_contract-value_to = wa_req-ct_end_date.
+
+
+            CLEAR : gv_sdat , gv_edat .
+            gv_sdat = wa_yrvt_contract-value_from .
+            gv_edat = wa_yrvt_contract-value_to .
+
+            gv_cntrt = l_vbeln .
+
+            CLEAR wa_yrva_ct_date .
+            READ TABLE it_yrva_ct_date INTO wa_yrva_ct_date WITH KEY contractid = gv_cntrt startdate = gv_sdat enddate = gv_edat  .
+
+            IF wa_yrva_ct_date IS INITIAL .
+              wa_yrva_ct_date-contractid = gv_cntrt .
+              wa_yrva_ct_date-startdate = gv_sdat .
+              wa_yrva_ct_date-enddate =  gv_edat .
+              CONDENSE wa_req-utr_no .
+              wa_yrva_ct_date-utr = wa_req-utr_no .
+              wa_yrva_ct_date-ct_req_no = wa_req-supplier.
+              wa_yrva_ct_date-dms_doc_no  = lv_dms_doc_no.
+              wa_yrva_ct_date-dms_doc_name = lv_dms_doc_name.
+
+              IF wa_req-curing_ct_flag = 'X'.
+                wa_yrva_ct_date-cur_ref_doc = wa_req-ref_contract_no.
+
+                CLEAR: lv_rec.
+                lv_rec-contract_from = wa_req-ref_contract_no.
+                lv_rec-contract_to = l_vbeln.
+                lv_rec-ct_to = wa_req-supplier.
+                lv_rec-ct_from = wa_req-curing_ct_ref_doc.
+
+                MODIFY yrva_gta_imb_sft FROM lv_rec.
+                COMMIT WORK AND WAIT.
+              ENDIF.
+
+
+              MODIFY yrva_ct_date FROM wa_yrva_ct_date.
+              COMMIT WORK.
+
+              CLEAR : wa_yrva_ct_date .
+
+            ENDIF.
+**********************************************************update clauses
+
+            IF wa_req-curing_ct_flag <> 'X'.
+
+
+              LOOP AT it_yrvt_contract_a INTO wa_yrvt_contract_a..
+*if wa_YRVT_CONTRACT_A is INITIAL.
+                wa_yrvt_contract-seqnr = l_seqnr.
+                wa_yrvt_contract-clause = wa_yrvt_contract_a-clause.
+                wa_yrvt_contract-threshold = wa_yrvt_contract_a-threshold .
+                wa_yrvt_contract-cal_unit = wa_yrvt_contract_a-cal_unit.
+                wa_yrvt_contract-cal_period = wa_yrvt_contract_a-cal_period.
+                wa_yrvt_contract-set_period = wa_yrvt_contract_a-set_period .
+                APPEND wa_yrvt_contract TO it_yrvt_contract.
+                l_seqnr = l_seqnr + 1.
+
+              ENDLOOP.
+
+            ELSE.
+              SELECT  * INTO TABLE @DATA(it_yrvt_curing_cls)
+                FROM yrvt_curing_cls
+                WHERE
+                auart = 'ZGT1'.
+
+              LOOP AT it_yrvt_curing_cls INTO DATA(wa_curing_cls).
+*if wa_YRVT_CONTRACT_A is INITIAL.
+                wa_yrvt_contract-seqnr = l_seqnr.
+                wa_yrvt_contract-clause = wa_curing_cls-clause.
+                wa_yrvt_contract-threshold = wa_curing_cls-threshold .
+                wa_yrvt_contract-cal_unit = wa_curing_cls-cal_unit.
+                wa_yrvt_contract-cal_period = wa_curing_cls-cal_period.
+                wa_yrvt_contract-set_period = wa_curing_cls-set_period .
+                APPEND wa_yrvt_contract TO it_yrvt_contract.
+                l_seqnr = l_seqnr + 1.
+
+              ENDLOOP.
+
+            ENDIF.
+
+            MODIFY yrvt_contract FROM TABLE it_yrvt_contract.
+            COMMIT WORK.
+
+***SET_PERIOD
+*          CALL FUNCTION 'OIJ_EL_C_TSW_DATA_SAVE_TABLES'
+*            TABLES
+*              t_oij_el_doc_mot = it_oij_el_doc_mot
+*              t_doc_m_mot_tab  = it_roij_el_doc_m_mot
+**             T_DOC_M_MOT_DEL_TAB       =
+*            EXCEPTIONS
+*              OTHERS           = 1
+**             OTHERS           = 2
+*            .
+*          IF sy-subrc <> 0.
+** Implement suitable error handling here
+*          ENDIF.
+*          COMMIT WORK.
+*
+*          CALL FUNCTION 'OIJ_EL_C_SAVE_CP_LAYT'
+*            EXPORTING
+*              it_cp_layt  = it_oij_el_cp_layt
+*              it_cp_loc   = it_1
+*              it_cp_prod  = it_2
+*              it_layt_ev  = it_3
+*              it_layt_inf = it_4
+*              it_doc_ev   = it_5.
+*
+*          COMMIT WORK AND WAIT.
+
+********************************************** update DCQ records
+
+
+
+
+
+            LOOP AT record_dcq INTO DATA(wa_dcq).
+
+              wa_yrvt_cont_dcq-vbeln = l_vbeln.
+              wa_yrvt_cont_dcq-sy_uname = sy-uname.
+              wa_yrvt_cont_dcq-creon = sy-datum.
+              wa_yrvt_cont_dcq-time = sy-uzeit.
+              wa_yrvt_cont_dcq-ydate = wa_dcq-dcq_date.
+              wa_yrvt_cont_dcq-dcq_qty = wa_dcq-dcq_qty.
+              wa_yrvt_cont_dcq-max_qty = '110'.
+              wa_yrvt_cont_dcq-min_qty = '0'.
+
+              APPEND wa_yrvt_cont_dcq TO it_yrvt_cont_dcq.
+
+            ENDLOOP.
+
+            MODIFY yrvt_cont_dcq FROM TABLE it_yrvt_cont_dcq.
+            COMMIT WORK.
+
+**************************************** update utr no in contract header
+            l_header-tdobject ='VBBK'.
+            l_header-tdname = l_vbeln.
+            l_header-tdid = 'ZUTR'.
+            l_header-tdspras = sy-langu.
+            l_header-tdtitle = l_vbeln.
+            REFRESH it_line.
+            wa_line-tdline = wa_req-utr_no.
+            APPEND wa_line TO it_line.
+
+            CALL FUNCTION 'SAVE_TEXT'
+              EXPORTING
+*               CLIENT          = SY-MANDT
+                header          = l_header
+                insert          = 'X'
+                savemode_direct = 'X'
+*               OWNER_SPECIFIED = ' '
+*               LOCAL_CAT       = ' '
+*               KEEP_LAST_CHANGED       = ' '
+* IMPORTING
+*               FUNCTION        =
+*               NEWHEADER       =
+              TABLES
+                lines           = it_line
+              EXCEPTIONS
+                id              = 1
+                language        = 2
+                name            = 3
+                object          = 4
+                OTHERS          = 5.
+            IF sy-subrc = 0.
+              COMMIT WORK.
+* Implement suitable error handling here
+            ENDIF.
+
+          ELSE.
+
+            lw_res-status = 'Error'.
+            IF return[] IS NOT INITIAL.
+              CLEAR: lw_res-message.
+
+
+              LOOP AT return INTO wa_ret.
+
+                CASE wa_ret-type.
+                  WHEN 'E'.
+                    lw_res-status = 'Error'.
+                    CONCATENATE lw_res-message wa_ret-message INTO lw_res-message SEPARATED BY space.
+                  WHEN 'S'.
+                    CONCATENATE lw_res-message wa_ret-message INTO lw_res-message SEPARATED BY space.
+                  WHEN 'A'.
+                    CONCATENATE lw_res-message wa_ret-message INTO lw_res-message SEPARATED BY space.
+                  WHEN OTHERS.
+                ENDCASE.
+                CLEAR wa_ret.
+              ENDLOOP.
+
+              IF lw_res-message IS INITIAL.
+                LOOP AT return INTO wa_ret.
+                  CONCATENATE lw_res-message wa_ret-message INTO lw_res-message SEPARATED BY space.
+                  CLEAR: wa_ret.
+                ENDLOOP.
+              ENDIF.
+
+
+            ENDIF.
+
+
+
+          ENDIF.
+
+
+        ELSE.
+          lw_res-status = 'Error'.
+          lw_res-message = 'Failed to create Contract, Please check the data and try again'.
+        ENDIF.
+
+      ENDIF.
+
+
+
+      else.
+        lw_res-status = 'Success'.
+        lw_res-sap_contract_id = WA_EXISTING.
+
+          CONCATENATE 'Contract' WA_EXISTING 'has already been created against CT request' wa_req-supplier INTO  lw_res-message SEPARATED BY SPACE.
+
+
+        endif.
+
+
+    ENDLOOP.
+
+    endif.
+
+
+    APPEND lw_res TO lt_res.
+
+
+    output-mt_new_contract_res-records[] = lt_res[].
+  endmethod.

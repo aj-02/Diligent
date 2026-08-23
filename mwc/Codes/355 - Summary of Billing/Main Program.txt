@@ -1,0 +1,30 @@
+*&---------------------------------------------------------------------*
+*& Report ZAB_M2C_SUM_BILL_PROCESS
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*& Requirement Id: DID_S2P_355                                          *
+*& Title: Summary of Billing Report                                     *
+*& Date Created: 25.07.2025                                             *
+*& Programmer: Sarfraz Sayyad Ali (SARFRAZS)                            *
+*& Program Objective: Extract the SOB report per project and per PO     *
+*& Orig Request: DS4K905320                                             *
+*&----------------------------------------------------------------------*
+*& Modification History                                                 *
+*&----------------------------------------------------------------------*
+*& Modified By:                                                         *
+*& Date:                                                                *
+*& Modification TR:                                                     *
+*& Reason:                                                              *
+*&----------------------------------------------------------------------*
+REPORT ZAB_M2C_SUM_BILL_PROCESS.
+
+"Global declarations and selection screen
+INCLUDE zin_m2c_sum_bill_process_top.
+
+"Event blocks and main program logic
+INCLUDE zin_m2c_sum_bill_process_e01.
+
+"Form routines for processing and output
+INCLUDE zin_m2c_sum_bill_process_f01.

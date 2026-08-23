@@ -1,0 +1,55 @@
+{
+
+
+  "formatVersion": "1",
+
+
+  "header": {
+
+
+    "description": "Accrual For PO",
+
+
+    "originalLanguage": "en"
+
+
+  },
+
+
+  "clientDependent": true,
+
+
+  "languageDependent": "noLanguageKey",
+
+
+  "category": "application",
+
+
+  "transportRecording": "notSupported",
+
+
+  "adaptableInProduction": false,
+
+
+  "bcSetAdjustment": "automatic",
+
+
+  "tableItems": [
+
+
+    {
+
+
+      "tableName": "YFI_ACCRUAL_PO",
+
+
+      "systemControlled": true,
+
+
+      "isPrimaryTable": true
+
+
+    }
+
+
+  ]

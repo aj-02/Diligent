@@ -1,0 +1,110 @@
+*&---------------------------------------------------------------------*
+*& Include          ZIN_M2C_SUM_BILL_PROCESS_E01
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*& Requirement Id: DID_S2P_355                                          *
+*& Title: Summary of Billing Report                                     *
+*& Date Created: 25.07.2025                                             *
+*& Programmer: Sarfraz Sayyad Ali (SARFRAZS)                            *
+*& Program Objective: Extract the SOB report per project and per PO     *
+*& Orig Request: DS4K905320                                             *
+*&----------------------------------------------------------------------*
+*& Modification History                                                 *
+*&----------------------------------------------------------------------*
+*& Modified By:                                                         *
+*& Date:                                                                *
+*& Modification TR:                                                     *
+*& Reason:                                                              *
+*&----------------------------------------------------------------------*
+
+*-- Validate PO assignment type and project linkage
+AT SELECTION-SCREEN ON p_ebeln.
+
+  "Get account assignment category (P, Q, or N) from PO item
+  SELECT SINGLE knttp
+    FROM ekpo
+    INTO @DATA(lv_knttp)
+    WHERE ebeln = @p_ebeln
+    AND ebelp = '10'.
+
+  IF lv_knttp = 'P' OR lv_knttp = 'Q'.
+
+    "Get WBS element from account assignment (EKKN)
+    SELECT ps_psp_pnr
+      FROM ekkn
+      INTO  @DATA(lv_ekkn) UP TO 1 rows
+      WHERE ebeln = @p_ebeln ORDER BY PRIMARY KEY. ENDSELECT.
+
+    IF sy-subrc IS INITIAL.
+
+      "Get order type from order master (AUFK) based on WBS
+      SELECT auart
+        FROM aufk
+        INTO @DATA(lv_aufk) UP TO 1 rows
+        WHERE pspel = @lv_ekkn ORDER BY PRIMARY KEY. ENDSELECT.
+
+      IF sy-subrc IS INITIAL.
+
+        "Validate if order type is valid
+        IF lv_aufk <> 'ZMWC' AND lv_aufk <> 'ZNEZ'.
+          DATA lv_msg TYPE string.
+          CONCATENATE text-016 p_ebeln text-064 INTO lv_msg.
+          MESSAGE: lv_msg TYPE 'E'.
+        ENDIF.
+
+      ENDIF.
+
+    ENDIF.
+
+  ELSEIF lv_knttp = 'N'.
+
+    "Get network number for network-assigned PO
+    SELECT nplnr
+      FROM ekkn
+      INTO @DATA(lv_ekkn1) UP TO 1 ROWS
+      WHERE ebeln = @p_ebeln ORDER BY PRIMARY KEY. ENDSELECT.
+
+    IF sy-subrc IS INITIAL.
+
+      "Get order type from AUFK for network number
+      SELECT auart
+        FROM aufk
+        INTO @lv_aufk UP TO 1 rows
+        WHERE aufnr = @lv_ekkn1 ORDER BY PRIMARY KEY. ENDSELECT.
+
+      IF sy-subrc IS INITIAL.
+
+        "Validate order type for network-based PO
+        IF lv_aufk <> 'ZMWC' AND lv_aufk <> 'ZNEZ'.
+*          DATA lv_msg TYPE string.
+          CONCATENATE text-016 p_ebeln text-064 INTO lv_msg.
+          MESSAGE: lv_msg TYPE 'E'.
+
+        ENDIF.
+
+      ENDIF.
+
+    ENDIF.
+
+  ENDIF.
+
+*-- Validate mandatory input fields based on selected mode
+AT SELECTION-SCREEN.
+  IF r1 = 'X'.
+
+    IF p_pspnr IS INITIAL OR p_ebeln IS INITIAL.
+      MESSAGE: text-063 TYPE 'E'.
+    ENDIF.
+
+  ELSE.
+
+    IF p_ebeln1 IS INITIAL.
+      MESSAGE: text-063 TYPE 'E'.
+    ENDIF.
+
+  ENDIF.
+
+*-- Main processing flow
+START-OF-SELECTION.
+  PERFORM f_get_data.                 "Fetch required data for report
+  PERFORM f_display_alv.              "Display report output in ALV

@@ -1,0 +1,37 @@
+*&----------------------------------------------------------------------*
+*& Include          ZIN_M2C_INBOUND_E01
+*&----------------------------------------------------------------------*
+*& Requirement Id: DID_M2C_138                                          *
+*& Title: Inbound Dunning Activity                                      *
+*& Date Created: 25.03.2025                                             *
+*& Programmer: Vipul Kumar Tamboli (TAMBOLIV)                           *
+*& Program Objective: Upload and Process Dunning Records                *
+*& Orig Request: DS4K901080                                             *
+*&----------------------------------------------------------------------*
+*& Modification History                                                 *
+*&----------------------------------------------------------------------*
+*& Modified By:                                                         *
+*& Date:                                                                *
+*& Modification TR:                                                     *
+*& Reason:                                                              *
+*&----------------------------------------------------------------------*
+
+"Before selection screen loads
+INITIALIZATION.
+  PERFORM f_initialization.
+
+AT SELECTION-SCREEN OUTPUT.  "Modify screen dynamically based on RB3
+  PERFORM f_modify_screen.
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_scp.  "F4 help for service provider
+  PERFORM f_f4_help_serv_provd.
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_file.    "F4 help for file path
+  PERFORM f_f4_help_file.
+
+AT SELECTION-SCREEN.                                  "Handle button click
+  PERFORM f_selection_screen.
+
+  " Main processing block
+START-OF-SELECTION.
+  PERFORM f_start_of_selection.

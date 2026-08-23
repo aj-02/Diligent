@@ -1,0 +1,4 @@
+ZDO_FLAG char 1
+
+X	True
+          	False

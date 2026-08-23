@@ -1,6 +1,13 @@
 # Local tooling / connection config — never commit
 .mcp.json
-.claude/
+.claude/settings.local.json
+.claude/settings.json
+# ...but the skills ARE work product and belong in the repo
+!.claude/skills/
+
+# Fresh SE80 downloads awaiting triage — transient
+incoming/*
+!incoming/README.md
 
 # Redundant archives — their contents are tracked unpacked alongside them
 /kpmg/zmb5b/drafts/final_code.zip

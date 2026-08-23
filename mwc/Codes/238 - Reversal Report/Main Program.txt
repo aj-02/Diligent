@@ -1,0 +1,32 @@
+*&---------------------------------------------------------------------*
+*& Report ZAB_M2C_REVERSAL_RPT
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+************************************************************************
+* Requirement Id: DID_M2C_238                                          *
+* Title: Program ZAB_M2C_REVERSAL_RPT                                  *
+* Date Created: 23.07.2025                                             *
+* Programmer:  TAMBOLIV                                                *
+* Program Objective: This program will fetch the reversal documents    *
+* and store them in local system or AL11                               *
+* Orig Request: DS4K901922                                             *
+************************************************************************
+* Modification History                                                 *
+************************************************************************
+* Modified By:                                                         *
+* Date:                                                                *
+* Modification TR:                                                     *
+* Reason:                                                              *
+************************************************************************
+
+REPORT ZAB_M2C_REVERSAL_RPT.
+
+***********************Data Delecalation and selection screen**************************
+INCLUDE ZI_M2C_REVERSAL_TOP.
+
+******************************Master data and perform ******************************
+INCLUDE ZI_M2C_REVERSAL_E01.
+
+***********************************data Process Logic**************************
+INCLUDE ZI_M2C_REVERSAL_F01.

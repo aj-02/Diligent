@@ -1,0 +1,52 @@
+FUNCTION ygrc_get_cer_hr_user.
+*"----------------------------------------------------------------------
+*"*"Local Interface:
+*"  EXPORTING
+*"     VALUE(EX_DATA) TYPE  YGRC_TT_CRE_USERS
+*"----------------------------------------------------------------------
+
+  DATA lv_begin_date TYPE syst_datum.
+  DATA: lr_begda TYPE RANGE OF syst_datum.
+  CALL FUNCTION 'CCM_GO_BACK_MONTHS'
+    EXPORTING
+      currdate   = sy-datum
+      backmonths = 6
+    IMPORTING
+      newdate    = lv_begin_date.
+
+  lr_begda = VALUE #( sign = 'I' option = 'BT' ( low = lv_begin_date
+  high = sy-datum ) ).
+
+  SELECT * FROM ygrc_hr_users_creation_cds WHERE begda IN @lr_begda
+    INTO TABLE @DATA(lt_users).
+  IF sy-subrc = 0.
+    ex_data = CORRESPONDING #( lt_users ).
+    """"Begin of code by harsh goyal on 28.07.25"""""""
+    IF ex_data IS NOT INITIAL.
+      LOOP AT ex_data INTO DATA(es_dat).
+        SELECT * FROM pa0105 INTO @DATA(ls_pa105) UP TO 1 ROWS
+             WHERE pernr EQ @es_dat-pernr
+             AND subty EQ '0001' ORDER BY PRIMARY KEY.
+        ENDSELECT.
+        IF ls_pa105 IS INITIAL.
+          DELETE ex_data WHERE pernr EQ es_dat-pernr.
+        ELSE.
+          SELECT * FROM pa0105 INTO @DATA(ls_pa105_tmp) UP TO 1 ROWS
+               WHERE pernr EQ @es_dat-pernr
+               AND subty IN ( '0010','E-ML' ) ORDER BY PRIMARY KEY.
+          ENDSELECT.
+          IF ls_pa105_tmp IS INITIAL.
+            DELETE ex_data WHERE pernr EQ es_dat-pernr.
+          ENDIF.
+        ENDIF.
+        CLEAR:ls_pa105,es_dat,ls_pa105_tmp.
+      ENDLOOP.
+    ENDIF.
+    """End of code by harsh goyal on 28.07.25"""""""""
+  ENDIF.
+
+
+
+ENDFUNCTION.
+
+export - EX_DATA	TYPE	YGRC_TT_CRE_USERS	Table Type for Creation Users

@@ -1,0 +1,31 @@
+  METHOD SPL_GL_VALIDATION.
+*&---------------------------------------------------------------------*
+*& Class:  YCL_PORTAL_CUST_CLEARING                                     *
+*& Method: SPL_GL_VALIDATION                                           *
+*&---------------------------------------------------------------------*
+*& Module: Finance(FI)                                                 *
+*& Developer: Rohtash                                                  *
+*& Functional: Manoj Narendra Rane                                     *
+*& Creation Date: 04/02/2025                                          *
+*&---------------------------------------------------------------------*
+*------------------------Technical Changes-----------------------------*
+*----------------------------------------------------------------------*
+* Date               Changed By          Charm No.          Transport  *
+*----------------------------------------------------------------------*
+* 04/02/2025         Rohtash             4000009303        	DVRK9A1EIY *
+*----------------------------------------------------------------------*
+
+
+    LOOP AT GI_CUST_CLR ASSIGNING FIELD-SYMBOL(<LFS_CUST_CLR>).
+
+*      IF <LFS_CUST_CLR>-INV_SPL_GL EQ '3' AND <LFS_CUST_CLR>-OLD_INV_DOC IS INITIAL.
+      IF <LFS_CUST_CLR>-INV_SPL_GL EQ '5' AND <LFS_CUST_CLR>-OLD_INV_DOC IS INITIAL.
+        <LFS_CUST_CLR>-MESSAGE = |Statistical Interest document exists|.
+        ME->UPDATE_CLEARING_TABLE( EXPORTING IM_PAY_GRP_NO = <LFS_CUST_CLR>-PAY_GRP_NO
+                                             IM_MESSAGE    = <LFS_CUST_CLR>-MESSAGE ).
+        LEAVE PROGRAM.
+      ENDIF.
+
+    ENDLOOP.
+
+  ENDMETHOD.

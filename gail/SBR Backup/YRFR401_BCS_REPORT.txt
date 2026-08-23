@@ -1,0 +1,146 @@
+@AbapCatalog.viewEnhancementCategory: [#NONE]
+
+
+@AccessControl.authorizationCheck: #NOT_REQUIRED
+
+
+@EndUserText.label: 'BCS Report'
+
+
+@Metadata.ignorePropagatedAnnotations: true
+
+
+@ObjectModel.usageType:{
+
+
+    serviceQuality: #X,
+
+
+    sizeCategory: #S,
+
+
+    dataClass: #MIXED
+
+
+}
+
+
+define view entity YRFR401_BCS_REPORT
+
+
+  with parameters
+
+
+    s_fikrs : fikrs,
+
+
+    s_gjahr : gjahr
+
+
+  //  as select from    fmci    as fm
+
+
+  as select from    fmfctr  as ff
+
+
+    left outer join fmfctrt as fmft on  fmft.fikrs = ff.fikrs
+
+
+                                    and fmft.fictr = ff.fictr
+
+
+                                    and fmft.spras = 'E'
+
+
+    left outer join P_FMBDT as pf   on  pf.rfikrs    = ff.fikrs
+
+
+                                    and pf.rfundsctr = ff.fictr
+
+
+                                    and pf.rldnr     = '9F'
+
+
+{
+
+
+  key pf.rldnr,
+
+
+  key pf.ryear,
+
+
+  key pf.rfikrs,
+
+
+      pf.rfundsctr,
+
+
+      pf.rcmmtitem,
+
+
+      cast( pf.hslvt as abap.dec(17,2) ) as hslvt,
+
+
+      cast( pf.hsl01 as abap.dec(17,2) ) as hsl01,
+
+
+      cast( pf.hsl02 as abap.dec(17,2) ) as hsl02,
+
+
+      cast( pf.hsl03 as abap.dec(17,2) ) as hsl03,
+
+
+      cast( pf.hsl04 as abap.dec(17,2) ) as hsl04,
+
+
+      cast( pf.hsl05 as abap.dec(17,2) ) as hsl05,
+
+
+      cast( pf.hsl06 as abap.dec(17,2) ) as hsl06,
+
+
+      cast( pf.hsl07 as abap.dec(17,2) ) as hsl07,
+
+
+      cast( pf.hsl08 as abap.dec(17,2) ) as hsl08,
+
+
+      cast( pf.hsl09 as abap.dec(17,2) ) as hsl09,
+
+
+      cast( pf.hsl10 as abap.dec(17,2) ) as hsl10,
+
+
+      cast( pf.hsl11 as abap.dec(17,2) ) as hsl11,
+
+
+      cast( pf.hsl12 as abap.dec(17,2) ) as hsl12,
+
+
+      cast( pf.hsl13 as abap.dec(17,2) ) as hsl13,
+
+
+      cast( pf.hsl14 as abap.dec(17,2) ) as hsl14,
+
+
+      cast( pf.hsl15 as abap.dec(17,2) ) as hsl15,
+
+
+      cast( pf.hsl16 as abap.dec(17,2) ) as hsl16,
+
+
+      pf.process_9,
+
+
+      pf.budtype_9
+
+
+}
+where
+
+
+      ff.fikrs = $parameters.s_fikrs
+
+
+  and pf.ryear = $parameters.s_gjahr

@@ -1,0 +1,1265 @@
+IF_EX_HCMFAB_COMMON~GET_ONBEHALF_EMPLOYEES	Instance Method	Public	                               	Get On-Behalf Employee List
+IF_EX_HCMFAB_COMMON~GET_COLLEAGUES	Instance Method	Public	                               	Get Colleagues of an Employee
+IF_EX_HCMFAB_COMMON~GET_DIRECT_REPORTS	Instance Method	Public	                               	Get Direct Reports of a Manager
+IF_EX_HCMFAB_COMMON~GET_EMPLOYEES	Instance Method	Public	                               	Get Employees
+IF_EX_HCMFAB_COMMON~GET_MANAGER	Instance Method	Public	                               	Get Employee Number of the corresponding Manager
+IF_EX_HCMFAB_COMMON~GET_EMPLOYEE_DETAILS	Instance Method	Public	                               	Get the Details for an Employee
+IF_EX_HCMFAB_COMMON~GET_EMPLOYEE_PICTURE	Instance Method	Public	                               	Get the Employee Picture
+IF_EX_HCMFAB_COMMON~GET_OFFICE_ADDRESS	Instance Method	Public	                               	Get the Office Address for an Employee
+IF_EX_HCMFAB_COMMON~GET_CONFIGURATION	Instance Method	Public	                               	Get central Configuration
+IF_EX_HCMFAB_COMMON~GET_CE_CONFIGURATION	Instance Method	Public	                               	Get Configuration for Concurrent Employement
+IF_EX_HCMFAB_COMMON~EMPLOYEE_IS_MANAGER	Instance Method	Public	                               	Employee is Manager ('X' = yes, SPACE = no)
+IF_EX_HCMFAB_COMMON~EMPLOYEE_IS_ONBEHALF_RELEVANT	Instance Method	Public	                               	Employee is Part of On-Behalf List ('X' = yes, SPACE = no)
+CLASS_CONSTRUCTOR	Static Method	Public		CLASS_CONSTRUCTOR
+GET_OFFICE_ADDRESS_FROM_ORG	Instance Method	Protected	                               	Get the office address from org.management
+GET_OFFICE_ADDRESS_FROM_USER	Instance Method	Protected	                               	Get the office address from user details
+BUFFER_FULL_ORG_ADDRESS_DATA	Instance Method	Protected	                               	Buffer the address data from IT1028
+
+
+METHOD if_ex_hcmfab_common~get_onbehalf_employees.
+
+* Determine the set of employees which can be accessed on behalf of the current user
+
+  DATA: lt_onbehalf_pernrs  TYPE pernr_tab,
+        lv_onbehalf_pernr   TYPE pernr_d,
+        lv_onbehalf_enabled TYPE boole_d,
+        lv_hide_pernr       TYPE boole_d,
+        lv_hide_pic         TYPE boole_d.
+
+  FIELD-SYMBOLS: <ls_entity> TYPE hcmfab_s_onbehalf_employee.
+
+
+  CLEAR et_onbehalf_employees.
+
+* check whether on-behalf is active at all for the given employee number
+  me->get_configuration(
+    EXPORTING
+      iv_application_id       = iv_application_id
+      iv_employee_number      = iv_employee_number
+    IMPORTING
+      ev_hide_employee_number = lv_hide_pernr
+      ev_enable_onbehalf      = lv_onbehalf_enabled
+  ).
+  IF lv_onbehalf_enabled = abap_false.
+    RETURN.
+  ENDIF.
+
+* Use the direct reports of the current user
+  me->get_direct_reports(
+    EXPORTING
+      iv_application_id = iv_application_id
+      iv_manager_pernr  = iv_employee_number
+    IMPORTING
+      et_direct_reports = lt_onbehalf_pernrs
+  ).
+
+* for the given PERNRs read the corresponding data
+  LOOP AT lt_onbehalf_pernrs INTO lv_onbehalf_pernr.
+    APPEND INITIAL LINE TO et_onbehalf_employees ASSIGNING <ls_entity>.
+
+    <ls_entity>-application_id         = iv_application_id.
+    <ls_entity>-employee_number        = lv_onbehalf_pernr.
+    <ls_entity>-employee_name          = go_employee_api->get_name( iv_pernr         = lv_onbehalf_pernr
+                                                                    iv_no_auth_check = abap_true ).
+    <ls_entity>-employee_sortname      = go_employee_api->get_sortable_name( iv_pernr         = lv_onbehalf_pernr
+                                                                             iv_no_auth_check = abap_true ).
+    <ls_entity>-requester_number       = iv_employee_number.
+    <ls_entity>-employee_category      = gc_employee_category-direct_report.
+
+*   Leave default version id empty. It will then automatically be calculated later on, but only for the relevant employees.
+    CLEAR <ls_entity>-default_version_id.
+
+    IF lv_hide_pernr = abap_true.
+      "if no employee number should be shown we display the employee´s position to better distinguish the employees
+      <ls_entity>-description =
+         go_employee_api->get_employee_details( iv_application_id   = iv_application_id
+                                                iv_pernr            = lv_onbehalf_pernr )-employee_position_longtext.
+    ENDIF.
+
+*   get the configuration info for the "on-behalf employee"
+    CLEAR lv_hide_pernr.
+    me->get_configuration(
+      EXPORTING
+        iv_application_id            = iv_application_id
+        iv_employee_number           = lv_onbehalf_pernr
+      IMPORTING
+        ev_hide_employee_picture     = lv_hide_pic
+        ev_hide_employee_number      = lv_hide_pernr
+        ev_show_empl_number_wo_zeros = <ls_entity>-show_employee_number_wo_zeros
+    ).
+
+    <ls_entity>-show_employee_number      = boolc( lv_hide_pernr = abap_false ).
+    <ls_entity>-show_employee_picture     = boolc( lv_hide_pic = abap_false ).
+
+    "in SAP-standard, managers are not allowed to change the employee picture of the onBehalf-employees
+    <ls_entity>-is_change_picture_enabled = abap_false.
+
+    "display the personal number in the dialog (additional properties can be added as comma separated list)
+    <ls_entity>-displayed_properties = 'EmployeeId'.
+
+  ENDLOOP.
+
+  SORT et_onbehalf_employees BY employee_sortname.
+
+ENDMETHOD.
+parameters -
+IV_APPLICATION_ID	Importing	Type	HCMFAB_APPLICATION_ID	                                                                                                                                    	Application ID
+IV_EMPLOYEE_NUMBER	Importing	Type	PERNR_D	                                                                                                                                    	Personnel Number
+ET_ONBEHALF_EMPLOYEES	Exporting	Type	HCMFAB_T_ONBEHALF_EMPLOYEE	                                                                                                                                    	                                                            
+
+
+METHOD if_ex_hcmfab_common~get_colleagues.
+* in SAP-standard the "colleagues" are the direct reports of the
+* requesting employees manager
+  DATA: lv_manager_pernr TYPE pernr_d.
+
+  CLEAR et_colleagues.
+
+  "determine the manager of the employee
+  lv_manager_pernr = go_employee_api->get_employeenumber_of_manager( iv_application_id = iv_application_id
+                                                                     iv_employee_pernr = iv_pernr ).
+
+  "get the direct reports of the manager
+  et_colleagues = go_employee_api->get_direct_reports( iv_application_id = iv_application_id
+                                                       iv_manager_pernr  = lv_manager_pernr ).
+
+  "exclude the "own employee number" from the colleagues list
+  DELETE et_colleagues WHERE table_line = iv_pernr.
+
+ENDMETHOD.
+parameters - 
+IV_APPLICATION_ID	Importing	Type	HCMFAB_APPLICATION_ID	                                                                                                                                    	HCM Fiori Application ID
+IV_PERNR	Importing	Type	PERNR_D	                                                                                                                                    	Personnel Number
+ET_COLLEAGUES	Exporting	Type	PERNR_TAB	                                                                                                                                    	List of Colleagues
+
+
+METHOD if_ex_hcmfab_common~get_direct_reports.
+
+  DATA: ls_root_object TYPE hrealo.
+  data l_pernr type PERNR_D.
+
+  CLEAR et_direct_reports.
+
+* check whether given employee number actually is a manager
+  IF go_employee_api->is_manager( iv_application_id = iv_application_id
+                                  iv_pernr          = iv_manager_pernr ) = abap_false.
+    RETURN.
+  ENDIF.
+
+select PERNR, SUBTY, OBJPS, SPRPS, ENDDA, BEGDA, SEQNR, plans
+  from pa0001 INto @data(lwa_pa0001)  UP TO 1 ROWS where
+  pernr = @iv_manager_pernr  and
+  begda le @sy-datum and
+  endda ge @sy-datum ORDER BY PRIMARY KEY.
+ENDSELECT.
+if sy-subrc = 0.
+  SELECT OTYPE, OBJID, PLVAR, RSIGN, RELAT, ISTAT, PRIOX, BEGDA, ENDDA, VARYF, SEQNR , sobid
+      from hrp1001 into table  @data(lt_hrp1001) where
+      otype = 'S' and
+      rsign = 'B' and
+      relat = '002' and
+      objid = @lwA_pa0001-plans and
+      begda le @sy-datum and
+      endda ge @sy-datum ORDER BY PRIMARY KEY.
+*     ENDSELECT.
+if sy-subrc = 0.
+  loop at lt_hrp1001 into data(wa_hrp1001).
+* -> Begin of changes by of Jatin on 16May25 for atc
+*  SELECT single OTYPE, OBJID, PLVAR, RSIGN, RELAT, ISTAT, PRIOX, BEGDA, ENDDA, VARYF, SEQNR , sobid, uname
+*      from hrp1001 into  @data(wa_hrp1001_1)
+*    "FOR ALL ENTRIES IN @lt_hrp1001
+*    where
+*      otype = 'S' and
+*      rsign = 'A' and
+*      relat = '008' and
+*      objid = @wa_hrp1001-sobid and
+*      begda le @sy-datum and
+*      endda ge @sy-datum ."ORDER BY PRIMARY KEY.
+  SELECT OTYPE, OBJID, PLVAR, RSIGN, RELAT, ISTAT, PRIOX, BEGDA, ENDDA, VARYF, SEQNR , sobid, uname
+      from hrp1001 into  @data(wa_hrp1001_1) UP TO 1 ROWS
+    "FOR ALL ENTRIES IN @lt_hrp1001
+    where
+      otype = 'S' and
+      rsign = 'A' and
+      relat = '008' and
+      objid = @wa_hrp1001-sobid and
+      begda le @sy-datum and
+      endda ge @sy-datum ORDER BY PRIMARY KEY.
+   ENDSELECT.
+* -> End changes by of Jatin on 16May25 for atc
+if sy-subrc = 0.
+l_pernr = wa_hrp1001_1-sobid.
+append l_pernr to ET_DIRECT_REPORTS.
+endif.
+endloop.
+endif.
+endif.
+
+** root object is the manager
+*  ls_root_object-plvar = cl_hcmfab_employee_api=>gv_active_plvar.
+*  ls_root_object-otype = cl_hrpa_tclas=>otype_employee.
+*  ls_root_object-realo = iv_manager_pernr.
+*
+** set delegating user name
+*  cl_mss_user_delegation=>set_delegating_uname( iv_pernr = iv_manager_pernr ).
+*
+** in the standard we get direct reports based on the following evaluation paths:
+*  "- 'SAP_MANG' for root object (org.units) determination
+*  "- 'MSSDIREC' for result objects (employees) determination
+*  et_direct_reports =
+*    cl_hcmfab_utilities=>get_employees_via_evalpath(
+*      is_root_object            = ls_root_object
+*      iv_eval_path_for_roots    = gc_evalpath-directreports_roots
+*      iv_eval_path_for_objects  = gc_evalpath-directreports_objects
+*      ).
+
+ENDMETHOD.
+parameters - 
+IV_APPLICATION_ID	Importing	Type	HCMFAB_APPLICATION_ID	                                                                                                                                    	HCM Fiori Application ID
+IV_MANAGER_PERNR	Importing	Type	PERNR_D	                                                                                                                                    	Personnel Number of Manager
+ET_DIRECT_REPORTS	Exporting	Type	PERNR_TAB	                                                                                                                                    	List of Direct Reports
+
+
+
+METHOD if_ex_hcmfab_common~get_employees.
+*
+  DATA: lv_orgview          TYPE hrwpc_orgview,
+        lv_selid            TYPE hr_selid.
+
+  CLEAR et_employees.
+
+  CASE iv_view_type.
+    WHEN gc_viewtype-oadpview.
+      "retrieve the employees via the given OADP-view
+      lv_orgview = iv_view_id.
+      et_employees =
+        cl_hcmfab_utilities=>get_employees_via_oadp( iv_orgview     = lv_orgview
+                                                     is_root_object = is_root_object ).
+    WHEN gc_viewtype-selid.
+      "retrieve the employees via the given selection ID (SELID)
+      lv_selid = iv_view_id.
+      et_employees = cl_hcmfab_utilities=>get_employees_via_selid( lv_selid ).
+  ENDCASE.
+
+ENDMETHOD.
+parameters - 
+IV_APPLICATION_ID	Importing	Type	HCMFAB_APPLICATION_ID	                                                                                                                                    	HCM Fiori Application ID
+IV_VIEW_TYPE	Importing	Type	HCMFAB_VIEW_TYPE	                                                                                                                                    	HCM Fiori View Type
+IV_VIEW_ID	Importing	Type	HCMFAB_VIEW_ID	                                                                                                                                    	HCM Fiori View ID
+IS_ROOT_OBJECT	Importing	Type	HREALO	                                                                                                                                    	Object
+ET_EMPLOYEES	Exporting	Type	PERNR_TAB	                                                                                                                                    	List of Employees
+
+
+METHOD if_ex_hcmfab_common~get_manager.
+*
+*
+data : lv_usrid TYPE P0105-USRID,
+      lv_pernr TYPE P0105-PERNR.
+
+select PERNR, SUBTY, OBJPS, SPRPS, ENDDA, BEGDA, SEQNR, plans
+  from pa0001 INto @data(lwa_pa0001)  UP TO 1 ROWS where
+  pernr = @IV_EMPLOYEE_PERNR and
+  begda le @sy-datum and
+  endda ge @sy-datum ORDER BY PRIMARY KEY.
+ENDSELECT.
+
+
+  IF sy-subrc eq 0.
+
+    SELECT OTYPE, OBJID, PLVAR, RSIGN, RELAT, ISTAT, PRIOX, BEGDA, ENDDA, VARYF, SEQNR , sobid
+      from hrp1001 UP TO 1 ROWS into @data(lwa_hrp1001) where
+      otype = 'S' and
+      rsign = 'A' and
+      relat = '002' and
+      objid = @lwA_pa0001-plans and
+      begda le @sy-datum and
+      endda ge @sy-datum ORDER BY PRIMARY KEY.
+     ENDSELECT.
+
+
+           IF sy-subrc eq 0.
+
+                     SELECT OTYPE, OBJID, PLVAR, RSIGN, RELAT, ISTAT, PRIOX, BEGDA, ENDDA, VARYF, SEQNR , sobid, uname
+      from hrp1001 into @data(lwa_hrp1001_1) UP TO 1 ROWS where
+      otype = 'S' and
+      rsign = 'A' and
+      relat = '008' and
+      objid = @lwA_hrp1001-sobid and
+      begda le @sy-datum and
+      endda ge @sy-datum ORDER BY PRIMARY KEY.
+      ENDSELECT.
+
+        IF sy-subrc eq 0.
+EV_MANAGER_PERNR = lwa_hrp1001_1-sobid.
+ COLLECT EV_MANAGER_PERNR INTO et_manager_pernrs.
+endif.
+endif.
+endif.
+
+*  DATA: lt_leader_obj   TYPE hrobject_t,
+*        lv_sobid        TYPE sobid,
+*        lt_p1001        TYPE STANDARD TABLE OF p1001,
+*        ls_p1001        TYPE p1001,
+*        lv_pernr        TYPE pernr_d.
+*
+*  CLEAR ev_manager_pernr.
+*  CLEAR et_manager_pernrs.
+*
+** get leading positions
+*  lv_sobid = iv_employee_pernr.
+*  CALL FUNCTION 'RH_GET_LEADING_POSITION'
+*    EXPORTING
+*      plvar             = cl_hcmfab_employee_api=>gv_active_plvar
+*      otype             = cl_hrpa_tclas=>otype_employee
+*      sobid             = lv_sobid
+*      date              = sy-datlo
+*      auth              = abap_true
+*      consider_vac_pos  = abap_true
+*    TABLES
+*      leading_pos       = lt_leader_obj
+*    EXCEPTIONS
+*      no_lead_pos_found = 1
+*      OTHERS            = 2.
+*  IF sy-subrc <> 0.
+*    RETURN.
+*  ENDIF.
+*
+** get holders of leading positions
+*  CALL FUNCTION 'RH_READ_INFTY_1001'
+*    EXPORTING
+*      with_stru_auth   = abap_true
+*      subty            = 'A008'
+*      begda            = sy-datlo
+*      endda            = sy-datlo
+*    TABLES
+*      objects          = lt_leader_obj
+*      i1001            = lt_p1001
+*    EXCEPTIONS
+*      nothing_found    = 1
+*      wrong_condition  = 2
+*      wrong_parameters = 3
+*      OTHERS           = 4.
+*  IF sy-subrc <> 0.
+*    RETURN.
+*  ENDIF.
+*
+*  "we ignore position assignments with zero percentage
+*  DELETE lt_p1001 WHERE prozt IS INITIAL. "i.e. 0.00
+*  SORT lt_p1001 BY prozt DESCENDING.
+*  LOOP AT lt_p1001 INTO ls_p1001 WHERE sclas = gc_otype-employee.
+*    IF ev_manager_pernr IS INITIAL.
+*      ev_manager_pernr = ls_p1001-sobid.
+*    ENDIF.
+*    lv_pernr = ls_p1001-sobid.
+*    COLLECT lv_pernr INTO et_manager_pernrs.
+*  ENDLOOP.
+*
+*  SORT et_manager_pernrs.
+
+ENDMETHOD.
+parameters - 
+IV_APPLICATION_ID	Importing	Type	HCMFAB_APPLICATION_ID	                                                                                                                                    	HCM Fiori Application ID
+IV_EMPLOYEE_PERNR	Importing	Type	PERNR_D	                                                                                                                                    	Personnel Number of Employee
+EV_MANAGER_PERNR	Exporting	Type	PERNR_D	                                                                                                                                    	Personnel Number of Manager
+ET_MANAGER_PERNRS	Exporting	Type	PERNR_TAB	                                                                                                                                    	HR: Master Data, PERNR Table (unsorted)
+
+
+METHOD if_ex_hcmfab_common~get_employee_details.
+
+  DATA: lv_data_exists     TYPE boole_d,
+        ls_p0001           TYPE p0001,
+        ls_p0002           TYPE p0002,
+        ls_p0105           TYPE p0105,
+        lv_country         TYPE land1,
+        ls_telephone       TYPE cl_hcmfab_utilities=>ty_s_telephone,
+        lv_phone_formatted TYPE sp_telno,
+        lv_timestamp       TYPE timestamp,
+        lv_time            TYPE uzeit,
+        lv_dst             TYPE c LENGTH 1,                 "#EC NEEDED
+        lv_date            TYPE d,                          "#EC NEEDED
+        ls_t522t           TYPE t522t,
+        ls_t001            TYPE t001,
+        ls_t001p           TYPE t001p,
+        ls_t500p           TYPE t500p,
+        lv_short_text      TYPE short_d.
+
+
+  CLEAR es_employee_details.
+
+  "Application Id
+  es_employee_details-application_id = iv_application_id.
+
+  "Employee Number
+  es_employee_details-employee_number = iv_pernr.
+
+  "User ID
+  es_employee_details-user_id = go_employee_api->get_userid_from_employeenumber( iv_pernr ).
+
+***********************************************************************
+* determine org.data (IT0001)
+***********************************************************************
+  CALL METHOD cl_hcmfab_utilities=>read_infotype_record
+    EXPORTING
+      iv_pernr       = iv_pernr
+      iv_infty       = '0001'
+    IMPORTING
+      es_pnnnn       = ls_p0001
+      ev_data_exists = lv_data_exists.
+
+  IF lv_data_exists = abap_true.
+    "Formatted Employee Name
+    es_employee_details-employee_name-formatted_name = ls_p0001-ename.
+
+    "Position
+    es_employee_details-employee_position_id = ls_p0001-plans.
+    CALL METHOD cl_hcmfab_utilities=>read_object_name
+      EXPORTING
+        iv_otype       = gc_otype-position
+        iv_objid       = ls_p0001-plans
+      IMPORTING
+        ev_object_name = es_employee_details-employee_position_longtext
+        ev_short_text  = lv_short_text.
+    es_employee_details-employee_position_text = lv_short_text.
+
+    "Org.unit
+    es_employee_details-employee_orgunit_id = ls_p0001-orgeh.
+    CALL METHOD cl_hcmfab_utilities=>read_object_name
+      EXPORTING
+        iv_otype       = gc_otype-orgunit
+        iv_objid       = ls_p0001-orgeh
+      IMPORTING
+        ev_object_name = es_employee_details-employee_orgunit_longtext
+        ev_short_text  = lv_short_text.
+    es_employee_details-employee_orgunit_text = lv_short_text.
+
+    "Job Title
+    es_employee_details-employee_jobtitle_id = ls_p0001-stell.
+    CALL METHOD cl_hcmfab_utilities=>read_object_name
+      EXPORTING
+        iv_otype       = gc_otype-job
+        iv_objid       = ls_p0001-stell
+      IMPORTING
+        ev_object_name = es_employee_details-employee_jobtitle_longtext
+        ev_short_text  = lv_short_text.
+    es_employee_details-employee_jobtitle_text = lv_short_text.
+
+    "Cost center
+    es_employee_details-cost_center_id = ls_p0001-kostl.
+    CALL METHOD cl_hcmfab_utilities=>read_object_name
+      EXPORTING
+        iv_otype           = gc_otype-costcenter
+        iv_kostl           = ls_p0001-kostl
+        iv_kokrs           = ls_p0001-kokrs
+      IMPORTING
+        ev_costcenter_text = es_employee_details-cost_center_text.
+
+    "Company Code
+    ls_t001 = cl_hr_t001=>read( ls_p0001-bukrs ).
+    es_employee_details-company_code_id   = ls_p0001-bukrs.
+    es_employee_details-company_code_text = ls_t001-butxt.
+
+    "Personnel Area
+    ls_t500p = cl_hr_t500p=>read( ls_p0001-werks ).
+    es_employee_details-personnel_area_id   = ls_p0001-werks.
+    es_employee_details-personnel_area_text = ls_t500p-name1.
+
+    "Personnel Subarea
+    ls_t001p = cl_hr_t001p=>read( werks = ls_p0001-werks
+                                  btrtl = ls_p0001-btrtl ).
+    es_employee_details-personnel_subarea_id   = ls_p0001-btrtl.
+    es_employee_details-personnel_subarea_text = ls_t001p-btext.
+
+    "Business Area
+    es_employee_details-business_area_id   = ls_p0001-gsber.
+    CALL FUNCTION 'HRCA_BUSINESSAREA_GETDETAIL'
+      EXPORTING
+        bus_area   = ls_p0001-gsber
+      IMPORTING
+        bus_ar_des = es_employee_details-business_area_text
+      EXCEPTIONS
+        not_found  = 1
+        OTHERS     = 2.
+    IF sy-subrc <> 0.
+      CLEAR es_employee_details-business_area_text.
+    ENDIF.
+
+   "Manager information
+    es_employee_details-manager_number =
+     go_employee_api->get_employeenumber_of_manager( iv_application_id = iv_application_id
+                                                     iv_employee_pernr = iv_pernr ).
+
+    es_employee_details-manager_name = go_employee_api->get_name( es_employee_details-manager_number ).
+
+  ENDIF.
+
+***********************************************************************
+*   office address
+***********************************************************************
+  es_employee_details-office_address =
+    go_employee_api->get_office_address( iv_application_id  = iv_application_id
+                                         iv_employee_number = iv_pernr ).
+
+***********************************************************************
+* determine name information (IT0002)
+***********************************************************************
+  CALL METHOD cl_hcmfab_utilities=>read_infotype_record
+    EXPORTING
+      iv_pernr       = iv_pernr
+      iv_infty       = '0002'
+    IMPORTING
+      es_pnnnn       = ls_p0002
+      ev_data_exists = lv_data_exists.
+
+  IF lv_data_exists = abap_true.
+    ls_t522t = cl_hr_t522t=>read( sprsl = sy-langu
+                                  anred = ls_p0002-anred ).
+    es_employee_details-employee_name-form_of_address = ls_t522t-atext.
+    es_employee_details-employee_name-academic_title  = ls_p0002-titel.
+    es_employee_details-employee_name-first_name      = ls_p0002-vorna.
+    es_employee_details-employee_name-middle_name     = ls_p0002-midnm.
+    es_employee_details-employee_name-last_name       = ls_p0002-nachn.
+  ENDIF.
+
+***********************************************************************
+* determine communication information (IT0105)
+***********************************************************************
+  lv_country = cl_hr_t500p=>read( ls_p0001-werks )-land1.  "MELN2608256
+  IF lv_country IS INITIAL.
+    lv_country = go_employee_api->get_address_from_user( es_employee_details-user_id )-country.
+  ENDIF.
+
+  "Office Fax
+  CALL METHOD cl_hcmfab_utilities=>read_infotype_record
+    EXPORTING
+      iv_pernr       = iv_pernr
+      iv_infty       = '0105'
+      iv_subty       = '0005'
+    IMPORTING
+      es_pnnnn       = ls_p0105
+      ev_data_exists = lv_data_exists.
+
+  IF lv_data_exists = abap_true.
+    IF ls_p0105-usrid_long IS NOT INITIAL.
+      es_employee_details-work_fax = ls_p0105-usrid_long.
+    ELSE.
+      es_employee_details-work_fax = ls_p0105-usrid.
+    ENDIF.
+  ENDIF.
+
+  "Office Mobile
+  CALL METHOD cl_hcmfab_utilities=>read_infotype_record
+    EXPORTING
+      iv_pernr       = iv_pernr
+      iv_infty       = '0105'
+      iv_subty       = 'CELL'
+    IMPORTING
+      es_pnnnn       = ls_p0105
+      ev_data_exists = lv_data_exists.
+
+  IF lv_data_exists = abap_true.
+    CLEAR ls_telephone.
+    IF ls_p0105-usrid_long IS NOT INITIAL.
+      ls_telephone = ls_p0105-usrid_long.
+    ELSE.
+      ls_telephone = ls_p0105-usrid.
+    ENDIF.
+
+    lv_phone_formatted =
+      cl_hcmfab_utilities=>format_telephone( iv_country   = lv_country
+                                             iv_telnumber = ls_telephone-tel_number
+                                             iv_extension = ls_telephone-tel_extens ).
+    IF lv_phone_formatted IS NOT INITIAL.
+      es_employee_details-work_mobile = lv_phone_formatted.
+    ELSE.
+      es_employee_details-work_mobile = ls_telephone-tel_number && '-' && ls_telephone-tel_extens.
+    ENDIF.
+  ENDIF.
+
+  "Office Telephone
+  CALL METHOD cl_hcmfab_utilities=>read_infotype_record
+    EXPORTING
+      iv_pernr       = iv_pernr
+      iv_infty       = '0105'
+      iv_subty       = '0020'
+    IMPORTING
+      es_pnnnn       = ls_p0105
+      ev_data_exists = lv_data_exists.
+
+  IF lv_data_exists = abap_true.
+    CLEAR ls_telephone.
+    IF ls_p0105-usrid_long IS NOT INITIAL.
+      ls_telephone = ls_p0105-usrid_long.
+    ELSE.
+      ls_telephone = ls_p0105-usrid.
+    ENDIF.
+
+    lv_phone_formatted =
+      cl_hcmfab_utilities=>format_telephone( iv_country   = lv_country
+                                             iv_telnumber = ls_telephone-tel_number
+                                             iv_extension = ls_telephone-tel_extens ).
+    IF lv_phone_formatted IS NOT INITIAL.
+      es_employee_details-work_phone = lv_phone_formatted.
+    ELSE.
+      es_employee_details-work_phone = ls_telephone-tel_number && '-' && ls_telephone-tel_extens.
+    ENDIF.
+  ENDIF.
+
+  "Office E-Mail address
+  CALL METHOD cl_hcmfab_utilities=>read_infotype_record
+    EXPORTING
+      iv_pernr       = iv_pernr
+      iv_infty       = '0105'
+      iv_subty       = '0010'
+    IMPORTING
+      es_pnnnn       = ls_p0105
+      ev_data_exists = lv_data_exists.
+
+  IF lv_data_exists = abap_false.
+    CALL METHOD cl_hcmfab_utilities=>read_infotype_record
+      EXPORTING
+        iv_pernr       = iv_pernr
+        iv_infty       = '0105'
+        iv_subty       = 'MAIL'
+      IMPORTING
+        es_pnnnn       = ls_p0105
+        ev_data_exists = lv_data_exists.
+  ENDIF.
+
+  IF lv_data_exists = abap_true.
+    IF ls_p0105-usrid_long IS NOT INITIAL.
+      es_employee_details-work_email = ls_p0105-usrid_long.
+    ELSE.
+      es_employee_details-work_email = ls_p0105-usrid.
+    ENDIF.
+  ENDIF.
+
+***********************************************************************
+* local time info
+***********************************************************************
+  es_employee_details-local_timezone = go_employee_api->get_timezone_from_user( es_employee_details-user_id ).
+  IF es_employee_details-local_timezone IS NOT INITIAL.
+    "get timezone text
+    CALL FUNCTION 'TZON_GET_TIMEZONE_TEXT'
+      EXPORTING
+        if_timezone       = es_employee_details-local_timezone
+      IMPORTING
+        ef_timezone_text  = es_employee_details-local_timezone_text
+      EXCEPTIONS
+        no_text_available = 1
+        OTHERS            = 2.
+    IF sy-subrc <> 0.
+      CLEAR es_employee_details-local_timezone_text.
+    ENDIF.
+
+    "get UTC-timestamp and convert it into employees local timezone
+    GET TIME STAMP FIELD lv_timestamp.
+    CONVERT TIME STAMP lv_timestamp
+                 TIME ZONE es_employee_details-local_timezone
+                 INTO DATE lv_date TIME lv_time
+                 DAYLIGHT SAVING TIME lv_dst.
+
+    "get employees timezone offset to UTC
+    CALL FUNCTION 'TZON_GET_OFFSET'
+      EXPORTING
+        if_timezone      = es_employee_details-local_timezone
+        if_local_date    = lv_date
+        if_local_time    = lv_time
+      IMPORTING
+        ef_utcdiff       = es_employee_details-local_timezone_offset
+        ef_utcsign       = es_employee_details-local_timezone_offset_sign
+        ef_is_in_dst     = es_employee_details-local_timezone_offset_is_dst
+      EXCEPTIONS
+        conversion_error = 1
+        OTHERS           = 2.
+    IF sy-subrc <> 0.
+      CLEAR: es_employee_details-local_timezone_offset,
+             es_employee_details-local_timezone_offset_sign,
+             es_employee_details-local_timezone_offset_is_dst.
+    ENDIF.
+  ENDIF.
+
+***********************************************************************
+* direct reports count
+***********************************************************************
+  IF go_employee_api->is_manager( iv_application_id = iv_application_id
+                                  iv_pernr          = iv_pernr ) = abap_true.
+    es_employee_details-direct_reports_count =
+      lines( go_employee_api->get_direct_reports( iv_application_id = iv_application_id
+                                                  iv_manager_pernr  = iv_pernr ) ).
+  ENDIF.
+
+ENDMETHOD.
+parameters - 
+IV_APPLICATION_ID	Importing	Type	HCMFAB_APPLICATION_ID	                                                                                                                                    	HCM Fiori Application ID
+IV_PERNR	Importing	Type	PERNR_D	                                                                                                                                    	Personnel Number
+ES_EMPLOYEE_DETAILS	Exporting	Type	HCMFAB_S_EMPLOYEEDETAILS	                                                                                                                                    	Employee Details
+
+
+METHOD if_ex_hcmfab_common~get_employee_picture.
+
+  DATA: ls_connect               TYPE toav0,
+        lv_doc_type              TYPE saedoktyp,
+        ls_photo                 TYPE tbl1024,
+        lv_line                  TYPE string,
+        lv_user_pernr            TYPE pernr_d,
+        lv_own_pernr             TYPE pernr_d,
+        lt_own_pernrs            TYPE pccet_pernr,
+        lv_picture_content       TYPE string,
+        lv_hide_employee_picture TYPE boole_d,
+        lt_photo_archive_out     TYPE TABLE OF tbl1024.
+
+
+  CLEAR: ev_photo_bytestring, ev_mime_type.
+
+* check whether employee picture should actually be used
+  TRY.
+      lv_user_pernr = go_employee_api->get_employeenumber_from_user( ).
+    CATCH cx_hcmfab_common.
+      RETURN.
+  ENDTRY.
+
+  lt_own_pernrs = go_employee_api->get_assignments( lv_user_pernr ).
+  LOOP AT lt_own_pernrs INTO lv_own_pernr.
+    me->get_configuration(
+      EXPORTING
+        iv_application_id        = iv_application_id
+        iv_employee_number       = lv_own_pernr
+      IMPORTING
+        ev_hide_employee_picture = lv_hide_employee_picture
+    ).
+    IF lv_hide_employee_picture = abap_false.
+      EXIT.
+    ENDIF.
+  ENDLOOP.
+  IF lv_hide_employee_picture = abap_true.
+    RETURN.
+  ENDIF.
+
+* check for min authority to read the employee picture
+  CALL FUNCTION 'HR_CHECK_AUTHORITY_PERNR'
+    EXPORTING
+      tclas                      = cl_hrpa_tclas=>tclas_employee
+      pernr                      = iv_pernr
+      begda                      = sy-datlo
+      endda                      = sy-datlo
+      uname                      = sy-uname
+    EXCEPTIONS
+      no_authorization_for_pernr = 1
+      OTHERS                     = 2.
+
+  IF sy-subrc = 0.
+*   Read employee photo
+    CALL FUNCTION 'HR_IMAGE_EXISTS'
+      EXPORTING
+        p_pernr               = iv_pernr
+      IMPORTING
+        p_connect_info        = ls_connect
+      EXCEPTIONS
+        error_connectiontable = 1
+        OTHERS                = 2.
+
+    IF sy-subrc = 0.
+*     Function Module to get the Binary MIME object of the Photo
+      CALL FUNCTION 'ARCHIVOBJECT_GET_TABLE'
+        EXPORTING
+          archiv_id                = ls_connect-archiv_id
+          document_type            = lv_doc_type
+          archiv_doc_id            = ls_connect-arc_doc_id
+        TABLES
+          binarchivobject          = lt_photo_archive_out
+        EXCEPTIONS
+          error_archiv             = 1
+          error_communicationtable = 2
+          error_kernel             = 3
+          OTHERS                   = 4.
+
+      IF sy-subrc EQ 0.
+        LOOP AT lt_photo_archive_out INTO ls_photo.
+          lv_line = ls_photo-line.
+          lv_picture_content = lv_picture_content && lv_line.
+        ENDLOOP.
+        ev_photo_bytestring = lv_picture_content.
+
+*       retrieve the pictures MIME type
+        lv_doc_type = ls_connect-reserve.
+        cl_alink_services=>get_mimetype_from_doctype(
+          EXPORTING
+            im_documentclass = lv_doc_type
+          IMPORTING
+            ex_mimetype      = ev_mime_type
+          EXCEPTIONS
+            not_found        = 1
+            OTHERS           = 2
+        ).
+        IF sy-subrc <> 0.
+          CALL FUNCTION 'SDOK_MIMETYPE_GET'
+            EXPORTING
+              extension = ls_connect-reserve
+            IMPORTING
+              mimetype  = ev_mime_type.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+
+* if for the employee no photo exists retrieve dummy photo from the server
+  IF ev_photo_bytestring IS INITIAL.
+    cl_hcmfab_utilities=>get_default_employee_photo(
+      EXPORTING
+        iv_pernr            = iv_pernr
+      IMPORTING
+        ev_photo_bytestring = ev_photo_bytestring
+        ev_mime_type        = ev_mime_type
+    ).
+  ENDIF.
+
+ENDMETHOD.
+parameters - 
+IV_APPLICATION_ID	Importing	Type	HCMFAB_APPLICATION_ID	                                                                                                                                    	HCM Fiori Application ID
+IV_PERNR	Importing	Type	PERNR_D	                                                                                                                                    	Personnel Number
+EV_PHOTO_BYTESTRING	Exporting	Type	XSTRING	                                                                                                                                    	Picture Content
+EV_MIME_TYPE	Exporting	Type	W3CONTTYPE	                                                                                                                                    	HTML content type
+
+
+METHOD if_ex_hcmfab_common~get_office_address.
+* in SAP-standard we retrieve the office address from the org.management (OM)
+* infotype 1028 for the position (S) or the org.unit (O)
+* --> Building and Room Number from IT1028 are overruled by IT0032 (if available)
+
+* OPTION for customers:
+* if needed, customers can also retrieve the office address from
+* the user details (SU01) by using the following method:
+* CL_HCMFAB_FB_COMMON->GET_OFFICE_ADDRESS_FROM_USER
+* (customer-own implementation class can inherit from CL_HCMFAB_FB_COMMON
+*  with re-definition of only the needed methods)
+
+  DATA: ls_hrobject TYPE hrobject,
+        ls_p0001    TYPE p0001,
+        ls_p0032    TYPE p0032.
+
+
+  CLEAR es_office_address.
+
+* first try to get the office address from the position
+  ls_hrobject-plvar = cl_hcmfab_employee_api=>gv_active_plvar.
+  ls_hrobject-otype = gc_otype-position.
+  ls_hrobject-objid = go_employee_api->get_position( iv_pernr ).
+
+  es_office_address = me->get_office_address_from_org( ls_hrobject ).
+
+  IF es_office_address IS INITIAL.
+    CALL METHOD cl_hcmfab_utilities=>read_infotype_record
+      EXPORTING
+        iv_pernr         = iv_pernr
+        iv_infty         = '0001'
+        iv_no_auth_check = abap_true
+      IMPORTING
+        es_pnnnn         = ls_p0001.
+    IF ls_p0001 IS INITIAL.
+      RETURN.
+    ENDIF.
+
+*   then try to get the office address from the org.unit
+    ls_hrobject-otype = gc_otype-orgunit.
+    ls_hrobject-objid = ls_p0001-orgeh.
+
+    es_office_address = me->get_office_address_from_org( ls_hrobject ).
+  ENDIF.
+
+  "Office Location (Building and Room Number)
+  CALL METHOD cl_hcmfab_utilities=>read_infotype_record
+    EXPORTING
+      iv_pernr = iv_pernr
+      iv_infty = '0032'
+    IMPORTING
+      es_pnnnn = ls_p0032.
+
+  IF ls_p0032-zimnr IS NOT INITIAL.
+    es_office_address-office_room = ls_p0032-zimnr.
+  ENDIF.
+  IF ls_p0032-gebnr IS NOT INITIAL.
+    es_office_address-office_building = ls_p0032-gebnr.
+  ENDIF.
+
+ENDMETHOD.
+parameters - 
+IV_APPLICATION_ID	Importing	Type	HCMFAB_APPLICATION_ID	                                                                                                                                    	HCM Fiori Application ID
+IV_PERNR	Importing	Type	PERNR_D	                                                                                                                                    	Personnel Number
+ES_OFFICE_ADDRESS	Exporting	Type	HCMFAB_S_ADDRESS	                                                                                                                                    	Address Information
+
+
+METHOD if_ex_hcmfab_common~get_configuration.
+
+  ev_hide_employee_picture     = abap_false.
+  ev_hide_employee_number      = abap_false.
+  ev_hide_ce_button            = abap_false.
+  ev_enable_onbehalf           = abap_false.
+  ev_show_empl_number_wo_zeros = abap_false.
+
+* On_behalf is switched off by default for compatibility reasons
+* To activate it for all users who are mangers the following code could be used:
+
+*  ev_enable_onbehalf = boolc( go_employee_api->is_manager( iv_application_id = iv_application_id
+*                                                           iv_pernr          = iv_employee_number ) = abap_true ).
+
+* In case that on behalf is active, transfer all data to the frontend. This is faster for small number of employees.
+* The backend search would only transfer the visible employees to the frontend, at the cost of multiple smaller requests.
+  ev_use_onbehalf_backend_search = abap_false.
+
+ENDMETHOD.
+parameters - 
+IV_APPLICATION_ID	Importing	Type	HCMFAB_APPLICATION_ID	                                                                                                                                    	Application ID
+IV_EMPLOYEE_NUMBER	Importing	Type	PERNR_D	                                                                                                                                    	Personnel Number
+EV_HIDE_EMPLOYEE_PICTURE	Exporting	Type	BOOLE_D	                                                                                                                                    	Hide Employee Picture globally
+EV_HIDE_EMPLOYEE_NUMBER	Exporting	Type	BOOLE_D	                                                                                                                                    	Hide Employee Number globally
+EV_HIDE_CE_BUTTON	Exporting	Type	BOOLE_D	                                                                                                                                    	Hide CE-Button
+EV_ENABLE_ONBEHALF	Exporting	Type	BOOLE_D	                                                                                                                                    	Enable On-Behalf Functionality
+EV_SHOW_EMPL_NUMBER_WO_ZEROS	Exporting	Type	BOOLE_D	                                                                                                                                    	Show Employee Number without Leading Zeros
+EV_USE_ONBEHALF_BACKEND_SEARCH	Exporting	Type	BOOLE_D	                                                                                                                                    	Enables On-Behalf Backend Search
+
+
+
+METHOD if_ex_hcmfab_common~get_ce_configuration.
+* All employees will be shown, independently of their employment status.
+  ev_hide_withdrawn = abap_false.
+  ev_hide_retiree = abap_false.
+  ev_hide_inactive = abap_false.
+ENDMETHOD.
+parameters - 
+IV_APPLICATION_ID	Importing	Type	HCMFAB_APPLICATION_ID	                                                                                                                                    	Application ID
+IV_EMPLOYEE_NUMBER	Importing	Type	PERNR_D	                                                                                                                                    	Personnel Number
+EV_HIDE_WITHDRAWN	Exporting	Type	BOOLE_D	                                                                                                                                    	Hide assignments with status 0 (Withdrawn)
+EV_HIDE_INACTIVE	Exporting	Type	BOOLE_D	                                                                                                                                    	Hide assignments with status 1 (Inactive)
+EV_HIDE_RETIREE	Exporting	Type	BOOLE_D	                                                                                                                                    	Hide assignments with status 2 (Retiree)
+
+
+METHOD if_ex_hcmfab_common~employee_is_manager.
+
+  DATA: lt_positions TYPE hri_positiontab_t,
+        lt_hrp1001  TYPE TABLE OF hrp1001.
+
+  FIELD-SYMBOLS: <ls_position> TYPE hri_position_tab.
+
+
+  CLEAR ev_is_manager.
+
+  "check whether employee is assigned to any manager position
+  lt_positions = go_employee_api->get_positions( iv_pernr = iv_pernr
+                                                 iv_date  = iv_eval_date ).
+  LOOP AT lt_positions ASSIGNING <ls_position>.
+    CLEAR lt_hrp1001.
+    CALL FUNCTION 'RH_READ_INFTY_1001'
+      EXPORTING
+        plvar            = cl_hcmfab_employee_api=>gv_active_plvar
+        otype            = gc_otype-position
+        objid            = <ls_position>-objid
+        subty            = 'A012'
+        begda            = iv_eval_date
+        endda            = iv_eval_date
+      TABLES
+        i1001            = lt_hrp1001
+      EXCEPTIONS
+        nothing_found    = 1
+        wrong_condition  = 2
+        wrong_parameters = 3
+        OTHERS           = 4.
+    IF sy-subrc = 0 AND lt_hrp1001 IS NOT INITIAL.
+      ev_is_manager = abap_true.
+      EXIT.
+    ENDIF.
+  ENDLOOP.
+
+ENDMETHOD.
+parameters - 
+IV_APPLICATION_ID	Importing	Type	HCMFAB_APPLICATION_ID	                                                                                                                                    	HCM Fiori Application ID
+IV_PERNR	Importing	Type	PERNR_D	                                                                                                                                    	Personnel Number
+IV_EVAL_DATE	Importing	Type	DARDT	SY-DATLO	Evaluation Date
+EV_IS_MANAGER	Exporting	Type	BOOLE_D	                                                                                                                                    	Data element for domain BOOLE: TRUE (='X') and FALSE (=' ')
+
+
+
+METHOD if_ex_hcmfab_common~employee_is_onbehalf_relevant.
+* Check if a given employee is included in the list of employees who can be accessed on behalf of the current user
+* Simple implementation would be:
+* Call me->get_onbehalf_employees( ) and check if iv_onbehalf_number is included in the result
+
+* More efficient way to check if the direct reports are used as on behalf employee set:
+* Check if the manager of the given onbehalt employee is the current employee number
+  DATA lt_manager_pernrs TYPE pernr_tab.
+
+  ev_is_relevant = abap_false.
+
+  me->get_manager(
+    EXPORTING
+      iv_application_id = iv_application_id
+      iv_employee_pernr = iv_onbehalf_number
+    IMPORTING
+      et_manager_pernrs  = lt_manager_pernrs
+  ).
+  READ TABLE lt_manager_pernrs WITH KEY table_line = iv_employee_number TRANSPORTING NO FIELDS.
+  IF sy-subrc = 0.
+    ev_is_relevant = abap_true.
+  ENDIF.
+
+ENDMETHOD.
+parameters - 
+IV_APPLICATION_ID	Importing	Type	HCMFAB_APPLICATION_ID	                                                                                                                                    	Application ID
+IV_EMPLOYEE_NUMBER	Importing	Type	PERNR_D	                                                                                                                                    	Requester Employee Number
+IV_ONBEHALF_NUMBER	Importing	Type	PERNR_D	                                                                                                                                    	On-behalf Employee Number
+EV_IS_RELEVANT	Exporting	Type	BOOLE_D	                                                                                                                                    	Data element for domain BOOLE: TRUE (='X') and FALSE (=' ')
+
+
+METHOD class_constructor.
+
+  "get reference to employee API
+  go_employee_api = cl_hcmfab_employee_api=>get_instance( ).
+
+ENDMETHOD.
+
+
+METHOD get_office_address_from_org.
+
+  DATA: ls_t005t   TYPE t005t,
+        ls_t005u   TYPE t005u.
+
+  FIELD-SYMBOLS: <ls_hrp1028> TYPE p1028.
+
+
+* fill the buffer
+  IF gt_hrp1028 IS INITIAL.
+    me->buffer_full_org_address_data( ).                   "MELN2689214
+  ENDIF.
+
+* retrieve the office address from the buffer
+  READ TABLE gt_hrp1028 ASSIGNING <ls_hrp1028>
+                        WITH KEY plvar = is_hrobject-plvar
+                                 otype = is_hrobject-otype
+                                 objid = is_hrobject-objid
+                        BINARY SEARCH.
+  IF sy-subrc <> 0.
+    RETURN.
+  ENDIF.
+
+  rs_office_address-office_room               = <ls_hrp1028>-room1.
+  rs_office_address-office_building           = <ls_hrp1028>-build.
+  rs_office_address-office_street             = <ls_hrp1028>-stras.
+  rs_office_address-office_house_number       = <ls_hrp1028>-hausn.
+  rs_office_address-office_address_supplement = <ls_hrp1028>-cname.
+  rs_office_address-office_postal_code        = <ls_hrp1028>-pstlz.
+  rs_office_address-office_city               = <ls_hrp1028>-ort01.
+  rs_office_address-office_country_key        = <ls_hrp1028>-land1.
+
+  IF <ls_hrp1028>-land1 IS NOT INITIAL.
+    "country text
+    ls_t005t = cl_hr_t005t=>read( <ls_hrp1028>-land1 ).
+    IF ls_t005t-landx50 IS NOT INITIAL.
+      rs_office_address-office_country_text = ls_t005t-landx50.
+    ELSEIF ls_t005t-landx IS NOT INITIAL.
+      rs_office_address-office_country_text = ls_t005t-landx.
+    ENDIF.
+
+    "region text
+    ls_t005u = cl_hr_t005u=>read( land1 = <ls_hrp1028>-land1
+                                  bland = <ls_hrp1028>-regio ).
+    rs_office_address-office_region     = ls_t005u-bezei.
+    rs_office_address-office_region_key = <ls_hrp1028>-regio.
+
+    TRY.
+        "format address
+        rs_office_address-office_address_formatted = cl_hcmfab_utilities=>format_address( rs_office_address ).
+      CATCH cx_hcmfab_common.
+        CLEAR rs_office_address-office_address_formatted.
+    ENDTRY.
+  ENDIF.
+
+
+ENDMETHOD.
+parameters - 
+IS_HROBJECT	Importing	Type	HROBJECT	                                                                                                                                    	Object
+RS_OFFICE_ADDRESS	Returning	Type	HCMFAB_S_ADDRESS	                                                                                                                                    	Address Information
+
+
+METHOD get_office_address_from_user.
+
+  DATA: ls_address TYPE bapiaddr3,
+        ls_t005t   TYPE t005t,
+        ls_t005u   TYPE t005u.
+
+
+  CLEAR rs_office_address.
+
+* read the address data from the user master record
+  ls_address = go_employee_api->get_address_from_user( iv_user_id ).
+
+  rs_office_address-office_building           = ls_address-building_p.
+  rs_office_address-office_room               = ls_address-room_no_p.
+  rs_office_address-office_street             = ls_address-street.
+  rs_office_address-office_house_number       = ls_address-house_no.
+  rs_office_address-office_address_supplement = ls_address-c_o_name.
+  rs_office_address-office_postal_code        = ls_address-postl_cod1.
+  rs_office_address-office_city               = ls_address-city.
+  rs_office_address-office_country_key        = ls_address-country.
+
+  IF ls_address-country IS NOT INITIAL.
+    "region text
+    ls_t005u = cl_hr_t005u=>read( land1 = ls_address-country
+                                  bland = ls_address-region ).
+    rs_office_address-office_region     = ls_t005u-bezei.
+    rs_office_address-office_region_key = ls_address-region.
+
+    "country text
+    ls_t005t = cl_hr_t005t=>read( ls_address-country ).
+    IF ls_t005t-landx50 IS NOT INITIAL.
+      rs_office_address-office_country_text = ls_t005t-landx50.
+    ELSEIF ls_t005t-landx IS NOT INITIAL.
+      rs_office_address-office_country_text = ls_t005t-landx.
+    ENDIF.
+
+    TRY.
+        "format address
+        rs_office_address-office_address_formatted = cl_hcmfab_utilities=>format_address( rs_office_address ).
+
+      CATCH cx_hcmfab_common.
+        CLEAR rs_office_address-office_address_formatted.
+    ENDTRY.
+  ENDIF.
+
+ENDMETHOD.
+parameters - 
+IV_USER_ID	Importing	Type	XUBNAME	                                                                                                                                    	User Name in User Master Record
+RS_OFFICE_ADDRESS	Returning	Type	HCMFAB_S_ADDRESS	                                                                                                                                    	Address Information
+
+
+
+METHOD buffer_full_org_address_data.
+
+  DATA: lt_t777a TYPE SORTED TABLE OF t777a WITH UNIQUE KEY build.
+
+  FIELD-SYMBOLS: <ls_hri1028> TYPE p1028,
+                 <ls_t777a>   TYPE t777a.
+
+
+* check if buffer was already filled
+  IF gt_hrp1028 IS NOT INITIAL.
+    RETURN.
+  ENDIF.
+
+* buffer org.address data from infotype 1028
+  CALL FUNCTION 'RH_READ_INFTY'
+    EXPORTING
+      with_stru_auth       = abap_true
+      plvar                = cl_hcmfab_employee_api=>gv_active_plvar
+      infty                = '1028'
+      begda                = sy-datlo                      "MELN2857008
+      endda                = sy-datlo
+      sort                 = abap_true
+    TABLES
+      innnn                = gt_hrp1028
+    EXCEPTIONS
+      all_infty_with_subty = 1
+      nothing_found        = 2
+      no_objects           = 3
+      wrong_condition      = 4
+      wrong_parameters     = 5
+      OTHERS               = 6.
+  IF sy-subrc <> 0.
+    CLEAR gt_hrp1028.
+    RETURN.
+  ENDIF.
+
+  DELETE gt_hrp1028 WHERE otype <> if_hcmfab_constants=>gc_otype-orgunit
+                      AND otype <> if_hcmfab_constants=>gc_otype-position.
+
+  SELECT * FROM t777a INTO TABLE lt_t777a.
+  LOOP AT gt_hrp1028 ASSIGNING <ls_hri1028> WHERE build IS NOT INITIAL.
+
+    READ TABLE lt_t777a WITH TABLE KEY build = <ls_hri1028>-build
+                        ASSIGNING <ls_t777a>.
+    IF sy-subrc = 0.
+      <ls_hri1028>-cname = <ls_t777a>-cname.
+      <ls_hri1028>-stras = <ls_t777a>-stras.
+      <ls_hri1028>-ort01 = <ls_t777a>-ort01.
+      <ls_hri1028>-pstlz = <ls_t777a>-pstlz.
+      <ls_hri1028>-land1 = <ls_t777a>-land1.
+      <ls_hri1028>-regio = <ls_t777a>-regio.
+      <ls_hri1028>-strs2 = <ls_t777a>-strs2.
+      <ls_hri1028>-hausn = <ls_t777a>-hausn.
+
+      IF <ls_hri1028>-telnr IS INITIAL.
+        <ls_hri1028>-telnr = <ls_t777a>-telnr.
+      ENDIF.
+
+      IF <ls_hri1028>-faxnr IS INITIAL.
+        <ls_hri1028>-faxnr = <ls_t777a>-faxnr.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+
+ENDMETHOD.
+
+
+interface - 
+IF_BADI_INTERFACE	Tag Interface for BAdIs
+IF_EX_HCMFAB_COMMON	Interface for BAdI: HCMFAB_B_COMMON
+IF_HCMFAB_CONSTANTS	HCM Constants
+
+
+attributes - IF_HCMFAB_CONSTANTS~GCS_HTTP_HEADER_ATTRIBUTES	Constant	Public			                                                            
+IF_HCMFAB_CONSTANTS~GCS_HTTP_HEADER_VALUES	Constant	Public			                                                            
+IF_HCMFAB_CONSTANTS~GCS_SORTING_ORDER	Constant	Public			                                                            
+IF_HCMFAB_CONSTANTS~GCS_DEFAULT_PHOTO_URL	Constant	Public			                                                            
+IF_HCMFAB_CONSTANTS~GC_MIMETYPE	Constant	Public			                                                            
+IF_HCMFAB_CONSTANTS~GC_CALCULATION_SIGN	Constant	Public			                                                            
+IF_HCMFAB_CONSTANTS~GC_EVALPATH	Constant	Public			                                                            
+IF_HCMFAB_CONSTANTS~GC_APPLICATION_ID	Constant	Public			                                                            
+IF_HCMFAB_CONSTANTS~GC_OTYPE	Constant	Public			                                                            
+IF_HCMFAB_CONSTANTS~GC_INFTY	Constant	Public			                                                            
+IF_HCMFAB_CONSTANTS~GC_VIEWTYPE	Constant	Public			                                                            
+IF_HCMFAB_CONSTANTS~GC_EMPLOYEE_CATEGORY	Constant	Public			                                                            
+IF_HCMFAB_CONSTANTS~GC_PROPERTY_EMPLOYEE_NUMBER	Constant	Public	Type	FIELDNAME	Field Name
+IF_HCMFAB_CONSTANTS~GC_DEFAULT_POSITION	Constant	Public	Type	PLANS	Position
+IF_HCMFAB_CONSTANTS~GC_APP_ID_MYLEAVEREQUESTS	Constant	Public	Type	HCMFAB_APPLICATION_ID	Application ID
+IF_HCMFAB_CONSTANTS~GC_APP_ID_APPROVELEAVEREQUEST	Constant	Public	Type	HCMFAB_APPLICATION_ID	Application ID
+IF_HCMFAB_CONSTANTS~GC_LOW_DATE	Constant	Public	Type	BEGDA	Valid from date
+IF_HCMFAB_CONSTANTS~GC_HIGH_DATE	Constant	Public	Type	ENDDA	Valid To Date
+IF_HCMFAB_CONSTANTS~GC_LOCKED	Constant	Public	Type	SPRPS	Lock Indicator for HR Master Data Record
+IF_HCMFAB_CONSTANTS~GC_UNLOCKED	Constant	Public	Type	SPRPS	Lock Indicator for HR Master Data Record
+GO_EMPLOYEE_API	Static Attribute	Protected	Type Ref To	CL_HCMFAB_EMPLOYEE_API	HCM Fiori Employee functions
+GT_HRP1028	Static Attribute	Protected	Type	TY_T_P1028	                                                            
+
+
+
+alias - 
+IF_EX_HCMFAB_COMMON~EMPLOYEE_IS_MANAGER		Protected	IS_MANAGER
+IF_EX_HCMFAB_COMMON~EMPLOYEE_IS_ONBEHALF_RELEVANT		Protected	EMPLOYEE_IS_ONBEHALF_RELEVANT
+IF_EX_HCMFAB_COMMON~GET_CE_CONFIGURATION			                              
+IF_EX_HCMFAB_COMMON~GET_COLLEAGUES		Protected	GET_COLLEAGUES
+IF_EX_HCMFAB_COMMON~GET_CONFIGURATION		Protected	GET_CONFIGURATION
+IF_EX_HCMFAB_COMMON~GET_DIRECT_REPORTS		Protected	GET_DIRECT_REPORTS
+IF_EX_HCMFAB_COMMON~GET_EMPLOYEES		Protected	GET_EMPLOYEES
+IF_EX_HCMFAB_COMMON~GET_EMPLOYEE_DETAILS		Protected	GET_EMPLOYEE_DETAILS
+IF_EX_HCMFAB_COMMON~GET_EMPLOYEE_PICTURE		Protected	GET_EMPLOYEE_PICTURE
+IF_EX_HCMFAB_COMMON~GET_MANAGER		Protected	GET_MANAGER
+IF_EX_HCMFAB_COMMON~GET_OFFICE_ADDRESS		Protected	GET_OFFICE_ADDRESS
+IF_EX_HCMFAB_COMMON~GET_ONBEHALF_EMPLOYEES		Protected	GET_ONBEHALF_EMPLOYEES
+IF_EX_HCMFAB_COMMON~TY_T_MIMETYPES		Protected	TY_T_MIMETYPES
+IF_HCMFAB_CONSTANTS~GCS_DEFAULT_PHOTO_URL		Protected	GCS_DEFAULT_PHOTO_URL
+IF_HCMFAB_CONSTANTS~GCS_HTTP_HEADER_ATTRIBUTES		Protected	GCS_HTTP_HEADER_ATTRIBUTES
+IF_HCMFAB_CONSTANTS~GCS_HTTP_HEADER_VALUES		Protected	GCS_HTTP_HEADER_VALUES
+IF_HCMFAB_CONSTANTS~GCS_SORTING_ORDER		Protected	GCS_SORTING_ORDER
+IF_HCMFAB_CONSTANTS~GC_APPLICATION_ID		Protected	GC_APPLICATION_ID
+IF_HCMFAB_CONSTANTS~GC_APP_ID_APPROVELEAVEREQUEST			                              
+IF_HCMFAB_CONSTANTS~GC_APP_ID_MYLEAVEREQUESTS			                              
+IF_HCMFAB_CONSTANTS~GC_CALCULATION_SIGN		Protected	GC_CALCULATION_SIGN
+IF_HCMFAB_CONSTANTS~GC_DEFAULT_POSITION		Protected	GC_DEFAULT_POSITION
+IF_HCMFAB_CONSTANTS~GC_EMPLOYEE_CATEGORY		Protected	GC_EMPLOYEE_CATEGORY
+IF_HCMFAB_CONSTANTS~GC_EVALPATH		Protected	GC_EVALPATH
+IF_HCMFAB_CONSTANTS~GC_HIGH_DATE		Protected	GC_HIGH_DATE
+IF_HCMFAB_CONSTANTS~GC_INFTY			                              
+IF_HCMFAB_CONSTANTS~GC_LOCKED		Protected	GC_LOCKED
+IF_HCMFAB_CONSTANTS~GC_LOW_DATE		Protected	GC_LOW_DATE
+IF_HCMFAB_CONSTANTS~GC_MIMETYPE		Protected	GC_MIMETYPE
+IF_HCMFAB_CONSTANTS~GC_OTYPE		Protected	GC_OTYPE
+IF_HCMFAB_CONSTANTS~GC_PROPERTY_EMPLOYEE_NUMBER		Protected	GC_PROPERTY_EMPLOYEE_NUMBER
+IF_HCMFAB_CONSTANTS~GC_UNLOCKED		Protected	GC_UNLOCKED
+IF_HCMFAB_CONSTANTS~GC_VIEWTYPE		Protected	GC_VIEWTYPE

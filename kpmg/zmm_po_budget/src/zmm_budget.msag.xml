@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<abapGit version="v1.0.0" serializer="LCL_OBJECT_MSAG" serializer_version="v1.0.0">
+ <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+  <asx:values>
+   <T100A>
+    <ARBGB>ZMM_BUDGET</ARBGB>
+    <STEXT>Budget control on indirect purchase</STEXT>
+    <MASTERLANG>E</MASTERLANG>
+   </T100A>
+   <T100_TEXTS>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZMM_BUDGET</ARBGB>
+     <MSGNR>001</MSGNR>
+     <TEXT>Budget has been exhausted. Kindly maintain the additional budget with approval</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZMM_BUDGET</ARBGB>
+     <MSGNR>002</MSGNR>
+     <TEXT>No budget maintained for plant &amp;1 purchasing group &amp;2 year &amp;3</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZMM_BUDGET</ARBGB>
+     <MSGNR>003</MSGNR>
+     <TEXT>Budget can no longer be changed. Use Additional Budget instead</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZMM_BUDGET</ARBGB>
+     <MSGNR>004</MSGNR>
+     <TEXT>Plant &amp;1: consumed &amp;2 exceeds allowed budget &amp;3 &amp;4</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZMM_BUDGET</ARBGB>
+     <MSGNR>005</MSGNR>
+     <TEXT>Enter a currency for the budget</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZMM_BUDGET</ARBGB>
+     <MSGNR>006</MSGNR>
+     <TEXT>Budget must be greater than zero</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZMM_BUDGET</ARBGB>
+     <MSGNR>007</MSGNR>
+     <TEXT>Additional budget must not be negative</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZMM_BUDGET</ARBGB>
+     <MSGNR>008</MSGNR>
+     <TEXT>Currency &amp;1 of the purchase order differs from budget currency &amp;2</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZMM_BUDGET</ARBGB>
+     <MSGNR>009</MSGNR>
+     <TEXT>No authorisation to maintain budget for plant &amp;1</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZMM_BUDGET</ARBGB>
+     <MSGNR>010</MSGNR>
+     <TEXT>Budget check skipped: no account assigned items in the document</TEXT>
+    </T100>
+   </T100_TEXTS>
+  </asx:values>
+ </asx:abap>
+</abapGit>

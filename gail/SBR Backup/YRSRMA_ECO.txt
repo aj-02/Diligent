@@ -1,0 +1,25 @@
+MANDT	S_MANDT	CLNT	3	0	0	Client
+YY_YEAR	YY_YEAR_1	NUMC	4	0	0	Year saving for webdynpro
+YY_MONTH	YY_MON	NUMC	2	0	0	Month for saving from webdynpro
+YY_PERNR	PERSNO	NUMC	8	0	0	Personnel Number
+YY_INP_DATE	DATS	DATS	8	0	0	Field of type DATS
+YY_REQ_NO		NUMC	10	0	0	Request Number
+YY_STATUS	YY_STATUS_1	CHAR	15	0	0	status  for edit/display
+YY_INITIATOR	YY_PROCESS_BY	CHAR	12	0	0	Processed By
+YY_CREAT_BY	YY_CREATE_BY	CHAR	12	0	0	Created By
+YY_SUB_DT	YY_SUB_DT	DATS	8	0	0	Last Changed On
+YY_CLAIM	YY_CLAIM	CHAR	5	0	0	Claim Type
+YY_NAME	YY_EMNAM_1	CHAR	60	0	0	Employee Name
+YY_DESIG	YY_DESIG	CHAR	15	0	0	Designation of Employee
+YY_GRADE	YY_GRADE_1	CHAR	15	0	0	Grade of Employee
+YY_DEPT	YY_DEPT	CHAR	3	0	0	Department
+YY_NM_HOD	YY_NM_HOD	NUMC	8	0	0	HOD
+YY_FIX_ECO	YY_FIX_ECO	CHAR	3	0	0	HR : Fixed ECOs (Shift Personnel)
+YY_RED_ECO	YY_FIX_ECO	CHAR	3	0	0	HR : Fixed ECOs (Shift Personnel)
+YY_ADD_ECO	YY_FIX_ECO	CHAR	3	0	0	HR : Fixed ECOs (Shift Personnel)
+YY_TOTAL	YY_TOTAL11	CHAR	18	0	0	Total ECOs
+YY_STATUS_FLAG	YY_ECO_STATUS	CHAR	1	0	0	Status updated in IT0015
+YY_REMARKS1	CHAR256	CHAR	256	0	0	Data element for WWI callback
+YY_REMARKS2	CHAR256	CHAR	256	0	0	Data element for WWI callback
+YY_REMARKS3	CHAR256	CHAR	256	0	0	Data element for WWI callback
+YY_REMARKS4	CHAR256	CHAR	256	0	0	Data element for WWI callback

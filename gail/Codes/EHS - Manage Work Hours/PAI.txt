@@ -1,0 +1,325 @@
+*&---------------------------------------------------------------------*
+*& Include YEHS_MANAGE_WORK_HOURS_PAI (Refactored with New Syntax)
+*&---------------------------------------------------------------------*
+*& This include handles PAI (Process After Input) logic for managing
+*& work hours in custom table YEHS_WORK_HOURS. It covers:
+*&  - Screen navigation and command handling
+*&  - F4 help for fields (date, plant, worker type)
+*&  - Create, Edit, Update, Delete record logic
+*&  - Validation for overlapping date ranges
+*&---------------------------------------------------------------------*
+
+
+*&---------------------------------------------------------------------*
+*& Module CALL_SCREEN INPUT
+*&---------------------------------------------------------------------*
+*& Handles navigation based on user actions: CREATE or EDIT
+*&---------------------------------------------------------------------*
+MODULE call_screen INPUT.
+  CASE sy-ucomm.
+
+    WHEN 'CREATE1'.
+      "Clear create screen input fields before opening entry screen
+      CLEAR: p_cedate, p_cplant, p_csdate, p_cwhour, p_cworker, p_cwtype.
+      CALL SCREEN 9002 STARTING AT 15 10 ENDING AT 52 18.
+
+    WHEN 'EDIT'.
+      "Clear previous edit variables
+      CLEAR: p_eedate, p_eplant, p_esdate, p_ewhour, p_eworker, p_ewtype,
+             gs_final, gs_hourworked.
+
+      "Read selected row internal table
+      LOOP AT gt_final INTO DATA(ls_final) WHERE sel = 'X'.
+
+        "Assign selected record values to screen fields
+        p_eplant  = ls_final-plant_id.
+        p_esdate  = ls_final-start_date.
+        p_eedate  = ls_final-end_date.
+        p_ewhour  = ls_final-hours_worked.
+        p_eworker = ls_final-no_of_workers.
+
+        "Find internal worker type value based on description
+        READ TABLE gt_worker_type INTO ls_worker_type
+          WITH KEY ddtext = ls_final-worker_type.
+        IF sy-subrc = 0.
+          p_ewtype = ls_worker_type-domvalue_l.
+        ENDIF.
+
+        "Map selected record into edit structure
+        gs_hourworked = CORRESPONDING #( ls_final ).
+      ENDLOOP.
+
+      "If nothing selected, show warning message
+      IF gs_hourworked IS INITIAL.
+        MESSAGE 'Please select a record' TYPE 'I' DISPLAY LIKE 'E'.
+      ELSE.
+        "Open edit screen
+        CALL SCREEN 9003 STARTING AT 15 10 ENDING AT 49 18.
+      ENDIF.
+
+  ENDCASE.
+ENDMODULE.
+
+
+*&---------------------------------------------------------------------*
+*& Module CALL_SCREEN1 INPUT
+*&---------------------------------------------------------------------*
+*& Handles navigation back to main screen
+*&---------------------------------------------------------------------*
+MODULE call_screen1 INPUT.
+  CASE sy-ucomm.
+    WHEN '&F12'.
+      CALL SCREEN 9001.
+  ENDCASE.
+ENDMODULE.
+
+
+*&---------------------------------------------------------------------*
+*& Module F4_SDATE INPUT
+*&---------------------------------------------------------------------*
+*& Provides F4 help for selecting start date based on active screen
+*&---------------------------------------------------------------------*
+MODULE f4_sdate INPUT.
+  CASE sy-dynnr.
+    WHEN '9001'. CALL FUNCTION 'F4_DATE' IMPORTING select_date = p_sdate.
+    WHEN '9002'. CALL FUNCTION 'F4_DATE' IMPORTING select_date = p_csdate.
+    WHEN '9003'. CALL FUNCTION 'F4_DATE' IMPORTING select_date = p_esdate.
+  ENDCASE.
+ENDMODULE.
+
+
+*&---------------------------------------------------------------------*
+*& Module F4_PLANT INPUT
+*&---------------------------------------------------------------------*
+*& Displays F4 help for selecting Plant (WERKS) from table T001W
+*&---------------------------------------------------------------------*
+MODULE f4_plant INPUT.
+  DATA: lt_return TYPE TABLE OF ddshretval.
+
+  "Fetch plant data
+  SELECT werks, name1 FROM t001w INTO TABLE @gt_plant.
+
+  "Show value help popup
+  CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
+    EXPORTING
+      retfield        = 'WERKS'
+      value_org       = 'S'
+    TABLES
+      value_tab       = gt_plant
+      return_tab      = lt_return
+    EXCEPTIONS
+      parameter_error = 1
+      no_values_found = 2.
+
+  "Handle F4 errors
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+      WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+    RETURN.
+  ENDIF.
+
+  "Set selected value to correct screen field
+  READ TABLE lt_return INTO DATA(ls_return) INDEX 1.
+  CASE sy-dynnr.
+    WHEN '9001'. p_plant  = ls_return-fieldval.
+    WHEN '9002'. p_cplant = ls_return-fieldval.
+    WHEN '9003'. p_eplant = ls_return-fieldval.
+  ENDCASE.
+ENDMODULE.
+
+
+*&---------------------------------------------------------------------*
+*& Module F4_EDATE INPUT
+*&---------------------------------------------------------------------*
+*& Provides F4 help for selecting end date based on active screen
+*&---------------------------------------------------------------------*
+MODULE f4_edate INPUT.
+  CASE sy-dynnr.
+    WHEN '9001'. CALL FUNCTION 'F4_DATE' IMPORTING select_date = p_edate.
+    WHEN '9002'. CALL FUNCTION 'F4_DATE' IMPORTING select_date = p_cedate.
+    WHEN '9003'. CALL FUNCTION 'F4_DATE' IMPORTING select_date = p_eedate.
+  ENDCASE.
+ENDMODULE.
+
+
+*&---------------------------------------------------------------------*
+*& Module USER_COMMAND_9003 INPUT
+*&---------------------------------------------------------------------*
+*& Handles back navigation from Edit screen (9003)
+*&---------------------------------------------------------------------*
+MODULE user_command_9003 INPUT.
+  IF sy-ucomm = '&F12'.
+    CALL SCREEN 9001.
+  ENDIF.
+ENDMODULE.
+
+
+*&---------------------------------------------------------------------*
+*& Module INSERT_RECORD INPUT
+*&---------------------------------------------------------------------*
+*& Inserts a new work hours record into database YEHS_WORK_HOURS
+*&---------------------------------------------------------------------*
+MODULE insert_record INPUT.
+  IF sy-ucomm = 'INSERT'.
+
+    "Prepare record for insertion
+    gs_hourworked = VALUE yehs_work_hours(
+      plant_id      = p_cplant
+      start_date    = p_csdate
+      end_date      = p_cedate
+      hours_worked  = p_cwhour
+      no_of_workers = p_cworker
+      worker_type   = p_cwtype ).
+
+    "Insert record into DB table
+    INSERT yehs_work_hours FROM @gs_hourworked.
+
+    "Confirm successful insertion
+    IF sy-subrc = 0.
+      MESSAGE 'Record successfully inserted into database' TYPE 'S'.
+      CALL SCREEN 9001.
+    ENDIF.
+
+  ENDIF.
+ENDMODULE.
+
+
+*&---------------------------------------------------------------------*
+*& Module UPDATE_RECORD INPUT
+*&---------------------------------------------------------------------*
+*& Updates or deletes existing work hours record in database
+*&---------------------------------------------------------------------*
+MODULE update_record INPUT.
+  DATA: lv_answer TYPE c.
+  CASE sy-ucomm.
+
+    WHEN 'SAVE'.
+      "Delete existing record before reinserting updated values
+      DELETE FROM yehs_work_hours
+        WHERE plant_id   = @gs_hourworked-plant_id
+          AND start_date = @gs_hourworked-start_date
+          AND end_date   = @gs_hourworked-end_date.
+
+      "Prepare updated record
+      gs_hourworked = VALUE yehs_work_hours(
+        plant_id      = p_eplant
+        start_date    = p_esdate
+        end_date      = p_eedate
+        hours_worked  = p_ewhour
+        no_of_workers = p_eworker
+        worker_type   = p_ewtype ).
+
+      "Reinsert updated record
+      INSERT yehs_work_hours FROM @gs_hourworked.
+
+      IF sy-subrc = 0.
+        MESSAGE 'Record successfully updated in database' TYPE 'S'.
+        CALL SCREEN 9001.
+      ENDIF.
+
+    WHEN 'DELETE'.
+      "Delete selected record
+      CALL FUNCTION 'POPUP_TO_CONFIRM'
+        EXPORTING
+          text_question         = 'Do you want to delete the selected record'
+          text_button_1         = 'Proceed'
+          text_button_2         = 'Cancel'
+          display_cancel_button = ' '
+        IMPORTING
+          answer                = lv_answer
+        EXCEPTIONS
+          text_not_found        = 1
+          OTHERS                = 2.
+      IF sy-subrc <> 0.
+        MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+                           WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+      ENDIF.
+
+      IF lv_answer IS NOT INITIAL AND lv_answer = '1'.
+        DELETE FROM yehs_work_hours
+          WHERE plant_id   = @gs_hourworked-plant_id
+            AND start_date = @gs_hourworked-start_date
+            AND end_date   = @gs_hourworked-end_date.
+
+        IF sy-subrc = 0.
+          MESSAGE 'Record successfully deleted from database' TYPE 'S'.
+          CALL SCREEN 9001.
+        ENDIF.
+      ENDIF.
+
+  ENDCASE.
+ENDMODULE.
+
+
+*&---------------------------------------------------------------------*
+*& Module F4_WTYPE INPUT
+*&---------------------------------------------------------------------*
+*& Provides F4 help for selecting Worker Type from internal table
+*&---------------------------------------------------------------------*
+MODULE f4_wtype INPUT.
+
+  "Display value help popup using internal table of worker types
+  CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
+    EXPORTING
+      retfield        = 'DOMVALUE_L'
+      value_org       = 'S'
+    TABLES
+      value_tab       = gt_worker_type
+      return_tab      = lt_return
+    EXCEPTIONS
+      parameter_error = 1
+      no_values_found = 2.
+
+  "Handle F4 errors
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+      WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+    RETURN.
+  ENDIF.
+
+  "Set selected worker type to correct field
+  READ TABLE lt_return INTO ls_return INDEX 1.
+  CASE sy-dynnr.
+    WHEN '9002'. p_cwtype = ls_return-fieldval.
+    WHEN '9003'. p_ewtype = ls_return-fieldval.
+  ENDCASE.
+ENDMODULE.
+
+
+*&---------------------------------------------------------------------*
+*& Module VALIDATE_RECORD INPUT
+*&---------------------------------------------------------------------*
+*& Validates overlapping date ranges before insert/update
+*&---------------------------------------------------------------------*
+MODULE validate_record INPUT.
+
+  "Validation for Create screen (9002)
+  IF sy-dynnr = '9002'.
+
+    SELECT * FROM yehs_work_hours
+      WHERE NOT ( start_date > @p_cedate OR end_date < @p_csdate )
+      INTO TABLE @DATA(gt_check).
+
+    IF gt_check IS NOT INITIAL.
+      MESSAGE 'Record already present in this date range'
+        TYPE 'W' DISPLAY LIKE 'I'.
+      CALL SCREEN 9001.
+    ENDIF.
+
+    "Validation for Edit screen (9003)
+  ELSEIF sy-dynnr = '9003'.
+    DATA: lv_flag TYPE c.
+    IF sy-ucomm = 'SAVE'.
+      DELETE gt_final WHERE start_date = gs_hourworked-start_date AND end_date = gs_hourworked-end_date.
+      LOOP AT gt_final INTO gs_final WHERE NOT  start_date > p_eedate AND NOT end_date < p_esdate.
+        lv_flag = 'X'.
+      ENDLOOP.
+      IF lv_flag = 'X'.
+        MESSAGE 'Record already present in this date range'
+          TYPE 'W' DISPLAY LIKE 'I'.
+        lv_flag = ' '.
+        CALL SCREEN 9001.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+ENDMODULE.

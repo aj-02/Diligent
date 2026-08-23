@@ -1,0 +1,26 @@
+*&----------------------------------------------------------------------*
+*& Report ZAB_M2C_INBOUND_DUNNING
+*&----------------------------------------------------------------------*
+*& Requirement Id: DID_M2C_138                                          *
+*& Title: Inbound Dunning Activity                                      *
+*& Date Created: 25.03.2025                                             *
+*& Programmer: Vipul Kumar Tamboli (TAMBOLIV)                           *
+*& Program Objective: Upload and Process Dunning Records                *
+*& Orig Request: DS4K901080                                             *
+*&----------------------------------------------------------------------*
+*& Modification History                                                 *
+*&----------------------------------------------------------------------*
+*& Modified By:                                                         *
+*& Date:                                                                *
+*& Modification TR:                                                     *
+*& Reason:                                                              *
+*&----------------------------------------------------------------------*
+REPORT zab_m2c_inbound_dunning.
+*****Include used for Declarations ********
+INCLUDE zin_m2c_inbound_top.
+*****Include used for Selection Screen********
+INCLUDE zin_m2c_inbound_sel.
+*****Include used for Event Handling***************************
+INCLUDE zin_m2c_inbound_e01.
+*****Include used for Functionalities**************************
+INCLUDE zin_m2c_inbound_f01.

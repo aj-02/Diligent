@@ -1,0 +1,4043 @@
+*---------------------------------------------------------------------*
+* GAIL - Project INTERCONNECT
+*---------------------------------------------------------------------*
+* PROGRAM DESCRIPTION:
+*
+*       DEVELOPER: DIVYA
+*       CREATION DATE: 2004-09-09
+*       DER NUMBER:GAILRFS003
+*---------------------------------------------------------------------*
+
+* REVISION HISTORY----------------------------------------------------*
+*
+*        REVISION NO:   R001
+*        DEVELOPER:     Priyanka Bansal                DATE:2005.01.06
+*        DESCRIPTION:   Validations checks built up on selection screen
+*                       & IBM standards have been maintained and a new
+*                       field STREET has been added to the address of
+*                       vendor in the smartform
+
+*         REVISION NO:   R002
+*        DEVELOPER:     Reema Chandok                DATE:2005.08.05
+*        DESCRIPTION:  Addition of radio button for DD NO and Cheque no.
+*                        and its corresponding logic.
+
+*         REVISION NO:   R003
+*        DEVELOPER:      Divya            DATE:2005.08.05
+*---------------------------------------------------------------------*
+
+REPORT yrfs002_cheque_forwarding
+* soc by Priyanka Bansal as on 7.1.2005
+                              NO STANDARD PAGE HEADING
+                              LINE-SIZE  250
+                              LINE-COUNT 90
+* eoc by Priyanka Bansal as on 7.1.2005
+                              MESSAGE-ID yf01.
+DATA w_ddchrg.
+
+* INITIALIZATION-------------------------------------------------------*
+INITIALIZATION.
+
+*INCLUDES-------------------------------------------------------------*
+*TABLES - SAP TABLES--------------------------------------------------*
+  TABLES: bkpf,       "Accounting Document Header
+          bseg,       "Accounting Document Segment
+          payr,       "Payment Medium File
+          bsak,       "Accounting: Secondary Index for Vendors
+          bsik,       "Accounting: Secondary Index for Vendors
+          bsad,       "Accounting: Secondary Index for Customers
+          bsid.       "Accounting: Secondary Index for Customers
+
+*INTERNAL TABLES------------------------------------------------------*
+  DATA:  i_main LIKE yrfs_cheque_forwarding     OCCURS 0 WITH HEADER LINE.
+  DATA:  i_double LIKE yrfs_cheque_forwarding   OCCURS 0 WITH HEADER LINE.
+  DATA:  i_double1 LIKE yrfs_cheque_forwarding  OCCURS 0 WITH HEADER LINE.
+  DATA:  i_doubleb LIKE yrfs_cheque_forwarding  OCCURS 0 WITH HEADER LINE.
+  DATA:  i_doubleb1 LIKE yrfs_cheque_forwarding OCCURS 0 WITH HEADER LINE.
+  DATA:  i_bseg LIKE yrfs_cheque_forwarding_doc OCCURS 0 WITH HEADER LINE.
+  DATA:  i_open LIKE yrfs_cheque_forwarding_doc OCCURS 0 WITH HEADER LINE.
+
+
+  DATA: BEGIN OF i_sadr OCCURS 0,
+          stras TYPE sadr-stras,
+          ort01 TYPE sadr-ort01,
+          pstlz TYPE sadr-pstlz,
+          adrnr TYPE t001-adrnr,
+        END   OF i_sadr.
+
+  DATA: BEGIN OF i_t001 OCCURS 0,
+          bukrs TYPE bkpf-bukrs,
+          adrnr TYPE t001-adrnr,
+
+        END   OF i_t001.
+
+  DATA: BEGIN OF i_kna1 OCCURS 0,
+          kunnr TYPE kna1-kunnr,
+          name1 TYPE kna1-name1,
+          name2 TYPE kna1-name2,
+          ort01 TYPE kna1-ort01,
+          pstlz TYPE kna1-pstlz,
+          stras TYPE kna1-stras,
+          xcpdk TYPE kna1-xcpdk,
+        END OF i_kna1.
+
+  DATA: BEGIN OF i_lfa1 OCCURS 0,
+          lifnr TYPE lfa1-lifnr,
+          name1 TYPE kna1-name1,
+          name2 TYPE kna1-name2,
+          ort01 TYPE kna1-ort01,
+          pstlz TYPE kna1-pstlz,
+          stras TYPE kna1-stras,
+          xcpdk TYPE lfa1-xcpdk,
+* SOC BY PRIYANKA AS ON 06.01.2005
+          adrnr TYPE lfa1-adrnr,
+* EOC
+        END OF i_lfa1.
+
+* SOC BY PRIYANKA AS ON 06.01.2005
+  DATA: BEGIN OF i_adrc OCCURS 0,
+          addrnumber TYPE adrc-addrnumber,
+          str_suppl3 TYPE adrc-str_suppl3,
+          location   TYPE adrc-location,
+        END OF i_adrc.
+
+  TYPES: BEGIN OF ty_usr21,  " Added By Ujala Gupta To get mail adderss on 20.03.2019
+           persnumber TYPE usr21-persnumber,
+           bname      TYPE usr21-bname,
+           addrnumber TYPE usr21-addrnumber,
+         END OF ty_usr21.
+
+  DATA: i_usr21 TYPE STANDARD TABLE OF ty_usr21 WITH HEADER LINE. " Added by Ujala Gupta on 20.03.2019
+
+  TYPES : BEGIN OF ty_adr6 ,
+            addrnumber TYPE adr6-addrnumber,
+            smtp_addr  TYPE adr6-smtp_addr,
+            ernam_addr TYPE adr6-smtp_addr,
+          END OF ty_adr6.
+
+  DATA: i_adr6 TYPE STANDARD TABLE OF ty_adr6 WITH HEADER LINE.
+* EOC
+
+  DATA: BEGIN OF i_payr OCCURS 0,
+          vblnr TYPE payr-vblnr,
+          chect TYPE char_50,     "payr-chect,   Change by Shruti 8.3.19
+          zbukr TYPE payr-zbukr,
+          lifnr TYPE payr-lifnr,
+          kunnr TYPE payr-kunnr,
+          gjahr TYPE payr-gjahr,
+          laufd TYPE regup-laufd, " Shruti 8.3.19
+*          zaldt TYPE payr-zaldt,  " Shruti 8.3.19
+          waers TYPE payr-waers,
+          rwbtr TYPE payr-rwbtr,
+          hkont TYPE regup-hkont,
+*          ubhkt TYPE payr-ubhkt,
+          xbukr TYPE payr-xbukr,
+          sgtxt TYPE bseg-sgtxt,
+          rzawe TYPE payr-rzawe,
+          hbkid TYPE payr-hbkid,
+        END OF i_payr.
+
+*        Start of code insert by Shruti 8.3.19
+  TYPES: BEGIN OF ty_hdfc,
+           program_run_date    TYPE  laufd,
+           run_identification  TYPE  laufi,
+           company_code        TYPE  bukrs,
+           voucher_number      TYPE  vblnr,
+           bank_ref_number     TYPE string,
+           cheque_number       TYPE string,
+           dd_number           TYPE string,
+           utr_neft_ref_number TYPE string,
+           vendor_code          TYPE lifnr,
+           value_date          TYPE datum,
+           intercompdoc        TYPE vblnr,
+         END OF ty_hdfc,
+
+
+         BEGIN OF ty_icici,
+           bgmref TYPE edif1004_r,
+           belnr   TYPE  belnr_d,
+           bukrs   TYPE bukrs,
+           gjahr   TYPE  gjahr,
+           utr_no TYPE string,
+
+         END OF ty_icici.
+*        End of code insert by Shruti 8.3.19
+
+  DATA: BEGIN OF i_bseg1 OCCURS 0,
+          bukrs TYPE bseg-bukrs,
+          belnr TYPE bseg-belnr,
+          gjahr TYPE bseg-gjahr,
+          lifnr TYPE bseg-lifnr,
+          kunnr TYPE bseg-kunnr,
+          wrbtr TYPE bseg-wrbtr,
+          hkont TYPE bseg-hkont,
+          koart TYPE bseg-koart,
+          sgtxt TYPE bseg-sgtxt,
+          ebeln TYPE bseg-ebeln,
+          zuonr TYPE bseg-zuonr,
+        END OF i_bseg1.
+
+  TYPES: BEGIN OF ty_final1,   " Added by Ujala Gupta 20.3.2019
+           ebeln      TYPE ekko-ebeln,
+           ernam      TYPE ekko-ernam,
+           ernam_addr TYPE adr6-smtp_addr,
+           afnam_addr TYPE adr6-smtp_addr,
+           esic_email TYPE adr6-smtp_addr,
+           usnam_addr TYPE adr6-smtp_addr,
+
+         END OF ty_final1.
+
+  DATA : i_final1 TYPE STANDARD TABLE OF ty_final1 WITH HEADER LINE. " Added by Ujala Gupta on 20.03.2019
+
+  TYPES: BEGIN OF ty_eket ,
+           ebeln TYPE ebeln,
+           banfn TYPE banfn,
+         END OF ty_eket .
+  DATA: wa_eket TYPE ty_eket,
+        i_eket  TYPE TABLE OF ty_eket.
+
+  TYPES : BEGIN OF ty_eban ,
+            banfn TYPE banfn,
+            afnam TYPE eban-afnam,
+          END OF ty_eban .
+  DATA: wa_eban TYPE ty_eban,
+        i_eban  TYPE TABLE OF ty_eban.
+
+  TYPES : BEGIN OF ty_ekko ,
+            ebeln      TYPE ekko-ebeln,
+            ernam      TYPE ekko-ernam,
+            oid_extbol TYPE ekko-oid_extbol ,   " addd by pradeep
+            bsart      TYPE ekko-bsart,
+          END OF ty_ekko.
+
+  DATA: wa_ekko TYPE ty_ekko,
+        it_ekko TYPE TABLE OF ty_ekko.
+  DATA: BEGIN OF i_usr21_1 OCCURS 0 ,
+          bname      TYPE usr21-bname,
+          persnumber TYPE usr21-persnumber,
+
+          addrnumber TYPE usr21-addrnumber,
+        END OF i_usr21_1.
+
+  TYPES : BEGIN OF ty_adr6_1,  "Added By Ujala Gupta for email addderss on 20.03.2019
+            afnam_addr TYPE adr6-smtp_addr,
+            addrnumber TYPE adr6-addrnumber,
+            smtp_adddr TYPE adr6-smtp_addr,
+          END OF ty_adr6_1.
+
+
+  TYPES : BEGIN OF ty_adr6_2 , "Added By Ujala Gupta for email addderss on 20.03.2019
+            addrnumber TYPE adr6-addrnumber,
+            smtp_addr  TYPE adr6-smtp_addr,
+            ernam_addr TYPE adr6-smtp_addr,
+          END OF ty_adr6_2.
+
+  DATA: i_adr6_1 TYPE STANDARD TABLE OF ty_adr6_1 WITH HEADER LINE,  "Added By Ujala Gupta for email addderss on 20.03.2019
+        i_adr6_2 TYPE STANDARD TABLE OF ty_adr6_2 WITH HEADER LINE.  " Added by Ujala Gupta for email adderss on 20.03.2019
+
+  DATA: BEGIN OF i_bkpf1 OCCURS 0,
+          bukrs TYPE bseg-bukrs,
+          belnr TYPE bseg-belnr,
+          gjahr TYPE bseg-gjahr,
+          waers TYPE bkpf-waers,
+        END OF i_bkpf1.
+
+
+  DATA: BEGIN OF i_tgsbt OCCURS 0,
+          gtext TYPE tgsbt-gtext,
+          gsber TYPE tgsbt-gsber,
+        END   OF i_tgsbt.
+
+  DATA: BEGIN OF i_tcurt OCCURS 0,
+          ltext TYPE tcurt-ltext,
+          waers TYPE tcurt-waers,
+          spras TYPE tcurt-spras,
+        END OF i_tcurt.
+
+  DATA: BEGIN OF i_text OCCURS 0,
+          hkont TYPE bsak-hkont,
+          prctr TYPE bsak-prctr,
+          belnr TYPE bsec-belnr,
+          bukrs TYPE bsec-bukrs,
+          gjahr TYPE bsec-gjahr,
+        END OF i_text.
+
+  DATA: BEGIN OF i_cepct OCCURS 0,
+          prctr TYPE bsak-prctr,
+          ktext TYPE cepct-ktext,
+        END OF i_cepct.
+
+  DATA: BEGIN OF i_bsec OCCURS 0,
+          xcpdk TYPE bsec-xcpdk,
+          ort01 TYPE bsec-ort01,
+          name1 TYPE bsec-name1,
+          name2 TYPE bsec-name2,
+          pstlz TYPE bsec-pstlz,
+          stras TYPE bsec-stras,
+          bukrs TYPE bsec-bukrs,
+          belnr TYPE bsec-belnr,
+          gjahr TYPE bsec-gjahr,
+        END OF i_bsec.
+
+  DATA: BEGIN OF i_concat OCCURS 0,
+          bvorg TYPE bkpf-bvorg,
+          lifnr TYPE payr-lifnr,
+          kunnr TYPE payr-kunnr,
+          zaldt TYPE payr-zaldt,
+          chect TYPE char20,  "payr-chect, change by Shruti 8.3.19
+          rwbtr TYPE payr-rwbtr,
+          ubhkt TYPE payr-ubhkt,
+          vblnr TYPE payr-vblnr,
+          gjahr TYPE payr-gjahr,
+          zbukr TYPE payr-zbukr,
+          hbkid TYPE payr-hbkid,
+        END   OF i_concat.
+
+
+  DATA: BEGIN OF i_bkpf OCCURS 0,
+          belnr TYPE bkpf-belnr,
+          bukrs TYPE bkpf-bukrs,
+          gjahr TYPE bkpf-gjahr,
+          bvorg TYPE bkpf-bvorg,
+          lifnr TYPE payr-lifnr,
+          kunnr TYPE payr-kunnr,
+          waers TYPE payr-waers,
+        END OF i_bkpf.
+* boc ashok and chinari call id 91832
+  DATA: BEGIN OF i_bseg_ven OCCURS 0,
+          bukrs LIKE bseg-bukrs,
+          belnr LIKE bseg-belnr,
+          gjahr LIKE bseg-gjahr,
+          buzei LIKE bseg-buzei,
+          kunnr LIKE bseg-kunnr,
+          lifnr LIKE bseg-lifnr,
+        END OF i_bseg_ven.
+* Eoc ashok and chinari call id 91832
+
+  DATA: w_invoice_no            LIKE bkpf-xblnr,
+        w_invoice_date          TYPE d,
+        w_awkey                 TYPE bkpf-awkey, "charm 4000003988
+        w_invoice_date_char(10),
+        w_po_no                 LIKE bseg-zuonr,
+        spoolno                 LIKE tsp01-rqident,
+        w_spoolno               TYPE rspoid, " tsp01-rqident ,
+        w_spoolno2              TYPE tsp01-rqident,
+*              w_spoolno type TSFSPOOLID ,
+        doc_out_info            TYPE  ssfcrespd,
+        job_out_info            TYPE  ssfcrescl,
+        job_out_opt             TYPE  ssfcresop,
+        w_file                  LIKE rlgrap-filename. " DEFAULT 'C:\temp\file.pdf'.
+  DATA: i_bseg_cc LIKE bseg OCCURS 0 WITH HEADER LINE .
+  DATA cancel.
+  "SOC AAKASH TYAGI / MANOJ RANE S 4000006749: AT:E:Chgs Payment advice and email body ON 14/07/2023
+  DATA : gv_kidno       TYPE regup-kidno.
+  DATA : lv_bktxt       TYPE bkpf-bktxt.
+  DATA : gv_gross_amt   TYPE /opt/vim_1head-gross_amount.
+  DATA : gv_gross_amt_c TYPE char20.
+  DATA : lv_new_amt_c   TYPE char20.
+  DATA : gs_vim_head    TYPE /opt/vim_1head.
+  DATA : lv_mailid      TYPE ad_smtpadr.
+  DATA : lv_user        TYPE sy-uname.
+  DATA : lv_kid_len     TYPE i.
+  DATA : lv_new_amt     TYPE bseg-dmbtr.
+  DATA : lv_doctype     TYPE /opt/vim_1head-doctype.
+  DATA : it_reten       TYPE TABLE OF yroa_vim_reten.
+  DATA : wa_reten       TYPE yroa_vim_reten.
+  DATA : lv_po_len      TYPE i.
+  DATA : lv_gstin       TYPE lfa1-stcd3.
+*  ** -> Begin of changes by of Vipul on 11/09/24 for ATC
+*  DATA : lv_pan_no      TYPE j_1imovend-j_1ipanno.
+  DATA : lv_pan_no      TYPE yd_lfa1-j_1ipanno.
+*  ** ->End of changes by of Vipul on 11/09/24 for ATC
+DATA : lv_ifsc        TYPE reguh-zbnkl.
+  DATA : lv_acc_no      TYPE reguh-zbnkn.
+  DATA : lv_ba          TYPE reguh-srtgb.
+  DATA : lv_bank_det    TYPE char35.
+  DATA : lv_factor      TYPE p DECIMALS 3.
+  DATA : gv_trans_det   TYPE char80.
+  "EOC AAKASH TYAGI / MANOJ RANE S 4000006749: AT:E:Chgs Payment advice and email body ON 14/07/2023
+  DATA pdf LIKE tline OCCURS 100 WITH HEADER LINE.
+  DATA: numbytes   TYPE i,
+        it_hdfc    TYPE TABLE OF     ty_hdfc,  " Shruti 8.3.19
+        wa_hdfc    TYPE ty_hdfc,     " Shruti 8.3.19
+        it_icici   TYPE TABLE OF ty_icici,
+        arc_idx    LIKE toa_dara,
+        pdfspoolid LIKE tsp01-rqident,
+        jobname    LIKE tbtcjob-jobname,
+        jobcount   LIKE tbtcjob-jobcount,
+        is_otf.
+
+  DATA: w_belnr TYPE bsak-belnr.
+
+  DATA: w_bnkchrg TYPE bseg-wrbtr,
+        lv_tax    TYPE char1.
+
+  DATA: BEGIN OF i_with OCCURS 0,
+          bukrs    TYPE with_item-bukrs,
+          belnr    TYPE with_item-belnr,
+          gjahr    TYPE with_item-gjahr,
+          wt_qbshb TYPE with_item-wt_qbshb,
+          buzei    TYPE with_item-buzei,
+          count    TYPE n VALUE 0,
+        END OF i_with.
+*VARIABLES------------------------------------------------------------*
+
+  DATA : w_fm_name TYPE rs38l_fnam,              "Name of function module
+         w_total   TYPE bsad-wrbtr,
+         flag(1),
+*  SOC BY PRIYANKA AS ON 07.01.2005
+         w_adrnr   LIKE lfa1-adrnr,
+         w_wrbtr   LIKE bseg-wrbtr.
+
+  DATA: wa_pa0105 TYPE pa0105,    " Added By Ujala Gupta 20.03.2019
+        gd_pernr  TYPE pa0105-pernr.
+
+  DATA: lv_email_esic TYPE adr6-smtp_addr .
+
+  DATA: lv_email_bkpf TYPE adr6-smtp_addr .
+  " Added By Ujala Gupta,variable for store email id on  20.03.2019
+* EOC
+
+**** centralized payment : Bipin / Pankaj : SAP : SOC : 12/03/2019
+  TYPES : BEGIN OF ty_regup,
+            laufd   TYPE laufd,
+            laufi   TYPE laufi,
+            xvorl   TYPE xvorl,
+            zbukr   TYPE dzbukr,
+            lifnr   TYPE lifnr,
+            kunnr   TYPE kunnr,
+            empfg  TYPE empfg,
+            vblnr   TYPE vblnr,
+            bukrs   TYPE bukrs,
+            belnr   TYPE belnr_d,
+            gjahr   TYPE gjahr,
+            zlsch   TYPE dzlsch,
+            waers   TYPE waers,
+            hbkid   TYPE hbkid,
+            budat   TYPE budat,
+            wrbtr   TYPE wrbtr,
+            gsber  TYPE   gsber,
+            sname1 TYPE  name1_gp,
+            "SOC AAKASH TYAGI / MANOJ RANE S 4000006749: AT:E:Chgs Payment advice and email body ON 14/07/2023
+            kidno  TYPE regup-kidno,
+            zuonr  TYPE regup-zuonr,
+            "EOC AAKASH TYAGI / MANOJ RANE S 4000006749: AT:E:Chgs Payment advice and email body ON 14/07/2023
+          END OF ty_regup.
+
+  DATA : it_regup TYPE TABLE OF ty_regup WITH HEADER LINE.
+  DATA : w_regup    LIKE LINE OF it_regup.
+**** centralized payment : Bipin / Pankaj : SAP : EOC : 12/03/2019
+
+
+*  SELECTION SCREEN----------------------------------------------------*
+
+  SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
+  SELECTION-SCREEN SKIP.
+
+  SELECT-OPTIONS:
+          s_belnr FOR bkpf-belnr  OBLIGATORY NO INTERVALS NO-EXTENSION.
+  "PAYMENT DOC
+
+  PARAMETERS: p_bukrs TYPE bkpf-bukrs OBLIGATORY DEFAULT '1000',         "COMPANY CODE
+              p_laufd TYPE laufd OBLIGATORY DEFAULT sy-datum,              "RUN DATE
+              p_gjahr TYPE bkpf-gjahr.        "FISCAL YEAR
+
+****  PARAMETERS: p_date   TYPE sy-datum.
+
+  PARAMETERS: c_mail  AS CHECKBOX,
+              c_print AS CHECKBOX.
+
+*  PARAMETERS: p_c   RADIOBUTTON GROUP rad .
+*              P_CHECT TYPE PAYR-CHECT.  " OBLIGATORY.         "CHECT NO
+
+
+*  PARAMETERS: p_d RADIOBUTTON GROUP rad.   "DD no.
+
+** BOC RAMBHAROS MEENA & CHINARI SAROJ DATED 20.12.2006. DD INFORMATION
+***SOC BY SANYOGITA & SUNNY ON 19.03.2019 - FOR UTR NO WITH CHAR 22
+***  PARAMETERS: p_dd_no TYPE char8 NO-DISPLAY.        "DD NUMBER.
+  PARAMETERS: p_dd_no TYPE char_50 NO-DISPLAY.        "DD NUMBER.
+***EOC BY SANYOGITA & SUNNY ON 19.03.2019 - FOR UTR NO WITH CHAR 22
+  PARAMETERS: p_dd_dt LIKE sy-datum NO-DISPLAY.    "DD DATE.
+  PARAMETERS: p_ddchrg TYPE payr-rwbtr NO-DISPLAY.
+  "DD CHARGES.
+
+** BOC RAMBHAROS MEENA & CHINARI SAROJ DATED 20.12.2006. DD INFORMATION
+  SELECTION-SCREEN SKIP.
+  SELECTION-SCREEN END OF BLOCK b1.
+
+
+
+  SELECTION-SCREEN BEGIN OF SCREEN 300 .
+  SELECTION-SCREEN SKIP.
+
+  PARAMETERS: p_chect TYPE char20. "payr-chect OBLIGATORY.         "CHECT NO
+
+  SELECTION-SCREEN SKIP.
+  SELECTION-SCREEN END OF SCREEN 300.
+
+**AT SELECTION SCREEN-------------------------------------------------*
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR s_belnr-low.
+  PERFORM material_f4.
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR s_belnr-high.
+  PERFORM material_f4.
+
+* soc by Priyanka as on 07.01.2005
+* AT SELECTION SCREEN--------------------------------------------------*
+
+* Company validated against the master table BKPF
+AT SELECTION-SCREEN ON p_bukrs.
+  PERFORM validate_company.
+
+* DOCUMENT NUMBER validated against the master table BKPF
+AT SELECTION-SCREEN .
+  PERFORM validate_doc_number.
+
+* check numBER VALIDATED AGAINST PAYR
+AT SELECTION-SCREEN ON p_chect.
+  PERFORM validate_check_number.
+* eoc
+******
+
+*AT SELECTION-SCREEN  ON RADIOBUTTON GROUP rad .
+*  IF P_C = 'X'.
+*    CALL SELECTION-SCREEN 300 STARTING AT 1 1 ending at 50 1.
+*  ENDIF.
+*
+
+
+* START OF SELECTION---------------------------------------------------*
+START-OF-SELECTION.
+  PERFORM get-data.
+
+*soc by priyanka as on 07.01.2005
+  PERFORM append_street4.
+* eoc
+*   add cross company data.
+
+  PERFORM add_cross_company_data.
+
+*SOC Deekshita & Jawahar 03.09.2019 charm 753 fetch BWS amount
+  DATA: lv_ini   TYPE yrma_bill_upload-initiator,
+        lv_inamt TYPE yrma_bill_upload-inamt.
+  SELECT belnr, bktxt FROM bkpf INTO TABLE @DATA(lt_bktxt)
+    FOR ALL ENTRIES IN @it_regup
+    WHERE bukrs = @it_regup-bukrs
+    AND   belnr = @it_regup-belnr
+    AND   gjahr = @it_regup-gjahr.
+
+  IF sy-subrc = 0.
+*    ** -> Begin of changes by of Vipul on 11/09/24 for ATC
+    sort lt_bktxt.
+*    ** ->End of changes by of Vipul on 11/09/24 for ATC,
+    READ TABLE lt_bktxt INTO DATA(ls_bktxt) INDEX 1.
+** -> Begin of changes by of <Aditi> on <09/11/2024> for ATC
+*    SELECT SINGLE inamt initiator FROM yrma_bill_upload INTO (lv_inamt, lv_ini)
+*      WHERE bwsno = ls_bktxt-bktxt.
+    SELECT inamt initiator FROM yrma_bill_upload INTO (lv_inamt, lv_ini)
+      UP TO 1 ROWS
+      WHERE bwsno = ls_bktxt-bktxt
+      ORDER BY PRIMARY KEY.
+    ENDSELECT.
+** -> End of changes by of <Aditi> on <09/11/2024> for ATC
+  ENDIF.
+*EOC Deekshita & Jawahar 03.09.2019 charm 753 fetch BWS amount
+
+***SOC BY SUNNY & SANYOGITA ON 22.04.2019 - TO RESOLVE PAYMENT ADVISE PRINT ISSUE
+  IF i_main[] IS NOT INITIAL.
+*    SORT i_main.
+*    *  BEGIN OF CHANGES BY OF Vipul ON 04 june 25 FOR ATC
+    READ TABLE i_main INDEX 1."#EC CI_NOORDER
+*    * END CHANGES BY OF Vipul ON 04 june 25 FOR ATC
+    IF i_main-lifnr+0(1) = 'E' OR i_main-lifnr+0(2) = 'ZV'.
+      MESSAGE 'Payment Advice shall be prined only for external vendors' TYPE 'I'.
+    ELSE.
+***EOC BY SUNNY & SANYOGITA ON 22.04.2019 - TO RESOLVE PAYMENT ADVISE PRINT ISSUE
+      "SOC AAKASH TYAGI / MANOJ RANE S 4000006749: AT:E:Chgs Payment advice and email body ON 14/07/2023
+      IF lv_doctype = 'YADV_INV' OR lv_doctype = 'YADV_REL'.
+        LOOP AT i_bseg.
+          READ TABLE it_regup INTO w_regup WITH KEY belnr = i_bseg-belnr gjahr = i_bseg-gjahr bukrs = i_bseg-bukrs.
+          IF sy-subrc = 0.
+            DELETE TABLE i_bseg FROM i_bseg.
+          ENDIF.
+          CLEAR : i_bseg , w_regup.
+        ENDLOOP.
+      ENDIF.
+      "EOC AAKASH TYAGI / MANOJ RANE S 4000006749: AT:E:Chgs Payment advice and email body ON 14/07/2023
+      "SOC AAKASH TYAGI / MANOJ RANE ON 25/04/2024
+      IF w_po_no IS INITIAL OR w_po_no = 'NIL'.
+        READ TABLE it_regup INTO DATA(wa_regup) INDEX 1.
+        IF sy-subrc EQ 0.
+** -> Begin of changes by  KRITIKA on 09.11.2024 for ATC
+*          SELECT SINGLE ebeln FROM bseg INTO w_po_no WHERE belnr = wa_regup-belnr AND bukrs = wa_regup-bukrs AND gjahr = wa_regup-gjahr
+*                                                       AND bschl = '29'.
+*
+
+DATA et_bseg TYPE TABLE OF bseg.
+DATA lt_fields_bseg TYPE fagl_t_field.
+DATA lv_rldnr TYPE rldnr.
+CALL FUNCTION 'FAGL_GET_LEADING_LEDGER'
+  IMPORTING
+    e_rldnr       = lv_rldnr
+  EXCEPTIONS
+    not_found     = 1
+    more_than_one = 2
+    OTHERS        = 3.
+IF sy-subrc = 0.
+  CALL FUNCTION 'FAGL_GET_GL_DOCUMENT'
+    EXPORTING
+      i_rldnr         = lv_rldnr
+      i_bukrs         = wa_regup-bukrs
+      i_belnr         = wa_regup-belnr
+      I_gjahr         = wa_regup-gjahr
+      it_fieldlist    = lt_fields_bseg
+
+    IMPORTING
+      et_bseg         = et_bseg
+*     ET_BSEG_EXT     =
+    EXCEPTIONS
+      not_found       = 1
+      OTHERS          = 2.
+  IF sy-subrc = 0.
+if et_bseg is not initial.
+* Implement suitable error handling here
+  sort et_bseg.
+  LOOP AT ET_BSEG INTO DATA(LS_BSEG) where bschl = '29' .
+    w_po_no   = ls_bseg-ebeln.
+  CLEAR: LS_BSEG.
+  EXIT.
+  ENDLOOP.
+endif.
+ENDIF.
+ENDIF.
+** -> End of changes by  KRITIKA on 09.11.2024 for ATC
+
+        ENDIF.
+      ENDIF.
+      "EOC AAKASH TYAGI / MANOJ RANE ON 25/04/2024
+      IF c_print = 'X'.
+        PERFORM display.
+      ELSEIF c_mail = 'X'.
+        PERFORM email. " Added By Shruti Goel For Sent Email with PDF Attachment
+      ENDIF.
+    ENDIF.
+*****SOC by Archana/Manas on 06.02.2020 to get GEM PO Invoice Details . Charm-4000001640*****
+    PERFORM gem_po.
+*****EOC by Archana/Manas on 06.02.2020 to get GEM PO Invoice Details . Charm-4000001640*****
+  ENDIF.
+
+* END OF SELECTION-----------------------------------------------------*
+END-OF-SELECTION.
+*&---------------------------------------------------------------------*
+*&      Form  GET-DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+*****SOC by Archana/Manas on 06.02.2020 to get GEM PO Invoice Details . Charm-4000001640*****
+FORM gem_po.
+  DATA : it_gem    TYPE STANDARD TABLE OF yrma_gem_invoice,
+         wa_gem    TYPE yrma_gem_invoice,
+         i_nivida  TYPE STANDARD TABLE OF yrma_nivida_po,
+         wa_nivida TYPE yrma_nivida_po,
+         wa_main   TYPE yrfs_cheque_forwarding,
+*         lv_particulars TYPE string,
+         w_p_total TYPE rwbtr,
+         w_p_tot   TYPE rwbtr.
+  SELECT * FROM yrma_nivida_po INTO TABLE i_nivida WHERE ebeln = w_po_no AND yy_gempono NE ' '.
+  IF i_nivida IS NOT INITIAL.
+    LOOP AT i_main INTO wa_main.
+      w_p_total = wa_main-p_rwbtr.
+      w_p_tot = w_p_total * -1.
+      IF w_p_tot < 0.
+        w_p_tot = w_p_tot * -1.
+      ENDIF.
+      READ TABLE i_payr WITH KEY zbukr = wa_main-bukrs
+                           vblnr = wa_main-belnr.
+      READ TABLE i_bseg WITH KEY bukrs = wa_main-bukrs augbl = wa_main-belnr.
+*    CONCATENATE i_bseg-xblnr i_bseg-bldat INTO lv_particulars SEPARATED BY space.
+      wa_gem-yy_utr = p_dd_no.
+      wa_gem-yy_utr_date = p_dd_dt.
+      wa_gem-yy_po = w_po_no.
+      wa_gem-yy_invoice_no = w_invoice_no.
+      wa_gem-yy_invoice_amt = lv_inamt.
+      wa_gem-yy_invoice_date = w_invoice_date_char.
+      wa_gem-yy_curr = i_payr-waers.
+      wa_gem-yy_payment_amt = w_p_tot.
+      wa_gem-yy_doc_no = i_bseg-belnr.
+*    wa_gem-yy_particulars = lv_particulars.
+      wa_gem-yy_bank = wa_main-hbkid.
+      wa_gem-yy_amt_deducted = i_bseg-wrbtr.
+      APPEND wa_gem TO it_gem.
+      MODIFY yrma_gem_invoice FROM wa_gem.
+    ENDLOOP.
+  ENDIF.
+ENDFORM.
+*****EOC by Archana/Manas on 06.02.2020 to get GEM PO Invoice Details . Charm-4000001640*****
+FORM get-data.
+
+  PERFORM bkpf_get_data.
+  PERFORM bkpf_initial.
+
+
+*IF NO ENTRIES IN I_MAIN TILL NOW
+
+*KUNNNR IS SELECTED
+  IF NOT i_payr[] IS INITIAL.
+    IF i_main[] IS INITIAL.
+
+*CLOSED ITEMS
+      SELECT belnr bukrs kunnr gjahr augbl budat gsber xblnr sgtxt
+             shkzg
+             INTO CORRESPONDING FIELDS OF  TABLE i_main
+             FROM bsad
+             FOR ALL ENTRIES IN i_payr
+             WHERE bukrs = i_payr-zbukr AND
+                   belnr = i_payr-vblnr AND
+                   gjahr = i_payr-gjahr  AND
+                   kunnr = i_payr-kunnr.
+
+*OPEN ITEMS
+      IF sy-subrc <> 0.
+        SELECT belnr bukrs kunnr gjahr augbl budat gsber xblnr sgtxt
+              wrbtr  bldat waers xblnr sgtxt shkzg
+              INTO CORRESPONDING FIELDS OF  TABLE i_main
+              FROM bsid
+              FOR ALL ENTRIES IN i_payr
+              WHERE bukrs = i_payr-zbukr AND
+                    belnr = i_payr-vblnr AND
+                    gjahr = i_payr-gjahr  AND
+                    kunnr = i_payr-kunnr.
+
+
+      ENDIF.
+
+      IF NOT i_main[] IS INITIAL.
+*ITEMS WHICH ARE THERE IN BSAD & BSID TABLE
+        SELECT gsber belnr bukrs kunnr gjahr augbl budat  sgtxt wrbtr shkzg
+               xblnr
+               INTO CORRESPONDING FIELDS OF TABLE i_open
+               FROM bsid
+               FOR ALL ENTRIES IN i_main
+               WHERE belnr = i_main-augbl AND
+* SOC BY REEMA AS ON 18.05.05 WRF VINEET
+                     bukrs = i_main-bukrs AND
+*                 GJAHR = I_MAIN-GJAHR AND
+                     kunnr = i_main-kunnr.
+* EOC
+      ENDIF.
+
+*GOING TO BSAD BY AUGBL
+      IF NOT i_main[] IS INITIAL.
+        SELECT gtext gsber
+               INTO TABLE i_tgsbt
+               FROM tgsbt
+               FOR ALL ENTRIES IN i_main
+               WHERE gsber = i_main-gsber.
+
+
+        SELECT belnr  bukrs kunnr gjahr augbl budat  sgtxt wrbtr shkzg
+                wmwst gsber xblnr bldat waers
+               INTO  CORRESPONDING FIELDS OF TABLE i_bseg
+               FROM bsad
+               FOR ALL ENTRIES IN i_main
+               WHERE   bukrs = i_main-bukrs AND
+***SOC BY SANYOGITA & SUNNY ON 24.04.2019 - TO RESOLVE CUSTOMER PAYMENT ADVISE
+***                       gjahr = i_main-gjahr AND
+***EOC BY SANYOGITA & SUNNY ON 24.04.2019 - TO RESOLVE CUSTOMER PAYMENT ADVISE
+                       augbl = i_main-augbl AND
+*  SOC BY REEMA AS ON 16.05.05 WRF VINEET
+                       kunnr = i_main-kunnr.
+*  EOC
+        .
+
+*NAME
+        SELECT kunnr name1 name2 ort01 pstlz stras xcpdk
+               INTO TABLE i_kna1
+               FROM kna1
+               FOR ALL ENTRIES IN i_main
+               WHERE kunnr = i_main-kunnr.
+
+*CITY ADDRESS
+        SELECT xcpdk ort01 name1  name2  pstlz stras bukrs belnr gjahr
+         INTO TABLE i_bsec
+         FROM bsec
+         FOR ALL ENTRIES IN i_main
+         WHERE bukrs = i_main-bukrs AND
+               belnr = i_main-belnr AND
+               gjahr = i_main-gjahr.
+
+
+      ENDIF.
+    ENDIF.
+  ENDIF.
+*DELETE ENTRIES WHERE AUGBL = BELNR
+
+  LOOP AT i_bseg.
+    READ TABLE i_main WITH KEY belnr = i_bseg-belnr.
+    IF sy-subrc = 0.
+      DELETE i_bseg.
+    ENDIF.
+  ENDLOOP.
+
+
+*INDIAN RUPEES
+  IF NOT i_payr[] IS INITIAL.
+    SELECT ltext waers
+           INTO TABLE i_tcurt
+           FROM tcurt
+           FOR ALL ENTRIES IN i_payr
+           WHERE waers = i_payr-waers AND
+                 spras = 'E'.
+
+
+  ENDIF.
+
+
+  LOOP AT i_main.
+
+
+*INDIAN RUPEES
+
+    READ TABLE i_payr WITH KEY zbukr = i_main-bukrs
+                               vblnr = i_main-belnr
+                               gjahr = i_main-gjahr
+                               lifnr = i_main-lifnr.
+    IF sy-subrc = 0.
+
+
+
+      i_main-p_rwbtr = i_payr-rwbtr.
+      i_main-p_rwbtr = i_main-p_rwbtr + w_bnkchrg.  "BY AJAY
+
+      READ TABLE i_tcurt WITH KEY waers = i_payr-waers.
+      IF sy-subrc = 0.
+        i_main-ltext = i_tcurt-ltext.
+      ENDIF.
+    ENDIF.
+
+*TEXT 3
+    READ TABLE i_text WITH KEY   bukrs = i_payr-zbukr
+                                 belnr = i_payr-vblnr
+                                 gjahr = i_payr-gjahr
+                                 hkont = i_payr-hkont. " Shruti 8.3.19
+*                                 hkont = i_payr-ubhkt. " Shruti 8.3.19
+
+    IF sy-subrc = 0.
+      READ TABLE i_cepct WITH KEY prctr = i_text-prctr.
+      IF sy-subrc = 0.
+        i_main-text3 = i_cepct-ktext.
+      ENDIF.
+    ENDIF.
+
+
+*NAME
+
+    READ TABLE i_kna1 WITH KEY kunnr = i_main-kunnr.
+    IF sy-subrc = 0.
+      IF i_kna1-xcpdk = 'X'.
+        READ TABLE i_bsec WITH KEY bukrs = i_main-bukrs
+                                   belnr = i_main-belnr
+                                   gjahr = i_main-gjahr.
+        IF sy-subrc = 0.
+          i_main-name1 = i_bsec-name1.
+          i_main-name2 = i_bsec-name2.
+          i_main-ort01 = i_bsec-ort01.
+          i_main-pstlz = i_bsec-pstlz.
+          i_main-stras = i_bsec-stras.
+          i_main-adrnr = i_lfa1-adrnr.
+        ENDIF.
+      ELSE.
+        i_main-name1 = i_kna1-name1.
+        i_main-name2 = i_kna1-name2.
+        i_main-ort01 = i_kna1-ort01.
+        i_main-pstlz = i_kna1-pstlz.
+        i_main-stras = i_kna1-stras.
+        i_main-adrnr = i_lfa1-adrnr.
+      ENDIF.
+    ENDIF.
+
+* NAME
+    READ TABLE i_lfa1 WITH KEY lifnr = i_main-lifnr.
+    IF sy-subrc = 0.
+      IF i_lfa1-xcpdk = 'X'.
+        READ TABLE i_bsec WITH KEY bukrs = i_main-bukrs
+                                   belnr = i_main-belnr
+                                   gjahr = i_main-gjahr.
+        IF sy-subrc = 0.
+          i_main-name1 = i_bsec-name1.
+          i_main-name2 = i_bsec-name2.
+          i_main-ort01 = i_bsec-ort01.
+          i_main-pstlz = i_bsec-pstlz.
+          i_main-stras = i_bsec-stras.
+          i_main-adrnr = i_lfa1-adrnr.
+        ENDIF.
+      ELSE.
+
+        i_main-name1 = i_lfa1-name1.
+        i_main-name2 = i_lfa1-name2.
+        i_main-ort01 = i_lfa1-ort01.
+        i_main-pstlz = i_lfa1-pstlz.
+        i_main-stras = i_lfa1-stras.
+        i_main-adrnr = i_lfa1-adrnr.
+      ENDIF.
+    ENDIF.
+* CHECT NO
+*    READ TABLE i_payr WITH KEY zbukr = i_main-bukrs
+*                               vblnr = i_main-belnr.
+*    IF sy-subrc = 0.
+
+    i_main-chect  = i_payr-chect.
+    i_main-zaldt = i_payr-laufd.   " Shruti 8.3.19
+*      i_main-zaldt = i_payr-zaldt.   " Shruti 8.2.19
+    i_main-sgtxt1 = i_payr-sgtxt.
+    IF i_payr-hbkid+0(1) = 'S'.
+      i_main-hbkid = 'SBI'.
+    ENDIF.
+    IF i_payr-hbkid+0(1) = 'I'.
+      i_main-hbkid = 'ICICI'.
+    ENDIF.
+    IF i_payr-hbkid+0(1) = 'H'.
+      i_main-hbkid = 'HDFC'.
+    ENDIF.
+*    ENDIF.
+
+    READ TABLE i_tgsbt WITH KEY gsber = i_main-gsber.
+    IF sy-subrc = 0.
+      i_main-gtext = i_tgsbt-gtext.
+    ENDIF.
+
+
+**amount to be changed to + or -
+    IF i_main-shkzg = 'S'.
+      i_main-wrbtr = i_main-wrbtr * -1.
+      i_main-qbshb = i_main-qbshb * -1.
+    ENDIF.
+
+    READ TABLE i_payr WITH KEY vblnr = i_main-belnr.
+    i_main-rzawe = 'C'.
+    IF  ( i_payr-rzawe = 'Y' ) OR  ( i_payr-rzawe = 'Z' ) OR ( i_payr-rzawe = 'R' )
+      OR ( i_payr-rzawe = 'D' ) OR ( i_payr-rzawe = 'S' )
+      OR ( i_payr-rzawe = 'B' ).
+
+
+      i_main-rzawe = 'X'.
+
+    ENDIF.
+
+    READ TABLE i_tcurt WITH KEY waers = i_payr-waers.
+    IF sy-subrc = 0.
+      i_main-ltext = i_tcurt-ltext.
+    ENDIF.
+
+    MODIFY i_main.
+    CLEAR i_main.
+
+
+
+  ENDLOOP.
+
+  SORT i_bseg BY augbl sgtxt.
+
+*ENDIF.
+
+  IF i_main[] IS INITIAL.
+    MESSAGE i032.
+    LEAVE LIST-PROCESSING.
+  ENDIF.
+
+
+  LOOP AT i_bseg .
+    IF i_bseg-shkzg = 'S'.
+      i_bseg-wrbtr = i_bseg-wrbtr * -1.
+      i_bseg-qbshb = i_bseg-qbshb * -1.
+    ENDIF.
+
+    MODIFY i_bseg.
+    CLEAR i_bseg.
+  ENDLOOP.
+
+
+  LOOP AT i_open.
+    IF i_open-shkzg = 'S'.
+      i_open-wrbtr = i_open-wrbtr * -1.
+      i_open-qbshb = i_open-qbshb * -1.
+    ENDIF.
+    MODIFY i_open.
+    CLEAR i_open.
+  ENDLOOP.
+
+  DELETE ADJACENT DUPLICATES FROM i_bseg COMPARING belnr  buzei.
+
+  LOOP AT i_bseg.
+    CLEAR w_belnr.
+    w_belnr = i_bseg-belnr.
+    IF i_bseg-augbl = w_belnr.
+
+      DELETE i_bseg.
+    ENDIF.
+  ENDLOOP.
+
+*for tax amount
+  IF i_bseg[] IS NOT INITIAL.
+
+    SELECT bukrs belnr gjahr wt_qbshb buzei
+           INTO TABLE i_with
+           FROM with_item
+           FOR ALL ENTRIES IN i_bseg
+           WHERE bukrs = i_bseg-bukrs AND
+                 belnr = i_bseg-belnr AND
+                 gjahr = i_bseg-gjahr AND
+                 buzei = i_bseg-buzei.
+
+  ENDIF.
+
+  DATA: count   TYPE n VALUE 0,
+        v_belnr TYPE with_item-belnr,
+        v_buzei TYPE with_item-buzei,
+        v_wrbtr TYPE bseg-wrbtr,
+        w_qbshb TYPE with_item-wt_qbshb.
+** -> Begin of changes by of Vipul on 11/09/24 for ATC,
+  sort i_with by bukrs.
+*  ** ->End of changes by of Vipul on 11/09/24 for ATC
+  LOOP AT i_with.
+    v_buzei = i_with-buzei.
+    AT NEW wt_qbshb.
+      w_qbshb = w_qbshb + i_with-wt_qbshb.
+      v_belnr = i_with-belnr.
+    ENDAT.
+    AT LAST.
+      i_with-belnr = v_belnr.
+      i_with-buzei = v_buzei.
+      i_with-wt_qbshb = w_qbshb.
+      i_with-count = 1.
+      MODIFY i_with.
+    ENDAT.
+  ENDLOOP.
+
+  LOOP AT i_with.
+    IF i_with-count = 0.
+      DELETE i_with.
+    ENDIF.
+  ENDLOOP.
+
+  LOOP AT i_with.
+    i_with-wt_qbshb = -1 * i_with-wt_qbshb.
+    MODIFY i_with.
+    CLEAR i_with.
+  ENDLOOP.
+
+  LOOP AT i_bseg.
+    READ TABLE i_with WITH KEY belnr = i_bseg-belnr buzei = i_bseg-buzei.
+    IF sy-subrc = 0.
+      i_bseg-wrbtr = i_bseg-wrbtr.
+*      - I_BSEG-QBSHB.
+      i_bseg-qbshb = i_with-wt_qbshb.
+      MODIFY i_bseg.
+    ENDIF.
+  ENDLOOP.
+
+ENDFORM.                    " GET-DATA
+*&---------------------------------------------------------------------*
+*&      Form  DISPLAY
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM display .
+
+  "SOC AAKASH TYAGI / MANOJ RANE S 4000006749: AT:E:Chgs Payment advice and email body ON 28/07/2023
+  CLEAR : gs_vim_head , lv_factor.
+  SELECT SINGLE * FROM /opt/vim_1head INTO gs_vim_head WHERE docid = gv_kidno.
+  IF gs_vim_head-doctype = 'YPO_INV' OR gs_vim_head-doctype = 'YPO_PIPE'.
+    lv_factor = gs_vim_head-gross_amount / ( gs_vim_head-net_amount + gs_vim_head-beznk ).
+    gv_gross_amt = gs_vim_head-gross_amount - ( gs_vim_head-beznk * lv_factor ).
+    SELECT * FROM yroa_vim_reten INTO TABLE it_reten WHERE docid = gv_kidno AND ret_reason IN ( 'D01', 'D02' , 'D03' , 'D04' , 'D05' ).
+    IF it_reten[] IS NOT INITIAL.
+      LOOP AT it_reten INTO wa_reten.
+        i_bseg-belnr = gv_kidno+2(10).
+        i_bseg-sgtxt = wa_reten-sgtxt.
+*        *  BEGIN OF CHANGES BY OF Vipul ON 04Feb25 FOR ATC
+        i_bseg-wrbtr = wa_reten-dmbtr * lv_factor. "#EC CI_FLDEXT_OK[2610650]
+*        * END CHANGES BY OF Vipul ON 04Feb25 FOR ATC
+        APPEND i_bseg.
+        CLEAR : wa_reten.
+      ENDLOOP.
+    ENDIF.
+  ELSE.
+    SELECT * FROM yroa_vim_reten INTO TABLE it_reten WHERE docid = gv_kidno AND ret_reason IN ( 'D01', 'D02' , 'D03' , 'D04' , 'D05' ).
+    IF it_reten[] IS NOT INITIAL.
+      LOOP AT it_reten INTO wa_reten.
+        i_bseg-belnr = gv_kidno+2(10).
+        i_bseg-sgtxt = wa_reten-sgtxt.
+        i_bseg-wrbtr = wa_reten-dmbtr.
+        APPEND i_bseg.
+        CLEAR : wa_reten.
+      ENDLOOP.
+    ENDIF.
+  ENDIF.
+  "EOC AAKASH TYAGI / MANOJ RANE S 4000006749: AT:E:Chgs Payment advice and email body ON 28/07/2023
+* Soc Kartik / Tanvi DATE 24/072025
+  SELECT belnr,bktxt,gjahr,bukrs FROM bkpf WHERE belnr = @i_bseg-belnr and bukrs = @i_bseg-bukrs and gjahr = @i_bseg-gjahr  into @data(ls_bkpf).
+    ENDSELECT.
+    IF ls_bkpf-bktxt is NOT INITIAL and gv_kidno is INITIAL.
+gv_kidno = ls_bkpf-bktxt.
+    ENDIF.
+* Eoc Kartik / Tanvi DATE 24/072025
+*Kartik / Tanvi.
+
+
+  CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
+    EXPORTING
+      formname           = 'YRF_CHEQUE_FORWARDING_NEW'
+*     VARIANT            = ' '
+*     DIRECT_CALL        = ' '
+    IMPORTING
+      fm_name            = w_fm_name
+*SOM - adding the following exceptions
+    EXCEPTIONS
+      no_form            = 1
+      no_function_module = 2
+      OTHERS             = 3.
+*SOM - adding the following exceptions
+  IF sy-subrc <> 0.
+* MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*         WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+  ENDIF.
+
+  CALL FUNCTION w_fm_name
+    EXPORTING
+      w_c            = ' ' "p_c
+      w_d            = 'X' "p_d
+** BOC RAMBHAROS MEENA & CHINARI SAROJ DATED 20.12.2006. DD INFORMATION
+      w_dd_no        = p_dd_no "DD NUMBER.
+      w_dd_dt        = p_dd_dt "DD DATE.
+      w_ddchrg       = p_ddchrg "DD CHARGES.
+      w_po_no        = w_po_no
+      w_invoice_no   = w_invoice_no
+      w_invoice_date = w_invoice_date_char
+      w_tax_ind      = lv_tax "By Kunal/Sunny for RMS:-1031 on 04/01/2019 for Adding text in the payment advice based on tax type
+** BOC RAMBHAROS MEENA & CHINARI SAROJ DATED 20.12.2006. DD INFORMATION
+*SOC Deekshita & Jawahar 11.09.2019 charm 753 pass BWS amt
+      w_inamt        = lv_inamt
+*EOC Deekshita & Jawahar 11.09.2019 charm 753 pass BWS amt
+      "SOC AAKASH TYAGI / MANOJ RANE S 4000006749: AT:E:Chgs Payment advice and email body ON 14/07/2023
+      w_kidno        = gv_kidno
+      w_gross_amt    = gv_gross_amt
+      w_net_amt      = lv_new_amt
+      "EOC AAKASH TYAGI / MANOJ RANE S 4000006749: AT:E:Chgs Payment advice and email body ON 14/07/2023
+      "SOC AAKASH TYAGI / SANDEEP SINGH S 4000007024: AT:E:Mod.- YRFS024- logic for UTR number ON 01/09/2023
+      w_bank_det     = gv_trans_det
+      "EOC AAKASH TYAGI / SANDEEP SINGH S 4000007024: AT:E:Mod.- YRFS024- logic for UTR number ON 01/09/2023
+*     ARCHIVE_INDEX  =
+*     ARCHIVE_INDEX_TAB          =
+*     ARCHIVE_PARAMETERS         =
+*     CONTROL_PARAMETERS         =
+*     MAIL_APPL_OBJ  =
+*     MAIL_RECIPIENT =
+*     MAIL_SENDER    =
+*     OUTPUT_OPTIONS =
+*     USER_SETTINGS  = 'X'
+* IMPORTING
+*     DOCUMENT_OUTPUT_INFO       =
+*     JOB_OUTPUT_INFO            =
+*     JOB_OUTPUT_OPTIONS         =
+    TABLES
+      i_main         = i_main
+      i_bseg         = i_bseg
+      i_open         = i_open
+* EXCEPTIONS
+*     FORMATTING_ERROR           = 1
+*     INTERNAL_ERROR = 2
+*     SEND_ERROR     = 3
+*     USER_CANCELED  = 4
+*     OTHERS         = 5
+    .
+  IF sy-subrc <> 0.
+* MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*         WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+  ENDIF.
+
+ENDFORM.                    " DISPLAY
+*&---------------------------------------------------------------------*
+*&      Form  MATERIAL_F4
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM material_f4 .
+
+  flag  = 'X'.
+  EXPORT flag TO MEMORY ID 'MB51_FLAG'.
+  CALL TRANSACTION 'FB03'.
+  GET PARAMETER ID 'BELNR' FIELD s_belnr-low.
+
+ENDFORM.                    " MATERIAL_F4
+*&---------------------------------------------------------------------*
+*&      Form  append_street4
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM append_street4 .
+
+* SOC BY PRIYANKA AS ON 06.01.2005
+* STREET FIELD ADDED
+*** -> Begin of changes by of Vipul on 11/09/24 for ATC
+sort i_adrc.
+*** ->End of changes by of Vipul on 11/09/24 for ATC
+  READ TABLE i_adrc INDEX 1.
+  IF sy-subrc = 0.
+    IF i_main[] IS INITIAL.
+      i_main-str_suppl3 = i_adrc-str_suppl3.
+      i_main-location   = i_adrc-location.
+      APPEND i_main.
+      CLEAR i_main.
+    ELSE.
+      LOOP AT i_main.
+        i_main-str_suppl3 = i_adrc-str_suppl3.
+        i_main-location   = i_adrc-location.
+        MODIFY i_main.
+        CLEAR i_main.
+      ENDLOOP.
+    ENDIF.
+
+  ENDIF.
+* EOC
+
+
+ENDFORM.                    " append_street4
+*---------------------------------------------------------------------*
+*      Form  VALIDATE_COMPANY
+*---------------------------------------------------------------------*
+*  validate company in BKPF
+*----------------------------------------------------------------------*
+FORM validate_company .
+
+  DATA l_bukrs(4).
+
+  IF NOT p_bukrs IS INITIAL.
+    SELECT SINGLE bukrs INTO l_bukrs
+                        FROM bkpf
+                        WHERE bukrs = p_bukrs.
+  ENDIF.
+
+  IF sy-subrc NE 0.
+* Company code & does not exist
+    MESSAGE e049(yf01) WITH p_bukrs.
+* Begin of Change by XSAP_SUBHEND
+  ELSE.
+    AUTHORITY-CHECK OBJECT 'F_BKPF_BUK'
+       ID 'BUKRS' FIELD p_bukrs
+       ID 'ACTVT' FIELD '03'.
+    IF sy-subrc <> 0.
+      DATA(lv_text) = |You are not Authorized for the company code, { p_bukrs }|.
+      MESSAGE lv_text TYPE 'E'.
+    ENDIF.
+* End of Change by XSAP_SUBHEND
+  ENDIF.
+
+
+
+ENDFORM.                    " VALIDATE_COMPANY
+*---------------------------------------------------------------------*
+*      Form  VALIDATE_DOC_NUMBER
+*---------------------------------------------------------------------*
+* VALIDATE BELNR IN BKPF
+*----------------------------------------------------------------------*
+FORM validate_doc_number .
+
+  DATA l_belnr(10).
+
+* VALIDATE ALL ENTRIES
+  LOOP AT s_belnr WHERE option = 'BT'
+                  AND   sign   = 'I'.
+
+    IF  s_belnr-low IS INITIAL AND
+    NOT s_belnr-high IS INITIAL.
+* Please enter the from value first
+      MESSAGE w053(yf01).
+    ENDIF.
+
+    IF NOT s_belnr-low IS INITIAL.
+      CLEAR l_belnr.
+      SELECT SINGLE belnr INTO l_belnr FROM bkpf
+                      WHERE belnr = s_belnr-low
+                      AND   bukrs = p_bukrs.
+      IF sy-subrc NE 0.
+* Document number & does not exist for company code &
+        MESSAGE e054(yf01) WITH s_belnr-low p_bukrs.
+      ENDIF.
+    ENDIF.
+
+    IF NOT s_belnr-high IS INITIAL.
+      CLEAR l_belnr.
+      SELECT SINGLE belnr INTO l_belnr FROM bkpf
+                      WHERE belnr = s_belnr-high
+                      AND   bukrs = p_bukrs.
+      IF sy-subrc NE 0.
+* Document number & does not exist for company code &
+        MESSAGE e054(yf01) WITH s_belnr-high p_bukrs.
+      ENDIF.
+    ENDIF.
+
+  ENDLOOP.
+
+  LOOP AT s_belnr WHERE option = 'EQ'
+                  AND   sign   = 'I'.
+
+    IF  s_belnr-low IS INITIAL AND
+    NOT s_belnr-high IS INITIAL.
+* Please enter the from value first
+      MESSAGE w053(yf01).
+    ENDIF.
+
+    IF NOT s_belnr-low IS INITIAL.
+      CLEAR l_belnr.
+      SELECT SINGLE belnr INTO l_belnr FROM bkpf
+                      WHERE belnr = s_belnr-low
+                      AND   bukrs = p_bukrs.
+      IF sy-subrc NE 0.
+* Document number & does not exist for company code &
+        MESSAGE e054(yf01) WITH s_belnr-low p_bukrs.
+      ENDIF.
+    ENDIF.
+
+    IF NOT s_belnr-high IS INITIAL.
+      CLEAR l_belnr.
+      SELECT SINGLE belnr INTO l_belnr FROM bkpf
+                      WHERE belnr = s_belnr-high
+                      AND   bukrs = p_bukrs.
+      IF sy-subrc NE 0.
+* Document number & does not exist for company code &
+        MESSAGE e054(yf01) WITH s_belnr-high p_bukrs.
+      ENDIF.
+    ENDIF.
+
+  ENDLOOP.
+
+
+ENDFORM.                    " VALIDATE_DOC_NUMBER
+*---------------------------------------------------------------------*
+*     Form  VALIDATE_CHECK_NUMBER
+*---------------------------------------------------------------------*
+* VALIDATE CHECK NUMBER AGAINST PAYR
+*----------------------------------------------------------------------*
+FORM validate_check_number .
+
+  DATA l_chect(13).
+
+  IF NOT p_chect IS INITIAL.
+    LOOP AT s_belnr WHERE option = 'BT'
+                  AND   sign   = 'I'.
+
+      IF NOT s_belnr-low IS INITIAL.
+        CLEAR l_chect.
+        SELECT SINGLE chect INTO l_chect
+                            FROM payr
+                            WHERE chect = p_chect
+                            AND   vblnr = s_belnr-low.
+
+        IF sy-subrc NE 0.
+* Check Number & does not exist for document number &
+          MESSAGE e055(yf01) WITH p_chect s_belnr-low.
+        ENDIF.
+      ENDIF.
+
+      IF NOT s_belnr-high IS INITIAL.
+        CLEAR l_chect.
+        SELECT SINGLE chect INTO l_chect
+                            FROM payr
+                            WHERE chect = p_chect
+                            AND   vblnr = s_belnr-high.
+
+        IF sy-subrc NE 0.
+* Check Number & does not exist for document number &
+          MESSAGE e055(yf01) WITH p_chect s_belnr-high.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+
+    LOOP AT s_belnr WHERE option = 'EQ'
+                  AND   sign   = 'I'.
+
+      IF NOT s_belnr-low IS INITIAL.
+        CLEAR l_chect.
+        SELECT SINGLE chect INTO l_chect
+                            FROM payr
+                            WHERE chect = p_chect
+                            AND   vblnr = s_belnr-low.
+
+        IF sy-subrc NE 0.
+* Check Number & does not exist for document number &
+          MESSAGE e055(yf01) WITH p_chect s_belnr-low.
+        ENDIF.
+      ENDIF.
+
+      IF NOT s_belnr-high IS INITIAL.
+        CLEAR l_chect.
+        SELECT SINGLE chect INTO l_chect
+                            FROM payr
+                            WHERE chect = p_chect
+                            AND   vblnr = s_belnr-high.
+
+        IF sy-subrc NE 0.
+* Check Number & does not exist for document number &
+          MESSAGE e055(yf01) WITH p_chect s_belnr-high.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+
+
+  ENDIF.
+
+ENDFORM.                    " VALIDATE_CHECK_NUMBER
+*&---------------------------------------------------------------------*
+*&      Form  BKPF_GET_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM bkpf_get_data .
+
+*** -> Begin of changes by of Vipul on 11/09/24 for ATC
+  SELECT bukrs belnr gjahr lifnr kunnr wrbtr hkont koart sgtxt ebeln zuonr "#EC CI_DB_OPERATION_OK[2431747]
+      INTO CORRESPONDING FIELDS OF TABLE i_bseg1
+      FROM bseg
+       WHERE bukrs = p_bukrs AND
+             belnr IN s_belnr AND
+             gjahr = p_gjahr.
+*    ** ->End of changes by of Vipul on 11/09/24 for ATC,
+
+
+*****************************************************************
+
+  IF i_bseg1[] IS NOT INITIAL.
+    SELECT ebeln bsart ernam oid_extbol FROM ekko INTO CORRESPONDING FIELDS OF TABLE it_ekko FOR ALL ENTRIES IN i_bseg1
+                                          WHERE  ( ebeln = i_bseg1-ebeln OR ebeln = i_bseg1-zuonr+0(10) ). " add by sachin on 20.11.2013 PO number from assignment
+*                                          AND bukrs =   lt_bseg-bukrs  .
+    DELETE it_ekko WHERE ebeln IS INITIAL .
+**************************changes by pradeep
+
+    IF it_ekko IS NOT INITIAL .
+      SELECT ebeln
+             banfn FROM eket INTO TABLE i_eket
+              FOR ALL ENTRIES IN it_ekko
+              WHERE ebeln = it_ekko-ebeln .
+
+    ENDIF .
+
+    IF i_eket IS NOT INITIAL .
+
+      SELECT banfn
+             afnam FROM eban INTO TABLE i_eban
+               FOR ALL ENTRIES IN i_eket
+               WHERE banfn = i_eket-banfn .
+    ENDIF .
+
+  ENDIF.
+***********************************************************
+
+
+*****SOC TO REMOVE BANK CHARGES
+********** -> Begin of changes by of Jatin on 08Nov24 for ATC
+*  SELECT wrbtr
+*      INTO w_bnkchrg
+*      FROM bseg
+*       WHERE bukrs = p_bukrs AND
+*             belnr IN s_belnr AND
+*             gjahr = p_gjahr AND " year restored ashok chinari 20.9.7
+*             hkont EQ '0006199380'.
+*  ENDSELECT.
+  SELECT wrbtr
+      INTO w_bnkchrg
+** -> Begin of changes by  KRITIKA on 09.11.2024 for ATC
+      FROM bseg        "#EC CI_DB_OPERATION_OK[2431747]
+** -> End of changes by  KRITIKA on 09.11.2024 for ATC
+       WHERE bukrs = p_bukrs AND
+             belnr IN s_belnr AND
+             gjahr = p_gjahr AND " year restored ashok chinari 20.9.7
+             hkont EQ '0006199380' ORDER BY PRIMARY KEY.
+  ENDSELECT.
+********** <- End changes by of Jatin on 08Nov24 for ATC
+*****EOC TO REMOVE BANK CHARGES
+
+  SELECT bukrs belnr gjahr waers
+    INTO CORRESPONDING FIELDS OF TABLE i_bkpf1
+    FROM bkpf
+      WHERE bukrs = p_bukrs AND
+            belnr IN s_belnr AND
+            gjahr = p_gjahr.
+
+** -> Begin of changes by of Vipul on 11/09/24 for ATC
+*  SELECT laufd
+*       laufi
+*       xvorl
+*       zbukr
+*       lifnr
+*       kunnr
+*       empfg
+*       vblnr
+*       bukrs
+*       belnr
+*       gjahr
+*       zlsch
+*       waers
+*       hbkid
+*       budat
+*       wrbtr
+*       gsber
+*       sname1
+*"SOC AAKASH TYAGI / MANOJ RANE S 4000006749: AT:E:Chgs Payment advice and email body ON 14/07/2023
+*       kidno
+*       zuonr
+*"EOC AAKASH TYAGI / MANOJ RANE S 4000006749: AT:E:Chgs Payment advice and email body ON 14/07/2023
+*    INTO TABLE it_regup
+*       FROM regup           WHERE zbukr = p_bukrs AND
+*            vblnr IN s_belnr AND
+*            laufd = p_laufd.
+SELECT laufd
+       laufi
+       xvorl
+       zbukr
+       lifnr
+       kunnr
+       empfg
+       vblnr
+       bukrs
+       belnr
+       gjahr
+       zlsch
+       waers
+       hbkid
+       budat
+       wrbtr
+       gsber
+       sname1
+"SOC AAKASH TYAGI / MANOJ RANE S 4000006749: AT:E:Chgs Payment advice and email body ON 14/07/2023
+       kidno
+       zuonr
+"EOC AAKASH TYAGI / MANOJ RANE S 4000006749: AT:E:Chgs Payment advice and email body ON 14/07/2023
+    INTO TABLE it_regup
+       FROM regup           WHERE zbukr = p_bukrs AND
+            vblnr IN s_belnr AND
+            laufd = p_laufd ORDER BY   PRIMARY KEY.
+*** ->End of changes by of Vipul on 11/09/24 for ATC
+***     AND
+***            gjahr = p_gjahr.
+  IF sy-subrc = 0.
+
+
+    SELECT program_run_date
+          run_identification
+          company_code
+          voucher_number
+          bank_ref_number
+          cheque_number
+          dd_number
+          utr_neft_ref_number
+          vendor_code
+          value_date
+     intercompdoc
+      FROM yrfa_hdfc_proxy INTO TABLE it_hdfc
+     FOR ALL ENTRIES IN it_regup
+      WHERE program_run_date = it_regup-laufd
+      AND   run_identification = it_regup-laufi
+      AND   company_code = it_regup-zbukr
+      AND   voucher_number = it_regup-vblnr
+      AND (  final_status = 'C-ERROR' OR final_status = 'CHANGED' ).
+*****EOC BY SUHANI AND SUNNY ON 02.05.19 TO INCLUDE C-ERROR STATUS AS WELL
+    IF sy-subrc = 0.
+      SORT it_hdfc BY company_code voucher_number.
+    ENDIF.
+
+*SOC Deekshita & Sunny Babla 20.04.2020 charm 4000002015 change logic for yrfa_icici_proxy
+    DATA : it_regup_icici TYPE TABLE OF ty_regup WITH HEADER LINE.
+
+    LOOP AT it_regup INTO DATA(ls_regup).
+      IF ls_regup-laufi(1) = 'C' AND ls_regup-xvorl NE 'X'.
+        APPEND ls_regup TO it_regup_icici.
+      ENDIF.
+      "SOC AAKASH TYAGI / MANOJ RANE S 4000006749: AT:E:Chgs Payment advice and email body ON 14/07/2023
+      IF ls_regup-kidno IS NOT INITIAL.
+        gv_kidno = ls_regup-kidno.
+      ENDIF.
+      "EOC AAKASH TYAGI / MANOJ RANE S 4000006749: AT:E:Chgs Payment advice and email body ON 14/07/2023
+      CLEAR: ls_regup.
+    ENDLOOP.
+
+    "SOC AAKASH TYAGI / MANOJ RANE S 4000006749: AT:E:Chgs Payment advice and email body ON 14/07/2023
+    IF gv_kidno IS INITIAL.
+*      sort it_regup.
+      READ TABLE it_regup INTO ls_regup INDEX 1.
+      IF sy-subrc = 0.
+        SELECT SINGLE bktxt FROM bkpf INTO lv_bktxt WHERE belnr = ls_regup-belnr AND bukrs = ls_regup-bukrs AND gjahr = ls_regup-gjahr.
+      ENDIF.
+    ENDIF.
+    CLEAR : lv_kid_len.
+    lv_kid_len = strlen( gv_kidno ).
+    IF lv_kid_len = 12.
+    ELSE.
+      CLEAR : lv_kid_len.
+      lv_kid_len = strlen( lv_bktxt ).
+      IF lv_kid_len = 12.
+        gv_kidno = lv_bktxt.
+      ENDIF.
+    ENDIF.
+    IF gv_kidno IS NOT INITIAL AND lv_kid_len = '12'.
+      SELECT SINGLE gross_amount FROM /opt/vim_1head INTO gv_gross_amt WHERE docid = gv_kidno.
+      IF sy-subrc EQ 0.
+        SELECT SINGLE doctype FROM /opt/vim_1head INTO lv_doctype WHERE docid = gv_kidno.
+        IF lv_doctype = 'YADV_INV' OR lv_doctype = 'YADV_REL'.
+** -> Begin of changes by of <Aditi> on <09/11/2024> for ATC
+*          SELECT SINGLE amount FROM yrfa_hdfc_proxy INTO lv_new_amt WHERE program_run_date = p_laufd AND company_code = p_bukrs
+*                                                                      AND voucher_number = s_belnr-low.
+          SELECT  amount FROM yrfa_hdfc_proxy INTO lv_new_amt UP TO 1 ROWS WHERE program_run_date = p_laufd AND company_code = p_bukrs
+                                                                      AND voucher_number = s_belnr-low ORDER BY PRIMARY KEY.
+          ENDSELECT.
+** -> End of changes by of <Aditi> on <09/11/2024> for ATC
+          IF sy-subrc NE 0.
+** -> Begin of changes by of <Aditi> on <09/11/2024> for ATC
+*            SELECT SINGLE amount FROM yrfa_icici_proxy INTO lv_new_amt WHERE gjahr = p_gjahr AND bukrs = p_bukrs
+*                                                                        AND belnr = s_belnr-low.
+            SELECT  amount FROM yrfa_icici_proxy INTO lv_new_amt UP TO 1 ROWS WHERE gjahr = p_gjahr AND bukrs = p_bukrs
+                                                                        AND belnr = s_belnr-low ORDER BY PRIMARY KEY.
+            ENDSELECT.
+** -> End of changes by of <Aditi> on <09/11/2024> for ATC
+            IF sy-subrc NE 0.
+** -> Begin of changes by of <Aditi> on <09/11/2024> for ATC
+*              SELECT SINGLE amount FROM yrfa_sbi_proxy INTO lv_new_amt WHERE program_run_date = p_laufd AND company_code = p_bukrs
+*                                                                        AND voucher_number = s_belnr-low.
+              SELECT amount FROM yrfa_sbi_proxy INTO lv_new_amt UP TO 1 ROWS WHERE program_run_date = p_laufd AND company_code = p_bukrs
+                                                                        AND voucher_number = s_belnr-low ORDER BY PRIMARY KEY.
+              ENDSELECT.
+** -> End of changes by of <Aditi> on <09/11/2024> for ATC
+              "SOC AAKASH TYAGI / SANDEEP SINGH S 4000007283: AT:E:CHANGES IN PAYMENT ADVISE  OF GMPL ON 27/10/2023
+** -> Begin of changes by of <Aditi> on <09/11/2024> for ATC
+              IF sy-subrc NE 0.
+*                SELECT SINGLE amount FROM yrfa_axis_proxy INTO lv_new_amt WHERE gjahr = p_gjahr AND bukrs = p_bukrs
+*                                                                            AND belnr = s_belnr-low.
+                SELECT  amount FROM yrfa_axis_proxy INTO lv_new_amt UP TO 1 ROWS WHERE gjahr = p_gjahr AND bukrs = p_bukrs
+                                                                            AND belnr = s_belnr-low ORDER BY PRIMARY KEY.
+                ENDSELECT.
+** -> End of changes by of <Aditi> on <09/11/2024> for ATC
+              ENDIF.
+              "EOC AAKASH TYAGI / SANDEEP SINGH S 4000007283: AT:E:CHANGES IN PAYMENT ADVISE  OF GMPL ON 27/10/2023
+            ENDIF.
+          ENDIF.
+        ENDIF.
+
+      ELSE.
+        CLEAR gv_kidno.
+      ENDIF.
+    ELSE.
+      CLEAR gv_kidno.
+    ENDIF.
+    "EOC AAKASH TYAGI / MANOJ RANE S 4000006749: AT:E:Chgs Payment advice and email body ON 14/07/2023
+
+    IF it_regup_icici[] IS NOT INITIAL.
+      SELECT bukrs, belnr, gjahr, cpudt
+        FROM bkpf
+        INTO TABLE @DATA(it_bkpf)
+        FOR ALL ENTRIES IN @it_regup_icici
+        WHERE bukrs = @it_regup_icici-zbukr
+        AND   belnr = @it_regup_icici-vblnr
+        AND   cpudt = @it_regup_icici-laufd.
+
+      SELECT bgmref
+                 belnr
+                 bukrs
+                 gjahr
+                utr_no  FROM yrfa_icici_proxy INTO TABLE it_icici
+                FOR ALL ENTRIES IN it_bkpf
+                WHERE bukrs = it_bkpf-bukrs
+                AND   belnr = it_bkpf-belnr
+                AND   gjahr = it_bkpf-gjahr.
+    ENDIF.
+*               FOR ALL ENTRIES IN it_regup
+*               WHERE belnr = it_regup-vblnr
+*               AND bukrs = it_regup-zbukr
+*               AND gjahr = it_regup-gjahr
+*               AND status = '000001'.
+*EOC Deekshita & Sunny Babla 20.04.2020 charm 4000002015 change logic for yrfa_icici_proxy
+*EOC Deekshita & Jawahar 12.9.2019 charm 753 changes in where clause for performance
+    IF sy-subrc = 0.
+      SORT it_icici BY belnr bukrs gjahr.
+    ENDIF.
+
+    "SOC AAKASH TYAGI / SANDEEP SINGH S 4000007283: AT:E:CHANGES IN PAYMENT ADVISE  OF GMPL ON 27/10/2023
+    IF it_hdfc[] IS INITIAL AND it_icici[] IS INITIAL.
+      IF it_regup_icici[] IS NOT INITIAL.
+        SELECT bukrs belnr gjahr cpudt
+          FROM bkpf
+          INTO TABLE it_bkpf
+          FOR ALL ENTRIES IN it_regup_icici
+          WHERE bukrs = it_regup_icici-zbukr
+          AND   belnr = it_regup_icici-vblnr
+          AND   cpudt = it_regup_icici-laufd.
+
+        SELECT bgmref,
+               belnr,
+               bukrs,
+               gjahr,
+               utr_no  FROM yrfa_axis_proxy INTO TABLE @DATA(it_axis)
+                       FOR ALL ENTRIES IN @it_bkpf
+                       WHERE bukrs = @it_bkpf-bukrs
+                       AND   belnr = @it_bkpf-belnr
+                       AND   gjahr = @it_bkpf-gjahr.
+      ENDIF.
+
+      IF sy-subrc = 0.
+        SORT it_axis BY belnr bukrs gjahr.
+      ENDIF.
+
+    ENDIF.
+    "EOC AAKASH TYAGI / SANDEEP SINGH S 4000007283: AT:E:CHANGES IN PAYMENT ADVISE  OF GMPL ON 27/10/2023
+
+    LOOP AT it_regup INTO DATA(wa_regup).
+      MOVE-CORRESPONDING wa_regup TO i_payr.
+      i_payr-rzawe = wa_regup-zlsch.
+*      i_payr-pridt = wa_regup-laufd.
+      i_payr-rwbtr = wa_regup-wrbtr.
+*      i_payr-strgb = wa_regup-gsber.
+*      i_payr-znme1   = wa_regup-sname1.
+      i_payr-waers   = wa_regup-waers.
+***SOC BY SUNNY & SANYOGITA ON 22.04.2019 - TO RESOLVE PAYMENT ADVISE PRINT ISSUE
+***      i_payr-xbukr   = wa_regup-bukrs.
+      IF wa_regup-bukrs <> wa_regup-zbukr.
+        i_payr-xbukr   = 'X'.
+      ENDIF.
+***EOC BY SUNNY & SANYOGITA ON 22.04.2019 - TO RESOLVE PAYMENT ADVISE PRINT ISSUE
+      CLEAR wa_hdfc.
+      READ TABLE it_hdfc INTO wa_hdfc WITH  KEY  company_code  = wa_regup-zbukr
+                                                       voucher_number = wa_regup-vblnr BINARY SEARCH.
+      IF sy-subrc = 0.
+        "SOC AAKASH TYAGI / SANDEEP SINGH S 4000007024: AT:E:Mod.- YRFS024- logic for UTR number ON 01/09/2023
+*        IF i_payr-chect IS INITIAL AND wa_hdfc-bank_ref_number IS NOT INITIAL.
+*          i_payr-chect = wa_hdfc-bank_ref_number.
+*          i_payr-hbkid = 'HDFC'. "added by Surbhi
+*        ELSEIF i_payr-chect IS INITIAL AND wa_hdfc-cheque_number IS NOT INITIAL.
+*          i_payr-chect = wa_hdfc-cheque_number.
+*          i_payr-hbkid = 'HDFC'. "added by Surbhi
+*        ELSEIF i_payr-chect IS INITIAL AND wa_hdfc-dd_number IS NOT INITIAL.
+*          i_payr-chect = wa_hdfc-dd_number.
+*          i_payr-hbkid = 'HDFC'. "added by Surbhi
+*        ELSEIF i_payr-chect IS INITIAL AND wa_hdfc-utr_neft_ref_number IS NOT INITIAL.
+*          i_payr-chect = wa_hdfc-utr_neft_ref_number.
+*          i_payr-hbkid = 'HDFC'. "added by Surbhi
+*        ENDIF.
+
+        IF i_payr-chect IS INITIAL AND wa_hdfc-dd_number IS NOT INITIAL.
+          i_payr-chect = wa_hdfc-dd_number.
+          i_payr-hbkid = 'HDFC'.
+        ELSEIF i_payr-chect IS INITIAL AND wa_hdfc-cheque_number IS NOT INITIAL.
+          i_payr-chect = wa_hdfc-cheque_number.
+          i_payr-hbkid = 'HDFC'.
+        ELSEIF i_payr-chect IS INITIAL AND wa_hdfc-bank_ref_number IS NOT INITIAL.
+          i_payr-chect = wa_hdfc-bank_ref_number.
+          i_payr-hbkid = 'HDFC'.
+        ELSEIF i_payr-chect IS INITIAL AND wa_hdfc-utr_neft_ref_number IS NOT INITIAL.
+          i_payr-chect = wa_hdfc-utr_neft_ref_number.
+          i_payr-hbkid = 'HDFC'.
+        ENDIF.
+        IF wa_hdfc-utr_neft_ref_number IS NOT INITIAL.
+          gv_trans_det = i_payr-chect && '/' && wa_hdfc-utr_neft_ref_number.
+        ELSE.
+          gv_trans_det = i_payr-chect.
+        ENDIF.
+        "EOC AAKASH TYAGI / SANDEEP SINGH S 4000007024: AT:E:Mod.- YRFS024- logic for UTR number ON 01/09/2023
+        p_dd_dt =  wa_hdfc-program_run_date.
+
+      ELSE.
+        READ TABLE it_icici INTO DATA(wa_icici) WITH  KEY  belnr  = wa_regup-vblnr
+                                                        bukrs = wa_regup-zbukr BINARY SEARCH.
+***SOC BY SANYOGITA & SUNNY ON : RMS - 1474 : TO RESOLVE THE ICICI ISSUE
+***                                                        gjahr = wa_regup-gjahr BINARY SEARCH.
+***EOC BY SANYOGITA & SUNNY ON : RMS - 1474 : TO RESOLVE THE ICICI ISSUE
+        IF sy-subrc = 0.
+          i_payr-chect = wa_icici-utr_no.
+          i_payr-hbkid = 'ICICI'. "added by Surbhi
+          "SOC AAKASH TYAGI / SANDEEP SINGH S 4000007283: AT:E:CHANGES IN PAYMENT ADVISE  OF GMPL ON 27/10/2023
+        ELSE.
+          READ TABLE it_axis INTO DATA(wa_axis) WITH  KEY  belnr  = wa_regup-vblnr
+                                                        bukrs = wa_regup-zbukr BINARY SEARCH.
+          IF sy-subrc = 0.
+            i_payr-chect = wa_axis-utr_no.
+            i_payr-hbkid = 'AXIS'.
+          ENDIF.
+          "EOC AAKASH TYAGI / SANDEEP SINGH S 4000007283: AT:E:CHANGES IN PAYMENT ADVISE  OF GMPL ON 27/10/2023
+        ENDIF.
+        "SOC AAKASH TYAGI / SANDEEP SINGH S 4000007024: AT:E:Mod.- YRFS024- logic for UTR number ON 01/09/2023
+        gv_trans_det = i_payr-chect.
+        "EOC AAKASH TYAGI / SANDEEP SINGH S 4000007024: AT:E:Mod.- YRFS024- logic for UTR number ON 01/09/2023
+        p_dd_dt =  wa_regup-laufd.
+
+      ENDIF.
+      p_dd_no =  i_payr-chect.
+***CHECK IF DATA IS AVAILABLE IN HDFC AND ICICI REVERSE FEED PROXY TABLES
+      IF wa_icici IS INITIAL AND wa_hdfc IS INITIAL AND wa_axis IS INITIAL.
+      ELSE.
+        APPEND i_payr.
+      ENDIF.
+      CLEAR : wa_regup.
+    ENDLOOP.
+  ENDIF.
+
+***SOC BY SANYOGITA & SUNNY ON 15.04.2019 - TO RESOLVE PAYMENT ADVISE PRINTING LOGIC
+  DATA: itab_bkpf_cp TYPE STANDARD TABLE OF bkpf WITH HEADER LINE,
+        itab_bvor_cp TYPE STANDARD TABLE OF bvor WITH HEADER LINE.
+
+  IF it_regup[] IS NOT INITIAL.
+    REFRESH itab_bkpf_cp[].
+    SELECT * FROM bkpf INTO CORRESPONDING FIELDS OF TABLE itab_bkpf_cp
+             FOR ALL ENTRIES IN it_regup
+             WHERE  belnr = it_regup-vblnr AND
+                    bukrs  = it_regup-zbukr AND
+                    cpudt = it_regup-laufd.
+    IF itab_bkpf_cp[] IS NOT INITIAL.
+      SELECT * FROM bvor INTO CORRESPONDING FIELDS OF TABLE itab_bvor_cp
+               FOR ALL ENTRIES IN itab_bkpf_cp
+               WHERE bvorg = itab_bkpf_cp-bvorg.
+
+      LOOP AT i_payr.
+        CLEAR itab_bkpf_cp.
+        READ TABLE itab_bkpf_cp WITH KEY belnr = i_payr-vblnr
+                                         bukrs = i_payr-zbukr.
+        IF itab_bkpf_cp IS NOT INITIAL.
+          i_payr-gjahr = itab_bkpf_cp-gjahr.
+          MODIFY i_payr TRANSPORTING gjahr.
+        ENDIF.
+
+      ENDLOOP.
+    ENDIF.
+  ENDIF.
+***EOC BY SANYOGITA & SUNNY ON 15.04.2019 - TO RESOLVE PAYMENT ADVISE PRINTING LOGIC
+
+** Cross Company Code : Logic
+** -> Begin of changes by of <Aditi> on <09/11/2024> for ATC
+*  SELECT SINGLE * FROM bvor INTO @DATA(ls_bvor)
+*    WHERE bukrs = @p_bukrs
+*    AND gjahr = @p_gjahr
+*    AND belnr IN @s_belnr.
+  SELECT * FROM bvor INTO @DATA(ls_bvor)
+    UP TO 1 ROWS
+    WHERE bukrs = @p_bukrs
+    AND gjahr = @p_gjahr
+    AND belnr IN @s_belnr
+    ORDER BY PRIMARY KEY.
+  ENDSELECT.
+** -> End of changes by of <Aditi> on <09/11/2024> for ATC
+  IF sy-subrc = 0.
+    DATA(p_belnr) = s_belnr-low.
+** -> Begin of changes by of <Aditi> on <09/11/2024> for ATC
+*    SELECT SINGLE * FROM bvor INTO @DATA(ls_bvor1)
+*      WHERE bvorg = @ls_bvor-bvorg "AND bukrs <> @p_bukrs
+**          AND gjahr <> @p_gjahr
+*      AND belnr <> @p_belnr.
+    SELECT  * FROM bvor INTO @DATA(ls_bvor1)
+      UP TO 1 ROWS
+      WHERE bvorg = @ls_bvor-bvorg "AND bukrs <> @p_bukrs
+*          AND gjahr <> @p_gjahr
+      AND belnr <> @p_belnr
+      ORDER BY PRIMARY KEY.
+    ENDSELECT.
+** -> End of changes by of <Aditi> on <09/11/2024> for ATC
+    IF sy-subrc = 0.
+      LOOP AT i_payr ASSIGNING FIELD-SYMBOL(<lfs_payr>).
+        <lfs_payr>-vblnr = ls_bvor1-belnr.
+        <lfs_payr>-zbukr = ls_bvor1-bukrs.
+        <lfs_payr>-gjahr = ls_bvor1-gjahr.
+      ENDLOOP.
+*          p_bukrs = ls_bvor1-belnr.
+*          p_gjahr = ls_bvor1-bukrs.
+*          p_belnr = ls_bvor1-gjahr.
+    ENDIF.
+
+  ENDIF.
+** Cross Company Code : Logic
+
+
+*****************************************************************************************************
+***SOC BY SUNNY & SANYOGITA ON 22.04.2019 - TO RESOLVE PAYMENT ADVISE PRINT ISSUE
+  IF i_payr[] IS NOT INITIAL.
+** Code Comment by Bipin(SAP) / Sunny : 12/03/2018 : EOC
+** -> Begin of changes by of <Aditi> on <09/11/2024> for ATC
+**    ** -> Begin of changes by of Vipul on 11/09/24 for ATC
+*    SELECT bukrs belnr gjahr buzei kunnr lifnr INTO TABLE i_bseg_ven"#EC CI_DB_OPERATION_OK[2431747]
+**      ** ->End of changes by of Vipul on 11/09/24 for ATC,
+*    FROM bseg
+*    FOR ALL ENTRIES IN i_payr
+*    WHERE bukrs = p_bukrs
+*    AND   belnr = i_payr-vblnr
+*    AND   gjahr = p_gjahr.
+**    AND   BUZEI = '1'.
+*    ** -> Begin of changes by of Vipul on 11/09/24 for ATC
+    SELECT bukrs belnr gjahr buzei kunnr lifnr INTO TABLE i_bseg_ven"#EC CI_DB_OPERATION_OK[2431747]
+*      ** ->End of changes by of Vipul on 11/09/24 for ATC,
+    FROM bseg
+    FOR ALL ENTRIES IN i_payr
+    WHERE bukrs = p_bukrs
+    AND   belnr = i_payr-vblnr
+    AND   gjahr = p_gjahr
+    ORDER BY PRIMARY KEY.
+*    AND   BUZEI = '1'.
+** -> End of changes by of <Aditi> on <09/11/2024> for ATC
+*   boc Priya and chinari call id 94675
+
+    LOOP AT i_payr WHERE lifnr IS INITIAL AND kunnr IS INITIAL.
+*      READ TABLE i_bseg_VEN WITH KEY bukrs = p_bukrs belnr = i_payr-vblnr GJAHR = P_GJAHR BUZEI = '1'.
+      LOOP AT i_bseg_ven WHERE bukrs = p_bukrs AND belnr = i_payr-vblnr AND gjahr = p_gjahr
+      AND NOT lifnr IS INITIAL .
+        IF sy-subrc = 0.
+          i_payr-lifnr = i_bseg_ven-lifnr.
+          i_payr-kunnr = i_bseg_ven-kunnr.
+          MODIFY i_payr TRANSPORTING kunnr lifnr.
+        ENDIF.
+      ENDLOOP.
+    ENDLOOP.
+  ENDIF.
+* Eoc ashok and chinari call id 91832
+
+  IF  i_payr[] IS INITIAL.
+    LOOP AT i_bseg1 WHERE hkont+3(3) = '342'.
+      i_payr-vblnr = i_bseg1-belnr.
+      i_payr-zbukr = i_bseg1-bukrs.
+      i_payr-sgtxt = i_bseg1-sgtxt.
+      i_payr-lifnr = i_bseg1-lifnr.
+      i_payr-kunnr = i_bseg1-kunnr.
+      i_payr-gjahr = i_bseg1-gjahr.
+      i_payr-rwbtr = i_bseg1-wrbtr.
+      i_payr-hkont = i_bseg1-hkont. " Shruti 8.3.19
+*      i_payr-ubhkt = i_bseg1-hkont. " Shruti 8.3.19
+*SOC Deekshita & Sunny Babla 08.04.2020 charm 4000001892 fill lifnr
+      READ TABLE i_bseg1 WITH KEY koart = 'K'.
+      IF sy-subrc = 0.
+        i_payr-lifnr = i_bseg1-lifnr.
+      ENDIF.
+*EOC Deekshita & Sunny Babla 08.04.2020 charm 4000001892 fill lifnr
+      APPEND i_payr.
+      CLEAR i_payr.
+    ENDLOOP.
+
+  ENDIF.
+
+
+  LOOP AT i_payr.
+    READ TABLE i_bkpf1 WITH KEY bukrs = i_payr-zbukr
+                                belnr = i_payr-vblnr
+                                gjahr = i_payr-gjahr.
+    IF sy-subrc = 0.
+
+      i_payr-waers = i_bkpf1-waers.
+
+      MODIFY i_payr TRANSPORTING waers.
+
+    ENDIF.
+    CLEAR i_bkpf1.
+    CLEAR i_payr.
+  ENDLOOP.
+
+
+**  ENDIF.
+
+
+  IF sy-subrc <> 0.
+* No Entry For Selected Criteria
+    MESSAGE i005.
+    LEAVE LIST-PROCESSING.
+  ENDIF.
+
+***EOC BY SUNNY & SANYOGITA ON 22.04.2019 - TO RESOLVE PAYMENT ADVISE PRINT ISSUE
+
+* SOC BY PRIYANKA AS ON 06.01.2005
+
+  READ TABLE i_payr INDEX 1.
+  SELECT SINGLE adrnr INTO w_adrnr
+                      FROM lfa1
+                      WHERE lifnr = i_payr-lifnr.
+  "SOC AAKASH TYAGI / SANDEEP SINGH S 4000006585: AT:E:Logic for customer email - YRFS024 ON 20/06/2023
+  IF sy-subrc NE 0.
+    SELECT SINGLE adrnr INTO w_adrnr
+                        FROM kna1
+                        WHERE kunnr = i_payr-kunnr.
+  ENDIF.
+  "EOC AAKASH TYAGI / SANDEEP SINGH S 4000006585: AT:E:Logic for customer email - YRFS024 ON 20/06/2023
+  SELECT addrnumber
+         str_suppl3
+         location      INTO TABLE i_adrc
+                       FROM adrc
+                       WHERE addrnumber = w_adrnr.
+
+*EOC
+
+
+*inter company code
+  LOOP AT i_payr.
+    IF i_payr-xbukr = 'X'.
+      CONCATENATE i_payr-vblnr i_payr-zbukr i_payr-gjahr+2(2)
+                                          INTO i_concat-bvorg.
+      i_concat-lifnr = i_payr-lifnr.
+      i_concat-kunnr = i_payr-kunnr.
+      i_concat-rwbtr = i_payr-rwbtr.
+      i_concat-zaldt = i_payr-laufd.  " Shruti 8.3.19
+*      i_concat-zaldt = i_payr-zaldt.  " Shruti 8.3.19
+      i_concat-chect = i_payr-chect.
+      i_concat-ubhkt = i_payr-hkont.   " Shruti 8.3.19
+*      i_concat-ubhkt = i_payr-ubhkt.   " Shruti 8.3.19
+      i_concat-vblnr = i_payr-vblnr.
+      i_concat-gjahr = i_payr-gjahr.
+      i_concat-zbukr = i_payr-zbukr.
+      i_concat-hbkid = i_payr-hbkid.
+      IF i_payr-hbkid+0(1) = 'S'.
+        i_concat-hbkid = 'SBI'.
+      ENDIF.
+      IF i_payr-hbkid+0(1) = 'I'.
+        i_concat-hbkid = 'ICICI'.
+      ENDIF.
+      IF i_payr-hbkid+0(1) = 'H'.
+        i_concat-hbkid = 'HDFC'.
+      ENDIF.
+
+      APPEND i_concat.
+      CLEAR i_concat.
+    ENDIF.
+  ENDLOOP.
+
+
+  IF NOT i_concat[] IS INITIAL.
+    SELECT belnr bukrs gjahr  bvorg waers
+          INTO TABLE i_bkpf
+          FROM bkpf
+          FOR ALL ENTRIES IN i_concat
+          WHERE bvorg = i_concat-bvorg ."AND
+*                BUKRS <> P_BUKRS AND
+*                GJAHR <> P_GJAHR  .
+
+  ENDIF.
+
+  LOOP AT i_bkpf.
+    READ TABLE i_concat WITH KEY bvorg = i_bkpf-bvorg.
+    IF sy-subrc = 0.
+      i_bkpf-lifnr = i_concat-lifnr.
+      i_bkpf-kunnr = i_concat-kunnr.
+      MODIFY i_bkpf.
+*      CLEAR  I_BKPF.
+    ENDIF.
+    IF i_bkpf-belnr  IN s_belnr.
+      DELETE i_bkpf.
+
+    ENDIF.
+  ENDLOOP.
+
+
+  IF NOT i_bkpf[] IS INITIAL.
+*Accounting Document Number, Company Code, Account Number of Vendor or
+*Creditor , Fiscal Year, Document Number of the Clearing Document,
+*Posting Date in the Document
+
+*TEXT
+*** -> Begin of changes by of Vipul on 11/09/24 for ATC
+    SELECT hkont gsber belnr  bukrs gjahr "#EC CI_DB_OPERATION_OK[2431747] " GSBER in place of prctr ashok and chinari call id 98761
+           INTO TABLE i_text
+           FROM bseg
+           FOR ALL ENTRIES IN i_concat
+           WHERE bukrs = i_concat-zbukr AND
+                 belnr = i_concat-vblnr AND
+                 gjahr = i_concat-gjahr AND
+                 hkont = i_concat-ubhkt.
+*      ** ->End of changes by of Vipul on 11/09/24 for ATC
+
+    IF NOT i_text[] IS INITIAL.
+      SELECT prctr ktext
+             INTO TABLE i_cepct
+             FROM cepct
+             FOR ALL ENTRIES IN i_text
+             WHERE prctr = i_text-prctr.
+    ENDIF.
+
+*CLOSED ITEMS
+    SELECT belnr bukrs lifnr gjahr augbl budat gsber xblnr sgtxt shkzg waers
+           INTO CORRESPONDING FIELDS OF  TABLE i_main
+           FROM bsak
+           FOR ALL ENTRIES IN i_bkpf
+           WHERE bukrs = i_bkpf-bukrs AND
+***SOC BY SANYOGITA & SUNNY ON 23.04.2019 - TO RESOLVE TAX AMOUNT DISPLAY IN PRINT - RMS 1474
+                 belnr = i_bkpf-belnr AND
+***                 AUGBL = i_bkpf-belnr AND
+***EOC BY SANYOGITA & SUNNY ON 23.04.2019 - TO RESOLVE TAX AMOUNT DISPLAY IN PRINT - RMS 1474
+                 gjahr = i_bkpf-gjahr  AND
+                 lifnr = i_bkpf-lifnr.
+
+
+    IF NOT i_main[] IS INITIAL.
+*ITEMS WHICH ARE THERE IN BSAD & BSID TABLE
+      SELECT gsber belnr bukrs lifnr gjahr augbl budat qbshb sgtxt wrbtr
+             shkzg xblnr waers
+             INTO  CORRESPONDING FIELDS OF TABLE i_open
+             FROM bsik
+             FOR ALL ENTRIES IN i_main
+             WHERE bukrs = i_main-bukrs AND
+                   belnr = i_main-augbl AND
+* SOC BY REEMA AS ON 18.05.05 WRF VINEET
+                   lifnr = i_main-lifnr.
+* EOC.
+    ENDIF.
+
+
+
+*OPEN ITEMS
+    IF i_main[] IS INITIAL.
+      SELECT belnr bukrs lifnr gjahr augbl budat gsber xblnr sgtxt wrbtr
+            bldat waers xblnr qbshb sgtxt shkzg
+            INTO CORRESPONDING FIELDS OF  TABLE i_main
+            FROM bsik
+            FOR ALL ENTRIES IN i_bkpf
+            WHERE bukrs = i_bkpf-bukrs AND
+                  belnr = i_bkpf-belnr AND
+                  gjahr = i_bkpf-gjahr  AND
+                  lifnr = i_bkpf-lifnr.
+
+    ENDIF.
+
+
+
+
+
+*text
+    IF NOT i_main[] IS INITIAL.
+      SELECT gtext gsber
+              INTO TABLE i_tgsbt
+              FROM tgsbt
+              FOR ALL ENTRIES IN i_main
+              WHERE gsber = i_main-gsber.
+
+      SELECT belnr bukrs lifnr gjahr augbl budat qbshb sgtxt wrbtr shkzg
+             gsber xblnr bldat waers
+             INTO CORRESPONDING FIELDS OF TABLE i_bseg
+             FROM bsak
+             FOR ALL ENTRIES IN i_main
+             WHERE bukrs = i_main-bukrs AND
+***SOC BY SANYOGITA & SUNNY ON 23.04.2019 - RMS - 1474 : RESOLVE TAX DETAILS IN PRINT
+***                   GJAHR = I_MAIN-GJAHR AND
+***EOC BY SANYOGITA & SUNNY ON 23.04.2019 - RMS - 1474 : RESOLVE TAX DETAILS IN PRINT
+                   augbl = i_main-augbl AND
+*soc by REEMA as on 16.05.05 wrf Vineet
+                   lifnr = i_main-lifnr.
+*EOC
+
+
+*NAME
+      SELECT  lifnr name1 name2 ort01 pstlz stras xcpdk adrnr
+             INTO TABLE i_lfa1
+             FROM lfa1
+             FOR ALL ENTRIES IN i_main
+             WHERE lifnr = i_main-lifnr.
+
+
+*CITY ADDRESS
+      SELECT xcpdk ort01 name1  name2  pstlz stras bukrs belnr gjahr
+       INTO TABLE i_bsec
+       FROM bsec
+       FOR ALL ENTRIES IN i_main
+       WHERE bukrs = i_main-bukrs AND
+             belnr = i_main-belnr AND
+             gjahr = i_main-gjahr.
+
+
+    ENDIF.
+
+  ENDIF.
+
+*KUNNNR IS SELECTED
+  IF NOT i_bkpf[] IS INITIAL.
+    IF i_main[] IS INITIAL.
+
+*CLOSED ITEMS
+      SELECT belnr bukrs kunnr gjahr augbl budat gsber xblnr sgtxt shkzg waers
+             INTO CORRESPONDING FIELDS OF  TABLE i_main
+             FROM bsad
+             FOR ALL ENTRIES IN i_bkpf
+             WHERE bukrs = i_bkpf-bukrs AND
+                   belnr = i_bkpf-belnr AND
+                   gjahr = i_bkpf-gjahr  AND
+                   kunnr = i_bkpf-kunnr.
+
+*OPEN ITEMS
+      IF sy-subrc <> 0.
+        SELECT belnr bukrs kunnr gjahr augbl budat gsber xblnr sgtxt
+              wrbtr  bldat waers xblnr sgtxt shkzg
+              INTO CORRESPONDING FIELDS OF  TABLE i_main
+              FROM bsid
+              FOR ALL ENTRIES IN i_bkpf
+              WHERE  bukrs = i_bkpf-bukrs AND
+                     belnr = i_bkpf-belnr AND
+                     gjahr = i_bkpf-gjahr  AND
+                     kunnr = i_bkpf-kunnr.
+
+
+      ENDIF.
+
+      IF NOT i_main[] IS INITIAL.
+*ITEMS WHICH ARE THERE IN BSAD & BSID TABLE
+        SELECT gsber belnr bukrs kunnr gjahr augbl budat  sgtxt wrbtr shkzg
+               xblnr waers
+               INTO CORRESPONDING FIELDS OF TABLE i_open
+               FROM bsid
+               FOR ALL ENTRIES IN i_main
+               WHERE belnr = i_main-augbl AND
+*           SOC BY REEMA AS ON 18.05.05 WRF VINEET
+                     kunnr = i_main-kunnr.
+*                 EOC
+      ENDIF.
+
+*GOING TO BSAD BY AUGBL
+      IF NOT i_main[] IS INITIAL.
+        SELECT gtext gsber
+               INTO TABLE i_tgsbt
+               FROM tgsbt
+               FOR ALL ENTRIES IN i_main
+               WHERE gsber = i_main-gsber.
+
+
+        SELECT belnr bukrs kunnr gjahr augbl budat  sgtxt wrbtr shkzg
+                wmwst gsber xblnr bldat waers
+               INTO CORRESPONDING FIELDS OF TABLE i_bseg
+               FROM bsad
+               FOR ALL ENTRIES IN i_main
+               WHERE bukrs = i_main-bukrs AND
+***SOC BY SANYOGITA & SUNNY ON 23.04.2019 - RMS - 1474 : RESOLVE TAX DETAILS IN PRINT
+***                     gjahr = i_main-gjahr AND
+***EOC BY SANYOGITA & SUNNY ON 23.04.2019 - RMS - 1474 : RESOLVE TAX DETAILS IN PRINT
+                     augbl = i_main-augbl AND
+*  SOC BY REEMA AS ON 16.05.05 WRF VINEET
+                     kunnr = i_main-kunnr.
+*  EOC
+
+*NAME
+        SELECT kunnr name1 name2 ort01 pstlz stras xcpdk
+               INTO TABLE i_kna1
+               FROM kna1
+               FOR ALL ENTRIES IN i_main
+               WHERE kunnr = i_main-kunnr.
+
+*CITY ADDRESS
+        SELECT xcpdk ort01 name1  name2  pstlz stras bukrs belnr gjahr
+         INTO TABLE i_bsec
+         FROM bsec
+         FOR ALL ENTRIES IN i_main
+         WHERE bukrs = i_main-bukrs AND
+               belnr = i_main-belnr AND
+               gjahr = i_main-gjahr.
+
+
+      ENDIF.
+    ENDIF.
+  ENDIF.
+
+*DELETE ENTRIES WHERE AUGBL = BELNR
+  LOOP AT i_bseg.
+    READ TABLE i_main WITH KEY belnr = i_bseg-belnr.
+    IF sy-subrc = 0.
+      DELETE i_bseg.
+    ENDIF.
+  ENDLOOP.
+
+
+
+*INDIAN RUPEES
+  IF NOT i_payr[] IS INITIAL.
+    SELECT ltext waers
+           INTO TABLE i_tcurt
+           FROM tcurt
+           FOR ALL ENTRIES IN i_bkpf
+           WHERE waers = i_bkpf-waers AND
+                 spras = 'E'.
+
+  ENDIF.
+
+
+
+
+  LOOP AT i_main.
+*INDIAN RUPEES
+    READ TABLE i_bkpf WITH KEY bukrs = i_main-bukrs
+                               belnr = i_main-belnr
+                               gjahr = i_main-gjahr
+                               lifnr = i_main-lifnr.
+    IF sy-subrc = 0.
+      READ TABLE i_tcurt WITH KEY waers = i_bkpf-waers.
+      IF sy-subrc = 0.
+        i_main-ltext = i_tcurt-ltext.
+      ENDIF.
+
+** CHECT NO
+      READ TABLE i_concat WITH KEY bvorg = i_bkpf-bvorg.
+      IF sy-subrc = 0.
+        i_main-chect  = i_concat-chect.
+        i_main-zaldt = i_concat-zaldt.
+        i_main-p_rwbtr = i_concat-rwbtr.
+
+**TEXT 3
+        READ TABLE i_text WITH KEY    bukrs = i_concat-zbukr
+                                      belnr = i_concat-vblnr
+                                      gjahr = i_concat-gjahr
+                                      hkont = i_concat-ubhkt.
+        i_main-cbukrs = i_concat-zbukr.
+        IF sy-subrc = 0.
+          READ TABLE i_cepct WITH KEY prctr = i_text-prctr.
+          IF sy-subrc = 0.
+            i_main-text3 = i_cepct-ktext.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+
+    ENDIF.
+
+*NAME
+
+    READ TABLE i_kna1 WITH KEY kunnr = i_main-kunnr.
+    IF sy-subrc = 0.
+      IF i_kna1-xcpdk = 'X'.
+        READ TABLE i_bsec WITH KEY bukrs = i_main-bukrs
+                                   belnr = i_main-belnr
+                                   gjahr = i_main-gjahr.
+        IF sy-subrc = 0.
+          i_main-name1 = i_bsec-name1.
+          i_main-name2 = i_bsec-name2.
+          i_main-ort01 = i_bsec-ort01.
+          i_main-pstlz = i_bsec-pstlz.
+          i_main-stras = i_bsec-stras.
+          i_main-adrnr = i_lfa1-adrnr.
+        ENDIF.
+      ELSE.
+        i_main-name1 = i_kna1-name1.
+        i_main-name2 = i_kna1-name2.
+        i_main-ort01 = i_kna1-ort01.
+        i_main-pstlz = i_kna1-pstlz.
+        i_main-stras = i_kna1-stras.
+        i_main-adrnr = i_lfa1-adrnr.
+      ENDIF.
+    ENDIF.
+
+* NAME
+    READ TABLE i_lfa1 WITH KEY lifnr = i_main-lifnr.
+    IF sy-subrc = 0.
+      IF i_lfa1-xcpdk = 'X'.
+        READ TABLE i_bsec WITH KEY bukrs = i_main-bukrs
+                                   belnr = i_main-belnr
+                                   gjahr = i_main-gjahr.
+        IF sy-subrc = 0.
+          i_main-name1 = i_bsec-name1.
+          i_main-name2 = i_bsec-name2.
+          i_main-ort01 = i_bsec-ort01.
+          i_main-pstlz = i_bsec-pstlz.
+          i_main-stras = i_bsec-stras.
+          i_main-adrnr = i_lfa1-adrnr.
+        ENDIF.
+      ELSE.
+
+        i_main-name1 = i_lfa1-name1.
+        i_main-name2 = i_lfa1-name2.
+        i_main-ort01 = i_lfa1-ort01.
+        i_main-pstlz = i_lfa1-pstlz.
+        i_main-stras = i_lfa1-stras.
+* SOC BY PRIYANKA AS ON 06.01.2005
+        i_main-adrnr = i_lfa1-adrnr.
+* EOC
+      ENDIF.
+    ENDIF.
+*GTEXT
+    READ TABLE i_tgsbt WITH KEY gsber = i_main-gsber.
+    IF sy-subrc = 0.
+      i_main-gtext = i_tgsbt-gtext.
+    ENDIF.
+
+
+
+**amount to be changed to + or -
+    IF i_main-shkzg = 'S'.
+      i_main-wrbtr = i_main-wrbtr * -1.
+      i_main-qbshb = i_main-qbshb * -1.
+    ENDIF.
+
+    MODIFY i_main.
+    CLEAR i_main.
+  ENDLOOP.
+
+
+
+** -> Begin of changes by of Vipul on 11/09/24 for ATC
+SORT i_bseg BY augbl sgtxt..
+** ->End of changes by of Vipul on 11/09/24 for ATC
+
+  LOOP AT i_bseg.
+    READ TABLE i_with WITH KEY bukrs = i_bseg-bukrs belnr = i_bseg-belnr
+    gjahr = i_bseg-gjahr.
+*    W_QBSHB = 0.
+    AT NEW belnr.
+    ENDAT.
+
+  ENDLOOP.
+
+
+  SORT i_bseg BY augbl sgtxt.
+
+  LOOP AT i_bseg .
+    IF i_bseg-shkzg = 'S'.
+      i_bseg-wrbtr = i_bseg-wrbtr * -1.
+      i_bseg-qbshb = i_bseg-qbshb * -1.
+    ENDIF.
+    MODIFY i_bseg.
+    CLEAR i_bseg.
+  ENDLOOP.
+
+
+  LOOP AT i_open.
+    IF i_open-shkzg = 'S'.
+      i_open-wrbtr = i_open-wrbtr * -1.
+      i_open-qbshb = i_open-qbshb * -1.
+    ENDIF.
+    MODIFY i_open.
+    CLEAR i_open.
+  ENDLOOP.
+
+
+
+
+
+ENDFORM.                    " BKPF_GET_DATA
+*&---------------------------------------------------------------------*
+*&      Form  BKPF_INITIAL
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM bkpf_initial .
+
+  IF i_bkpf[] IS INITIAL.
+
+*Accounting Document Number, Company Code, Account Number of Vendor or
+*Creditor , Fiscal Year, Document Number of the Clearing Document,
+*Posting Date in the Document
+    IF NOT i_payr[] IS INITIAL.
+
+*TEXT
+*** -> Begin of changes by of Vipul on 11/09/24 for ATC
+      SELECT hkont prctr belnr  bukrs gjahr"#EC CI_DB_OPERATION_OK[2431747]
+*        ** ->End of changes by of Vipul on 11/09/24 for ATC
+             INTO TABLE i_text
+             FROM bseg
+             FOR ALL ENTRIES IN i_payr
+             WHERE bukrs = i_payr-zbukr AND
+                   belnr = i_payr-vblnr AND
+                   hkont = i_payr-hkont. " Shruti 8.3.19
+*                   hkont = i_payr-ubhkt. " Shruti 8.3.19
+*                  GJAHR = I_PAYR-GJAHR.
+
+      IF NOT i_text[] IS INITIAL.
+        SELECT prctr ktext
+               INTO TABLE i_cepct
+               FROM cepct
+               FOR ALL ENTRIES IN i_text
+               WHERE prctr = i_text-prctr.
+      ENDIF.
+*CLOSED ITEMS
+      SELECT belnr bukrs lifnr gjahr augbl budat gsber xblnr sgtxt shkzg
+             INTO CORRESPONDING FIELDS OF  TABLE i_main
+             FROM bsak
+             FOR ALL ENTRIES IN i_payr
+             WHERE bukrs = i_payr-zbukr AND
+                   belnr = i_payr-vblnr AND
+                   gjahr = i_payr-gjahr  AND
+                   lifnr = i_payr-lifnr.
+
+
+
+
+      IF NOT i_main[] IS INITIAL.
+*ITEMS WHICH ARE THERE IN BSAD & BSID TABLE
+        SELECT gsber belnr bukrs lifnr gjahr augbl budat qbshb sgtxt wrbtr
+               shkzg xblnr
+               INTO  CORRESPONDING FIELDS OF TABLE i_open
+               FROM bsik
+               FOR ALL ENTRIES IN i_main
+               WHERE belnr = i_main-augbl AND
+* SOC BY REEMA AS ON 18.05.05 WRF VINEET
+                     bukrs = i_main-bukrs AND
+*                  GJAHR = I_MAIN-GJAHR AND
+                     lifnr = i_main-lifnr.
+* EOC
+      ENDIF.
+*TOTAL
+      LOOP AT i_open.
+        i_open-w_total = i_open-w_total + i_open-wrbtr.
+        MODIFY i_open.
+        CLEAR i_open.
+      ENDLOOP.
+
+
+
+*OPEN ITEMS
+      IF i_main[] IS INITIAL.
+        SELECT belnr bukrs lifnr gjahr augbl budat gsber xblnr sgtxt wrbtr
+               bldat waers xblnr qbshb sgtxt shkzg
+              INTO CORRESPONDING FIELDS OF  TABLE i_main
+              FROM bsik
+              FOR ALL ENTRIES IN i_payr
+              WHERE bukrs = i_payr-zbukr AND
+                    belnr = i_payr-vblnr AND
+                    gjahr = i_payr-gjahr  AND
+                    lifnr = i_payr-lifnr.
+
+      ENDIF.
+
+
+*text
+      IF NOT i_main[] IS INITIAL.
+        SELECT gtext gsber
+                INTO TABLE i_tgsbt
+                FROM tgsbt
+                FOR ALL ENTRIES IN i_main
+                WHERE gsber = i_main-gsber.
+
+        SELECT belnr bukrs lifnr gjahr augbl budat qbshb sgtxt wrbtr shkzg
+                  gsber xblnr bldat waers   buzei
+                  INTO CORRESPONDING FIELDS OF TABLE i_bseg
+                  FROM bsak
+                  FOR ALL ENTRIES IN i_main
+                  WHERE  bukrs = i_main-bukrs AND
+*                      GJAHR = I_MAIN-GJAHR AND
+                         augbl = i_main-augbl AND
+*SOC BY REEMA AS ON 16.05.05 WRF VINEET.
+                         lifnr = i_main-lifnr
+                        AND ( blart <> 'ZP' OR blart <> 'ZV').""ÄDDED BY SUHANI AND SUHANI ON 01.05.2019
+* EOC
+
+      ENDIF.
+
+
+
+*SOC DIVYA
+      IF i_main[] IS NOT INITIAL.
+
+        SELECT belnr bukrs lifnr gjahr augbl budat gsber xblnr sgtxt wrbtr
+                    bldat waers xblnr qbshb sgtxt shkzg buzei
+                   INTO CORRESPONDING FIELDS OF  TABLE i_double
+                   FROM bsak
+                   FOR ALL ENTRIES IN i_main
+                   WHERE bukrs = i_main-bukrs AND
+                         augbl = i_main-belnr AND
+*                     GJAHR = I_MAIN-GJAHR  AND
+                         lifnr = i_main-lifnr AND
+                         auggj = i_double-gjahr "charm 4000004349 Deekshita/Sandeep Singh 18.11.2021 pass document financial year
+          AND ( blart <> 'ZP' OR blart <> 'ZV' ) .""ADDED BY SUHANI AND SUNNY ON 01.05.19
+
+
+        LOOP AT i_double.
+          i_bseg-belnr = i_double-belnr.
+          i_bseg-bukrs = i_double-bukrs.
+          i_bseg-lifnr = i_double-lifnr.
+          i_bseg-gjahr = i_double-gjahr.
+          i_bseg-augbl = i_double-augbl.
+          i_bseg-bldat = i_double-budat.
+*I_BSEG-GSBER = I_DOUBLE-GSBER.
+          i_bseg-xblnr = i_double-xblnr.
+          i_bseg-sgtxt = i_double-sgtxt.
+          i_bseg-wrbtr = i_double-wrbtr.
+          i_bseg-bldat = i_double-bldat.
+          i_bseg-waers = i_double-waers.
+          i_bseg-xblnr = i_double-xblnr.
+          i_bseg-qbshb = i_double-qbshb.
+          i_bseg-sgtxt = i_double-sgtxt .
+          i_bseg-shkzg = i_double-shkzg.
+          i_bseg-buzei  = i_double-buzei.
+
+          APPEND i_bseg.
+          CLEAR i_bseg.
+        ENDLOOP.
+
+
+        SELECT belnr bukrs lifnr gjahr augbl budat gsber xblnr sgtxt wrbtr
+                         bldat waers xblnr qbshb sgtxt shkzg buzei
+                        INTO CORRESPONDING FIELDS OF  TABLE i_doubleb
+                        FROM bsik
+                        FOR ALL ENTRIES IN i_main
+                        WHERE bukrs = i_main-bukrs AND
+                              belnr = i_main-belnr AND
+                              gjahr = i_main-gjahr  AND
+                              lifnr = i_main-lifnr.
+        LOOP AT i_doubleb.
+
+          i_bseg-belnr = i_doubleb-belnr.
+          i_bseg-bukrs = i_doubleb-bukrs.
+          i_bseg-lifnr = i_doubleb-lifnr.
+          i_bseg-gjahr = i_doubleb-gjahr.
+          i_bseg-augbl = i_doubleb-augbl.
+          i_bseg-bldat = i_doubleb-budat.
+*I_BSEG-GSBER = I_DOUBLE-GSBER.
+          i_bseg-xblnr = i_doubleb-xblnr.
+          i_bseg-sgtxt = i_doubleb-sgtxt.
+          i_bseg-wrbtr = i_doubleb-wrbtr.
+          i_bseg-bldat = i_doubleb-bldat.
+          i_bseg-waers = i_doubleb-waers.
+          i_bseg-xblnr = i_doubleb-xblnr.
+          i_bseg-qbshb = i_doubleb-qbshb.
+          i_bseg-sgtxt = i_doubleb-sgtxt .
+          i_bseg-shkzg = i_doubleb-shkzg.
+          i_bseg-buzei  = i_doubleb-buzei.
+          APPEND i_bseg.
+          CLEAR i_bseg.
+        ENDLOOP.
+
+        IF NOT i_double[] IS  INITIAL.
+          SELECT belnr bukrs lifnr gjahr augbl budat gsber xblnr sgtxt wrbtr
+                      bldat waers xblnr qbshb sgtxt shkzg buzei
+                     INTO CORRESPONDING FIELDS OF  TABLE i_double1
+                     FROM bsak
+                     FOR ALL ENTRIES IN i_double
+                     WHERE bukrs = i_double-bukrs AND
+                           augbl = i_double-belnr AND
+*                      GJAHR = I_DOUBLE-GJAHR  AND
+                           lifnr = i_double-lifnr AND
+                           auggj = i_double-gjahr. "charm 4000004349 Deekshita/Sandeep Singh 18.11.2021 pass document financial year
+        ENDIF.
+
+        LOOP AT i_double1.
+          i_bseg-belnr = i_double1-belnr.
+          i_bseg-bukrs = i_double1-bukrs.
+          i_bseg-lifnr = i_double1-lifnr.
+          i_bseg-gjahr = i_double1-gjahr.
+          i_bseg-augbl = i_double1-augbl.
+*I_BSEG-BUDAT = I_DOUBLE1-BUDAT.
+*I_BSEG-GSBER = I_DOUBLE1-GSBER.
+          i_bseg-xblnr = i_double1-xblnr.
+          i_bseg-sgtxt = i_double1-sgtxt.
+          i_bseg-wrbtr = i_double1-wrbtr.
+          i_bseg-bldat = i_double1-bldat.
+          i_bseg-waers = i_double1-waers.
+          i_bseg-xblnr = i_double1-xblnr.
+          i_bseg-qbshb = i_double1-qbshb.
+          i_bseg-sgtxt = i_double1-sgtxt .
+          i_bseg-shkzg = i_double1-shkzg.
+          i_bseg-buzei  = i_double1-buzei.
+          APPEND i_bseg.
+          CLEAR i_bseg.
+        ENDLOOP.
+
+        IF NOT i_double[] IS INITIAL.
+          SELECT belnr bukrs lifnr gjahr augbl budat gsber xblnr sgtxt wrbtr
+                           bldat waers xblnr qbshb sgtxt shkzg buzei
+                          INTO CORRESPONDING FIELDS OF  TABLE i_doubleb1
+                          FROM bsik
+                          FOR ALL ENTRIES IN i_double
+                          WHERE bukrs = i_double-bukrs AND
+                                belnr = i_double-belnr AND
+                                gjahr = i_double-gjahr  AND
+                                lifnr = i_double-lifnr.
+
+        ENDIF.
+
+
+        LOOP AT i_doubleb1.
+          i_bseg-belnr = i_doubleb1-belnr.
+          i_bseg-bukrs = i_doubleb1-bukrs.
+          i_bseg-lifnr = i_doubleb1-lifnr.
+          i_bseg-gjahr = i_doubleb1-gjahr.
+          i_bseg-augbl = i_doubleb1-augbl.
+          i_bseg-bldat = i_doubleb1-budat.
+*I_BSEG-GSBER = I_DOUBLE-GSBER.
+          i_bseg-xblnr = i_doubleb1-xblnr.
+          i_bseg-sgtxt = i_doubleb1-sgtxt.
+          i_bseg-wrbtr = i_doubleb1-wrbtr.
+          i_bseg-bldat = i_doubleb1-bldat.
+          i_bseg-waers = i_doubleb1-waers.
+          i_bseg-xblnr = i_doubleb1-xblnr.
+          i_bseg-qbshb = i_doubleb1-qbshb.
+          i_bseg-sgtxt = i_doubleb1-sgtxt .
+          i_bseg-shkzg = i_doubleb1-shkzg.
+          i_bseg-buzei  = i_doubleb1-buzei.
+          APPEND i_bseg.
+          CLEAR i_bseg.
+        ENDLOOP.
+
+
+
+
+
+
+      ENDIF.
+*EOC
+
+*NAME
+      SELECT  lifnr name1 name2 ort01 pstlz stras xcpdk
+             INTO TABLE i_lfa1
+             FROM lfa1
+             FOR ALL ENTRIES IN i_main
+             WHERE lifnr = i_main-lifnr.
+
+
+*CITY ADDRESS
+      IF NOT i_main[] IS INITIAL.
+        SELECT xcpdk ort01 name1  name2  pstlz stras bukrs belnr gjahr
+         INTO TABLE i_bsec
+         FROM bsec
+         FOR ALL ENTRIES IN i_main
+         WHERE bukrs = i_main-bukrs AND
+               belnr = i_main-belnr AND
+               gjahr = i_main-gjahr.
+      ENDIF.
+    ENDIF.
+
+  ENDIF.
+
+
+
+
+
+
+
+
+
+
+
+
+ENDFORM.                    " BKPF_INITIAL
+*&---------------------------------------------------------------------*
+*&      Form  convert_to_pdf_save
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM convert_to_pdf_save .
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ENDFORM.                    " convert_to_pdf_save
+*&---------------------------------------------------------------------*
+*&      Form  ADD_CROSS_COMPANY_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM  add_cross_company_data .
+  DATA: w_belnr       LIKE bsak-belnr,
+        w_belnr_final LIKE bsak-belnr,
+        w_cc_belnr    LIKE bsak-belnr,
+        w_cc_bukrs    LIKE bsak-bukrs,
+        w_cc_gjahr    LIKE bsak-gjahr,
+        w_51_belnr    LIKE bsak-belnr,
+        w_51_bukrs    LIKE bsak-bukrs,
+        w_51_gjahr    LIKE bsak-gjahr,
+        w_bvorg       LIKE bkpf-bvorg,
+        lv_budat      TYPE bkpf-budat. " added on 07.05.2024
+  LOOP AT i_bseg WHERE belnr+0(2) = '51'
+***SOC BY SANYOGITA & SUNNY ON 24.04.2019 - TO ADD CHECKS FOR DOCUMENTS STARTING WITH 17
+                    OR belnr+0(2) = '17'.
+***EOC BY SANYOGITA & SUNNY ON 24.04.2019 - TO ADD CHECKS FOR DOCUMENTS STARTING WITH 17
+    w_51_belnr = i_bseg-belnr.
+    w_51_bukrs = i_bseg-bukrs.
+    w_51_gjahr = i_bseg-gjahr.
+  ENDLOOP.
+** -> Begin of changes by of <Aditi> on <09/11/2024> for ATC*  SOC add previous bseg entries for special GL code only
+**** -> Begin of changes by of Vipul on 11/09/24 for ATC
+*  SELECT * FROM bseg APPENDING CORRESPONDING FIELDS OF TABLE i_bseg_cc"#EC CI_DB_OPERATION_OK[2431747]
+**    ** ->End of changes by of Vipul on 11/09/24 for ATC
+*****             FOR ALL ENTRIES IN i_bseg
+*           WHERE bukrs = i_bseg-bukrs AND
+*                 belnr = i_bseg-belnr AND
+*                 gjahr = i_bseg-gjahr AND
+*                 shkzg = 'H' AND
+*                 bschl NE '31' AND umskz NE ''.
+*** -> Begin of changes by of Vipul on 11/09/24 for ATC
+  SELECT * FROM bseg APPENDING CORRESPONDING FIELDS OF TABLE i_bseg_cc"#EC CI_DB_OPERATION_OK[2431747]
+*    ** ->End of changes by of Vipul on 11/09/24 for ATC
+****             FOR ALL ENTRIES IN i_bseg
+           WHERE bukrs = i_bseg-bukrs AND
+                 belnr = i_bseg-belnr AND
+                 gjahr = i_bseg-gjahr AND
+                 shkzg = 'H' AND
+                 bschl NE '31' AND umskz NE ''
+           ORDER BY PRIMARY KEY.
+** -> End of changes by of <Aditi> on <09/11/2024> for ATC
+  "SOC by Kunal/Sunny for RMS:-1031 on 04/01/2019 for Adding GST rows in the payment advice based on tax type
+** -> Begin of changes by of <Aditi> on <09/11/2024> for ATC
+**    ** -> Begin of changes by of Vipul on 11/09/24 for ATC
+*  SELECT * FROM bseg APPENDING CORRESPONDING FIELDS OF TABLE i_bseg_cc "#EC CI_DB_OPERATION_OK[2431747]
+****               FOR ALL ENTRIES IN i_bseg
+*           WHERE bukrs = i_bseg-bukrs AND
+*                 belnr = i_bseg-belnr AND
+*                 gjahr = i_bseg-gjahr AND
+*                 shkzg = 'H' AND
+*                 bschl NE '31' AND
+*                ( ( hkont GE '0002013250' AND hkont LE '0002013411' ) OR
+*                    hkont EQ '0003719100' OR
+*                    hkont EQ '0002013153' OR
+*                    hkont EQ '0002013817' OR
+*                    hkont EQ '0002013818' OR
+*                    hkont EQ '0002013819' OR
+*                    hkont EQ '0002013820').
+*    ** -> Begin of changes by of Vipul on 11/09/24 for ATC
+  SELECT * FROM bseg APPENDING CORRESPONDING FIELDS OF TABLE i_bseg_cc "#EC CI_DB_OPERATION_OK[2431747]
+***               FOR ALL ENTRIES IN i_bseg
+           WHERE bukrs = i_bseg-bukrs AND
+                 belnr = i_bseg-belnr AND
+                 gjahr = i_bseg-gjahr AND
+                 shkzg = 'H' AND
+                 bschl NE '31' AND
+                ( ( hkont GE '0002013250' AND hkont LE '0002013411' ) OR
+                    hkont EQ '0003719100' OR
+                    hkont EQ '0002013153' OR
+                    hkont EQ '0002013817' OR
+                    hkont EQ '0002013818' OR
+                    hkont EQ '0002013819' OR
+                    hkont EQ '0002013820')
+           ORDER BY PRIMARY KEY.
+** -> End of changes by of <Aditi> on <09/11/2024> for ATC
+*    ** ->End of changes by of Vipul on 11/09/24 for ATC
+  "EOC by Kunal/Sunny for RMS:-1031 on 04/01/2019 for Adding GST rows in the payment advice based on tax type
+***SOC BY SANYOGITA & SUNNY ON 24.04.2019 - TO ADD CHECKS FOR DOCUMENTS STARTING WITH 17
+  IF i_bseg_cc[] IS NOT INITIAL.
+***EOC BY SANYOGITA & SUNNY ON 24.04.2019 - TO ADD CHECKS FOR DOCUMENTS STARTING WITH 17
+    CLEAR: i_bseg.
+    REFRESH i_bseg.
+    LOOP AT i_bseg_cc.
+      MOVE-CORRESPONDING i_bseg_cc TO i_bseg.
+      "SOC by Kunal/Sunny for RMS:-1031 on 04/01/2019 for Adding GST rows in the payment advice based on tax type
+*    Change by Shruti addion of tax code CG, SG, UG and IG for text print in form
+      IF i_bseg_cc-qsskz = 'A4' OR i_bseg_cc-qsskz = 'CG' OR  i_bseg_cc-qsskz = 'SG' OR  i_bseg_cc-qsskz = 'UG' OR  i_bseg_cc-qsskz = 'IG'.
+        lv_tax = 'X'.
+      ENDIF.
+      "EOC by Kunal/Sunny for RMS:-1031 on 04/01/2019 for Adding GST rows in the payment advice based on tax type
+      APPEND i_bseg.
+    ENDLOOP.
+    CLEAR: i_bseg_cc.
+    REFRESH i_bseg_cc.
+    "SOC AAKASH TYAGI / MANOJ RANE S 4000006749: AT:E:Chgs Payment advice and email body ON 03/08/2023
+  ELSE.
+    CLEAR: i_bseg.
+    REFRESH i_bseg.
+    i_bseg-sgtxt = 'NIL'.
+    APPEND i_bseg.
+    "EOC AAKASH TYAGI / MANOJ RANE S 4000006749: AT:E:Chgs Payment advice and email body ON 03/08/2023
+  ENDIF.
+*  EOC add previous bseg entries for special GL code only
+
+
+  LOOP AT i_main.
+    "code added on 07.05.2024 by aakash tyagi
+    CLEAR : lv_budat.
+    SELECT SINGLE budat FROM bkpf INTO lv_budat WHERE bukrs = i_main-bukrs AND belnr = i_main-belnr AND gjahr = i_main-gjahr.
+    "end of code
+** -> Begin of changes by of <Aditi> on <09/11/2024> for ATC
+*    SELECT SINGLE belnr INTO w_belnr FROM bsak WHERE bukrs = i_main-bukrs AND
+*                                                     augbl = i_main-belnr AND
+*                                                     belnr NE i_main-belnr AND
+**                                                     gjahr = i_main-gjahr. " commented on 07.05.2024
+*                                                     augdt = lv_budat. " added on 07.05.2024
+    SELECT  belnr INTO w_belnr FROM bsak UP TO 1 ROWS WHERE bukrs = i_main-bukrs AND
+                                                     augbl = i_main-belnr AND
+                                                     belnr NE i_main-belnr AND
+*                                                     gjahr = i_main-gjahr. " commented on 07.05.2024
+                                                     augdt = lv_budat " added on 07.05.2024
+                                                     ORDER BY PRIMARY KEY.
+    ENDSELECT.
+** -> End of changes by of <Aditi> on <09/11/2024> for ATC
+    IF sy-subrc = 0.
+***SOC BY SANYOGITA & SUNNY ON 24.04.2019 - TO ADD CHECKS FOR DOCUMENTS STARTING WITH 17
+***      IF w_belnr+0(2) = '51'.
+      IF w_belnr+0(2) = '51' OR w_belnr+0(2) = '17'.
+***EOC BY SANYOGITA & SUNNY ON 24.04.2019 - TO ADD CHECKS FOR DOCUMENTS STARTING WITH 17
+        w_51_belnr = w_belnr.
+        w_51_bukrs = i_main-bukrs.
+        w_51_gjahr = i_main-gjahr.
+      ENDIF.
+      PERFORM get_bseg_data USING w_belnr i_main-bukrs i_main-gjahr i_main-lifnr.
+** -> Begin of changes by of <Aditi> on <09/11/2024> for ATC
+*      SELECT SINGLE belnr INTO w_belnr_final FROM bsak WHERE bukrs = i_main-bukrs AND augbl = w_belnr AND belnr NE w_belnr AND  gjahr = i_main-gjahr.
+      SELECT  belnr INTO w_belnr_final FROM bsak UP TO 1 ROWS WHERE bukrs = i_main-bukrs AND augbl = w_belnr AND belnr NE w_belnr AND  gjahr = i_main-gjahr ORDER BY PRIMARY KEY.
+      ENDSELECT.
+** -> End of changes by of <Aditi> on <09/11/2024> for ATC
+      IF sy-subrc NE 0 .
+        SELECT SINGLE bvorg INTO w_bvorg FROM bkpf WHERE bukrs = i_main-bukrs AND belnr = w_belnr AND  gjahr = i_main-gjahr.
+        IF sy-subrc = 0 AND w_bvorg IS NOT INITIAL.
+          w_cc_belnr = w_bvorg+0(10).
+          w_cc_bukrs = w_bvorg+10(4).
+          CONCATENATE '20' w_bvorg+14(2) INTO w_cc_gjahr .
+***SOC BY SANYOGITA & SUNNY ON 24.04.2019 - TO ADD CHECKS FOR DOCUMENTS STARTING WITH 17
+***          IF w_cc_belnr+0(2) = '51'.
+          IF w_cc_belnr+0(2) = '51' OR w_cc_belnr+0(2) = '17'.
+***EOC BY SANYOGITA & SUNNY ON 24.04.2019 - TO ADD CHECKS FOR DOCUMENTS STARTING WITH 17
+            w_51_belnr = w_cc_belnr.
+            w_51_bukrs = w_cc_bukrs.
+            w_51_gjahr = w_cc_gjahr.
+          ENDIF.
+          PERFORM get_bseg_data USING w_cc_belnr w_cc_bukrs w_cc_gjahr i_main-lifnr.
+          SELECT  belnr INTO w_belnr FROM bsak WHERE bukrs = w_cc_bukrs AND  augbl = w_cc_belnr AND belnr NE w_cc_belnr AND gjahr = w_cc_gjahr.
+***SOC BY SANYOGITA & SUNNY ON 24.04.2019 - TO ADD CHECKS FOR DOCUMENTS STARTING WITH 17
+***            IF w_belnr+0(2) = '51'.
+            IF w_belnr+0(2) = '51' OR w_belnr+0(2) = '17'.
+***EOC BY SANYOGITA & SUNNY ON 24.04.2019 - TO ADD CHECKS FOR DOCUMENTS STARTING WITH 17
+              w_51_belnr = w_belnr.
+              w_51_bukrs = w_cc_bukrs.
+              w_51_gjahr = w_cc_gjahr.
+            ENDIF.
+            PERFORM get_bseg_data USING w_belnr w_cc_bukrs w_cc_gjahr i_main-lifnr.
+            SELECT  belnr INTO w_belnr FROM bsak WHERE bukrs = w_cc_bukrs AND augbl = w_cc_belnr AND belnr NE w_cc_belnr AND  gjahr = w_cc_gjahr.
+***SOC BY SANYOGITA & SUNNY ON 24.04.2019 - TO ADD CHECKS FOR DOCUMENTS STARTING WITH 17
+***              IF w_belnr+0(2) = '51'.
+              IF w_belnr+0(2) = '51' OR w_belnr+0(2) = '17'.
+***EOC BY SANYOGITA & SUNNY ON 24.04.2019 - TO ADD CHECKS FOR DOCUMENTS STARTING WITH 17
+                w_51_belnr = w_belnr.
+                w_51_bukrs = w_cc_bukrs.
+                w_51_gjahr = w_cc_gjahr.
+              ENDIF.
+              PERFORM get_bseg_data USING w_belnr w_cc_bukrs w_cc_gjahr i_main-lifnr.
+            ENDSELECT.
+          ENDSELECT.
+        ENDIF.
+      ELSE.
+        SELECT belnr INTO w_belnr_final FROM bsak WHERE bukrs = i_main-bukrs AND  augbl = w_belnr AND belnr NE w_belnr AND gjahr = i_main-gjahr.
+***SOC BY SANYOGITA & SUNNY ON 24.04.2019 - TO ADD CHECKS FOR DOCUMENTS STARTING WITH 17
+***          IF w_belnr_final+0(2) = '51'.
+          IF w_belnr_final+0(2) = '51' OR w_belnr_final+0(2) = '17'.
+***EOC BY SANYOGITA & SUNNY ON 24.04.2019 - TO ADD CHECKS FOR DOCUMENTS STARTING WITH 17
+            w_51_belnr = w_belnr_final.
+            w_51_bukrs = i_main-bukrs.
+            w_51_gjahr = i_main-gjahr.
+          ENDIF.
+          PERFORM get_bseg_data USING w_belnr_final i_main-bukrs i_main-gjahr i_main-lifnr.
+          SELECT SINGLE bvorg INTO w_bvorg FROM bkpf WHERE bukrs = i_main-bukrs AND belnr = w_belnr_final AND  gjahr = i_main-gjahr.
+          IF sy-subrc = 0 .
+            PERFORM get_bseg_data USING w_belnr_final i_main-bukrs i_main-gjahr i_main-lifnr.
+
+            IF  w_bvorg IS NOT INITIAL .
+              w_cc_belnr = w_bvorg+0(10).
+              w_cc_bukrs = w_bvorg+10(4).
+              CONCATENATE '20' w_bvorg+14(2) INTO w_cc_gjahr .
+***SOC BY SANYOGITA & SUNNY ON 24.04.2019 - TO ADD CHECKS FOR DOCUMENTS STARTING WITH 17
+***              IF w_cc_belnr+0(2) = '51'.
+              IF w_cc_belnr+0(2) = '51' OR w_cc_belnr+0(2) = '17'.
+***EOC BY SANYOGITA & SUNNY ON 24.04.2019 - TO ADD CHECKS FOR DOCUMENTS STARTING WITH 17
+                w_51_belnr = w_cc_belnr.
+                w_51_bukrs = w_cc_bukrs.
+                w_51_gjahr = w_cc_gjahr.
+              ENDIF.
+              PERFORM get_bseg_data USING w_cc_belnr w_cc_bukrs w_cc_gjahr i_main-lifnr.
+              SELECT  belnr INTO w_belnr FROM bsak WHERE bukrs = w_cc_bukrs AND augbl = w_cc_belnr AND belnr NE w_cc_belnr AND  gjahr = w_cc_gjahr.
+***SOC BY SANYOGITA & SUNNY ON 24.04.2019 - TO ADD CHECKS FOR DOCUMENTS STARTING WITH 17
+***                IF w_belnr+0(2) = '51'.
+                IF w_belnr+0(2) = '51' OR w_belnr+0(2) = '17'.
+***EOC BY SANYOGITA & SUNNY ON 24.04.2019 - TO ADD CHECKS FOR DOCUMENTS STARTING WITH 17
+                  w_51_belnr = w_belnr.
+                  w_51_bukrs = w_cc_bukrs.
+                  w_51_gjahr = w_cc_gjahr.
+                ENDIF.
+                PERFORM get_bseg_data USING w_belnr w_cc_bukrs w_cc_gjahr i_main-lifnr.
+                SELECT  belnr INTO w_belnr FROM bsak WHERE bukrs = w_cc_bukrs AND  augbl = w_cc_belnr AND belnr NE w_cc_belnr AND gjahr = w_cc_gjahr.
+***SOC BY SANYOGITA & SUNNY ON 24.04.2019 - TO ADD CHECKS FOR DOCUMENTS STARTING WITH 17
+***                  IF w_belnr+0(2) = '51'.
+                  IF w_belnr+0(2) = '51' OR w_belnr+0(2) = '17'.
+***EOC BY SANYOGITA & SUNNY ON 24.04.2019 - TO ADD CHECKS FOR DOCUMENTS STARTING WITH 17
+                    w_51_belnr = w_belnr.
+                    w_51_bukrs = w_cc_bukrs.
+                    w_51_gjahr = w_cc_gjahr.
+                  ENDIF.
+                  PERFORM get_bseg_data USING w_belnr w_cc_bukrs w_cc_gjahr i_main-lifnr.
+                ENDSELECT.
+              ENDSELECT.
+            ENDIF.
+          ENDIF.
+
+        ENDSELECT.
+      ENDIF.
+
+    ENDIF.
+  ENDLOOP.
+
+  CLEAR lv_tax.
+  LOOP AT i_bseg_cc.
+    MOVE-CORRESPONDING i_bseg_cc TO i_bseg.
+    APPEND i_bseg.
+***SOC BY SANYOGITA & SUNNY ON 26.03.2019-TO DISPLY TAX AT FOOTER
+    IF i_bseg_cc-qsskz = 'CG' OR  i_bseg_cc-qsskz = 'SG' OR  i_bseg_cc-qsskz = 'UG' OR  i_bseg_cc-qsskz = 'IG'.
+      lv_tax = 'X'.
+    ENDIF.
+***EOC BY SANYOGITA & SUNNY ON 26.03.2019-TO DISPLY TAX AT FOOTER
+  ENDLOOP.
+  SORT i_bseg BY belnr buzei.
+  DELETE ADJACENT DUPLICATES FROM i_bseg COMPARING belnr buzei.
+*  get PO no, Invoice no and invoice date
+  IF w_51_belnr IS NOT INITIAL.
+*SOC Deekshita/Sunny Babla charm 4000003988 14.07.2021 change logic to pick PO no.
+    SELECT SINGLE xblnr bldat awkey INTO (w_invoice_no, w_invoice_date, w_awkey) FROM bkpf
+      WHERE bukrs = w_51_bukrs AND belnr = w_51_belnr AND gjahr = w_51_gjahr.
+    SELECT SINGLE ebeln INTO (w_po_no) FROM ekbe
+      WHERE belnr = w_awkey(10) AND gjahr = w_awkey+10(4).
+*    SELECT SINGLE xblnr bldat INTO (w_invoice_no, w_invoice_date) FROM bkpf WHERE bukrs = w_51_bukrs AND belnr = w_51_belnr AND gjahr = w_51_gjahr.
+*    SELECT SINGLE zuonr INTO (w_po_no) FROM bseg WHERE bukrs = w_51_bukrs AND belnr = w_51_belnr AND gjahr = w_51_gjahr.
+*EOC Deekshita/Sunny Babla charm 4000003988 14.07.2021 change logic to pick PO no.
+    CONCATENATE w_invoice_date+6(2) w_invoice_date+4(2) w_invoice_date+0(4) INTO w_invoice_date_char SEPARATED BY '.'.
+  ENDIF.
+
+  IF w_invoice_no IS INITIAL.
+    DATA: wa_bseg_inv TYPE yrfs_cheque_forwarding_doc.
+    READ TABLE i_bseg INTO wa_bseg_inv INDEX 1.
+    SELECT SINGLE xblnr bldat INTO (w_invoice_no, w_invoice_date) FROM bkpf
+*            WHERE bukrs = wa_bseg_inv-bukrs AND
+*                  belnr = wa_bseg_inv-belnr AND
+*                  gjahr = wa_bseg_inv-gjahr.
+             WHERE bukrs = i_main-bukrs AND
+                  belnr  = i_main-belnr AND
+                  gjahr  = i_main-gjahr.
+
+    CONCATENATE w_invoice_date+6(2) w_invoice_date+4(2) w_invoice_date+0(4) INTO w_invoice_date_char SEPARATED BY '.'.
+  ENDIF.
+  w_po_no = w_po_no+0(10) .
+  IF w_po_no IS INITIAL.
+    w_po_no = 'NIL'.
+  ENDIF.
+
+ENDFORM.                    " ADD_CROSS_COMPANY_DATA
+*&---------------------------------------------------------------------*
+*&      Form  GET_BSEG_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_W_BELNR  text
+*      -->P_I_MAIN_BUKRS  text
+*      -->P_I_MAIN_GJAHR  text
+*----------------------------------------------------------------------*
+FORM get_bseg_data  USING    p_w_belnr
+                             p_i_main_bukrs
+                             p_i_main_gjahr
+                             p_i_main_lifnr.
+***SOC BY SANYOGITA & SUNNY ON 25.03.2019 - TO ADD GST TDS DETAILS FOR CROSS COMPANY PAYMENTS IN PDF
+*  ** -> Begin of changes by of Vipul on 11/09/24 for ATC
+  SELECT * FROM bseg APPENDING CORRESPONDING FIELDS OF TABLE i_bseg_cc "#EC CI_DB_OPERATION_OK[2431747]
+*    ** ->End of changes by of Vipul on 11/09/24 for ATC
+           WHERE  belnr = p_w_belnr AND
+                  bukrs = p_i_main_bukrs AND
+                  gjahr = p_i_main_gjahr  AND
+                  shkzg = 'H' AND
+                  bschl NE '31' AND
+                  lifnr =  p_i_main_lifnr
+           ORDER BY PRIMARY KEY.
+  DELETE i_bseg_cc WHERE  belnr = p_w_belnr AND
+                          bukrs = p_i_main_bukrs AND
+                          gjahr = p_i_main_gjahr  AND
+                          shkzg = 'H' AND
+                          bschl NE '31' AND
+                          lifnr =  p_i_main_lifnr AND
+                          umskz IS INITIAL.
+*  add special GL code
+** -> Begin of changes by of <Aditi> on <09/11/2024> for ATC
+**  ** -> Begin of changes by of Vipul on 11/09/24 for ATC
+*  SELECT * FROM bseg APPENDING CORRESPONDING FIELDS OF TABLE i_bseg_cc"#EC CI_DB_OPERATION_OK[2431747]
+**    ** ->End of changes by of Vipul on 11/09/24 for ATC
+*           WHERE  belnr = p_w_belnr AND
+*                  bukrs = p_i_main_bukrs AND
+*                  gjahr = p_i_main_gjahr  AND
+*                  shkzg = 'H' AND
+*                  bschl NE '31' AND
+****ADD GL OF TAXES
+****                  hkont GE '0002013250' AND hkont LE '0002013411' .
+*                  ( ( hkont GE '0002013250' AND hkont LE '0002013416' ) OR
+****                  hkont IN ( '0002013817' , '0002013818' , '0002013819' , '0002013820' ).
+*                    hkont = '0002013817' OR
+*                    hkont = '0002013818' OR
+*                    hkont = '0002013819' OR
+*                    hkont = '0002013820' ).
+*  ** -> Begin of changes by of Vipul on 11/09/24 for ATC
+  SELECT * FROM bseg APPENDING CORRESPONDING FIELDS OF TABLE i_bseg_cc"#EC CI_DB_OPERATION_OK[2431747]
+*    ** ->End of changes by of Vipul on 11/09/24 for ATC
+           WHERE  belnr = p_w_belnr AND
+                  bukrs = p_i_main_bukrs AND
+                  gjahr = p_i_main_gjahr  AND
+                  shkzg = 'H' AND
+                  bschl NE '31' AND
+***ADD GL OF TAXES
+***                  hkont GE '0002013250' AND hkont LE '0002013411' .
+                  ( ( hkont GE '0002013250' AND hkont LE '0002013416' ) OR
+***                  hkont IN ( '0002013817' , '0002013818' , '0002013819' , '0002013820' ).
+                    hkont = '0002013817' OR
+                    hkont = '0002013818' OR
+                    hkont = '0002013819' OR
+                    hkont = '0002013820' )
+            ORDER BY PRIMARY KEY.
+** -> End of changes by of <Aditi> on <09/11/2024> for ATC
+***EOC BY SANYOGITA & SUNNY ON 25.03.2019 - TO ADD GST TDS DETAILS FOR CROSS COMPANY PAYMENTS IN PDF
+ENDFORM.                    " GET_BSEG_DATA
+*&---------------------------------------------------------------------*
+*&      Form  EMAIL
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM email .
+
+  TYPES :t_document_data TYPE  sodocchgi1,
+         t_receivers     TYPE  somlreci1,
+         t_packing_list  TYPE  sopcklsti1,
+         t_attachment    TYPE  solisti1,
+         t_body_msg      TYPE  solisti1.
+
+
+  DATA: wa_document_data LIKE sodocchgi1,
+        i_packing_list   LIKE sopcklsti1 OCCURS 0 WITH HEADER LINE,
+        i_receivers      LIKE somlreci1 OCCURS 0 WITH HEADER LINE,
+        i_message        TYPE STANDARD TABLE OF solisti1 INITIAL SIZE 0 WITH HEADER LINE,
+        w_attachment     TYPE  t_attachment,
+        i_attachment     TYPE STANDARD TABLE OF t_attachment,
+        w_receivers      TYPE  t_receivers.
+
+  DATA: w_ctrlop TYPE ssfctrlop,
+        w_return TYPE ssfcrescl,
+        w_compop TYPE ssfcompop.
+
+  DATA: v_len_in LIKE sood-objlen,
+        i_otf    TYPE itcoo OCCURS 0 WITH HEADER LINE,
+        i_tline  TYPE TABLE OF tline WITH HEADER LINE.
+
+  DATA: g_tab_lines TYPE i,
+        w_cnt       TYPE i.
+
+  DATA: ld_attfilename    TYPE  so_obj_nam,
+        ld_attdescription TYPE  so_obj_des.
+
+  DATA: i_record LIKE solisti1 OCCURS 0 WITH HEADER LINE.
+
+  DATA:  g_sent_to_all TYPE sonv-flag.
+  DATA: lv_formname    TYPE tdsfname.
+
+  DATA : l_payment(17) TYPE c.
+
+  DATA : l_rwbtr TYPE payr-rwbtr.
+
+  DATA : l_famount LIKE aubf-vkwrt.
+
+  DATA : l_amount TYPE rslinlmsg-message.
+
+  DATA : l_message TYPE string.
+
+  DATA : l_line(80) TYPE c.
+
+  DATA : wa_buffer TYPE string.
+
+  DATA: lv_address TYPE ad_smtpadr.
+
+  LOOP AT i_main.
+
+*****************Email Addres OF vendor*****************
+** -> Begin of changes by of <Aditi> on <09/11/2024> for ATC
+*    SELECT SINGLE smtp_addr FROM adr6 INTO lv_address WHERE addrnumber = w_adrnr.
+    SELECT smtp_addr FROM adr6 INTO lv_address UP TO 1 ROWS WHERE addrnumber = w_adrnr ORDER BY PRIMARY KEY.
+    ENDSELECT.
+** -> End of changes by of <Aditi> on <09/11/2024> for ATC
+    CLEAR: wa_document_data, i_message, i_packing_list, i_receivers,
+            i_record,i_attachment.
+
+    REFRESH: i_message[], i_packing_list[], i_receivers[], i_record,i_attachment.
+
+*******************************************************************************************
+
+**********************************Added by Ujala Gupta For Fetch Email Address On 20.03.2019**********
+
+**    LOOP AT it_ekko INTO wa_ekko.
+**
+**      READ TABLE i_eket INTO wa_eket WITH KEY ebeln = wa_ekko-ebeln .
+**      IF sy-subrc = 0 .
+**        READ TABLE i_eban INTO wa_eban WITH KEY banfn = wa_eket-banfn .
+**
+**        IF sy-subrc = 0 .
+**
+**          SELECT SINGLE bname persnumber addrnumber  """"" For get Requitioner Email Address
+**             FROM usr21
+**             INTO  i_usr21_1
+**             WHERE bname = wa_eban-afnam.
+**          IF sy-subrc = 0 .
+**            SELECT  smtp_addr
+**                FROM adr6
+**               INTO TABLE i_adr6_1
+**               WHERE addrnumber = i_usr21_1-addrnumber AND persnumber = i_usr21_1-persnumber.
+**
+**            READ TABLE  i_adr6_1 INDEX 1 .
+**            IF sy-subrc = 0 .
+**              i_final1-afnam_addr = i_adr6_1-afnam_addr .
+**            ELSE.
+**              i_final1-afnam_addr = ' '.
+**            ENDIF .
+**            IF i_final1-afnam_addr IS INITIAL.
+**              CLEAR: wa_pa0105,
+**                     gd_pernr.
+**
+**              gd_pernr  = wa_eban-afnam+4(8).
+**              SELECT SINGLE * FROM pa0105
+**                              INTO wa_pa0105
+**                              WHERE pernr = gd_pernr
+**                              AND subty = 'E-ML'.
+**              IF sy-subrc EQ 0.
+**                i_final1-afnam_addr = wa_pa0105-usrid.
+**              ENDIF.
+**            ENDIF.
+**          ENDIF.
+**        ELSE.
+**          i_final1-afnam_addr = ' '.
+**        ENDIF .
+**
+**      ENDIF .
+**
+***    ENDIF .
+**
+**      i_final1-ebeln = wa_ekko-ebeln .
+**      i_final1-ernam = wa_ekko-ernam .
+**
+**      SELECT SINGLE  persnumber bname addrnumber    """"" Get Email Address For Document Creator
+**       FROM usr21
+**       INTO  i_usr21
+**       WHERE bname = wa_ekko-ernam.
+**
+**      SELECT smtp_addr
+**         FROM adr6
+**        INTO TABLE i_adr6_2
+**        WHERE addrnumber = i_usr21-addrnumber AND persnumber = i_usr21-persnumber.
+**
+**      READ TABLE  i_adr6_2 INDEX 1 .
+**      IF sy-subrc = 0 .
+**        i_final1-ernam_addr = i_adr6_2-ernam_addr.
+**      ELSE .
+**        i_final1-ernam_addr = ' '.
+**      ENDIF .
+**
+**      IF i_final1-ernam_addr IS INITIAL.
+**        CLEAR: gd_pernr,
+**               wa_pa0105.
+**        gd_pernr  = wa_eban-afnam+4(8).
+**
+**        SELECT SINGLE * FROM pa0105
+**                          INTO wa_pa0105
+**                          WHERE pernr = gd_pernr
+**                          AND subty = 'E-ML'.
+**
+**        IF sy-subrc EQ 0.
+**          i_final1-ernam_addr = wa_pa0105-usrid.
+**        ENDIF.
+**      ENDIF.
+**
+**      SELECT SINGLE  usrid_long  """""" Get EIC Email Address
+**       FROM pa0105
+**       INTO lv_email_esic
+**       WHERE pernr = wa_ekko-oid_extbol AND subty = '0010'.
+**      IF sy-subrc = 0 .
+**        i_final1-esic_email =   lv_email_esic.
+**      ELSE  .
+**        i_final1-esic_email = ' ' .
+**      ENDIF .
+**
+**
+**      APPEND i_final1.
+***    MODIFY i_final index sy-tabix TRANSPORTING ebeln ernam.
+**      CLEAR : wa_ekko , i_adr6_1 , i_adr6_2 ,wa_eban.
+**      REFRESH : i_adr6_1 ,i_adr6_2 .
+**    ENDLOOP.
+*****************************Get EIC Email Address
+    IF w_po_no IS NOT INITIAL.
+      DATA: w_po    TYPE ebeln,
+            w_empno TYPE persno.
+      CLEAR wa_ekko.
+      w_po = w_po_no.
+** -> Begin of changes by of <Aditi> on <09/11/2024> for ATC
+*      SELECT SINGLE * FROM ekko INTO CORRESPONDING FIELDS OF wa_ekko WHERE ebeln = w_po.
+      SELECT * FROM ekko INTO CORRESPONDING FIELDS OF wa_ekko UP TO 1 ROWS WHERE ebeln = w_po ORDER BY PRIMARY KEY.
+      ENDSELECT.
+** -> End of changes by of <Aditi> on <09/11/2024> for ATC
+      IF wa_ekko IS NOT INITIAL.
+        CLEAR lv_email_esic.
+        w_empno = wa_ekko-oid_extbol.
+** -> Begin of changes by of <Aditi> on <09/11/2024> for ATC
+*        SELECT SINGLE  usrid_long
+*            FROM pa0105 INTO lv_email_esic
+*            WHERE pernr = w_empno AND
+*                  subty = '0010'.
+        SELECT  usrid_long
+            FROM pa0105 INTO lv_email_esic
+            UP TO 1 ROWS
+            WHERE pernr = w_empno AND
+                  subty = '0010'
+            ORDER BY PRIMARY KEY.
+        ENDSELECT.
+** -> End of changes by of <Aditi> on <09/11/2024> for ATC
+        IF lv_email_esic IS NOT INITIAL.
+          i_final1-esic_email = lv_email_esic.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+
+    READ TABLE it_regup INDEX 1.
+
+    DATA: lv_email1 TYPE adr6-smtp_addr.
+** -> Begin of changes by of <Aditi> on <09/11/2024> for ATC
+*    SELECT SINGLE usnam
+*    FROM bkpf
+*    INTO  lv_email_bkpf
+*    WHERE belnr = it_regup-belnr AND
+*          gjahr = it_regup-gjahr AND
+*          bukrs = it_regup-bukrs.
+    SELECT usnam
+    FROM bkpf
+    INTO  lv_email_bkpf
+    UP TO 1 ROWS
+    WHERE belnr = it_regup-belnr AND
+          gjahr = it_regup-gjahr AND
+          bukrs = it_regup-bukrs
+    ORDER BY PRIMARY KEY.
+    ENDSELECT.
+** -> End of changes by of <Aditi> on <09/11/2024> for ATC
+** -> Begin of changes by of <Aditi> on <09/11/2024> for ATC
+*    SELECT SINGLE  usrid_long
+*     FROM pa0105
+*     INTO lv_email1
+*     WHERE pernr = lv_email_bkpf AND subty = '0010'.
+    SELECT  usrid_long
+     FROM pa0105
+     INTO lv_email1
+     UP TO 1 ROWS
+     WHERE pernr = lv_email_bkpf AND subty = '0010'
+     ORDER BY PRIMARY KEY.
+     ENDSELECT.
+** -> End of changes by of <Aditi> on <09/11/2024> for ATC
+    IF sy-subrc = 0 .
+      i_final1-usnam_addr = lv_email1.
+    ENDIF.
+
+    CLEAR : wa_ekko,it_regup,wa_pa0105.
+
+
+
+
+*****************************************************
+
+    wa_document_data-obj_langu = sy-langu.
+    wa_document_data-obj_name  = 'SAPRPT'.
+    wa_document_data-sensitivty = 'F'.
+
+    CLEAR : lv_po_len.
+    lv_po_len = strlen( w_po_no ).
+    IF lv_po_len = 10.
+
+      IF w_po_no CA sy-abcde.
+        wa_document_data-obj_descr = 'Pay Adv:' && 'DP-' && gv_kidno && '/' && 'INV-' && w_invoice_no.
+      ELSE.
+        wa_document_data-obj_descr = 'Pay Adv:' && 'PO-' && w_po_no && '/' && 'DP-' && gv_kidno && '/' && 'INV-' && w_invoice_no.
+      ENDIF.
+    ELSE.
+      wa_document_data-obj_descr = 'Pay Adv:' && 'DP-' && gv_kidno && '/' && 'INV-' && w_invoice_no.
+    ENDIF.
+
+    i_message-line = 'प्रिय महोदय / महोदया,'.
+    APPEND i_message.
+    i_message-line = 'Dear Sir/Madam'.
+    APPEND i_message.
+
+    i_message-line = ''.
+    APPEND i_message.
+
+    IF lv_new_amt IS NOT INITIAL.
+      l_payment = lv_new_amt.
+      l_famount = lv_new_amt.
+    ELSE.
+      l_payment = i_main-p_rwbtr.
+      l_famount = i_main-p_rwbtr.
+    ENDIF.
+
+    CALL FUNCTION 'Y_RX_AMOUNT_IN_WORDS'
+      EXPORTING
+        amount          = l_famount
+      IMPORTING
+        amount_in_words = l_amount.
+***SOC BY SANYOGITA GOHE ON 25.03.2019 - CHANGE EMAIL TEXT
+***    CONCATENATE 'We have electronically advised' 'our banker' INTO
+***   l_message SEPARATED BY space.
+***
+***    CONCATENATE l_message 'vide transaction No.' i_main-chect ',' INTO
+***    l_message SEPARATED BY space.
+***
+***    CONCATENATE l_message 'dated:' p_dd_dt ', to issue a cheque' INTO
+***    l_message SEPARATED BY
+***    space.
+***
+***    CONCATENATE l_message 'of Rs.' l_payment INTO l_message
+***    SEPARATED BY space.
+***
+***    CONCATENATE l_message '(Rs.' l_amount ') in your favour and send it'
+***    INTO l_message SEPARATED BY space.
+***
+***    CONCATENATE l_message 'directly to you. You will receive the cheque'
+***    INTO l_message SEPARATED BY space.
+***
+***    CONCATENATE l_message 'in due course of time' INTO l_message SEPARATED
+***    BY space.
+************************************************************************************
+
+****SOC by Aru and Sunny babla on dated 10/06/2020 for including hindi text charm id : 4000002240
+
+    CONDENSE l_payment.
+
+    DATA: w_date TYPE char10.
+
+    CONCATENATE p_dd_dt+6(2) '.' p_dd_dt+4(2) '.' p_dd_dt+0(4) INTO w_date.
+    "SOC AAKASH TYAGI / SANDEEP SINGH S 4000007024: AT:E:Mod.- YRFS024- logic for UTR number ON 01/09/2023
+*    CONCATENATE 'हम यूटीआर नंबर'  p_dd_no 'दिनांक'  w_date 'के माध्यम से'  l_payment 'भारतीय रुपये के भुगतान का अग्रेषण कर रहे हैं। कृपया अधिक जानकारी के लिए संलग्नक देखें।'  INTO
+    CONCATENATE 'हम बैंक संदर्भ/यूटीआर नंबर'  gv_trans_det 'दिनांक'  w_date 'के माध्यम से'  l_payment 'भारतीय रुपये के भुगतान का अग्रेषण कर रहे हैं। कृपया अधिक जानकारी के लिए संलग्नक देखें।'  INTO
+"EOC AAKASH TYAGI / SANDEEP SINGH S 4000007024: AT:E:Mod.- YRFS024- logic for UTR number ON 01/09/2023
+    l_message SEPARATED BY space.
+
+    i_message-line = l_message.
+    APPEND i_message.
+    CLEAR l_message.
+
+    "SOC AAKASH TYAGI / SANDEEP SINGH S 4000007024: AT:E:Mod.- YRFS024- logic for UTR number ON 01/09/2023
+*    CONCATENATE 'We are forwarding payment through Bank Ref./UTR number ' p_dd_no INTO
+    CONCATENATE 'We are forwarding payment through Bank Ref./UTR number ' gv_trans_det INTO
+"EOC AAKASH TYAGI / SANDEEP SINGH S 4000007024: AT:E:Mod.- YRFS024- logic for UTR number ON 01/09/2023
+****    i_main-chect INTO
+                l_message SEPARATED BY space.
+
+    CONCATENATE l_message 'dated:' w_date 'for INR ' l_payment INTO
+    l_message SEPARATED BY
+    space.
+
+    CONCATENATE l_message '(Rs.' l_amount '), please refer the attachment for more details. '
+    INTO l_message SEPARATED BY space.
+************************************************************************************
+***EOC BY SANYOGITA GOHE ON 25.03.2019 - CHANGE EMAIL TEXT
+    i_message-line = l_message.
+    APPEND i_message.
+    CLEAR l_message.
+
+    i_message-line = ''.
+    APPEND i_message.
+
+    "SOC AAKASH TYAGI / MANOJ RANE S 4000006749: AT:E:Chgs Payment advice and email body ON 18/07/2023
+
+    CLEAR : lv_gstin , lv_pan_no , lv_ifsc , lv_acc_no , lv_bank_det , lv_ba.
+    SELECT SINGLE stcd3 FROM lfa1 INTO lv_gstin WHERE lifnr = i_main-lifnr.
+*      ** -> Begin of changes by of Vipul on 11/09/24 for ATC
+*    SELECT SINGLE j_1ipanno FROM j_1imovend INTO lv_pan_no WHERE lifnr = i_main-lifnr.
+    SELECT SINGLE j_1ipanno FROM yd_lfa1 INTO lv_pan_no WHERE lifnr = i_main-lifnr.
+*      ** ->End of changes by of Vipul on 11/09/24 for ATC
+** -> Begin of changes by of <Aditi> on <09/11/2024> for ATC
+*    SELECT SINGLE zbnkl zbnkn srtgb FROM reguh INTO (lv_ifsc,lv_acc_no,lv_ba) WHERE laufd = p_laufd AND vblnr = s_belnr-low.
+    SELECT  zbnkl zbnkn srtgb FROM reguh INTO (lv_ifsc,lv_acc_no,lv_ba) UP TO 1 ROWS WHERE laufd = p_laufd AND vblnr = s_belnr-low ORDER BY PRIMARY KEY.
+    ENDSELECT.
+** -> End of changes by of <Aditi> on <09/11/2024> for ATC
+    lv_bank_det = lv_ifsc && '/' && lv_acc_no.
+    CONDENSE lv_bank_det.
+
+    CONCATENATE 'वीआईएम डीपी आईडी / VIM DP ID' gv_kidno INTO l_message SEPARATED BY '-'.
+    i_message-line = l_message.
+    APPEND i_message.
+    CLEAR l_message.
+    CONCATENATE 'पीओ नंबर / PO No' w_po_no INTO l_message SEPARATED BY '-'.
+    i_message-line = l_message.
+    APPEND i_message.
+    CLEAR l_message.
+    CONCATENATE 'बिज़नेस एरिया/ Business Area' lv_ba INTO l_message SEPARATED BY '-'.
+    i_message-line = l_message.
+    APPEND i_message.
+    CLEAR l_message.
+    CONCATENATE 'विक्रेता कोड / Vendor Code' i_main-lifnr INTO l_message SEPARATED BY '-'.
+    i_message-line = l_message.
+    APPEND i_message.
+    CLEAR l_message.
+    CONCATENATE 'विक्रेता का नाम / Vendor Name' i_main-name1 INTO l_message SEPARATED BY '-'.
+    i_message-line = l_message.
+    APPEND i_message.
+    CLEAR l_message.
+    CONCATENATE 'चालान नंबर / Invoice No' w_invoice_no INTO l_message SEPARATED BY '-'.
+    i_message-line = l_message.
+    APPEND i_message.
+    CLEAR l_message.
+    CONCATENATE 'चालान की तारीख / Invoice Date' w_invoice_date_char INTO l_message SEPARATED BY '-'.
+    i_message-line = l_message.
+    APPEND i_message.
+    CLEAR l_message.
+    CLEAR gv_gross_amt_c.
+    gv_gross_amt_c = gv_gross_amt.
+    CONDENSE gv_gross_amt_c.
+    CONCATENATE 'कुल चालान राशि / Total Invoice Amount' gv_gross_amt_c INTO l_message SEPARATED BY '-'.
+    i_message-line = l_message.
+    APPEND i_message.
+    CLEAR l_message.
+    CLEAR lv_new_amt_c.
+    IF lv_new_amt IS NOT INITIAL.
+      lv_new_amt_c = lv_new_amt.
+    ELSE.
+      lv_new_amt_c = i_main-p_rwbtr.
+    ENDIF.
+    CONDENSE lv_new_amt_c.
+    CONCATENATE 'कुल भुगतान की गई राशि / Total paid amount' lv_new_amt_c INTO l_message SEPARATED BY '-'.
+    i_message-line = l_message.
+    APPEND i_message.
+    CLEAR l_message.
+    "EOC AAKASH TYAGI / MANOJ RANE S 4000006749: AT:E:Chgs Payment advice and email body ON 18/07/2023
+
+    CONCATENATE  l_message 'वेंडर का ई-मेल आईडी  / Vendor E-Mail Id: ' lv_address '.' INTO l_message   SEPARATED BY space .
+    i_message-line = l_message.
+    APPEND i_message.
+    CLEAR l_message.
+*    ENDIF.
+
+    CONCATENATE 'जीएसटी नंबर / GST Number:' lv_gstin INTO l_message SEPARATED BY '-'.
+    i_message-line = l_message.
+    APPEND i_message.
+    CLEAR l_message.
+
+    CONCATENATE 'पैन नंबर / PAN Number:' lv_pan_no INTO l_message SEPARATED BY '-'.
+    i_message-line = l_message.
+    APPEND i_message.
+    CLEAR l_message.
+
+    CONCATENATE 'बैंक के खाते का विवरण / Bank Account details:' lv_bank_det INTO l_message SEPARATED BY '-'.
+    i_message-line = l_message.
+    APPEND i_message.
+    CLEAR l_message.
+
+    i_message-line = ''.
+    APPEND i_message.
+
+    CLEAR l_message.
+
+    CONCATENATE 'अन्य किसी स्पष्टीकरण / जिज्ञासा के मामले में कृपया vimhd@gail.co.in या 0120-4446060 पर संपर्क कर सकते हैं। / In case of any further' 'clarification/query,'
+    INTO l_message SEPARATED BY space.
+
+    CONCATENATE l_message ' Please may contact to vimhd@gail.co.in or 0120-4446060'
+    INTO l_message SEPARATED BY space.
+    i_message-line = l_message.
+    APPEND i_message.
+    CLEAR l_message.
+
+    i_message-line = ''.
+    APPEND i_message.
+
+    i_message-line = 'सादर'.
+    APPEND i_message.
+
+    i_message-line = 'Thanks & Regards'(017).
+    APPEND i_message.
+
+    i_message-line = ''.
+    APPEND i_message.
+
+    i_message-line = 'केंद्रीकृत भुगतान टीम '.
+    APPEND i_message.
+
+    i_message-line = 'Centralised Payment Team'(018).
+    APPEND i_message.
+***    i_message-line = 'PARTNER CARE'(019).
+***    APPEND i_message.
+
+*   { INSERT
+    IF p_bukrs = '9000'.
+      i_message-line = 'गेल गैस लिमिटेड / GAIL GAS LTD.'.
+    ELSE.
+*   INSERT }
+      i_message-line = 'गेल (इंडिया) लिमिटेड / GAIL (INDIA) LTD.'.
+*   { INSERT
+    ENDIF.
+*   INSERT }
+
+
+    APPEND i_message.
+    i_message-line ='--------------------------------------------------------------------------------------------------------------------------------------------------------'.
+    APPEND i_message.
+    i_message-line = 'डिसक्लेमर / Disclaimer: यह सिस्टम जनित मेल है, कृपया इसका उत्तर न दें। /  This is a system generated mail. Please do not reply. '.
+    APPEND i_message.
+    i_message-line = '--------------------------------------------------------------------------------------------------------------------------------------------------------'.
+    APPEND i_message.
+
+
+****SOC by Aru and Sunny babla on dated 10/06/2020 for including hindi text charm id : 4000002240
+
+*    CLEAR: i_main, i_open, i_bseg, w_po_no,w_invoice_no,w_invoice_date_char.
+*    REFRESH: i_main, i_open, i_bseg.
+*
+*    CALL FUNCTION 'YRF_CHEQUE_FORWARDING'
+*      EXPORTING
+*        p_bukrs             = i_final-zbukr
+*        p_gjahr             = i_final-gjahr
+*        p_belnr             = i_final-vblnr
+*      TABLES
+*        i_main              = i_main
+*        i_bseg              = i_bseg
+*        i_open              = i_open
+*      CHANGING
+*        w_po_no             = w_po_no
+*        w_invoice_no        = w_invoice_no
+*        w_invoice_date_char = w_invoice_date_char.
+*
+*    IF i_main[] IS NOT INITIAL.
+*************** add an attachment**************************
+
+    "SOC AAKASH TYAGI / MANOJ RANE S 4000006749: AT:E:Chgs Payment advice and email body ON 28/07/2023
+    CLEAR : gs_vim_head , lv_factor.
+    SELECT SINGLE * FROM /opt/vim_1head INTO gs_vim_head WHERE docid = gv_kidno.
+    IF gs_vim_head-doctype = 'YPO_INV' OR gs_vim_head-doctype = 'YPO_PIPE'.
+      lv_factor = gs_vim_head-gross_amount / ( gs_vim_head-net_amount + gs_vim_head-beznk ).
+      gv_gross_amt = gs_vim_head-gross_amount - ( gs_vim_head-beznk * lv_factor ).
+      SELECT * FROM yroa_vim_reten INTO TABLE it_reten WHERE docid = gv_kidno AND ret_reason IN ( 'D01', 'D02' , 'D03' , 'D04' , 'D05' ).
+      IF it_reten[] IS NOT INITIAL.
+        LOOP AT it_reten INTO wa_reten.
+          i_bseg-belnr = gv_kidno+2(10).
+          i_bseg-sgtxt = wa_reten-sgtxt.
+*          *  BEGIN OF CHANGES BY OF Vipul ON 04Feb25 FOR ATC
+          i_bseg-wrbtr = wa_reten-dmbtr * lv_factor. "#EC CI_FLDEXT_OK[2610650]
+*          * END CHANGES BY OF Vipul ON 04Feb25 FOR ATC
+          APPEND i_bseg.
+          CLEAR : wa_reten.
+        ENDLOOP.
+      ENDIF.
+    ELSE.
+      SELECT * FROM yroa_vim_reten INTO TABLE it_reten WHERE docid = gv_kidno AND ret_reason IN ( 'D01', 'D02' , 'D03' , 'D04' , 'D05' ).
+      IF it_reten[] IS NOT INITIAL.
+        LOOP AT it_reten INTO wa_reten.
+          i_bseg-belnr = gv_kidno+2(10).
+          i_bseg-sgtxt = wa_reten-sgtxt.
+          i_bseg-wrbtr = wa_reten-dmbtr.
+          APPEND i_bseg.
+          CLEAR : wa_reten.
+        ENDLOOP.
+      ENDIF.
+    ENDIF.
+    "EOC AAKASH TYAGI / MANOJ RANE S 4000006749: AT:E:Chgs Payment advice and email body ON 28/07/2023
+* Soc Kartik / Tanvi DATE 24/072025
+  SELECT belnr,bktxt,gjahr,bukrs FROM bkpf WHERE belnr = @i_bseg-belnr and bukrs = @i_bseg-bukrs and gjahr = @i_bseg-gjahr  into @data(ls_bkpf).
+    ENDSELECT.
+    IF ls_bkpf-bktxt is NOT INITIAL and gv_kidno is INITIAL.
+gv_kidno = ls_bkpf-bktxt.
+    ENDIF.
+* Eoc Kartik / Tanvi DATE 24/072025
+
+    lv_formname = 'YRF_CHEQUE_FORWARDING_NEW'.
+
+    CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
+      EXPORTING
+        formname           = lv_formname "'YRF_CHEQUE_FORWARDING_NEW'
+      IMPORTING
+        fm_name            = w_fm_name
+      EXCEPTIONS
+        no_form            = 1
+        no_function_module = 2
+        OTHERS             = 3.
+    IF sy-subrc <> 0.
+      MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+              WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+    ENDIF.
+*
+*
+    w_ctrlop-getotf = 'X'.
+    w_ctrlop-no_dialog = 'X'.
+*      W_CTRLOP-DEVICE = 'LOCP'.
+    w_compop-tdnoprev = 'X'.
+
+    CALL FUNCTION w_fm_name "V_FORM_NAME
+      EXPORTING
+        control_parameters = w_ctrlop
+        output_options     = w_compop
+        user_settings      = 'X'
+        w_c                = ' '
+        w_d                = 'X'
+        w_dd_no            = p_dd_no        "'' "DD NUMBER.
+        w_dd_dt            = p_dd_dt        "'00000000' "DD DATE.
+        w_ddchrg           = p_ddchrg       "'0.0' "DD CHARGES.
+        w_po_no            = w_po_no
+        w_invoice_no       = w_invoice_no
+        w_invoice_date     = w_invoice_date_char
+        w_tax_ind          = lv_tax
+*SOC Deekshita & Jawahar 11.09.2019 charm 753 pass BWS amt
+        w_inamt            = lv_inamt
+*EOC Deekshita & Jawahar 11.09.2019 charm 753 pass BWS amt
+        "SOC AAKASH TYAGI / MANOJ RANE S 4000006749: AT:E:Chgs Payment advice and email body ON 14/07/2023
+        w_kidno            = gv_kidno
+        w_gross_amt        = gv_gross_amt
+        w_net_amt          = lv_new_amt
+        "EOC AAKASH TYAGI / MANOJ RANE S 4000006749: AT:E:Chgs Payment advice and email body ON 14/07/2023
+        "SOC AAKASH TYAGI / SANDEEP SINGH S 4000007024: AT:E:Mod.- YRFS024- logic for UTR number ON 01/09/2023
+        w_bank_det         = gv_trans_det
+        "EOC AAKASH TYAGI / SANDEEP SINGH S 4000007024: AT:E:Mod.- YRFS024- logic for UTR number ON 01/09/2023
+      IMPORTING
+        job_output_info    = w_return
+      TABLES
+        i_main             = i_main
+        i_bseg             = i_bseg
+        i_open             = i_open.
+
+    IF sy-subrc <> 0.
+      MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+      WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+    ENDIF.
+    REFRESH i_otf.
+
+    i_otf[] = w_return-otfdata[].
+
+    CALL FUNCTION 'CONVERT_OTF'
+      EXPORTING
+        format                = 'PDF'
+        max_linewidth         = 132
+      IMPORTING
+        bin_filesize          = v_len_in
+      TABLES
+        otf                   = i_otf
+        lines                 = i_tline
+      EXCEPTIONS
+        err_max_linewidth     = 1
+        err_format            = 2
+        err_conv_not_possible = 3
+        OTHERS                = 4.
+
+    CALL FUNCTION 'SX_TABLE_LINE_WIDTH_CHANGE'
+**       EXPORTING
+**         LINE_WIDTH_SRC                    =
+**         LINE_WIDTH_DST                    =
+**         TRANSFER_BIN                      = ' '
+      TABLES
+        content_in                  = i_tline
+        content_out                 = i_record
+      EXCEPTIONS
+        err_line_width_src_too_long = 1
+        err_line_width_dst_too_long = 2
+        err_conv_failed             = 3
+        OTHERS                      = 4.
+
+***************Fill the document data and get size of attachment*********
+    CLEAR wa_document_data.
+    READ TABLE i_record INDEX w_cnt.
+    wa_document_data-doc_size = ( w_cnt - 1 ) * 255 + strlen( i_record ).
+    wa_document_data-obj_langu  = sy-langu.
+    wa_document_data-obj_name   = 'SAPRPT'.
+*    wa_document_data-obj_descr = 'Intimation of Electronic Payment w/o PO.'.
+*    wa_document_data-obj_descr = 'Pay Adv:' && w_po_no && '/' && gv_kidno && '/' && w_invoice_no.
+    IF lv_po_len = 10.
+      IF w_po_no CA sy-abcde.
+        wa_document_data-obj_descr = 'Pay Adv:' && 'DP-' && gv_kidno && '/' && 'INV-' && w_invoice_no.
+      ELSE.
+        wa_document_data-obj_descr = 'Pay Adv:' && 'PO-' && w_po_no && '/' && 'DP-' && gv_kidno && '/' && 'INV-' && w_invoice_no.
+      ENDIF.
+    ELSE.
+      wa_document_data-obj_descr = 'Pay Adv:' && 'DP-' && gv_kidno && '/' && 'INV-' && w_invoice_no.
+    ENDIF.
+    wa_document_data-sensitivty = 'F'.
+    CLEAR i_attachment.
+    REFRESH i_attachment.
+    i_attachment[] = i_record[].
+******************* end for attachment************************
+** add the control number
+*    DATA: w_line(100),
+*          w_date(10).
+*    CONCATENATE sy-datum+6(2)  sy-datum+4(2) sy-datum+0(4) INTO w_date SEPARATED BY '.'.
+*    CONCATENATE 'Source:'(023) w_tcode+2 '.' sy-uname '.' w_date '.'  sy-uzeit INTO i_message-line SEPARATED BY space.
+*    APPEND i_message.
+
+    i_packing_list-transf_bin = space.
+    i_packing_list-head_start = 1.
+    i_packing_list-head_num = 0.
+    i_packing_list-body_start = 1.
+    DESCRIBE TABLE i_message LINES i_packing_list-body_num.
+    i_packing_list-doc_type = 'RAW'.
+    APPEND i_packing_list.
+    IF i_main[] IS NOT INITIAL.
+
+****************** Create attachment notification**********************
+
+      i_packing_list-transf_bin = 'X'.
+      i_packing_list-head_start = 1.
+      i_packing_list-head_num   = 1.
+      i_packing_list-body_start = 1.
+
+      DESCRIBE TABLE i_attachment LINES i_packing_list-body_num.
+      i_packing_list-doc_type   =  'PDF'.    " format of attachment
+
+      i_packing_list-obj_descr  =  'PDF Attachment'.
+      i_packing_list-obj_name   =  'PDF Attachment'.
+      i_packing_list-doc_size   =  i_packing_list-body_num * 255.
+      APPEND i_packing_list.
+    ENDIF.
+
+******************* Create Receiver **************************************
+    w_receivers-receiver = lv_address. " vendor Email Address
+    w_receivers-rec_type = 'U'.
+    w_receivers-com_type = 'INT'.
+    w_receivers-notif_del = 'X'.
+    w_receivers-notif_ndel = 'X'.
+    APPEND w_receivers TO i_receivers.
+    CLEAR : w_receivers.
+
+**********Added By Ujala Gupta 20.03.2019
+
+*    w_receivers-receiver = i_final1-afnam_addr. "
+*    w_receivers-rec_type = 'U'.
+*    w_receivers-com_type = 'INT'.
+*    w_receivers-notif_del = 'X'.
+*    w_receivers-notif_ndel = 'X'.
+*    APPEND w_receivers TO i_receivers.
+*    CLEAR : w_receivers.
+
+    w_receivers-receiver = i_final1-usnam_addr. " Document No. Creator Email Address
+    w_receivers-rec_type = 'U'.
+    w_receivers-com_type = 'INT'.
+    w_receivers-notif_del = 'X'.
+    w_receivers-notif_ndel = 'X'.
+***SOC BY SANYOGITA & SUNNY ON 24.04.2019 - RECEPIENTS IN CC
+    w_receivers-copy = 'X'.
+***EOC BY SANYOGITA & SUNNY ON 24.04.2019 - RECEPIENTS IN CC
+    APPEND w_receivers TO i_receivers.
+    CLEAR : w_receivers.
+
+    w_receivers-receiver = i_final1-esic_email. " EIC Email Address
+    w_receivers-rec_type = 'U'.
+    w_receivers-com_type = 'INT'.
+    w_receivers-notif_del = 'X'.
+    w_receivers-notif_ndel = 'X'.
+***SOC BY SANYOGITA & SUNNY ON 24.04.2019 - RECEPIENTS IN CC
+    w_receivers-copy = 'X'.
+***EOC BY SANYOGITA & SUNNY ON 24.04.2019 - RECEPIENTS IN CC
+    APPEND w_receivers TO i_receivers.
+    CLEAR : w_receivers.
+
+    "code added by aakash tyagi on 07.05.2024
+*    ** -> Begin of changes by of Vipul on 11/09/24 for ATC
+sort it_regup.
+*** -> Begin of changes by of Vipul on 11/09/24 for ATC
+    READ TABLE it_regup INTO wa_regup INDEX 1.
+    IF sy-subrc EQ 0.
+***SOC BY Kartik & Monoje ON 04.10.2024 Change Dev: 4000008838
+** -> Begin of changes by  KRITIKA on 09.11.2024 for ATC
+      SELECT SINGLE * FROM bseg INTO @DATA(l_bseg) WHERE belnr = @wa_regup-belnr AND bukrs = @wa_regup-bukrs  "#EC CI_DB_OPERATION_OK[2431747]
+** -> End of changes by  KRITIKA on 09.11.2024 for ATC
+         AND gjahr = @wa_regup-gjahr
+          AND hkont in ('0006111085','0006112085')."charm  2000000931
+***EOC BY Kartik & Monoj ON 04.10.2024 Change Dev: 4000008838
+      IF sy-subrc EQ 0.
+** -> Begin of changes by of <Aditi> on <09/11/2024> for ATC
+*        SELECT SINGLE usrid FROM pa0105 INTO w_receivers-receiver WHERE pernr = wa_regup-zuonr AND subty = 'E-ML' AND endda = '99991231'.
+        SELECT  usrid FROM pa0105 INTO w_receivers-receiver UP TO 1 ROWS WHERE pernr = wa_regup-zuonr AND subty = 'E-ML' AND endda = '99991231' ORDER BY PRIMARY KEY.
+        ENDSELECT.
+** -> End of changes by of <Aditi> on <09/11/2024> for ATC
+        w_receivers-rec_type = 'U'.
+        w_receivers-com_type = 'INT'.
+        w_receivers-notif_del = 'X'.
+        w_receivers-notif_ndel = 'X'.
+        w_receivers-copy = 'X'.
+        APPEND w_receivers TO i_receivers.
+        CLEAR : w_receivers.
+      ENDIF.
+    ENDIF.
+    "end of code
+
+*SOC Deekshita & Jawahar 03.09.2019 charm 624 mail to BWS initator
+*SOC Deekshita & Jawahar 03.09.2019 charm 753 commentented as same logic need to be added for print also
+*    SELECT belnr, bktxt FROM bkpf INTO TABLE @DATA(lt_bktxt)
+*      FOR ALL ENTRIES IN @it_regup
+*      WHERE bukrs = @it_regup-bukrs
+*      AND   belnr = @it_regup-belnr
+*      AND   gjahr = @it_regup-gjahr.
+*
+*    IF sy-subrc = 0.
+*      READ TABLE lt_bktxt INTO DATA(ls_bktxt) INDEX 1.
+*      SELECT SINGLE initiator FROM yrma_bill_upload INTO @DATA(lv_ini)
+*        WHERE bwsno = @ls_bktxt-bktxt.
+*
+*      IF sy-subrc = 0.
+*EOC Deekshita & Jawahar 03.09.2019 charm 753 commentented as same logic need to be added for print also
+    IF lv_ini IS NOT INITIAL.
+***SOC BY ANKIT & Mr. N Jawahar  ON 18.8.2020 Charm no #4000002574, ANS:YRFS024 email Sub Type E-ML
+*      SELECT SINGLE usrid_long FROM pa0105 INTO @DATA(lv_ini_email)
+*        WHERE pernr = @lv_ini
+*        AND   subty = '0010'.
+** -> Begin of changes by of <Aditi> on <09/11/2024> for ATC
+*      SELECT SINGLE usrid FROM pa0105 INTO @DATA(lv_ini_email)
+*      WHERE pernr = @lv_ini
+*      AND   subty = 'E-ML'.
+      SELECT usrid FROM pa0105 INTO @DATA(lv_ini_email)
+      UP TO 1 ROWS
+      WHERE pernr = @lv_ini
+      AND   subty = 'E-ML'
+      ORDER BY PRIMARY KEY.
+      ENDSELECT.
+** -> End of changes by of <Aditi> on <09/11/2024> for ATC
+***EOC BY ANKIT & Mr. N Jawahar  ON 18.8.2020 Charm no #4000002574, ANS:YRFS024 email Sub Type E-ML
+
+      w_receivers-receiver = lv_ini_email.
+      w_receivers-rec_type = 'U'.
+      w_receivers-com_type = 'INT'.
+      w_receivers-notif_del = 'X'.
+      w_receivers-notif_ndel = 'X'.
+      APPEND w_receivers TO i_receivers.
+      CLEAR : w_receivers, ls_bktxt, lv_ini, lv_ini_email, lt_bktxt.
+      DELETE i_receivers WHERE receiver IS INITIAL.
+    ENDIF.
+*    ENDIF.
+*EOC Deekshita & Jawahar 03.09.2019 charm 624 mail to BWS initator
+
+********************** Sent Email with Attachment**************************
+
+    "SOC AAKASH TYAGI / MANOJ RANE S 4000006749: AT:E:Chgs Payment advice and email body ON 18/07/2023
+    CLEAR : gs_vim_head.
+** -> Begin of changes by of <Aditi> on <09/11/2024> for ATC
+*    SELECT SINGLE * FROM /opt/vim_1head INTO gs_vim_head WHERE kidno = gv_kidno.
+    SELECT * FROM /opt/vim_1head INTO gs_vim_head UP TO 1 ROWS WHERE kidno = gv_kidno ORDER BY PRIMARY KEY.
+    ENDSELECT.
+** -> End of changes by of <Aditi> on <09/11/2024> for ATC
+    IF sy-subrc EQ 0.
+      IF gs_vim_head-doctype = 'YNPO_INV'.
+        READ TABLE i_receivers INTO w_receivers WITH KEY receiver = gs_vim_head-email_id.
+        IF sy-subrc NE 0.
+          w_receivers-receiver   = gs_vim_head-email_id.
+          w_receivers-rec_type   = 'U'.
+          w_receivers-com_type   = 'INT'.
+          w_receivers-notif_del  = 'X'.
+          w_receivers-notif_ndel = 'X'.
+          w_receivers-copy = 'X'.
+          APPEND w_receivers TO i_receivers.
+          CLEAR : w_receivers.
+        ENDIF.
+      ELSE.
+        CLEAR : lv_mailid,lv_user.
+        lv_user = gs_vim_head-yy_oid_extbol.
+        CALL FUNCTION 'FTR_CORR_CHECK_EMAIL_SAP_USER'
+          EXPORTING
+            i_user              = lv_user
+          IMPORTING
+            e_email_address     = lv_mailid
+          EXCEPTIONS
+            mail_address        = 1
+            determination_error = 2.
+        READ TABLE i_receivers INTO w_receivers WITH KEY receiver = lv_mailid.
+        IF sy-subrc NE 0.
+          w_receivers-receiver   = lv_mailid.
+          w_receivers-rec_type   = 'U'.
+          w_receivers-com_type   = 'INT'.
+          w_receivers-notif_del  = 'X'.
+          w_receivers-notif_ndel = 'X'.
+          w_receivers-copy = 'X'.
+          APPEND w_receivers TO i_receivers.
+          CLEAR : w_receivers.
+        ENDIF.
+        CLEAR : lv_mailid , lv_user.
+        lv_user = gs_vim_head-yy_coordinator.
+        CALL FUNCTION 'FTR_CORR_CHECK_EMAIL_SAP_USER'
+          EXPORTING
+            i_user              = lv_user
+          IMPORTING
+            e_email_address     = lv_mailid
+          EXCEPTIONS
+            mail_address        = 1
+            determination_error = 2.
+        READ TABLE i_receivers INTO w_receivers WITH KEY receiver = lv_mailid.
+        IF sy-subrc NE 0.
+          w_receivers-receiver   = lv_mailid.
+          w_receivers-rec_type   = 'U'.
+          w_receivers-com_type   = 'INT'.
+          w_receivers-notif_del  = 'X'.
+          w_receivers-notif_ndel = 'X'.
+          w_receivers-copy = 'X'.
+          APPEND w_receivers TO i_receivers.
+          CLEAR : w_receivers.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+    "EOC AAKASH TYAGI / MANOJ RANE S 4000006749: AT:E:Chgs Payment advice and email body ON 18/07/2023
+* Soc Kartik / Tanvi DATE 24/072025
+    IF gv_kidno is not INITIAL ."EIC Mail
+SELECT SINGLE docid , EMAIL_ID FROM /OPT/VIM_1HEAD WHERE docid = @gv_kidno INTO @data(ls_VIM_1HEAD).
+      w_receivers-receiver   = ls_VIM_1HEAD-EMAIL_ID.
+       w_receivers-rec_type = 'U'.
+      w_receivers-com_type = 'INT'.
+      w_receivers-notif_del = 'X'.
+      w_receivers-notif_ndel = 'X'.
+          w_receivers-copy = 'X'.
+          APPEND w_receivers TO i_receivers.
+    ENDIF.
+
+* Eoc Kartik / Tanvi DATE 24/072025
+
+    CALL FUNCTION 'SO_NEW_DOCUMENT_ATT_SEND_API1'
+      EXPORTING
+        document_data              = wa_document_data
+        put_in_outbox              = 'X'
+        commit_work                = 'X'
+      IMPORTING
+        sent_to_all                = g_sent_to_all
+      TABLES
+        packing_list               = i_packing_list[]
+        contents_bin               = i_attachment
+        contents_txt               = i_message[]
+        receivers                  = i_receivers
+      EXCEPTIONS
+        too_many_receivers         = 1
+        document_not_sent          = 2
+        document_type_not_exist    = 3
+        operation_no_authorization = 4
+        parameter_error            = 5
+        x_error                    = 6
+        enqueue_error              = 7
+        OTHERS                     = 8.
+    IF sy-subrc = 0 .
+      IF sy-batch = 'X'.
+      ELSE.
+        MESSAGE'Mail has been Successfully Sent.' TYPE 'I'.
+      ENDIF.
+    ELSE.
+      WAIT UP TO 2 SECONDS.
+      "This program starts the SAPconnect send process.
+      SUBMIT rsconn01 WITH mode = 'INT'
+      WITH output = 'X'
+      AND RETURN.
+    ENDIF.
+
+    REFRESH:  i_attachment, i_message, i_receivers , i_packing_list.
+  ENDLOOP.
+ENDFORM.

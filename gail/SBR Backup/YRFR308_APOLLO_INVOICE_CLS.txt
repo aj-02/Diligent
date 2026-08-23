@@ -1,0 +1,1137 @@
+*&---------------------------------------------------------------------*
+*&  INCLUDE           YRFR308_APOLLO_INVOICE_CLS
+*&---------------------------------------------------------------------*
+CLASS lcl_bdc DEFINITION.
+  PUBLIC SECTION.
+    CLASS-METHODS: lm_call_bdc IMPORTING hsn_code TYPE steuc,
+      lm_bdc_dynpro IMPORTING program TYPE bdc_prog
+                              dynpro  TYPE bdc_dynr,
+      lm_bdc_field IMPORTING fnam TYPE fnam_____4
+                             fval TYPE bdc_fval.
+ENDCLASS.  "CLASS lcl_bdc DEFINITION.
+CLASS lcl_bdc IMPLEMENTATION.
+  METHOD lm_call_bdc.
+    DATA: lv_lichild TYPE j_1ichid.
+
+    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+      EXPORTING
+        input  = hsn_code
+      IMPORTING
+        output = lv_lichild.
+
+    lcl_bdc=>lm_bdc_dynpro( EXPORTING program = 'SAPMJ1ID' dynpro = '0200' ).
+    lcl_bdc=>lm_bdc_field( EXPORTING fnam = 'BDC_CURSOR' fval = 'EXCISE' ).
+    lcl_bdc=>lm_bdc_field( EXPORTING fnam = 'BDC_OKCODE' fval = '=EX' ).
+    lcl_bdc=>lm_bdc_field( EXPORTING fnam = 'RB11' fval = 'X' ).
+
+    lcl_bdc=>lm_bdc_dynpro( EXPORTING program = 'SAPLJ1I0' dynpro = '0100' ).
+    lcl_bdc=>lm_bdc_field( EXPORTING fnam = 'BDC_CURSOR' fval = 'J_1IVCHID-J_1ICHT1(01)' ).
+    lcl_bdc=>lm_bdc_field( EXPORTING fnam = 'BDC_OKCODE' fval = '=NEWL' ).
+
+    lcl_bdc=>lm_bdc_dynpro( EXPORTING program = 'SAPLJ1I0' dynpro = '0150' ).
+    lcl_bdc=>lm_bdc_field( EXPORTING fnam = 'BDC_CURSOR' fval = 'J_1IVCHID-J_1ICHID' ).
+    lcl_bdc=>lm_bdc_field( EXPORTING fnam = 'BDC_OKCODE' fval = '=SAVE' ).
+    lcl_bdc=>lm_bdc_field( EXPORTING fnam = 'J_1IVCHID-J_1ICHID' fval = CONV bdc_fval( lv_lichild ) ).
+
+    lcl_bdc=>lm_bdc_dynpro( EXPORTING program = 'SAPLJ1I0' dynpro = '0150' ).
+    lcl_bdc=>lm_bdc_field( EXPORTING fnam = 'BDC_CURSOR' fval = 'J_1IVCHID-J_1ICHUM' ).
+    lcl_bdc=>lm_bdc_field( EXPORTING fnam = 'BDC_OKCODE' fval = '=ENDE' ).
+
+    lcl_bdc=>lm_bdc_dynpro( EXPORTING program = 'SAPMJ1ID' dynpro = '0200' ).
+    lcl_bdc=>lm_bdc_field( EXPORTING fnam = 'BDC_OKCODE' fval = '/EEXIT' ).
+    lcl_bdc=>lm_bdc_field( EXPORTING fnam = 'BDC_CURSOR' fval = 'EXCISE' ).
+
+    CALL TRANSACTION 'J1ID'  USING gi_bdcdata
+         MODE 'N' UPDATE 'S' MESSAGES INTO  gi_message.
+
+    CLEAR: gi_bdcdata, gi_message, lv_lichild.
+
+  ENDMETHOD.  "METHOD lm_call_bdc.
+  METHOD lm_bdc_dynpro.
+
+    CLEAR gs_bdcdata.
+    gs_bdcdata-program  = program.
+    gs_bdcdata-dynpro   = dynpro.
+    gs_bdcdata-dynbegin = 'X'.
+    APPEND gs_bdcdata TO gi_bdcdata .
+
+  ENDMETHOD.  "METHOD lm_bdc_dynpro.
+  METHOD lm_bdc_field.
+
+    CLEAR gs_bdcdata.
+    gs_bdcdata-fnam = fnam.
+    gs_bdcdata-fval = fval.
+    APPEND gs_bdcdata TO gi_bdcdata.
+
+  ENDMETHOD.  "METHOD lm_bdc_field.
+ENDCLASS.  "CLASS lcl_bdc IMPLEMENTATION.
+CLASS lcl_apollow_data DEFINITION.
+  PUBLIC SECTION.
+    CLASS-METHODS:
+      lm_get_data,
+      lm_doc_post.
+ENDCLASS. "CLASS lcl_apollow_data DEFINITION.
+CLASS lcl_apollow_data IMPLEMENTATION.
+  METHOD lm_get_data.
+    "Get Header Data
+    IF s_go_id IS NOT INITIAL OR s_pi_dat IS NOT INITIAL.
+      SELECT *
+        FROM yrfa_cl_med_pi_h
+        INTO TABLE @gi_med_h
+        WHERE gail_order_id IN @s_go_id
+          AND pi_entry_date IN @s_pi_dat
+          AND document_no EQ ''.
+    ENDIF.
+    IF sy-subrc EQ 0 AND gi_med_h IS NOT INITIAL.
+      "Get Items Data
+      SELECT *
+        FROM yrfa_cl_med_pi_i
+        INTO TABLE @gi_med_i
+        FOR ALL ENTRIES IN @gi_med_h
+        WHERE gail_order_id EQ @gi_med_h-gail_order_id.
+      IF sy-subrc EQ 0.
+        "Do Nothing
+      ENDIF.
+
+      ""Get all tax codes & tax types based on vendor and company code
+      SELECT lifnr, bukrs, wt_withcd, witht
+        FROM lfbw
+        INTO TABLE @gi_lfbw
+        FOR ALL ENTRIES IN @gi_med_h
+        WHERE lifnr EQ @gi_med_h-vendor_code
+          AND bukrs EQ @gi_med_h-company_code.
+      IF sy-subrc EQ 0.
+
+      ENDIF.
+
+      ""Get Profit Center For Business Areas
+      SELECT  bukrs, gsber, prctr
+          FROM yrfa_bapc_master
+          INTO TABLE @gi_bapc
+          FOR ALL ENTRIES IN @gi_med_h
+          WHERE gsber EQ @gi_med_h-business_area.
+      IF sy-subrc EQ 0.
+
+      ENDIF.
+
+      ""Get Bank Data
+      SELECT lifnr, bankn
+        FROM lfbk
+        INTO TABLE @gi_lfbk
+        FOR ALL ENTRIES IN @gi_med_h
+        WHERE lifnr EQ @gi_med_h-vendor_code.
+      IF sy-subrc EQ 0.
+
+      ENDIF.
+
+      ""Get Payee
+      SELECT lifnr, bukrs, empfk
+        FROM lfza
+        INTO TABLE @gi_lfza
+        FOR ALL ENTRIES IN @gi_med_h
+        WHERE lifnr EQ @gi_med_h-vendor_code.
+      IF sy-subrc EQ 0.
+
+      ENDIF.
+
+      ""Get Cost Center
+      SELECT pernr,
+        endda,
+        begda,
+        kostl
+        FROM pa0001
+        INTO TABLE @gi_pa0001
+        FOR ALL ENTRIES IN @gi_med_h
+        WHERE pernr EQ @gi_med_h-employee_id
+          AND begda LE @gi_med_h-order_date
+          AND endda GE @gi_med_h-order_date.
+      IF sy-subrc EQ 0.
+        SORT gi_pa0001 BY pernr endda DESCENDING.
+      ENDIF.
+
+    ENDIF.
+  ENDMETHOD. "METHOD lm_get_data.
+  METHOD lm_doc_post.
+
+    DATA: ls_documentheader    TYPE bapiache09,
+          ls_accountgl         TYPE bapiacgl09,
+          lt_accountgl         TYPE STANDARD TABLE OF bapiacgl09,
+          ls_accountreceivable TYPE bapiacar09,
+          lt_accountreceivable TYPE STANDARD TABLE OF bapiacar09,
+          lt_accountpayable    TYPE STANDARD TABLE OF bapiacap09,
+          ls_accountpayable    TYPE bapiacap09,
+          ls_currencyamount    TYPE bapiaccr09,
+          lt_currencyamount    TYPE STANDARD TABLE OF bapiaccr09,
+          lt_accountwt         TYPE STANDARD TABLE OF bapiacwt09,
+          ls_accountwt         TYPE bapiacwt09,
+          lv_obj_key           TYPE bapiache09-obj_key,
+          lv_fyear             TYPE bkpf-gjahr,
+          lt_return            TYPE STANDARD TABLE OF bapiret2,
+          lv_vendor_amt        TYPE wrbtr,
+          lv_net_inv_amt       TYPE yy_net_inv_amt,
+          lv_ded_dis           TYPE yy_deduct_disc,
+          lv_oth_dis           TYPE yy_other_disc,
+          lv_emp_ded           TYPE yy_deduct_empl,
+          lv_doc_no            TYPE bkpf-belnr,
+          lv_doc_cc            TYPE bkpf-bukrs,
+          lv_doc_yr            TYPE bkpf-gjahr,
+          lr_tax               TYPE RANGE OF qsskz,
+          lt_extention2        TYPE STANDARD TABLE OF bapiparex,
+          ls_extention2        TYPE bapiparex.
+
+    DATA: lr_persk_e TYPE RANGE OF pa0001-persk.
+    DATA: lr_persk_s TYPE RANGE OF pa0001-persk.
+
+    DATA: lv_ded TYPE yrfa_cl_med_pi_i-deduction_disc.
+
+    CLEAR: lv_success, lv_error.
+
+    TRY.
+
+        lr_persk_e = VALUE #( LET s = 'I'
+                                o = 'EQ'
+                               IN sign = s
+                                option = o
+                                 ( low = 'E0' )
+                                 ( low = 'E1' )
+                                 ( low = 'E2' )
+                                 ( low = 'E3' )
+                                 ( low = 'E4' )
+                                 ( low = 'E5' )
+                                 ( low = 'E6' )
+                                 ( low = 'E7' )
+                                 ( low = 'E8' )
+                                 ( low = 'E9' ) ).
+
+        lr_persk_s = VALUE #( LET s = 'I'
+                                o = 'EQ'
+                               IN sign = s
+                                option = o
+                                 ( low = 'S0' )
+                                 ( low = 'S1' )
+                                 ( low = 'S2' )
+                                 ( low = 'S3' )
+                                 ( low = 'S4' )
+                                 ( low = 'S5' )
+                                 ( low = 'S6' )
+                                 ( low = 'S7' ) ).
+
+***SOC BY ROHTASH/BRIJESH CHARM:4000008362 DATE:12/06/2024
+        LOOP AT gi_med_h INTO DATA(lw_medh).
+          LOOP AT gi_med_i ASSIGNING FIELD-SYMBOL(<lfs_medi>) WHERE gail_order_id = lw_medh-gail_order_id.
+            CLEAR: lv_ded.
+            IF <lfs_medi>-actual_disc_rate IS NOT INITIAL.
+              lv_ded = <lfs_medi>-total_amount * ( <lfs_medi>-actual_disc_rate / 100 ).
+              IF lv_ded IS NOT INITIAL.
+                <lfs_medi>-deduction_disc = lv_ded.
+              ENDIF.
+            ENDIF.
+
+          ENDLOOP.
+        ENDLOOP.
+***EOC BY ROHTASH/BRIJESH CHARM:4000008362 DATE:12/06/2024
+** Prepare Data To Pass In BAPI
+        LOOP AT gi_med_h INTO DATA(ls_medh).
+
+          CLEAR: lv_doc_no, lv_doc_cc, lv_doc_yr, lv_net_inv_amt, lv_ded_dis, lv_oth_dis, lv_emp_ded, ls_documentheader, lv_vendor_amt,
+                 lv_obj_key, lt_accountgl, lt_accountpayable, lt_currencyamount, lt_return, ls_accountwt, lt_accountwt.
+
+          DATA(lv_item) = '0000000001'.
+
+          IF ls_medh-document_no IS INITIAL.
+***SOC by Rohtash/Brijesh Charm:4000008403 Date:21/06/2024
+**            READ TABLE gi_pa0001 INTO DATA(ls_pa0001) WITH KEY pernr = ls_medh-employee_id
+**                                                               endda = '99991231'.
+**            IF sy-subrc EQ 0.
+**
+**            ENDIF.
+            LOOP AT gi_pa0001 INTO DATA(ls_pa0001) WHERE pernr = ls_medh-employee_id
+                                                     AND begda LE ls_medh-order_date
+                                                     AND endda GE ls_medh-order_date.
+              IF ls_pa0001-kostl IS NOT INITIAL.
+                EXIT.
+              ENDIF.
+            ENDLOOP.
+***EOC by Rohtash/Brijesh Charm:4000008403 Date:21/06/2024
+
+            "GET FISCAL YEAR
+            CALL FUNCTION 'GET_CURRENT_YEAR'
+              EXPORTING
+                bukrs = ls_medh-company_code
+                date  = sy-datum
+              IMPORTING
+                curry = lv_fyear.
+
+            "DOCUMENT HEADER DATA
+            ls_documentheader-username   = 'BKG_BASIS'.
+            ls_documentheader-header_txt = ls_medh-apollo_order_id.
+            ls_documentheader-comp_code  = ls_medh-company_code.
+            ls_documentheader-doc_date   = ls_medh-order_date.
+***SOC by Rohtash/Brijesh Charm:4000009167 Date:01/01/2025
+*            ls_documentheader-doc_date   = ls_medh-order_date.
+            ls_documentheader-doc_date   = ls_medh-bill_date.
+***EOC by Rohtash/Brijesh Charm:4000009167 Date:01/01/2025
+            ls_documentheader-pstng_date = sy-datum.
+            ls_documentheader-fisc_year  = lv_fyear.
+            ls_documentheader-doc_type   = 'KR'.
+            ls_documentheader-ref_doc_no = ls_medh-bill_no.
+
+            "NET INVOICE AMOUNT
+            lv_net_inv_amt = REDUCE yy_net_inv_amt( INIT x TYPE yy_net_inv_amt FOR ls IN gi_med_i
+                                                    WHERE ( gail_order_id = ls_medh-gail_order_id )
+                                                    NEXT x = x + ls-net_invoice_amt ).
+
+            "DEDUCTION DISCOUNT
+            lv_ded_dis = REDUCE yy_deduct_disc( INIT x TYPE yy_deduct_disc FOR ls IN gi_med_i
+                                                WHERE ( gail_order_id = ls_medh-gail_order_id )
+                                                NEXT x = x + ls-deduction_disc ).
+
+            "OTHER DEDUCTION
+            lv_oth_dis = REDUCE yy_other_disc( INIT x TYPE yy_other_disc FOR ls IN gi_med_i
+                                               WHERE ( gail_order_id = ls_medh-gail_order_id )
+                                               NEXT x = x + ls-other_deduction ).
+
+            "EMPLOYEE DEDUCTION
+            lv_emp_ded = REDUCE yy_deduct_empl( INIT x TYPE yy_deduct_empl FOR ls IN gi_med_i
+                                               WHERE ( gail_order_id = ls_medh-gail_order_id )
+                                               NEXT x = x + ls-deduction_empl ).
+
+            ""ACCOUNT PAYABLE DATA
+            ls_accountpayable-itemno_acc    = lv_item.
+            ls_accountpayable-vendor_no     = ls_medh-vendor_code.
+            ls_accountpayable-comp_code     = ls_medh-company_code.
+
+               """"""""""""""soc mobin /brijesh 24.07.2025""""""""""""""""""""""""""""
+            if ls_medh-business_area = '1011'.
+               ls_medh-business_area = '1010'.
+            endif.
+
+         """"""""""""""eoc mobin /brijesh 24.07.2025""""""""""""""""""""""""""""
+
+            ls_accountpayable-bus_area      = ls_medh-business_area.
+            ls_accountpayable-item_text     = |APOLLO CASHLESS MEDICINE-E| & |{ ls_medh-employee_id }|.
+            ls_accountpayable-sectioncode   = 'GAIL'.
+            ls_accountpayable-businessplace = ls_medh-business_place.
+            ls_accountpayable-alloc_nmbr    = ls_medh-gail_order_id.
+*      LS_ACCOUNTPAYABLE-TAX_CODE     = LS_MEDH-GAIL_GST_NO.
+            READ TABLE gi_bapc INTO DATA(ls_bapc) WITH KEY gsber = ls_medh-business_area.
+            IF sy-subrc EQ 0.
+              ls_accountpayable-profit_ctr    = ls_bapc-prctr.
+            ENDIF.
+
+            "PASS PAYEE IF BANK ACCOUNT NUMBER IS NOT MAPPED
+            READ TABLE gi_lfbk INTO DATA(ls_lfbk) WITH KEY lifnr = ls_medh-vendor_code.
+            IF sy-subrc NE 0.
+              READ TABLE gi_lfza INTO DATA(ls_lfza) WITH KEY lifnr = ls_medh-vendor_code.
+              IF sy-subrc EQ 0.
+                ls_accountpayable-alt_payee = ls_lfza-empfk.
+              ENDIF.
+            ENDIF.
+
+            APPEND ls_accountpayable TO lt_accountpayable.
+            CLEAR: ls_accountpayable.
+
+            lv_vendor_amt = ( lv_net_inv_amt - ( lv_ded_dis + lv_oth_dis ) ).
+            ls_currencyamount-itemno_acc   = lv_item.
+            ls_currencyamount-currency     = 'INR'.
+            ls_currencyamount-amt_doccur   = lv_vendor_amt * -1.
+            APPEND ls_currencyamount TO lt_currencyamount.
+            CLEAR: ls_currencyamount.
+
+            READ TABLE gi_med_i INTO DATA(ls_medi1) WITH KEY gail_order_id = ls_medh-gail_order_id.
+            IF sy-subrc EQ 0.
+              IF ls_medi1-gst_type EQ 'CGST'.
+
+                "Tax Code- 'SG'
+                ls_accountwt-itemno_acc = lv_item.
+                ls_accountwt-wt_code    = 'SG'.
+                READ TABLE gi_lfbw INTO DATA(ls_lfbw) WITH KEY lifnr = ls_medh-vendor_code
+                                                               bukrs = ls_medh-company_code
+                                                               wt_withcd = 'SG'.
+                IF sy-subrc EQ 0.
+                  ls_accountwt-wt_type = ls_lfbw-witht.
+                ENDIF.
+                APPEND ls_accountwt TO lt_accountwt.
+                CLEAR ls_accountwt.
+
+                "Tax Code- 'CG'
+                ls_accountwt-itemno_acc = lv_item.
+                ls_accountwt-wt_code    = 'CG'.
+                READ TABLE gi_lfbw INTO ls_lfbw WITH KEY lifnr = ls_medh-vendor_code
+                                                         bukrs = ls_medh-company_code
+                                                         wt_withcd = 'CG'.
+                IF sy-subrc EQ 0.
+                  ls_accountwt-wt_type = ls_lfbw-witht.
+                ENDIF.
+                APPEND ls_accountwt TO lt_accountwt.
+                CLEAR ls_accountwt.
+
+                "Income Tax
+                ls_accountwt-itemno_acc = lv_item.
+                ls_accountwt-wt_code    = '4Q'.
+                READ TABLE gi_lfbw INTO ls_lfbw WITH KEY lifnr = ls_medh-vendor_code
+                                                         bukrs = ls_medh-company_code
+                                                         wt_withcd = '4Q'.
+                IF sy-subrc EQ 0.
+                  ls_accountwt-wt_type = ls_lfbw-witht.
+                ENDIF.
+                APPEND ls_accountwt TO lt_accountwt.
+                CLEAR ls_accountwt.
+
+              ELSEIF ls_medi1-gst_type EQ 'UGST'.
+
+                "Tax Code- 'UG'
+                ls_accountwt-itemno_acc = lv_item.
+                ls_accountwt-wt_code    = 'UG'.
+                READ TABLE gi_lfbw INTO ls_lfbw WITH KEY lifnr = ls_medh-vendor_code
+                                                         bukrs = ls_medh-company_code
+                                                         wt_withcd = 'UG'.
+                IF sy-subrc EQ 0.
+                  ls_accountwt-wt_type = ls_lfbw-witht.
+                ENDIF.
+                APPEND ls_accountwt TO lt_accountwt.
+                CLEAR ls_accountwt.
+
+                "Tax Code- 'CG'
+                ls_accountwt-itemno_acc = lv_item.
+                ls_accountwt-wt_code    = 'CG'.
+                READ TABLE gi_lfbw INTO ls_lfbw WITH KEY lifnr = ls_medh-vendor_code
+                                                         bukrs = ls_medh-company_code
+                                                         wt_withcd = 'CG'.
+                IF sy-subrc EQ 0.
+                  ls_accountwt-wt_type = ls_lfbw-witht.
+                ENDIF.
+                APPEND ls_accountwt TO lt_accountwt.
+                CLEAR ls_accountwt.
+
+                "Income Tax
+                ls_accountwt-itemno_acc = lv_item.
+                ls_accountwt-wt_code    = '4Q'.
+                READ TABLE gi_lfbw INTO ls_lfbw WITH KEY lifnr = ls_medh-vendor_code
+                                                         bukrs = ls_medh-company_code
+                                                         wt_withcd = '4Q'.
+                IF sy-subrc EQ 0.
+                  ls_accountwt-wt_type = ls_lfbw-witht.
+                ENDIF.
+                APPEND ls_accountwt TO lt_accountwt.
+                CLEAR ls_accountwt.
+
+              ELSEIF ls_medi1-gst_type EQ 'IGST'.
+
+                ls_accountwt-itemno_acc = lv_item.
+                ls_accountwt-wt_code    = 'IG'.
+                READ TABLE gi_lfbw INTO ls_lfbw WITH KEY lifnr = ls_medh-vendor_code
+                                                         bukrs = ls_medh-company_code
+                                                         wt_withcd = 'IG'.
+                IF sy-subrc EQ 0.
+                  ls_accountwt-wt_type = ls_lfbw-witht.
+                ENDIF.
+                APPEND ls_accountwt TO lt_accountwt.
+                CLEAR ls_accountwt.
+
+                "Income Tax
+                ls_accountwt-itemno_acc = lv_item.
+                ls_accountwt-wt_code    = '4Q'.
+                READ TABLE gi_lfbw INTO ls_lfbw WITH KEY lifnr = ls_medh-vendor_code
+                                                         bukrs = ls_medh-company_code
+                                                         wt_withcd = '4Q'.
+                IF sy-subrc EQ 0.
+                  ls_accountwt-wt_type = ls_lfbw-witht.
+                ENDIF.
+                APPEND ls_accountwt TO lt_accountwt.
+                CLEAR ls_accountwt.
+
+              ENDIF.
+            ENDIF.  "IF sy-subrc EQ 0.
+
+            LOOP AT gi_med_i INTO DATA(ls_medi) WHERE gail_order_id = ls_medh-gail_order_id.
+
+**Create HSN Code If HSN Code is not available in master table T604F.
+              SELECT SINGLE steuc FROM t604f INTO @DATA(lv_steuc) WHERE steuc EQ @ls_medi-hsn_code.
+              IF sy-subrc NE 0.
+                "CALLING BDC FOR TRANSACTION J1ID TO CREATE NEW HSN CODE
+                lcl_bdc=>lm_call_bdc( EXPORTING hsn_code = ls_medi-hsn_code ).
+              ENDIF.
+
+**SOC by Rohtash/Brijesh Charm:4000008498 Date:17/07/2024
+              IF ls_medh-employee_grade EQ 'CM'.
+                ls_medh-employee_grade = 'A'.
+              ELSEIF ls_medh-employee_grade EQ 'DI'.
+                ls_medh-employee_grade = 'B'.
+              ENDIF.
+**EOC by Rohtash/Brijesh Charm:4000008498 Date:17/07/2024
+
+              lv_item = lv_item + 1.
+              ""ACCOUNT GL DATA
+              ls_accountgl-itemno_acc = lv_item.
+              IF ls_medh-employee_grade IN lr_persk_e.
+                ls_accountgl-gl_account = '0006114015'.
+              ELSEIF ls_medh-employee_grade IN lr_persk_s.
+                ls_accountgl-gl_account = '0006114115'.
+              ELSEIF ls_medh-employee_grade EQ 'A' OR ls_medh-employee_grade EQ 'B'.
+                ls_accountgl-gl_account = '0006114210'.
+              ENDIF.
+              ls_accountgl-item_text  = |APOLLO CASHLESS MEDICINE-E| & |{ ls_medh-employee_id }|.
+              ls_accountgl-comp_code  = ls_medi-company_code.
+              ls_accountgl-bus_area   = ls_medi-business_area.
+              ls_accountgl-profit_ctr = ls_bapc-prctr.
+              ls_accountgl-yyhsn_sac  = ls_medi-hsn_code.
+              ls_accountgl-tax_code   = ls_medi-tax_code.
+              ls_accountgl-alloc_nmbr = ls_medi-gail_order_id.
+              ls_accountgl-costcenter = ls_pa0001-kostl.
+              APPEND ls_accountgl TO lt_accountgl.
+              CLEAR ls_accountgl.
+
+              ls_currencyamount-itemno_acc   = lv_item.
+              ls_currencyamount-currency     = 'INR'.
+              ls_currencyamount-amt_doccur   = ( ls_medi-net_invoice_amt - ( ls_medi-deduction_disc + ls_medi-other_deduction + ls_medi-deduction_empl ) ).
+              APPEND ls_currencyamount TO lt_currencyamount.
+              CLEAR: ls_currencyamount.
+
+              "UPDATE GST TDS TAX CODE AND WITHHOLDING TAX CODE IN TABLE YRFA_CL_MED_PI_I
+              DATA(lv_it_tds1) = '4Q'.
+              IF ls_medi-gst_type EQ 'CGST'.
+                DATA(lv_gst_tds_tax_code) = 'CG'.
+              ELSEIF ls_medi-gst_type EQ 'UGST'.
+                lv_gst_tds_tax_code = 'UG'.
+              ELSEIF ls_medi-gst_type EQ 'IGST'..
+                lv_gst_tds_tax_code = 'IG'.
+              ENDIF.
+
+              UPDATE yrfa_cl_med_pi_i SET gst_tds_tax_code = lv_gst_tds_tax_code
+                                                    it_tds = lv_it_tds1
+                                      WHERE gail_order_id = ls_medi-gail_order_id
+                                        AND item_no = ls_medi-item_no.
+
+              CLEAR: lv_it_tds1, lv_gst_tds_tax_code.
+
+            ENDLOOP. "LOOP AT gi_med_i INTO DATA(ls_medi) WHERE gail_order_id = ls_medh-gail_order_id.
+
+
+
+            "Pass Employee Deduction line item/(Employee Recovery) in accountgl
+            lv_item = lv_item + 1.
+            ls_accountgl-itemno_acc = lv_item.
+            ls_accountgl-gl_account = '0003713480'.
+            ls_accountgl-item_text  = |APOLLO CASHLESS MEDICINE-E| & |{ ls_medh-employee_id }|.
+            ls_accountgl-comp_code  = ls_medi-company_code.
+            ls_accountgl-bus_area   = ls_medi-business_area.
+            ls_accountgl-alloc_nmbr = ls_medi-gail_order_id.
+            APPEND ls_accountgl TO lt_accountgl.
+            CLEAR ls_accountgl.
+
+            ls_currencyamount-itemno_acc   = lv_item.
+            ls_currencyamount-currency     = 'INR'.
+            ls_currencyamount-amt_doccur   = lv_emp_ded.
+            APPEND ls_currencyamount TO lt_currencyamount.
+            CLEAR: ls_currencyamount.
+
+            IF lt_extention2[] IS INITIAL AND ls_medh-employee_id IS NOT INITIAL.
+              ls_extention2-valuepart1 = 'PERNR'.
+              ls_extention2-valuepart2 = ls_medh-employee_id.
+              APPEND ls_extention2 TO lt_extention2.
+              CLEAR : ls_extention2.
+
+            ENDIF.
+
+
+            CALL FUNCTION 'FI_DUPLICATE_INVOICE_CHECK'
+              EXPORTING
+                i_bukrs       = ls_medh-company_code
+                i_lifnr       = ls_medh-vendor_code
+                i_waers       = 'INR'
+                i_bldat       = ls_documentheader-doc_date
+                i_xblnr       = ls_documentheader-ref_doc_no
+                i_wrbtr       = '1.00'
+                i_koart       = 'K'
+                i_reprf       = 'X'
+                i_shkzg       = ''
+                i_xumsw       = 'X'
+                i_bstat       = ''
+              EXCEPTIONS
+                missing_data  = 1
+                error_message = 2
+                OTHERS        = 3.
+
+            IF sy-subrc EQ 1.
+              UPDATE yrfa_cl_med_pi_h SET message = 'Missing Data'
+                                      WHERE gail_order_id = ls_medh-gail_order_id.
+              gs_msg-gail_order_id = ls_medh-gail_order_id.
+              gs_msg-document_no   = ls_medh-document_no.
+*              gs_msg-clr_doc_no    = ls_medh-clr_doc_no.
+              gs_msg-fiscal_year   = ls_medh-fiscal_year.
+              gs_msg-posting_date  = ls_medh-posting_date.
+              gs_msg-message = 'Missing Data'.
+              APPEND gs_msg TO gi_msg.
+              CLEAR gs_msg.
+            ELSEIF sy-subrc EQ 2.
+              MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4 INTO DATA(lv_err_msg).
+
+              UPDATE yrfa_cl_med_pi_h SET message = lv_err_msg
+                                      WHERE gail_order_id = ls_medh-gail_order_id.
+
+              gs_msg-gail_order_id = ls_medh-gail_order_id.
+              gs_msg-document_no   = ls_medh-document_no.
+*              gs_msg-clr_doc_no    = ls_medh-clr_doc_no.
+              gs_msg-fiscal_year   = ls_medh-fiscal_year.
+              gs_msg-posting_date  = ls_medh-posting_date.
+              gs_msg-message = lv_err_msg.
+              APPEND gs_msg TO gi_msg.
+              CLEAR gs_msg.
+              CONTINUE.
+            ENDIF.
+
+** Call BAPI to post the Document
+            CALL FUNCTION 'Y_FIFM_ACC_DOCUMENT_POST'
+              EXPORTING
+                documentheader = ls_documentheader
+              IMPORTING
+                obj_key        = lv_obj_key
+              TABLES
+                accountgl      = lt_accountgl
+                accountpayable = lt_accountpayable
+                currencyamount = lt_currencyamount
+                accountwt      = lt_accountwt
+                extension2     = lt_extention2
+                return         = lt_return.
+
+            READ TABLE lt_return INTO DATA(ls_return)  WITH KEY type = 'S'.
+            IF sy-subrc = 0.
+
+              WAIT UP TO 2 SECONDS.
+              lv_success = 'X'.
+
+              lv_doc_no = lv_obj_key+0(10).  "Document Number
+              lv_doc_cc = lv_obj_key+10(4).  "Company Code
+              lv_doc_yr = lv_obj_key+14(4).  "Fiscal Year
+
+              SELECT belnr, bukrs, gjahr, waers, blart, budat, bldat, xblnr
+                FROM bkpf
+                INTO TABLE @DATA(li_bkpf)
+                WHERE belnr EQ @lv_doc_no
+                  AND bukrs EQ @lv_doc_cc
+                  AND gjahr EQ @lv_doc_yr.
+              IF sy-subrc EQ 0 AND li_bkpf IS NOT INITIAL.
+** -> Begin of changes by  KRITIKA on 21.10.2024 for ATC
+                SELECT belnr, bukrs, gjahr, zfbdt, qsskz, wrbtr, bschl, hkont, lifnr  "#EC CI_DB_OPERATION_OK[2431747]
+** <- End of changes by KRITIKA on 21.10.2024 for ATC
+                  FROM bseg
+                  INTO TABLE @DATA(li_bseg)
+                  FOR ALL ENTRIES IN @li_bkpf
+                  WHERE belnr EQ @li_bkpf-belnr
+                    AND bukrs EQ @li_bkpf-bukrs
+                    AND gjahr EQ @li_bkpf-gjahr.
+                IF sy-subrc EQ 0.
+
+                  CLEAR: gs_ftclear, gt_ftclear, gs_ftpost, gt_ftpost, gt_blntab, gt_fttax,
+                         gv_msgid, gv_msgid, gv_msgty, gv_msgv1, gv_msgv2, gv_msgv3, gv_msgv4, gv_subrc.
+
+****                  ""Clear vendor line item and post to BA '3810'
+****                  READ TABLE li_bkpf INTO DATA(ls_bkpf) INDEX 1.
+****                  IF sy-subrc EQ 0.
+****                    READ TABLE li_bseg INTO DATA(ls_bseg2) WITH KEY belnr = ls_bkpf-belnr
+****                                                                    bukrs = ls_bkpf-bukrs
+****                                                                    gjahr = ls_bkpf-gjahr
+****                                                                    bschl = '31'.
+****                    IF sy-subrc EQ 0.
+****
+****                      gs_ftclear-agkoa  = 'K'.
+****                      gs_ftclear-agkon  = ls_bseg2-lifnr.
+****                      gs_ftclear-agbuk  = ls_bseg2-bukrs.
+****                      gs_ftclear-xnops  = 'X'.
+****                      gs_ftclear-selfd  = 'BELNR'.
+****                      gs_ftclear-selvon = ls_bseg2-belnr.
+****                      APPEND gs_ftclear TO gt_ftclear.
+****                      CLEAR gs_ftclear.
+****
+****                      gs_ftpost-stype = 'K'.
+****                      gs_ftpost-count = '001'.
+****                      gs_ftpost-fnam = 'BKPF-WAERS'.
+****                      gs_ftpost-fval = ls_bkpf-waers.
+****                      APPEND gs_ftpost TO gt_ftpost.
+****                      CLEAR gs_ftpost.
+****
+****                      gs_ftpost-stype = 'K'.
+****                      gs_ftpost-count = '001'.
+****                      gs_ftpost-fnam = 'BKPF-BUKRS'.
+****                      gs_ftpost-fval = '3000'.
+****                      APPEND gs_ftpost TO gt_ftpost.
+****                      CLEAR gs_ftpost.
+****
+****                      gs_ftpost-stype = 'K'.
+****                      gs_ftpost-count = '001'.
+****                      gs_ftpost-fnam = 'BKPF-BLART'.
+****                      gs_ftpost-fval = 'KA'.
+****                      APPEND gs_ftpost TO gt_ftpost.
+****                      CLEAR gs_ftpost.
+****
+****                      gs_ftpost-stype = 'K'.
+****                      gs_ftpost-count = '001'.
+****                      gs_ftpost-fnam = 'BKPF-BUDAT'.
+****                      gs_ftpost-fval = sy-datum+6(2) && '.' && sy-datum+4(2) && '.' && sy-datum+0(4).
+****                      APPEND gs_ftpost TO gt_ftpost.
+****                      CLEAR gs_ftpost.
+****
+****                      gs_ftpost-stype = 'K'.
+****                      gs_ftpost-count = '001'.
+****                      gs_ftpost-fnam = 'BKPF-BLDAT'.
+****                      gs_ftpost-fval = ls_bkpf-bldat+6(2) && '.' && ls_bkpf-bldat+4(2) && '.' && ls_bkpf-bldat+0(4).
+****                      APPEND gs_ftpost TO gt_ftpost.
+****                      CLEAR gs_ftpost.
+****
+****                      gs_ftpost-stype = 'K'.
+****                      gs_ftpost-count = '001'.
+****                      gs_ftpost-fnam = 'BKPF-BKTXT'.
+****                      gs_ftpost-fval = |APOLLO|.
+****                      APPEND gs_ftpost TO gt_ftpost.
+****                      CLEAR gs_ftpost.
+****
+****                      gs_ftpost-stype = 'K'.
+****                      gs_ftpost-count = '001'.
+****                      gs_ftpost-fnam = 'BKPF-XBLNR'.
+****                      gs_ftpost-fval = 'APOLLO_TRANSFER'.
+****                      APPEND gs_ftpost TO gt_ftpost.
+****                      CLEAR gs_ftpost.
+****
+****                      gs_ftpost-stype = 'P'.
+****                      gs_ftpost-count = '002'.
+****                      gs_ftpost-fnam = 'RF05A-NEWBS'.
+****                      gs_ftpost-fval = '31'.
+****                      APPEND gs_ftpost TO gt_ftpost.
+****                      CLEAR gs_ftpost.
+****
+****                      gs_ftpost-stype = 'P'.
+****                      gs_ftpost-count = '002'.
+****                      gs_ftpost-fnam = 'RF05A-NEWKO'.
+****                      gs_ftpost-fval = ls_bseg2-lifnr.
+****                      APPEND gs_ftpost TO gt_ftpost.
+****                      CLEAR gs_ftpost..
+****
+****                      gs_ftpost-stype = 'P'.
+****                      gs_ftpost-count = '002'.
+****                      gs_ftpost-fnam = 'BSEG-WRBTR'.
+****                      gs_ftpost-fval = ls_bseg2-wrbtr.
+****                      CONDENSE gs_ftpost-fval.
+****                      APPEND gs_ftpost TO gt_ftpost.
+****                      CLEAR gs_ftpost.
+****
+****                      gs_ftpost-stype = 'P'.
+****                      gs_ftpost-count = '002'.
+****                      gs_ftpost-fnam = 'BSEG-GSBER'.
+****                      gs_ftpost-fval = '3810'.
+****                      APPEND gs_ftpost TO gt_ftpost.
+****                      CLEAR gs_ftpost.
+****
+****                      gs_ftpost-stype = 'P'.
+****                      gs_ftpost-count = '002'.
+****                      gs_ftpost-fnam = 'BSEG-SGTXT'.
+****                      gs_ftpost-fval = |APOLLO CASHLESS MEDICINE-E| & |{ ls_medh-employee_id }|.
+****                      APPEND gs_ftpost TO gt_ftpost.
+****                      CLEAR gs_ftpost.
+****
+****                      gs_ftpost-stype = 'P'.
+****                      gs_ftpost-count = '002'.
+****                      gs_ftpost-fnam = 'BSEG-ZUONR'.
+****                      gs_ftpost-fval = ls_medh-gail_order_id.
+****                      APPEND gs_ftpost TO gt_ftpost.
+****                      CLEAR gs_ftpost.
+****
+****                      gs_ftpost-stype = 'P'.
+****                      gs_ftpost-count = '002'.
+****                      gs_ftpost-fnam = 'BSEG-ZFBDT'.
+****                      gs_ftpost-fval = ls_bseg2-zfbdt+6(2) && '.' && ls_bseg2-zfbdt+4(2) && '.' && ls_bseg2-zfbdt+0(4).
+****                      APPEND gs_ftpost TO gt_ftpost.
+****                      CLEAR gs_ftpost.
+****
+****                      SELECT SINGLE empfk FROM lfza INTO @DATA(lv_empfk) WHERE lifnr EQ @ls_bseg2-lifnr.
+****                      IF sy-subrc EQ 0.
+****                        gs_ftpost-stype = 'P'.
+****                        gs_ftpost-count = '002'.
+****                        gs_ftpost-fnam = 'BSEG-EMPFB'.
+****                        gs_ftpost-fval = lv_empfk.
+****                        APPEND gs_ftpost TO gt_ftpost.
+****                        CLEAR: gs_ftpost, lv_empfk.
+****
+****                        CALL FUNCTION 'POSTING_INTERFACE_START'
+****                          EXPORTING
+****                            i_client           = sy-mandt
+****                            i_function         = 'C'
+****                            i_mode             = 'E'
+****                            i_user             = sy-uname
+****                          EXCEPTIONS
+****                            client_incorrect   = 1
+****                            function_invalid   = 2
+****                            group_name_missing = 3
+****                            mode_invalid       = 4
+****                            update_invalid     = 5
+****                            user_invalid       = 6.
+****
+****                        "Transfer posting with clearing using FB05
+****                        CALL FUNCTION 'POSTING_INTERFACE_CLEARING'
+****                          EXPORTING
+****                            i_auglv                    = 'UMBUCHNG'
+****                            i_tcode                    = 'FB05'
+****                            i_sgfunct                  = 'C'
+****                          IMPORTING
+****                            e_msgid                    = gv_msgid
+****                            e_msgno                    = gv_msgno
+****                            e_msgty                    = gv_msgty
+****                            e_msgv1                    = gv_msgv1
+****                            e_msgv2                    = gv_msgv2
+****                            e_msgv3                    = gv_msgv3
+****                            e_msgv4                    = gv_msgv4
+****                            e_subrc                    = gv_subrc
+****                          TABLES
+****                            t_blntab                   = gt_blntab
+****                            t_ftclear                  = gt_ftclear
+****                            t_ftpost                   = gt_ftpost
+****                            t_fttax                    = gt_fttax
+****                          EXCEPTIONS
+****                            clearing_procedure_invalid = 1
+****                            clearing_procedure_missing = 2
+****                            table_t041a_empty          = 3
+****                            transaction_code_invalid   = 4
+****                            amount_format_error        = 5
+****                            too_many_line_items        = 6
+****                            company_code_invalid       = 7
+****                            screen_not_found           = 8
+****                            no_authorization           = 9
+****                            OTHERS                     = 10.
+****
+****                        CALL FUNCTION 'POSTING_INTERFACE_END'
+****                          EXCEPTIONS
+****                            session_not_processable = 1
+****                            OTHERS                  = 2.
+****
+****                        IF gt_blntab[] IS INITIAL .
+****                          CALL FUNCTION 'MESSAGE_TEXT_BUILD'
+****                            EXPORTING
+****                              msgid               = gv_msgid
+****                              msgnr               = gv_msgno
+****                              msgv1               = gv_msgv1
+****                              msgv2               = gv_msgv2
+****                              msgv3               = gv_msgv3
+****                              msgv4               = gv_msgv4
+****                            IMPORTING
+****                              message_text_output = lv_message.
+****                        ELSE.
+*****                          READ TABLE gt_blntab INTO DATA(ls_blntab) INDEX 1. "Commented by Rohtash/Brijesh Charm:4000008376 Date:14/06/2024
+****                          READ TABLE gt_blntab INTO DATA(ls_blntab) WITH KEY bukrs = '3000'. "Added by Rohtash/Brijesh Charm:4000008376 Date:14/06/2024
+****                          IF sy-subrc EQ 0 AND ls_blntab-belnr IS NOT INITIAL.
+****                            DATA(lv_clr_doc) = ls_blntab-belnr.
+****                            DATA(lv_clr_cc)  = ls_blntab-bukrs.  "Added by Rohtash/Brijesh Charm:4000008376 Date:14/06/2024
+****                          ENDIF.
+****                        ENDIF.
+****                      ELSE.
+****                        lv_message = 'Please maintain alternate payee.'.
+****                      ENDIF.
+****                    ENDIF.
+****                  ENDIF.
+
+                  IF ls_medi-gst_type EQ 'CGST'.
+                    "GST TDS Amount
+                    DATA(lv_gst_tds) = REDUCE wrbtr( INIT x TYPE wrbtr FOR lw IN li_bseg
+                                                            WHERE ( qsskz = 'SG' OR qsskz = 'CG' )
+                                                            NEXT x = x + lw-wrbtr ).
+                  ELSEIF ls_medi-gst_type EQ 'UGST'.
+                    "GST TDS Amount
+                    lv_gst_tds = REDUCE wrbtr( INIT x TYPE wrbtr FOR lw IN li_bseg
+                                                      WHERE ( qsskz = 'UG' OR qsskz = 'CG' )
+                                                      NEXT x = x + lw-wrbtr ).
+                  ELSEIF ls_medi-gst_type EQ 'IGST'.
+                    READ TABLE li_bseg INTO DATA(ls_bseg_i) WITH KEY qsskz = 'IG'.
+                    IF sy-subrc EQ 0.
+                      lv_gst_tds = ls_bseg_i-wrbtr.
+                    ENDIF.
+                  ENDIF.
+
+                  "Income Tax Amount
+                  READ TABLE li_bseg INTO DATA(ls_bseg) WITH KEY qsskz = '4Q'.
+                  IF sy-subrc EQ 0.
+** -> Begin of changes by  KRITIKA on 22.10.2024 for ATC
+                     DATA(lv_wrbtr1) = CONV WRBTR_CS( ls_bseg-wrbtr ).
+*                    DATA(lv_it_tds) = ls_bseg-wrbtr.
+                     DATA(lv_it_tds) = lv_wrbtr1.
+** <- End of changes by KRITIKA on 22.10.2024 for ATC
+                  ENDIF.
+
+                  "Vendor Amount
+                  READ TABLE li_bseg INTO DATA(ls_bseg1) WITH KEY bschl = '31'.
+                  IF sy-subrc EQ 0.
+** -> Begin of changes by  KRITIKA on 22.10.2024 for ATC
+                    DATA(lv_wrbtr) = CONV WRBTR_CS( ls_bseg1-wrbtr ).
+*                    DATA(lv_vendor_amount) = ls_bseg1-wrbtr.
+                     DATA(lv_vendor_amount) = lv_wrbtr.
+** <- End of changes by KRITIKA on 22.10.2024 for ATC
+                  ENDIF.
+                ENDIF.
+              ENDIF.
+
+              CALL FUNCTION 'ENQUEUE_E_TABLE'  "Lock Table
+                EXPORTING
+                  tabname        = 'YRFA_CL_MED_PI_H'
+                EXCEPTIONS
+                  foreign_lock   = 1
+                  system_failure = 2
+                  OTHERS         = 3.
+
+              IF sy-subrc EQ 0.
+                UPDATE yrfa_cl_med_pi_h SET document_no     = lv_doc_no           "Document Number
+*                                            clr_doc_no      = lv_clr_doc          "Clearing Document Number
+*                                            clr_doc_cc      = lv_clr_cc    "Added by Rohtash/Brijesh Charm:4000008376 Date:14/06/2024
+                                            fiscal_year     = lv_doc_yr           "Fiscal Year
+                                            posting_date    = sy-datum            "Posting Date
+                                            message         = ''                  "Message
+** -> Begin of changes by  KRITIKA on 22.10.2024 for ATC
+                                            gst_tds_amt     = lv_gst_tds       "#EC CI_FLDEXT_OK[2610650]   "Gst Tds Amount
+** <- End of changes by KRITIKA on 22.10.2024 for ATC
+                                            it_tds_amt      = lv_it_tds           "Income Tax Amount
+                                            payment_amt     = lv_vendor_amount    "Payment Amount
+                                      WHERE gail_order_id = ls_medh-gail_order_id.
+
+                gs_msg-gail_order_id = ls_medh-gail_order_id.
+                gs_msg-document_no   = lv_doc_no.
+*                gs_msg-clr_doc_no    = ls_medh-clr_doc_no.
+                gs_msg-fiscal_year   = lv_doc_yr.
+                gs_msg-posting_date  = sy-datum .
+**SOC by Rohtash/Brijesh Charm:4000008579 Date:07/08/2024
+                gs_msg-deduction_disc = lv_ded_dis.
+                gs_msg-other_deduction = lv_oth_dis.
+**EOC by Rohtash/Brijesh Charm:4000008579 Date:07/08/2024
+                gs_msg-gst_tds_amt   = lv_gst_tds.
+                gs_msg-it_tds_amt    = lv_it_tds.
+**SOC by Rohtash/Brijesh Charm:4000008579 Date:07/08/2024
+*                gs_msg-payment_amt   = lv_vendor_amt.
+                gs_msg-payment_amt   = lv_vendor_amount.
+                gs_msg-message       = ''.
+**EOC by Rohtash/Brijesh Charm:4000008579 Date:07/08/2024
+                APPEND gs_msg TO gi_msg.
+                CLEAR gs_msg.
+              ENDIF.
+
+              CALL FUNCTION 'DEQUEUE_E_TABLE'  "UNLOCK TABLE
+                EXPORTING
+                  tabname = 'YRFA_CL_MED_PI_H'.
+***SOC by Rohtash/Brijesh Charm:4000008362 Date:12/06/2024
+              LOOP AT gi_med_i INTO DATA(ls_med_i) WHERE gail_order_id = ls_medh-gail_order_id.
+
+                CALL FUNCTION 'ENQUEUE_E_TABLE'  "Lock Table
+                  EXPORTING
+                    tabname        = 'YRFA_CL_MED_PI_I'
+                  EXCEPTIONS
+                    foreign_lock   = 1
+                    system_failure = 2
+                    OTHERS         = 3.
+
+                IF sy-subrc EQ 0.
+                  UPDATE yrfa_cl_med_pi_i SET deduction_disc  = ls_med_i-deduction_disc    "Deduction Discount
+                                          WHERE gail_order_id = ls_med_i-gail_order_id
+                                            AND item_no = ls_med_i-item_no.
+                ENDIF.
+
+                CALL FUNCTION 'DEQUEUE_E_TABLE'  "Unlock Table
+                  EXPORTING
+                    tabname = 'YRFA_CL_MED_PI_I'.
+
+              ENDLOOP.
+***EOC by Rohtash/Brijesh Charm:4000008362 Date:12/06/2024
+            ELSE.
+
+              lv_error = 'X'.
+
+              "If any error after BAPI run then update error message in message field of header table
+              CALL FUNCTION 'ENQUEUE_E_TABLE'  "Lock Table
+                EXPORTING
+                  tabname        = 'YRFA_CL_MED_PI_H'
+                EXCEPTIONS
+                  foreign_lock   = 1
+                  system_failure = 2
+                  OTHERS         = 3.
+
+              IF sy-subrc EQ 0.
+                READ TABLE lt_return INTO DATA(ls_return1) INDEX 2.
+                IF sy-subrc = 0.
+                  UPDATE yrfa_cl_med_pi_h SET message = ls_return1-message
+                                          WHERE gail_order_id = ls_medh-gail_order_id.
+                  gs_msg-gail_order_id = ls_medh-gail_order_id.
+                  gs_msg-document_no   = ls_medh-document_no.
+*                  gs_msg-clr_doc_no    = ls_medh-clr_doc_no.
+                  gs_msg-fiscal_year   = ls_medh-fiscal_year.
+                  gs_msg-posting_date   = ls_medh-posting_date.
+                  gs_msg-message = ls_return1-message.
+                  APPEND gs_msg TO gi_msg.
+                  CLEAR gs_msg.
+                ENDIF.
+              ENDIF.
+
+              CALL FUNCTION 'DEQUEUE_E_TABLE'  "Unlock Table
+                EXPORTING
+                  tabname = 'YRFA_CL_MED_PI_H'.
+
+            ENDIF. "IF sy-subrc = 0.
+
+          ELSE.
+            CONTINUE.
+          ENDIF. "IF ls_medh-document_no IS INITIAL.
+          CLEAR: lv_gst_tds, lv_it_tds, lv_vendor_amt, lv_gst_tds, lr_tax, li_bseg, li_bkpf,
+                  lv_vendor_amount, ls_medi, ls_medi1, lt_return, ls_pa0001.
+        ENDLOOP. "LOOP AT gi_med_h INTO DATA(ls_medh).
+      CATCH cx_root INTO DATA(ls_root).
+    ENDTRY.
+  ENDMETHOD. "METHOD lm_doc_post.
+ENDCLASS. "CLASS LCL_APOLLOW_DATA IMPLEMENTATION.
+CLASS lcl_send_mail DEFINITION FINAL.
+  PUBLIC SECTION.
+    CLASS-METHODS :
+      lm_get_body,
+      lm_get_attachment,
+      lm_send_mail.
+ENDCLASS. "CLASS LCL_SEND_MAIL DEFINITION FINAL.
+CLASS lcl_send_mail IMPLEMENTATION.
+  METHOD lm_get_body.
+
+    gs_body_text = 'Dear Team,'.
+    APPEND gs_body_text TO gi_body_text.
+    CLEAR gs_body_text.
+    APPEND gs_body_text TO gi_body_text.
+    CONCATENATE 'The liabilities (please refer to the attached details) have successfully passed'
+                'hr approval via the gail intranet and have been duly posted in sap.'
+                INTO gs_body_text SEPARATED BY space.
+    APPEND gs_body_text TO gi_body_text.
+    CONCATENATE 'As per our standard procedure, your prompt attention is now'
+                'required to conduct the L1 and L2 of these liabilities.'
+                INTO gs_body_text SEPARATED BY space.
+    APPEND gs_body_text TO gi_body_text.
+    CLEAR gs_body_text.
+    APPEND gs_body_text TO gi_body_text.
+    CONCATENATE 'In case of any error during the posting process,'
+                'We kindly ask that you to review the same and notify bis-fico for further resolution.'
+                INTO gs_body_text SEPARATED BY space.
+    APPEND gs_body_text TO gi_body_text.
+    CLEAR gs_body_text.
+    APPEND gs_body_text TO gi_body_text.
+    gs_body_text = 'Thank you for your cooperation and attention to this matter.'.
+    APPEND gs_body_text TO gi_body_text.
+    CLEAR gs_body_text.
+    APPEND gs_body_text TO gi_body_text.
+    gs_body_text =  'Regards,'.
+    APPEND gs_body_text TO gi_body_text.
+    gs_body_text = 'GAIL INDIA (LTD.)'.
+    APPEND gs_body_text TO gi_body_text.
+    CLEAR gs_body_text.
+    APPEND gs_body_text TO gi_body_text.
+    gs_body_text = 'This is a system generated email, please do not reply to this email.'.
+    APPEND gs_body_text TO gi_body_text.
+    CLEAR gs_body_text.
+    APPEND gs_body_text TO gi_body_text.
+    CONCATENATE 'Program name-' sy-cprog INTO gs_body_text.
+    APPEND gs_body_text TO gi_body_text.
+
+  ENDMETHOD. "METHOD LM_GET_BODY.
+  METHOD lm_get_attachment.
+
+    DATA: gv_string  TYPE string,
+          lv_net_amt TYPE char20,
+          lv_app_amt TYPE char20.
+
+    CONCATENATE 'GAIL ORDER ID' 'APOLLO ORDER ID' 'DATE OF ORDER' 'EMPLOYEE ID' 'EMPLOYEE/APP.NAME'
+                'EMPLOYEE SUBGROUP' 'PATIENT NAME' 'BILL NUMBER' 'BILL DATE' 'APOLLOW GST NUMBER'
+                'GAIL GST NUMBER' 'VENDOR' 'COMPANY CODE' 'BUSINESS AREA' 'BUSINESS PLACE'
+**SOC by Rohtash/Brijesh Charm:4000008579 Date:07/08/2024
+                'ACCOUNTING DOCUMENT NUMBER'  'POSTING DATE' 'PI ENTRY DATE' 'INVOICE AMOUNT'
+                'DEDUCTION DISCOUNT' 'OTHER DISCOUNT' 'APPROVED INVOICE AMOUNT' 'GST TDS AMOUNT'
+                'IT TDS AMOUNT' 'PAYMENT AMOUNT' 'MESSAGE'
+**EOC by Rohtash/Brijesh Charm:4000008579 Date:07/08/2024
+                INTO gv_string SEPARATED BY gc_tab.
+
+    CONCATENATE gv_string gc_crlf INTO gv_string.
+
+    LOOP AT gi_med_h INTO DATA(ls_med_h).
+      READ TABLE gi_msg INTO DATA(ls_msg) WITH KEY gail_order_id = ls_med_h-gail_order_id.
+      IF sy-subrc EQ 0.
+
+      ENDIF.
+      lv_net_amt = ls_med_h-net_invoice_amt.
+      lv_app_amt = lv_net_amt - ( ls_msg-deduction_disc + ls_msg-other_deduction ).
+      gv_string =  gv_string && ls_med_h-gail_order_id && gc_tab && ls_med_h-apollo_order_id && gc_tab && ls_med_h-order_date
+                   && gc_tab && ls_med_h-employee_id && gc_tab && ls_med_h-employee_name
+                   && gc_tab && ls_med_h-employee_grade && gc_tab && ls_med_h-patient_name && gc_tab && ls_med_h-bill_no
+                   && gc_tab && ls_med_h-bill_date && gc_tab && ls_med_h-apollo_gst_no && gc_tab && ls_med_h-gail_gst_no
+                   && gc_tab && ls_med_h-vendor_code && gc_tab && ls_med_h-company_code && gc_tab && ls_med_h-business_area
+**SOC by Rohtash/Brijesh Charm:4000008579 Date:07/08/2024
+                   && gc_tab && ls_med_h-business_place && gc_tab && ls_msg-document_no && gc_tab && ls_msg-posting_date
+                   && gc_tab && ls_med_h-pi_entry_date && gc_tab && lv_net_amt && gc_tab && ls_msg-deduction_disc
+                   && gc_tab && ls_msg-other_deduction && gc_tab && lv_app_amt && gc_tab && ls_msg-gst_tds_amt
+                   && gc_tab && ls_msg-it_tds_amt && gc_tab && ls_msg-payment_amt && gc_tab && ls_msg-message && gc_crlf.
+**EOC by Rohtash/Brijesh Charm:4000008579 Date:07/08/2024
+      CLEAR: ls_msg.
+
+    ENDLOOP. "LOOP AT GI_MED_H INTO DATA(LS_MED_H).
+
+* --------------------------------------------------------------
+* CONVERT THE TEXT STRING INTO UTF-16LE BINARY DATA INCLUDING
+* BYTE-ORDER-MARK. MIRCOSOFT EXCEL PREFERS THESE SETTINGS
+* ALL THIS IS DONE BY NEW CLASS CL_BCS_CONVERT (SEE NOTE 1151257)
+    TRY.
+        cl_bcs_convert=>string_to_solix(
+          EXPORTING
+            iv_string   = gv_string
+            iv_codepage = '4103'  "SUITABLE FOR MS EXCEL, LEAVE EMPTY
+            iv_add_bom  = 'X'     "FOR OTHER DOC TYPES
+          IMPORTING
+            et_solix  = gv_binary_content
+            ev_size   = gv_size ).
+      CATCH cx_bcs.
+        MESSAGE e445(so).
+    ENDTRY.
+
+  ENDMETHOD. "METHOD LM_GET_ATTACHMENT.
+  METHOD lm_send_mail.
+
+    TRY.
+
+        lcl_send_mail=>lm_get_body( ).
+        lcl_send_mail=>lm_get_attachment( ).
+
+*     -------- CREATE PERSISTENT SEND REQUEST ------------------------
+        gv_send_request = cl_bcs=>create_persistent( ).
+
+*     -------- CREATE AND SET DOCUMENT WITH ATTACHMENT ---------------
+        gv_document = cl_document_bcs=>create_document(
+          i_type    = 'RAW'
+          i_text    = gi_body_text
+          i_subject = 'L1 AND L2 OF APOLLO LIABILITIES' ).
+
+*     ADD THE SPREAD SHEET AS ATTACHMENT TO DOCUMENT OBJECT
+        gv_document->add_attachment(
+          i_attachment_type    = 'XLS'
+          i_attachment_subject = 'L1 AND L2 OF APOLLO LIABILITIES'
+          i_attachment_size    = gv_size
+          i_att_content_hex    = gv_binary_content ).
+
+*     ADD DOCUMENT OBJECT TO SEND REQUEST
+        gv_send_request->set_document( gv_document ).
+
+        LOOP AT s_email INTO DATA(ls_mail).
+*     --------- ADD RECIPIENT (E-MAIL ADDRESS) -----------------------
+*     CREATE RECIPIENT OBJECT
+          gv_recipient = cl_cam_address_bcs=>create_internet_address( ls_mail-low ).
+
+*     ADD RECIPIENT OBJECT TO SEND REQUEST
+          gv_send_request->add_recipient( gv_recipient ).
+
+        ENDLOOP.
+
+*     ---------- SEND DOCUMENT ---------------------------------------
+        gv_sent_to_all = gv_send_request->send( i_with_error_screen = 'X' ).
+
+        COMMIT WORK.
+
+
+*   ------------ EXCEPTION HANDLING ----------------------------------
+      CATCH cx_bcs INTO gv_bcs_exception.
+        MESSAGE i865(so) WITH gv_bcs_exception->error_type.
+    ENDTRY.
+
+  ENDMETHOD. "METHOD LM_SEND_MAIL.
+ENDCLASS. "CLASS LCL_SEND_MAIL IMPLEMENTATION.

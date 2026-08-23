@@ -1,0 +1,2 @@
+method
+WD_GET_API	Instance Method

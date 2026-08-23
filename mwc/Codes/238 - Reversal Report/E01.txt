@@ -1,0 +1,92 @@
+*&---------------------------------------------------------------------*
+*& Include          ZI_M2C_REVERSAL_E01
+*&---------------------------------------------------------------------*
+************************************************************************
+* Requirement Id: DID_M2C_238                                          *
+* Title: Program ZAB_M2C_REVERSAL_RPT                                  *
+* Date Created: 23.07.2025                                             *
+* Programmer:  TAMBOLIV                                                *
+* Program Objective: This program will fetch the reversal documents    *
+* and store them in local system or AL11                               *
+* Orig Request: DS4K901922                                             *
+************************************************************************
+* Modification History                                                 *
+************************************************************************
+* Modified By:                                                         *
+* Date:                                                                *
+* Modification TR:                                                     *
+* Reason:                                                              *
+************************************************************************
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_path.
+
+data: fl type string.
+"Browse Directory for file storage
+CALL METHOD cl_gui_frontend_services=>directory_browse
+  CHANGING
+    selected_folder      = fl
+  EXCEPTIONS
+    cntl_error           = 1
+    error_no_gui         = 2
+    not_supported_by_gui = 3
+    others               = 4.
+  IF sy-subrc <> 0.
+    MESSAGE text-012 TYPE 'I'.
+    CLEAR p_path.
+    RETURN.
+  ENDIF.
+
+p_path = fl.
+INITIALIZATION.
+
+SELECT * FROM  TVARVC INTO LS_TVARVC UP TO 1 rows WHERE name = 'ZTV_M2C_REVERSAL_PATH' ORDER BY PRIMARY KEY.  "#EC CI_ALL_FIELDS_NEEDED
+  ENDSELECT.
+
+IF SY-SUBRC IS INITIAL.
+REPLACE 'DS4' IN ls_tvarvc-low WITH SY-sysid.
+ENDIF.
+*IF sy-sysid = 'QS4'.
+*
+*ENDIF.
+*p_al11 = TEXT-031.
+p_al11 = ls_tvarvc-low.
+
+START-OF-SELECTION.
+"Logic to validate the date range
+LOOP AT s_date into data(ls_date) ##NEEDED.
+  IF s_date-option = TEXT-032.
+    IF sy-batch <> abap_true.
+IF ls_date-high - ls_date-low > 31 ##NUMBER_OK.
+      MESSAGE: text-014 type TEXT-033.
+    ENDIF.
+    ENDIF.
+
+  ENDIF.
+ENDLOOP.
+"Fetch data
+PERFORM MASTER_DATA.
+*IF sy-batch = abap_true and p_al11 = TEXT-031. "p_path is INITIAL.
+IF sy-batch = abap_true and p_al11 = ls_tvarvc-low. "p_path is INITIAL.
+IF p_path is INITIAL.
+*p_path = TEXT-031.
+p_path = ls_tvarvc-low.
+ENDIF.
+perform al11_data.
+elseif sy-batch = ' '.
+*  IF p_al11 = TEXT-031 and p_path is INITIAL and p_path <> p_al11  .
+  IF p_al11 = ls_tvarvc-low and p_path is INITIAL and p_path <> p_al11  .
+    perform al11_data.
+*  elseif p_path is NOT INITIAL and p_path <> TEXT-031.
+  elseif p_path is NOT INITIAL and p_path <> ls_tvarvc-low.
+  perform download_data.
+  else.
+    MESSAGE text-010 type TEXT-033.
+  ENDIF.
+else.
+  IF sy-batch = abap_true and p_al11 is INITIAL.
+
+    MESSAGE text-013 type TEXT-033.
+  ELSE.
+    MESSAGE TEXT-015 type TEXT-033.
+  ENDIF.
+ENDIF.

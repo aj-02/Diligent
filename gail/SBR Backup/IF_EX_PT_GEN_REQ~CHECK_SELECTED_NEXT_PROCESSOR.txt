@@ -1,0 +1,593 @@
+METHOD if_ex_pt_gen_req~check_selected_next_processor.
+
+*  TYPES: BEGIN OF lea_appr,
+*           pernr TYPE persno,
+*           subty TYPE subty,
+*           begda TYPE begda,
+*           endda TYPE endda,
+*         END OF lea_appr.
+*
+*  DATA: ls_lea_appr      TYPE lea_appr,
+*        w_approver_persk TYPE pa0001-persk,
+*        w_emp_persk      TYPE persk,
+*        wa_leave_wf      TYPE yrha_leave_wf,
+*        lv_app_pernr     TYPE pernr_d.
+*
+*  DATA: lt_flow  TYPE TABLE OF yrhs_wf_rep_stru,
+*        ls_appr  TYPE ptreq_actor_struc_flat,
+*        lv_count TYPE i.
+*
+*  IMPORT ls_lea_appr TO ls_lea_appr FROM MEMORY ID 'emppernr'.
+*  if ls_lea_appr is INITIAL.
+*      IMPORT ls_lea_appr TO ls_lea_appr FROM MEMORY ID 'emppernrUI5'.
+*    endif.
+*
+*
+*  IF ls_lea_appr IS NOT INITIAL AND im_persdata_tab IS NOT INITIAL.
+*
+*    DESCRIBE TABLE im_persdata_tab LINES lv_count.
+*    IF lv_count EQ 1.
+*      READ TABLE im_persdata_tab INTO ls_appr INDEX 1.
+*      lv_app_pernr = ls_appr-pernr.
+*    else.
+*      READ TABLE im_persdata_tab INTO ls_appr INDEX 2.
+*      lv_app_pernr = ls_appr-pernr.
+*    ENDIF.
+*
+*********** -> Begin of changes by of Jatin on 04Nov24 for ATC
+**    SELECT SINGLE persk INTO w_emp_persk FROM pa0001
+**        WHERE pernr = ls_lea_appr-pernr AND begda LE ls_lea_appr-begda
+**            AND endda GE ls_lea_appr-endda.
+*    SELECT persk INTO w_emp_persk FROM pa0001 UP TO 1 ROWS
+*        WHERE pernr = ls_lea_appr-pernr AND begda LE ls_lea_appr-begda
+*            AND endda GE ls_lea_appr-endda ORDER BY PRIMARY KEY.
+*    ENDSELECT.
+*********** <- End changes by of Jatin on 04Nov24 for ATC
+*
+*    IF lv_app_pernr IS NOT INITIAL AND lv_app_pernr NE '00000000'.
+*********** -> Begin of changes by of Jatin on 04Nov24 for ATC
+**      SELECT SINGLE persk INTO w_approver_persk FROM pa0001 WHERE pernr = lv_app_pernr AND endda = '99991231'.
+*      SELECT persk INTO w_approver_persk FROM pa0001 WHERE pernr = lv_app_pernr AND endda = '99991231' ORDER BY PRIMARY KEY.
+*      ENDSELECT.
+*********** <- End changes by of Jatin on 04Nov24 for ATC
+*
+*      CLEAR: wa_leave_wf.
+*      SELECT SINGLE * FROM yrha_leave_wf INTO wa_leave_wf  WHERE yy_pernr EQ ls_lea_appr-pernr AND
+*        yy_begda LE sy-datum AND yy_endda GE sy-datum.
+*      IF sy-subrc NE 0.
+*
+*        IF w_approver_persk = 'A' OR w_approver_persk = 'B'.
+*          CALL FUNCTION 'YHR_FIND_REPORTING_STRUCTURE'
+*            EXPORTING
+*              pernr      = ls_lea_appr-pernr "app_pernr
+*            TABLES
+*              itab_final = lt_flow.
+*
+*          READ TABLE lt_flow INTO DATA(ls_flow) WITH KEY yy_pernr = lv_app_pernr yy_level = '2'.
+*
+*          IF sy-subrc = 0.
+**          no action
+*          ELSE.
+*            CALL METHOD message_handler->add_message
+*              EXPORTING
+*                im_type       = 'E'
+*                im_cl         = 'YH01'
+*                im_number     = '451'
+*                im_par3       = 'BLOP'
+*                im_context    = ''
+*                im_subcontext = ''
+*                im_classname  = 'CL_PT_ARQ_BLOP_ADAPTER'
+*                im_methodname = 'MESSAGE'.
+*          ENDIF.
+*        ENDIF.
+*      ENDIF.
+*
+*      IF ls_lea_appr-subty = '25' AND w_approver_persk NE 'E8' AND w_approver_persk NE 'E9' AND w_approver_persk NE 'A' AND w_approver_persk NE 'B'.
+*        CALL METHOD message_handler->add_message
+*          EXPORTING
+*            im_type       = 'E'
+*            im_cl         = 'YH01'
+*            im_number     = '326'
+*            im_par3       = 'BLOP'
+*            im_context    = ''
+*            im_subcontext = ''
+*            im_classname  = 'CL_PT_ARQ_BLOP_ADAPTER'
+*            im_methodname = 'MESSAGE'.
+*
+*      ENDIF.
+*      IF w_approver_persk EQ 'E5' OR w_approver_persk EQ 'E6' OR w_approver_persk EQ 'E7' OR  w_approver_persk EQ 'E8' OR w_approver_persk EQ 'E9'
+*        OR w_approver_persk EQ 'A' OR w_approver_persk EQ 'B'.
+*      ELSEIF w_approver_persk EQ 'E4'.
+*        IF ls_lea_appr-subty = '01' OR ls_lea_appr-subty = '09' OR ls_lea_appr-subty = '10'
+*            OR ls_lea_appr-subty = '11' OR ls_lea_appr-subty = '12' OR ls_lea_appr-subty = '13'
+*           OR ls_lea_appr-subty = '14'.
+*          IF w_emp_persk = 'E4' OR w_emp_persk = 'E5' OR w_emp_persk = 'E6' OR w_emp_persk = 'E7' OR w_emp_persk = 'E8' OR w_emp_persk = 'E9'.
+*            CALL METHOD message_handler->add_message
+*              EXPORTING
+*                im_type       = 'E'
+*                im_cl         = 'YH01'
+*                im_number     = '307'
+*                im_par3       = 'BLOP'
+*                im_context    = ''
+*                im_subcontext = ''
+*                im_classname  = 'CL_PT_ARQ_BLOP_ADAPTER'
+*                im_methodname = 'MESSAGE'.
+*          ENDIF.
+*        ELSEIF ls_lea_appr-subty = '02' OR ls_lea_appr-subty = '27' OR ls_lea_appr-subty = '03' OR ls_lea_appr-subty = '26'.
+*          IF w_emp_persk+0(1) EQ 'E' .
+*            CALL METHOD message_handler->add_message
+*              EXPORTING
+*                im_type       = 'E'
+*                im_cl         = 'YH01'
+*                im_number     = '307'
+*                im_par3       = 'BLOP'
+*                im_context    = ''
+*                im_subcontext = ''
+*                im_classname  = 'CL_PT_ARQ_BLOP_ADAPTER'
+*                im_methodname = 'MESSAGE'.
+*          ENDIF.
+*
+*****      ELSEIF lv_app_pernr <> lv_apuid AND ls_lea_appr-subty = '04' .
+*****        IF sy-sysid <> 'PDR'.
+*****          CALL METHOD message_handler->add_message
+*****            EXPORTING
+*****              im_type       = 'E'
+*****              im_cl         = 'YH01'
+*****              im_number     = '307'
+*****              im_par3       = 'BLOP'
+*****              im_context    = ''
+*****              im_subcontext = ''
+*****              im_classname  = 'CL_PT_ARQ_BLOP_ADAPTER'
+*****              im_methodname = 'MESSAGE'.
+*****        ENDIF.
+*
+*        ENDIF.
+*      ELSEIF w_approver_persk EQ 'E3' .
+*
+*        IF ls_lea_appr-subty = '01' OR ls_lea_appr-subty = '09' OR ls_lea_appr-subty = '10' OR ls_lea_appr-subty = '11' OR ls_lea_appr-subty = '12' OR ls_lea_appr-subty = '13'
+*           OR ls_lea_appr-subty = '14'.
+*          IF w_emp_persk = 'E3' OR w_emp_persk = 'E4' OR w_emp_persk = 'E5' OR w_emp_persk = 'E6' OR w_emp_persk = 'E7' OR w_emp_persk = 'E8' OR w_emp_persk = 'E9'.
+*            CALL METHOD message_handler->add_message
+*              EXPORTING
+*                im_type       = 'E'
+*                im_cl         = 'YH01'
+*                im_number     = '307'
+*                im_par3       = 'BLOP'
+*                im_context    = ''
+*                im_subcontext = ''
+*                im_classname  = 'CL_PT_ARQ_BLOP_ADAPTER'
+*                im_methodname = 'MESSAGE'.
+*          ENDIF.
+*
+*        ELSEIF ls_lea_appr-subty = '02' OR ls_lea_appr-subty = '03' OR ls_lea_appr-subty = '26' OR ls_lea_appr-subty = '27'.
+*          CALL METHOD message_handler->add_message
+*            EXPORTING
+*              im_type       = 'E'
+*              im_cl         = 'YH01'
+*              im_number     = '307'
+*              im_par3       = 'BLOP'
+*              im_context    = ''
+*              im_subcontext = ''
+*              im_classname  = 'CL_PT_ARQ_BLOP_ADAPTER'
+*              im_methodname = 'MESSAGE'.
+*        ENDIF.
+*      ELSE.
+*
+*        CALL METHOD message_handler->add_message
+*          EXPORTING
+*            im_type       = 'E'
+*            im_cl         = 'YH01'
+*            im_number     = '307'
+*            im_par3       = 'BLOP'
+*            im_context    = ''
+*            im_subcontext = ''
+*            im_classname  = 'CL_PT_ARQ_BLOP_ADAPTER'
+*            im_methodname = 'MESSAGE'.
+*      ENDIF.
+*    ENDIF.
+*
+**  cmd approves only CL & RH of himself
+*    IF lv_app_pernr = ls_lea_appr-pernr AND ls_lea_appr-subty NE '01' AND
+*       ls_lea_appr-subty NE '08' AND ls_lea_appr-subty NE '03' AND ls_lea_appr-subty NE '02' AND
+*       ls_lea_appr-subty NE '05' AND ls_lea_appr-subty NE '06' AND ls_lea_appr-subty NE '24' AND ls_lea_appr-subty NE '16'.
+*      CALL METHOD message_handler->add_message
+*        EXPORTING
+*          im_type       = 'E'
+*          im_cl         = 'YH01'
+*          im_number     = '307'
+*          im_par3       = 'BLOP'
+*          im_context    = ''
+*          im_subcontext = ''
+*          im_classname  = 'CL_PT_ARQ_BLOP_ADAPTER'
+*          im_methodname = 'MESSAGE'.
+*    ENDIF.
+*  ENDIF.
+************************************************************************************************
+
+  TYPES: BEGIN OF lea_appr,
+           pernr TYPE persno,
+           subty TYPE subty,
+           begda TYPE begda,
+           endda TYPE endda,
+         END OF lea_appr.
+
+  DATA: ls_lea_appr      TYPE lea_appr,
+        w_approver_persk TYPE pa0001-persk,
+        w_emp_persk      TYPE persk,
+        wa_leave_wf      TYPE yrha_leave_wf,
+        lv_app_pernr     TYPE pernr_d.
+
+  DATA: lt_flow      TYPE TABLE OF yrhs_wf_rep_stru,
+        ls_appr      TYPE ptreq_actor_struc_flat,
+        lv_count     TYPE i,
+        lv_multy_lvl TYPE c,
+        error_flag   TYPE c.
+
+  IMPORT ls_lea_appr TO ls_lea_appr FROM MEMORY ID 'emppernr'.
+  IF ls_lea_appr IS INITIAL.
+    IMPORT ls_lea_appr TO ls_lea_appr FROM MEMORY ID 'emppernrUI5'.
+  ENDIF.
+
+  IF ls_lea_appr IS NOT INITIAL AND im_persdata_tab IS NOT INITIAL.
+
+    DESCRIBE TABLE im_persdata_tab LINES lv_count.
+    IF lv_count EQ 1.
+      READ TABLE im_persdata_tab INTO ls_appr INDEX 1.
+      lv_app_pernr = ls_appr-pernr.
+    ELSE.
+      lv_multy_lvl =   'X' .
+      READ TABLE im_persdata_tab INTO ls_appr INDEX 2.
+      lv_app_pernr = ls_appr-pernr.
+    ENDIF.
+
+********** -> Begin of changes by of Jatin on 04Nov24 for ATC
+*    SELECT SINGLE persk INTO w_emp_persk FROM pa0001
+*        WHERE pernr = ls_lea_appr-pernr AND begda LE ls_lea_appr-begda
+*            AND endda GE ls_lea_appr-endda.
+    SELECT persk INTO w_emp_persk FROM pa0001 UP TO 1 ROWS
+        WHERE pernr = ls_lea_appr-pernr AND begda LE ls_lea_appr-begda
+            AND endda GE ls_lea_appr-endda ORDER BY PRIMARY KEY.
+    ENDSELECT.
+********** <- End changes by of Jatin on 04Nov24 for ATC
+
+    IF lv_app_pernr IS NOT INITIAL AND lv_app_pernr NE '00000000'.
+********** -> Begin of changes by of Jatin on 04Nov24 for ATC
+*      SELECT SINGLE persk INTO w_approver_persk FROM pa0001 WHERE pernr = lv_app_pernr AND endda = '99991231'.
+      SELECT persk INTO w_approver_persk FROM pa0001 WHERE pernr = lv_app_pernr AND endda = '99991231' ORDER BY PRIMARY KEY.
+      ENDSELECT.
+********** <- End changes by of Jatin on 04Nov24 for ATC
+
+      CLEAR: wa_leave_wf.
+      SELECT SINGLE * FROM yrha_leave_wf INTO wa_leave_wf  WHERE yy_pernr EQ ls_lea_appr-pernr AND
+        yy_begda LE sy-datum AND yy_endda GE sy-datum.
+      IF sy-subrc NE 0.
+
+        IF w_approver_persk = 'A' OR w_approver_persk = 'B'.
+          CALL FUNCTION 'YHR_FIND_REPORTING_STRUCTURE'
+            EXPORTING
+              pernr      = ls_lea_appr-pernr "app_pernr
+            TABLES
+              itab_final = lt_flow.
+
+          READ TABLE lt_flow INTO DATA(ls_flow) WITH KEY yy_pernr = lv_app_pernr yy_level = '2'.
+
+          IF sy-subrc = 0.
+*          no action
+          ELSE.
+            CALL METHOD message_handler->add_message
+              EXPORTING
+                im_type       = 'E'
+                im_cl         = 'YH01'
+                im_number     = '451'
+                im_par3       = 'BLOP'
+                im_context    = ''
+                im_subcontext = ''
+                im_classname  = 'CL_PT_ARQ_BLOP_ADAPTER'
+                im_methodname = 'MESSAGE'.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+
+*      IF ls_lea_appr-subty = '25' AND w_approver_persk NE 'E8' AND w_approver_persk NE 'E9' AND w_approver_persk NE 'A' AND w_approver_persk NE 'B'.
+*        CALL METHOD message_handler->add_message
+*          EXPORTING
+*            im_type       = 'E'
+*            im_cl         = 'YH01'
+*            im_number     = '326'
+*            im_par3       = 'BLOP'
+*            im_context    = ''
+*            im_subcontext = ''
+*            im_classname  = 'CL_PT_ARQ_BLOP_ADAPTER'
+*            im_methodname = 'MESSAGE'.
+*
+*      ENDIF.
+
+*      IF W_APPROVER_PERSK EQ 'E5' OR W_APPROVER_PERSK EQ 'E6' OR W_APPROVER_PERSK EQ 'E7' OR  W_APPROVER_PERSK EQ 'E8' OR W_APPROVER_PERSK EQ 'E9'
+*        OR W_APPROVER_PERSK EQ 'A' OR W_APPROVER_PERSK EQ 'B'.
+*      ELSEIF W_APPROVER_PERSK EQ 'E4'.
+**        IF ls_lea_appr-subty = '01' OR ls_lea_appr-subty = '09' OR ls_lea_appr-subty = '10'
+*        IF LS_LEA_APPR-SUBTY = '09' OR LS_LEA_APPR-SUBTY = '10'
+*           OR LS_LEA_APPR-SUBTY = '11' OR LS_LEA_APPR-SUBTY = '12' OR LS_LEA_APPR-SUBTY = '13'
+*          OR LS_LEA_APPR-SUBTY = '14'.
+*          IF W_EMP_PERSK = 'E4' OR W_EMP_PERSK = 'E5' OR W_EMP_PERSK = 'E6' OR W_EMP_PERSK = 'E7' OR W_EMP_PERSK = 'E8' OR W_EMP_PERSK = 'E9'.
+*            CALL METHOD MESSAGE_HANDLER->ADD_MESSAGE
+*              EXPORTING
+*                IM_TYPE       = 'E'
+*                IM_CL         = 'YH01'
+*                IM_NUMBER     = '307'
+*                IM_PAR3       = 'BLOP'
+*                IM_CONTEXT    = ''
+*                IM_SUBCONTEXT = ''
+*                IM_CLASSNAME  = 'CL_PT_ARQ_BLOP_ADAPTER'
+*                IM_METHODNAME = 'MESSAGE'.
+*          ENDIF.
+*        ENDIF.
+*      ENDIF.
+**        ELSEIF ls_lea_appr-subty = '02' OR ls_lea_appr-subty = '27' OR ls_lea_appr-subty = '03' OR ls_lea_appr-subty = '26'.
+*    ELSEIF LS_LEA_APPR-SUBTY = '27' OR LS_LEA_APPR-SUBTY = '26'.
+*      IF W_EMP_PERSK+0(1) EQ 'E' .
+*        CALL METHOD MESSAGE_HANDLER->ADD_MESSAGE
+*          EXPORTING
+*            IM_TYPE       = 'E'
+*            IM_CL         = 'YH01'
+*            IM_NUMBER     = '307'
+*            IM_PAR3       = 'BLOP'
+*            IM_CONTEXT    = ''
+*            IM_SUBCONTEXT = ''
+*            IM_CLASSNAME  = 'CL_PT_ARQ_BLOP_ADAPTER'
+*            IM_METHODNAME = 'MESSAGE'.
+*      ENDIF.
+
+****      ELSEIF lv_app_pernr <> lv_apuid AND ls_lea_appr-subty = '04' .
+****        IF sy-sysid <> 'PDR'.
+****          CALL METHOD message_handler->add_message
+****            EXPORTING
+****              im_type       = 'E'
+****              im_cl         = 'YH01'
+****              im_number     = '307'
+****              im_par3       = 'BLOP'
+****              im_context    = ''
+****              im_subcontext = ''
+****              im_classname  = 'CL_PT_ARQ_BLOP_ADAPTER'
+****              im_methodname = 'MESSAGE'.
+****        ENDIF.
+
+*    ENDIF.
+******************
+*** For Group 1...
+******************
+*        elseif  w_approver_persk EQ 'E3' .
+*        IF ls_lea_appr-subty = '01' OR ls_lea_appr-subty = '09' OR ls_lea_appr-subty = '10' OR ls_lea_appr-subty = '11' OR ls_lea_appr-subty = '12' OR ls_lea_appr-subty = '13'
+*           OR ls_lea_appr-subty = '14'.
+*          IF w_emp_persk = 'E3' OR w_emp_persk = 'E4' OR w_emp_persk = 'E5' OR w_emp_persk = 'E6' OR w_emp_persk = 'E7' OR w_emp_persk = 'E8' OR w_emp_persk = 'E9'.
+      IF w_emp_persk = 'S0' OR w_emp_persk = 'S1' OR w_emp_persk = 'S2' OR w_emp_persk = 'S3' OR w_emp_persk = 'S4' OR
+             w_emp_persk = 'S5' OR w_emp_persk = 'S6' OR w_emp_persk = 'S7' .
+
+        IF ls_lea_appr-subty = '01' OR ls_lea_appr-subty = '08' OR ls_lea_appr-subty = '19' OR ls_lea_appr-subty = '24'
+           OR ls_lea_appr-subty = '02' OR ls_lea_appr-subty = '03' OR ls_lea_appr-subty = '06' OR ls_lea_appr-subty = '16'
+           OR ls_lea_appr-subty = '23' OR ls_lea_appr-subty = '29' OR ls_lea_appr-subty = '30' OR ls_lea_appr-subty = '20'
+           OR ls_lea_appr-subty = '21' OR ls_lea_appr-subty = '36' OR ls_lea_appr-subty = '37' OR ls_lea_appr-subty = '38' .
+          IF w_approver_persk NE 'E3'  AND w_approver_persk NE 'E4' AND w_approver_persk NE 'E5' AND  w_approver_persk NE 'E6'
+              AND w_approver_persk NE 'E7' AND w_approver_persk NE 'E8' AND  w_approver_persk NE 'E9'
+              AND  w_approver_persk NE 'A'  AND w_approver_persk NE 'B'  .
+
+            CALL METHOD message_handler->add_message
+              EXPORTING
+                im_type       = 'E'
+                im_cl         = 'YH01'
+                im_number     = '307'
+                im_par3       = 'BLOP'
+                im_context    = ''
+                im_subcontext = ''
+                im_classname  = 'CL_PT_ARQ_BLOP_ADAPTER'
+                im_methodname = 'MESSAGE'.
+          ENDIF.
+        ELSEIF ls_lea_appr-subty = '05' OR ls_lea_appr-subty = '07' OR ls_lea_appr-subty = '15' OR ls_lea_appr-subty = '25'
+         OR ls_lea_appr-subty = '26' OR ls_lea_appr-subty = '27' OR ls_lea_appr-subty = '28' OR ls_lea_appr-subty = '34'
+         OR ls_lea_appr-subty = '35' OR ls_lea_appr-subty = '44'  OR ls_lea_appr-subty = '04' .
+          IF  lv_multy_lvl =   'X' .
+            IF w_approver_persk NE 'E3'  AND w_approver_persk NE 'E4' AND w_approver_persk NE 'E5' AND  w_approver_persk NE 'E6'
+              AND w_approver_persk NE 'E7' AND w_approver_persk NE 'E8' AND  w_approver_persk NE 'E9'
+              AND  w_approver_persk NE 'A'  AND w_approver_persk NE 'B'  .
+
+              CALL METHOD message_handler->add_message
+                EXPORTING
+                  im_type       = 'E'
+                  im_cl         = 'YH01'
+                  im_number     = '307'
+                  im_par3       = 'BLOP'
+                  im_context    = ''
+                  im_subcontext = ''
+                  im_classname  = 'CL_PT_ARQ_BLOP_ADAPTER'
+                  im_methodname = 'MESSAGE'.
+            ENDIF.
+          ENDIF.
+        ENDIF.
+*        ELSEIF LS_LEA_APPR-SUBTY = '02' OR LS_LEA_APPR-SUBTY = '03' OR LS_LEA_APPR-SUBTY = '26' OR LS_LEA_APPR-SUBTY = '27'.
+*          CALL METHOD MESSAGE_HANDLER->ADD_MESSAGE
+*            EXPORTING
+*              IM_TYPE       = 'E'
+*              IM_CL         = 'YH01'
+*              IM_NUMBER     = '307'
+*              IM_PAR3       = 'BLOP'
+*              IM_CONTEXT    = ''
+*              IM_SUBCONTEXT = ''
+*              IM_CLASSNAME  = 'CL_PT_ARQ_BLOP_ADAPTER'
+*              IM_METHODNAME = 'MESSAGE'.
+*        ENDIF.
+*      ELSE.
+*
+*        CALL METHOD MESSAGE_HANDLER->ADD_MESSAGE
+*          EXPORTING
+*            IM_TYPE       = 'E'
+*            IM_CL         = 'YH01'
+*            IM_NUMBER     = '307'
+*            IM_PAR3       = 'BLOP'
+*            IM_CONTEXT    = ''
+*            IM_SUBCONTEXT = ''
+*            IM_CLASSNAME  = 'CL_PT_ARQ_BLOP_ADAPTER'
+*            IM_METHODNAME = 'MESSAGE'.
+*      ENDIF.
+*    ENDIF.
+
+      ELSEIF w_emp_persk = 'E0' OR w_emp_persk = 'E1' OR w_emp_persk = 'E2' OR w_emp_persk = 'E3'  .
+        IF ls_lea_appr-subty = '01' OR ls_lea_appr-subty = '08' OR ls_lea_appr-subty = '19' OR ls_lea_appr-subty = '24' .
+          IF  w_approver_persk NE 'E4'  AND w_approver_persk NE 'E5'  AND  w_approver_persk NE 'E6'
+              AND  w_approver_persk NE 'E7' AND  w_approver_persk NE 'E8' AND  w_approver_persk NE 'E9'
+              AND  w_approver_persk NE 'A'  AND  w_approver_persk NE 'B'  .
+
+            CALL METHOD message_handler->add_message
+              EXPORTING
+                im_type       = 'E'
+                im_cl         = 'YH01'
+                im_number     = '307'
+                im_par3       = 'BLOP'
+                im_context    = ''
+                im_subcontext = ''
+                im_classname  = 'CL_PT_ARQ_BLOP_ADAPTER'
+                im_methodname = 'MESSAGE'.
+          ENDIF.
+        ELSEIF ls_lea_appr-subty = '02' OR ls_lea_appr-subty = '03' OR ls_lea_appr-subty = '06' OR ls_lea_appr-subty = '16'
+            OR ls_lea_appr-subty = '23' OR ls_lea_appr-subty = '29' OR ls_lea_appr-subty = '30' OR ls_lea_appr-subty = '20'
+           OR ls_lea_appr-subty = '21' OR ls_lea_appr-subty = '36' OR ls_lea_appr-subty = '37'  OR ls_lea_appr-subty = '38' .
+          IF  w_approver_persk NE 'E5' AND  w_approver_persk NE 'E6'  AND
+              w_approver_persk NE 'E7' AND  w_approver_persk NE 'E8' AND  w_approver_persk NE 'E9'
+              AND  w_approver_persk NE 'A'  AND  w_approver_persk NE 'B' .
+            CALL METHOD message_handler->add_message
+              EXPORTING
+                im_type       = 'E'
+                im_cl         = 'YH01'
+                im_number     = '307'
+                im_par3       = 'BLOP'
+                im_context    = ''
+                im_subcontext = ''
+                im_classname  = 'CL_PT_ARQ_BLOP_ADAPTER'
+                im_methodname = 'MESSAGE'.
+          ENDIF.
+        ELSEIF ls_lea_appr-subty = '05' OR ls_lea_appr-subty = '07' OR ls_lea_appr-subty = '15' OR ls_lea_appr-subty = '25'
+            OR ls_lea_appr-subty = '26' OR ls_lea_appr-subty = '27' OR ls_lea_appr-subty = '28' OR ls_lea_appr-subty = '34'
+            OR ls_lea_appr-subty = '35' OR ls_lea_appr-subty = '44'  OR ls_lea_appr-subty = '04' .
+          IF  lv_multy_lvl =   'X' .
+            IF  w_approver_persk NE 'E5' AND  w_approver_persk NE 'E6'  AND
+           w_approver_persk NE 'E7' AND  w_approver_persk NE 'E8' AND  w_approver_persk NE 'E9'
+           AND  w_approver_persk NE 'A'  AND  w_approver_persk NE 'B' .
+              CALL METHOD message_handler->add_message
+                EXPORTING
+                  im_type       = 'E'
+                  im_cl         = 'YH01'
+                  im_number     = '307'
+                  im_par3       = 'BLOP'
+                  im_context    = ''
+                  im_subcontext = ''
+                  im_classname  = 'CL_PT_ARQ_BLOP_ADAPTER'
+                  im_methodname = 'MESSAGE'.
+            ENDIF.
+          ENDIF.
+        ENDIF.
+      ELSEIF w_emp_persk = 'E4' OR w_emp_persk = 'E5' OR w_emp_persk = 'E6' OR w_emp_persk = 'E7'
+          OR w_emp_persk = 'E8' OR w_emp_persk = 'E9' OR w_emp_persk = 'B'  .
+
+        IF ls_lea_appr-subty = '01' OR ls_lea_appr-subty = '08' OR ls_lea_appr-subty = '19' OR ls_lea_appr-subty = '24'
+        OR ls_lea_appr-subty = '02' OR ls_lea_appr-subty = '03' OR ls_lea_appr-subty = '06' OR ls_lea_appr-subty = '16'
+        OR ls_lea_appr-subty = '23' OR ls_lea_appr-subty = '29' OR ls_lea_appr-subty = '30' OR ls_lea_appr-subty = '20'
+        OR ls_lea_appr-subty = '21' OR ls_lea_appr-subty = '36' OR ls_lea_appr-subty = '37' OR ls_lea_appr-subty = '38' .
+          IF w_emp_persk = 'B' AND   w_approver_persk NE 'A' .
+            error_flag  = 'X'.
+          ELSEIF w_emp_persk = 'E9' AND  ( w_approver_persk NE 'B' AND w_approver_persk NE 'A' ).
+            error_flag  = 'X'.
+          ELSEIF w_emp_persk = 'E8' AND ( w_approver_persk NE 'E9' AND w_approver_persk NE 'B' AND w_approver_persk NE 'A' ).
+            error_flag  = 'X'.
+          ELSEIF w_emp_persk = 'E7' AND  ( w_approver_persk NE 'E8' AND  w_approver_persk NE 'E9' AND
+                                           w_approver_persk NE 'B'  AND  w_approver_persk NE 'A' ).
+            error_flag  = 'X'.
+          ELSEIF w_emp_persk = 'E6' AND  ( w_approver_persk NE 'E7' AND  w_approver_persk NE 'E8' AND
+                 w_approver_persk NE 'E9' AND w_approver_persk NE 'B' AND w_approver_persk NE 'A' ) .
+            error_flag  = 'X'.
+          ELSEIF w_emp_persk = 'E5' AND ( w_approver_persk NE 'E6' AND w_approver_persk NE 'E7' AND
+               w_approver_persk NE 'E8' AND w_approver_persk NE 'E9' AND w_approver_persk NE 'B' AND w_approver_persk NE 'A' ).
+            error_flag  = 'X'.
+          ELSEIF w_emp_persk = 'E4' AND ( w_approver_persk NE 'E5' AND w_approver_persk NE 'E6' AND w_approver_persk NE 'E7'
+          AND w_approver_persk NE 'E8' AND w_approver_persk NE 'E9' AND w_approver_persk NE 'B' AND w_approver_persk NE 'A' ).
+            error_flag  = 'X'.
+          ENDIF.
+          IF  error_flag  = 'X'.
+            CALL METHOD message_handler->add_message
+              EXPORTING
+                im_type       = 'E'
+                im_cl         = 'YH01'
+                im_number     = '307'
+                im_par3       = 'BLOP'
+                im_context    = ''
+                im_subcontext = ''
+                im_classname  = 'CL_PT_ARQ_BLOP_ADAPTER'
+                im_methodname = 'MESSAGE'.
+          ENDIF.
+        ELSEIF  ls_lea_appr-subty = '05' OR ls_lea_appr-subty = '07' OR ls_lea_appr-subty = '15' OR ls_lea_appr-subty = '25'
+           OR ls_lea_appr-subty = '26' OR ls_lea_appr-subty = '27' OR ls_lea_appr-subty = '28' OR ls_lea_appr-subty = '34'
+           OR ls_lea_appr-subty = '35' OR ls_lea_appr-subty = '44'  OR ls_lea_appr-subty = '04' .
+          IF  lv_multy_lvl =   'X' .
+            IF w_emp_persk = 'B' AND   w_approver_persk NE 'A' .
+              error_flag  = 'X'.
+            ELSEIF w_emp_persk = 'E9' AND  ( w_approver_persk NE 'B' AND w_approver_persk NE 'A' ).
+              error_flag  = 'X'.
+            ELSEIF w_emp_persk = 'E8' AND ( w_approver_persk NE 'E9' AND w_approver_persk NE 'B' AND w_approver_persk NE 'A' ).
+              error_flag  = 'X'.
+            ELSEIF w_emp_persk = 'E7' AND  ( w_approver_persk NE 'E8' AND  w_approver_persk NE 'E9' AND
+                                             w_approver_persk NE 'B'  AND  w_approver_persk NE 'A' ).
+              error_flag  = 'X'.
+            ELSEIF w_emp_persk = 'E6' AND  ( w_approver_persk NE 'E7' AND  w_approver_persk NE 'E8' AND
+                   w_approver_persk NE 'E9' AND w_approver_persk NE 'B' AND w_approver_persk NE 'A' ) .
+              error_flag  = 'X'.
+            ELSEIF w_emp_persk = 'E5' AND ( w_approver_persk NE 'E6' AND w_approver_persk NE 'E7' AND
+                 w_approver_persk NE 'E8' AND w_approver_persk NE 'E9' AND w_approver_persk NE 'B' AND w_approver_persk NE 'A' ).
+              error_flag  = 'X'.
+            ELSEIF w_emp_persk = 'E4' AND ( w_approver_persk NE 'E5' AND w_approver_persk NE 'E6' AND w_approver_persk NE 'E7'
+            AND w_approver_persk NE 'E8' AND w_approver_persk NE 'E9' AND w_approver_persk NE 'B' AND w_approver_persk NE 'A' ).
+              error_flag  = 'X'.
+            ENDIF.
+            IF  error_flag  = 'X'.
+              CALL METHOD message_handler->add_message
+                EXPORTING
+                  im_type       = 'E'
+                  im_cl         = 'YH01'
+                  im_number     = '307'
+                  im_par3       = 'BLOP'
+                  im_context    = ''
+                  im_subcontext = ''
+                  im_classname  = 'CL_PT_ARQ_BLOP_ADAPTER'
+                  im_methodname = 'MESSAGE'.
+            ENDIF.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+******************
+*** For Group 2...
+******************
+*      SELECT yy_awart FROM yrha_mult_appr INTO @DATA(lv_awart) UP TO 1 ROWS
+*             WHERE yy_awart = @ls_lea_appr-subty AND yy_begda LE @ls_lea_appr-begda
+*               AND yy_endda GE @ls_lea_appr-endda ORDER BY PRIMARY KEY.
+*      ENDSELECT.
+*      IF sy-subrc = 0 .
+*        lv_multy_lvl = 'X' .
+*      ENDIF.
+
+
+*********************************************************************************************
+*  cmd approves only CL & RH of himself
+      IF lv_app_pernr = ls_lea_appr-pernr AND ls_lea_appr-subty NE '01' AND
+         ls_lea_appr-subty NE '08' AND ls_lea_appr-subty NE '03' AND ls_lea_appr-subty NE '02' AND
+         ls_lea_appr-subty NE '05' AND ls_lea_appr-subty NE '06' AND ls_lea_appr-subty NE '24' AND ls_lea_appr-subty NE '16'.
+        CALL METHOD message_handler->add_message
+          EXPORTING
+            im_type       = 'E'
+            im_cl         = 'YH01'
+            im_number     = '307'
+            im_par3       = 'BLOP'
+            im_context    = ''
+            im_subcontext = ''
+            im_classname  = 'CL_PT_ARQ_BLOP_ADAPTER'
+            im_methodname = 'MESSAGE'.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+ENDMETHOD.

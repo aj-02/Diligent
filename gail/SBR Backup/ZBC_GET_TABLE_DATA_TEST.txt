@@ -1,0 +1,205 @@
+*&---------------------------------------------------------------------*
+*& Report  ZBC_GET_TABLE_DATA
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+
+REPORT  zbc_get_table_data_test.
+
+INCLUDE zbc_table_top.
+INCLUDE zbc_table_sel.
+INCLUDE zbc_table_form.
+
+
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_fold.
+
+  CALL METHOD cl_gui_frontend_services=>directory_browse
+    EXPORTING
+      window_title         = 'Select Directory to download file'
+*     initial_folder       =
+    CHANGING
+      selected_folder      = p_fold
+    EXCEPTIONS
+      cntl_error           = 1
+      error_no_gui         = 2
+      not_supported_by_gui = 3
+      OTHERS               = 4.
+  IF sy-subrc <> 0.
+* MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*            WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+  ENDIF.
+
+***********************************
+INITIALIZATION.
+
+
+***********************************
+START-OF-SELECTION.
+
+  PERFORM get_data.
+
+end-OF-SELECTION.
+
+*&---------------------------------------------------------------------*
+*&  Include           ZBC_TABLE_TOP
+*&---------------------------------------------------------------------*
+
+tables: dd02l.
+
+
+data: lt_table type table of dd02l,
+      ls_table type dd02l.
+
+*&---------------------------------------------------------------------*
+*&  Include           ZBC_TABLE_SEL
+*&---------------------------------------------------------------------*
+
+SELECT-OPTIONS : sc_tab for dd02l-tabname no INTERVALS.
+*PARAMETERS :
+*rb_app type char1 RADIOBUTTON GROUP R1,
+*             rb_loc TYPE char1 RADIOBUTTON GROUP R1.
+
+PARAMETERS : p_format type char4 DEfault 'xls' OBLIGATORY.
+**PARAMETERS : p_dir type DIRNAME.
+PARAMETERS : p_fold type string OBLIGATORY LOWER CASE.
+
+*&---------------------------------------------------------------------*
+*&  Include           ZBC_TABLE_FORM
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Form  GET_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM get_data .
+  DATA: w_dref     TYPE REF TO data,
+        lv_file    TYPE string,
+        lv_headerx TYPE xstring,
+        lv_header  TYPE string.
+  DATA: BEGIN OF ls_fname,
+          name(100) TYPE c,
+        END OF ls_fname.
+  DATA: lv_data TYPE c LENGTH 7000,
+        length  TYPE i.
+
+  FIELD-SYMBOLS :<fs_data> TYPE any.
+
+  DATA: lt_fname LIKE STANDARD TABLE OF ls_fname.
+
+  DATA: lt_tabdsc TYPE TABLE OF dfies,
+        ls_tabdsc TYPE dfies.
+
+  SELECT *
+    FROM dd02l
+    INTO TABLE lt_table
+    WHERE tabname IN sc_tab.
+
+  FIELD-SYMBOLS : <fs_tab>    TYPE any,
+                  <fs_table>  TYPE STANDARD  TABLE,
+                  <fs_dd02l>  TYPE dd02l,
+                  <fs_tabnam> TYPE tabname,
+                  <fs_header> TYPE any.
+
+
+  LOOP AT lt_table  ASSIGNING <fs_dd02l> .
+
+    CREATE DATA w_dref TYPE TABLE OF (<fs_dd02l>-tabname).
+
+    ASSIGN w_dref->* TO  <fs_table> .
+    REFRESH : lt_fname[], lt_tabdsc.
+    CALL FUNCTION 'DDIF_FIELDINFO_GET'
+      EXPORTING
+        tabname        = <fs_dd02l>-tabname
+        langu          = sy-langu
+      TABLES
+        dfies_tab      = lt_tabdsc
+*       FIXED_VALUES   =
+      EXCEPTIONS
+        not_found      = 1
+        internal_error = 2
+        OTHERS         = 3.
+    IF sy-subrc <> 0.
+* Implement suitable error handling here
+    ENDIF.
+    DATA: lv_tab_head(4096) TYPE c.
+    CLEAR: ls_fname,lv_tab_head .
+    LOOP AT lt_tabdsc INTO ls_tabdsc.
+
+      IF sy-tabix = 1.
+        CONCATENATE ls_tabdsc-scrtext_m cl_abap_char_utilities=>horizontal_tab
+                     INTO lv_tab_head.
+
+      ELSE.
+        CONCATENATE lv_tab_head ls_tabdsc-scrtext_m INTO lv_tab_head
+        SEPARATED BY cl_abap_char_utilities=>horizontal_tab.
+      ENDIF.
+
+      ls_fname-name =   ls_tabdsc-scrtext_m .
+      APPEND ls_fname TO lt_fname.
+
+
+    ENDLOOP.
+
+
+*    SELECT *
+*      FROM (<fs_dd02l>-tabname)
+*      INTO TABLE <fs_table> .
+
+*    IF NOT <fs_table>[] IS INITIAL.
+    CLEAR : lv_file.
+
+*      IF rb_loc = 'X'.
+    CONCATENATE p_fold '\'<fs_dd02l>-tabname '.'  p_format INTO lv_file .
+    CALL METHOD cl_gui_frontend_services=>gui_download
+      EXPORTING
+        filename                = lv_file
+*       header                  = lv_headerx
+        filetype                = 'DAT'
+        fieldnames              = lt_fname
+      CHANGING
+        data_tab                = <fs_table>
+      EXCEPTIONS
+        file_write_error        = 1
+        no_batch                = 2
+        gui_refuse_filetransfer = 3
+        invalid_type            = 4
+        no_authority            = 5
+        unknown_error           = 6
+        header_not_allowed      = 7
+        separator_not_allowed   = 8
+        filesize_not_allowed    = 9
+        header_too_long         = 10
+        dp_error_create         = 11
+        dp_error_send           = 12
+        dp_error_write          = 13
+        unknown_dp_error        = 14
+        access_denied           = 15
+        dp_out_of_memory        = 16
+        disk_full               = 17
+        dp_timeout              = 18
+        file_not_found          = 19
+        dataprovider_exception  = 20
+        control_flush_error     = 21
+        not_supported_by_gui    = 22
+        error_no_gui            = 23
+        OTHERS                  = 24.
+    IF sy-subrc <> 0.
+*   MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*              WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+    ENDIF.
+*      ENDIF.
+*    ENDIF.
+    UNASSIGN: <fs_table> ,<fs_header>.
+
+  ENDLOOP.
+
+
+
+
+ENDFORM.                    " GET_DATA

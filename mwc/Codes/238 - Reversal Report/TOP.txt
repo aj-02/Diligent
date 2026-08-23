@@ -1,0 +1,123 @@
+*&---------------------------------------------------------------------*
+*& Include          ZI_M2C_REVERSAL_TOP
+*&---------------------------------------------------------------------*
+************************************************************************
+* Requirement Id: DID_M2C_238                                          *
+* Title: Program ZAB_M2C_REVERSAL_RPT                                  *
+* Date Created: 23.07.2025                                             *
+* Programmer:  TAMBOLIV                                                *
+* Program Objective: This program will fetch the reversal documents    *
+* and store them in local system or AL11                               *
+* Orig Request: DS4K901922                                             *
+************************************************************************
+* Modification History                                                 *
+************************************************************************
+* Modified By:                                                         *
+* Date:                                                                *
+* Modification TR:                                                     *
+* Reason:                                                              *
+************************************************************************
+
+DATA: erdate TYPE erdat,
+      vkont  TYPE vkont_kk,
+      belnr  TYPE e_belnr.
+
+* Global Type Declarations
+TYPES: BEGIN OF ty_final_1,
+         bukrs                 TYPE bukrs,
+         service_area          TYPE gsber,
+         bus_place             TYPE bupla,
+         can                   TYPE vkont_KK,
+         mru                   TYPE ableinheit,
+         dmz                   TYPE regiogroup,
+         rate_code             TYPE  tariftyp_anl,
+         billing_class         TYPE aklasse,
+         account_name          TYPE vkbez,
+         reversal_code         TYPE bcreason,
+         reversal_reason       TYPE char40,
+         reversal_date         TYPE dats,
+         invoice_date          TYPE budat,
+         inv_doc_no            TYPE opbel_KK,
+         doc_typ               TYPE char2,
+         mru_DATE              TYPE adat,
+         bill_date             TYPE char10,
+         prev_mru_type         TYPE istablart,
+*         prev_mru              TYPE char40,
+         prev_mru              TYPE int4,
+         pres_mru_type_REV     TYPE istablart,
+*         pres_mru_REV          TYPE char40,
+         pres_mru_REV          TYPE int4,
+         consumption_REV       TYPE ez_abrmenge,
+         total_amount_REV      TYPE betrw_kk,
+         basic_REV             TYPE nettobtr,
+         fcda_REV              TYPE nettobtr,
+         envi_REV              TYPE nettobtr,
+         sewer_REV             TYPE nettobtr,
+         msc_REV               TYPE nettobtr,
+         discount_REV          TYPE nettobtr,
+         lft_REV               TYPE e_printdoc,
+         nft_REV               TYPE e_printdoc,
+         vat_REV               TYPE e_printdoc,
+         reversed_by           TYPE aenam,
+         reinvoiced_date       TYPE budat,
+         invoice_doc_number    TYPE intopbel,
+         doctype               TYPE char2,
+         pres_mru_type_reinv   TYPE istablart,
+*         pres_mru_reinv        TYPE char40,
+         pres_mru_reinv        TYPE int4,
+         consumption_reinv     TYPE ez_abrmenge,
+         total_amount_reinv    TYPE betrw_kk,
+         basic_reinv           TYPE nettobtr,
+         fcda_reinv            TYPE nettobtr,
+         envi_reinv            TYPE nettobtr,
+         sewer_REINV           TYPE nettobtr,
+         msc_REINV             TYPE nettobtr,
+         discount_REINV        TYPE nettobtr,
+         lft_REINV             TYPE e_printdoc,
+         nft_REINV             TYPE e_printdoc,
+         vat_REINV             TYPE e_printdoc,
+         reINVOICED_by         TYPE aenam,
+         variance_cons         TYPE ez_abrmenge,
+         variance_total_amount TYPE ez_abrmenge,
+         variance_basic        TYPE nettobtr,
+         variance_fcda         TYPE nettobtr,
+         variance_envi         TYPE nettobtr,
+         variance_sewer        TYPE nettobtr,
+         variance_msc          TYPE nettobtr,
+         variance_discount     TYPE nettobtr,
+         variance_lft          TYPE e_printdoc,
+         variance_nft          TYPE e_printdoc,
+         variance_vat          TYPE e_printdoc,
+
+       END OF ty_final_1.
+
+Types :  BEGIN OF gts_cline,
+    line TYPE c LENGTH 1024, " Line of type Character
+  END OF gts_cline.
+
+* Final Itab
+DATA: GT_FINAL TYPE TABLE OF TY_FINAL_1 ##NEEDED.
+
+data:
+        lr_functions     TYPE REF TO cl_salv_functions_list ##NEEDED, " Generic and User-Defined Functions in List-Type Tables
+        lr_layout        TYPE REF TO cl_salv_layout ##NEEDED,         " Settings for Layout
+        lv_xml_type      TYPE salv_bs_constant ##NEEDED,
+        lv_xml           TYPE xstring ##NEEDED,
+        lt_srctab        TYPE STANDARD TABLE OF gts_cline ##NEEDED,
+        ls_key           TYPE salv_s_layout_key ##NEEDED,             " Layout Key
+        lt_len           TYPE i ##NEEDED,                             " Len of type Integers        ls_key           TYPE salv_s_layout_key ##NEEDED,             " Layout Key
+        lr_content       TYPE REF TO cl_salv_form_element  ##NEEDED,
+        lo_columns       TYPE REF TO cl_salv_columns_table ##NEEDED,
+        lo_column        TYPE REF TO cl_salv_column ##NEEDED.
+
+DATA : LS_TVARVC type TVARVC ##NEEDED.
+* Selection Screen
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-t01.
+  PARAMETERS : p_bukrs TYPE bukrs OBLIGATORY.
+  SELECT-OPTIONS: s_date FOR erdate OBLIGATORY,
+                  s_vkont FOR  vkont,
+                  s_belnr FOR belnr.
+  PARAMETERS: p_path TYPE zde_filename.
+  PARAMETERS: p_al11 TYPE zde_filename.
+
+SELECTION-SCREEN END OF BLOCK b1.

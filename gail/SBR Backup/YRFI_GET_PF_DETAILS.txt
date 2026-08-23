@@ -1,0 +1,2667 @@
+FUNCTION yrfi_get_pf_details.
+*"----------------------------------------------------------------------
+*"*"Local Interface:
+*"  IMPORTING
+*"     REFERENCE(CPF_NO) TYPE  VTBFHA-KONTRH
+*"     REFERENCE(F_YEAR) TYPE  BKPF-GJAHR
+*"  EXPORTING
+*"     REFERENCE(W_GEN_DATA) TYPE  YRFS_PFCARD_DATA
+*"     REFERENCE(W_OPN_BAL_DET) TYPE  YRFS_PFCARD_OPN_BAL
+*"     REFERENCE(W_YEARLY_TOT) TYPE  YRFS_PFCARD_YEAR_TOT
+*"     REFERENCE(W_TOT_VALUES) TYPE  YRFS_PFCARD_TOTAL_VALUES
+*"  TABLES
+*"      IT_CONT_DET TYPE  YRFTT_PFCARD_DETAILS
+*"----------------------------------------------------------------------
+  TYPES : BEGIN OF ty_month_contri,
+            type   TYPE char5,
+            year   TYPE bkpf-gjahr,
+            period TYPE bkpf-monat,
+            amount TYPE bapitb_bzbetr,
+          END OF ty_month_contri.
+  TYPES : BEGIN OF ty_rate,
+            referenz TYPE t056p-referenz,
+            datab    TYPE t056p-datab,
+            zsoll    TYPE t056p-zsoll,
+            conv_val TYPE char10,
+            date     TYPE sy-datum,
+          END OF ty_rate.
+  DATA : l_first       TYPE pa0002-vorna.
+  DATA : l_mid         TYPE pa0002-midnm.
+  DATA : l_last        TYPE pa0002-nachn.
+  DATA : l_gbdat       TYPE pa0002-gbdat.
+  DATA : lv_begda      TYPE pa0000-begda.
+  DATA : l_plans       TYPE pa0001-plans.
+  DATA : lv_rfha       TYPE vtbfha-rfha.
+  DATA : im_operator   TYPE adsub.
+  DATA : im_duration   TYPE psen_duration.
+  DATA : ex_date       TYPE datum.
+  DATA : lv_set_date   TYPE datum.
+*  DATA : lv_fin_year   TYPE char9.
+  DATA : lv_eps_95     TYPE yrfa_op_bal-yyop_bal_eps.
+  DATA : day_in        TYPE sy-datum.
+  DATA : last_day_mon  TYPE sy-datum.
+  DATA : sep_date      TYPE sy-datum.
+  DATA : lv_first_date TYPE sy-datum.
+  DATA : lv_last_date  TYPE sy-datum.
+  DATA : int_date      TYPE sy-datum.
+  DATA : p_val_date    TYPE sy-datum.
+  DATA : p_val_date1   TYPE sy-datum.
+  DATA : lv_period     TYPE bkpf-monat.
+  DATA : lv_year       TYPE bkpf-gjahr.
+  DATA : lv_index      TYPE i.
+  DATA : lv_count      TYPE i.
+  DATA : lv_amount     TYPE bapitb_bzbetr.
+  DATA : lv_txt        TYPE char1.
+  DATA : lv_txt1       TYPE char5.
+  DATA : lv_lifnr      TYPE bseg-lifnr.
+  DATA : f_year1       TYPE bkpf-gjahr.
+  DATA : lv_f_date     TYPE datab_inv.
+  DATA : lv_l_date     TYPE datab_inv.
+  DATA : it_bsis  TYPE TABLE OF bsis,
+         it_bsis1 TYPE TABLE OF bsis,
+         wa_bsis  TYPE bsis,
+         wa_bsis1 TYPE bsis,
+         i_rate   TYPE TABLE OF ty_rate,
+         w_rate   TYPE ty_rate.
+  DATA : i_condition   TYPE TABLE OF bapi_ftr_condition.
+  DATA : i_formula_var TYPE TABLE OF bapi_ftr_condition_formula.
+  DATA : i_singledate  TYPE TABLE OF bapi_ftr_condition_singledat.
+  DATA : i_pay_det     TYPE TABLE OF bapi_ftr_paydet.
+  DATA : i_addflow     TYPE TABLE OF bapi_ftr_flow.
+  DATA : it_cont_det1  TYPE TABLE OF yrfs_pfcard_details.
+  DATA : i_mainflow  TYPE TABLE OF bapi_ftr_mainflow,
+         w_mainflow  TYPE bapi_ftr_mainflow,
+         w_deposit   TYPE bapi_ftr_getdetail_irate,
+         wa_cont_det TYPE yrfs_pfcard_details.
+  DATA : i_erc         TYPE TABLE OF ty_month_contri,
+         w_erc         TYPE ty_month_contri,
+         i_erc1        TYPE TABLE OF ty_month_contri,
+         w_erc1        TYPE ty_month_contri,
+         i_erc2        TYPE TABLE OF ty_month_contri,
+         w_erc2        TYPE ty_month_contri,
+         i_eec_nt      TYPE TABLE OF ty_month_contri,
+         w_eec_nt      TYPE ty_month_contri,
+         i_eec_nt1     TYPE TABLE OF ty_month_contri,
+         w_eec_nt1     TYPE ty_month_contri,
+         i_eec_nt2     TYPE TABLE OF ty_month_contri,
+         w_eec_nt2     TYPE ty_month_contri,
+         i_eec_t       TYPE TABLE OF ty_month_contri,
+         w_eec_t       TYPE ty_month_contri,
+         i_eec_t1      TYPE TABLE OF ty_month_contri,
+         w_eec_t1      TYPE ty_month_contri,
+         i_eec_t2      TYPE TABLE OF ty_month_contri,
+         w_eec_t2      TYPE ty_month_contri,
+         i_vpf_nt      TYPE TABLE OF ty_month_contri,
+         w_vpf_nt      TYPE ty_month_contri,
+         i_vpf_nt1     TYPE TABLE OF ty_month_contri,
+         w_vpf_nt1     TYPE ty_month_contri,
+         i_vpf_nt2     TYPE TABLE OF ty_month_contri,
+         w_vpf_nt2     TYPE ty_month_contri,
+         i_vpf_t       TYPE TABLE OF ty_month_contri,
+         w_vpf_t       TYPE ty_month_contri,
+         i_vpf_t1      TYPE TABLE OF ty_month_contri,
+         w_vpf_t1      TYPE ty_month_contri,
+         i_vpf_t2      TYPE TABLE OF ty_month_contri,
+         w_vpf_t2      TYPE ty_month_contri,
+         i_bal_aftr_sa TYPE TABLE OF ty_month_contri,
+         w_bal_aftr_sa TYPE ty_month_contri.
+
+
+  DATA: lv_ret_ecc_nt     TYPE bapitb_bzbetr,
+        lv_ret_fin_ecc_nt TYPE bapitb_bzbetr,
+        lv_ret_erc_nt     TYPE bapitb_bzbetr,
+        lv_ret_ecc_t      TYPE bapitb_bzbetr,
+        lv_ret_fin_ecc_t  TYPE bapitb_bzbetr,
+        lv_ret_vpf_nt     TYPE bapitb_bzbetr,
+        lv_ret_vpf_t      TYPE bapitb_bzbetr,
+        lv_ret_fin_vpf_nt TYPE bapitb_bzbetr,
+        lv_ret_fin_vpf_t  TYPE bapitb_bzbetr,
+        lv_int_adv_rec    TYPE bapitb_bzbetr.
+data: lv_settle_dt type sy-datum.
+  CLEAR: lv_ret_ecc_nt,
+         lv_ret_fin_ecc_nt,
+         lv_ret_ecc_t,
+         lv_ret_fin_ecc_t,
+         lv_ret_vpf_nt,
+         lv_ret_fin_vpf_nt,
+         lv_ret_erc_nt,
+         lv_int_adv_rec.
+
+  " Fetch General Details of CPF
+  w_gen_data-cpf_no = cpf_no+1(8).
+  lv_first_date = f_year && '04' && '01'.
+  f_year1 = f_year + 1.
+  lv_last_date  = f_year1 && '03' && '31'.
+  int_date = f_year1 && '04' && '01'.
+** -> Begin of changes by of <Aditi> on <05/11/2024> for ATC
+*  SELECT SINGLE vorna midnm nachn gbdat
+*  FROM pa0002
+*  INTO (l_first,l_mid,l_last,l_gbdat)
+*  WHERE pernr = cpf_no+1(8) AND endda = '99991231'.
+  SELECT vorna midnm nachn gbdat
+  FROM pa0002
+  INTO (l_first,l_mid,l_last,l_gbdat)
+  UP TO 1 ROWS
+  WHERE pernr = cpf_no+1(8) AND endda = '99991231'
+  ORDER BY PRIMARY KEY.
+  ENDSELECT.
+** -> End of changes by of <Aditi> on <05/11/2024> for ATC
+  CONCATENATE l_first
+              l_mid
+              l_last
+         INTO w_gen_data-name SEPARATED BY space.
+
+  SELECT SINGLE icnum FROM pa0185 INTO w_gen_data-uan_no WHERE pernr = cpf_no+1(8) AND subty = '08' AND endda = '99991231'.
+** -> Begin of changes by of <Aditi> on <05/11/2024> for ATC
+*  SELECT SINGLE plans gsber
+*         FROM pa0001
+*         INTO (l_plans,w_gen_data-unit_code)
+*         WHERE pernr EQ cpf_no+1(8) AND
+*               begda LE lv_last_date AND endda GE lv_last_date..
+  SELECT plans gsber
+         FROM pa0001
+         INTO (l_plans,w_gen_data-unit_code)
+         UP TO 1 ROWS
+         WHERE pernr EQ cpf_no+1(8) AND
+               begda LE lv_last_date AND endda GE lv_last_date ORDER BY PRIMARY KEY.
+  ENDSELECT.
+** -> End of changes by of <Aditi> on <05/11/2024> for ATC
+  IF l_plans IS NOT INITIAL.
+** -> Begin of changes by of <Aditi> on <05/11/2024> for ATC
+*    SELECT SINGLE plstx
+*           FROM t528t
+*           INTO w_gen_data-designation
+*           WHERE plans EQ l_plans AND
+*                 sprsl EQ 'E' AND endda EQ '99991231'.
+    SELECT plstx
+           FROM t528t
+           INTO w_gen_data-designation
+           UP TO 1 ROWS
+           WHERE plans EQ l_plans AND
+                 sprsl EQ 'E' AND endda EQ '99991231' ORDER BY PRIMARY KEY.
+    ENDSELECT.
+** -> End of changes by of <Aditi> on <05/11/2024> for ATC
+  ENDIF.
+  IF w_gen_data-unit_code IS NOT INITIAL.
+** -> Begin of changes by of <Aditi> on <05/11/2024> for ATC
+*    SELECT SINGLE gtext
+*           FROM tgsbt
+*           INTO w_gen_data-location
+*           WHERE gsber EQ w_gen_data-unit_code AND
+*                 spras EQ 'E'.
+    SELECT gtext
+           FROM tgsbt
+           INTO w_gen_data-location
+           UP TO 1 ROWS
+           WHERE gsber EQ w_gen_data-unit_code AND
+                 spras EQ 'E' ORDER BY PRIMARY KEY.
+    ENDSELECT.
+** -> End of changes by of <Aditi> on <05/11/2024> for ATC
+  ENDIF.
+** -> Begin of changes by of <Aditi> on <05/11/2024> for ATC
+*  SELECT SINGLE icnum
+*       FROM pa0185
+*       INTO w_gen_data-pan_no
+*       WHERE pernr EQ cpf_no+1(8) AND endda = '99991231'.
+  SELECT icnum
+       FROM pa0185
+       INTO w_gen_data-pan_no
+        UP TO 1 ROWS
+       WHERE pernr EQ cpf_no+1(8) AND endda = '99991231'
+       ORDER BY PRIMARY KEY.
+  ENDSELECT.
+** -> End of changes by of <Aditi> on <05/11/2024> for ATC
+  IF l_gbdat IS NOT INITIAL.
+    CALL FUNCTION 'CONVERT_DATE_TO_EXTERNAL'
+      EXPORTING
+        date_internal            = l_gbdat
+      IMPORTING
+        date_external            = w_gen_data-date_of_birth
+      EXCEPTIONS
+        date_internal_is_invalid = 1
+        OTHERS                   = 2 ##FM_SUBRC_OK.
+
+    im_duration-duryy = '60'.
+    im_operator = '+'.
+
+    CALL FUNCTION 'HR_99S_DATE_ADD_SUB_DURATION'
+      EXPORTING
+        im_date     = l_gbdat
+        im_operator = im_operator
+        im_duration = im_duration
+      IMPORTING
+        ex_date     = ex_date.
+    IF ex_date+6(2) = '01'.
+      sep_date = ex_date - 1.
+      CALL FUNCTION 'CONVERT_DATE_TO_EXTERNAL'
+        EXPORTING
+          date_internal            = sep_date
+        IMPORTING
+          date_external            = w_gen_data-date_of_sep
+        EXCEPTIONS
+          date_internal_is_invalid = 1
+          OTHERS                   = 2 ##FM_SUBRC_OK.
+    ELSE.
+      CALL FUNCTION 'RP_LAST_DAY_OF_MONTHS'
+        EXPORTING
+          day_in            = ex_date
+        IMPORTING
+          last_day_of_month = last_day_mon
+        EXCEPTIONS
+          day_in_no_date    = 1.
+      IF last_day_mon IS NOT INITIAL.
+        CALL FUNCTION 'CONVERT_DATE_TO_EXTERNAL'
+          EXPORTING
+            date_internal            = last_day_mon
+          IMPORTING
+            date_external            = w_gen_data-date_of_sep
+          EXCEPTIONS
+            date_internal_is_invalid = 1
+            OTHERS                   = 2 ##FM_SUBRC_OK.
+      ENDIF.
+
+    ENDIF.
+
+  ENDIF.
+** -> Begin of changes by of <Aditi> on <05/11/2024> for ATC
+*  SELECT SINGLE begda FROM pa0000 INTO lv_begda WHERE pernr = cpf_no+1(8) AND massn = 'A1'.
+  SELECT begda FROM pa0000 INTO lv_begda UP TO 1 ROWS WHERE pernr = cpf_no+1(8) AND massn = 'A1' ORDER BY PRIMARY KEY.
+  ENDSELECT.
+** -> End of changes by of <Aditi> on <05/11/2024> for ATC
+  IF lv_begda IS NOT INITIAL.
+    CALL FUNCTION 'CONVERT_DATE_TO_EXTERNAL'
+      EXPORTING
+        date_internal            = lv_begda
+      IMPORTING
+        date_external            = w_gen_data-date_of_joining
+      EXCEPTIONS
+        date_internal_is_invalid = 1
+        OTHERS                   = 2 ##FM_SUBRC_OK.
+  ENDIF.
+
+  SELECT * FROM t056p INTO CORRESPONDING FIELDS OF TABLE i_rate WHERE referenz = 'PF RATE'.
+  IF i_rate IS NOT INITIAL.
+    LOOP AT i_rate INTO w_rate.
+      CALL FUNCTION 'CONVERSION_EXIT_INVDT_OUTPUT'
+        EXPORTING
+          input  = w_rate-datab
+        IMPORTING
+          output = w_rate-conv_val.
+      w_rate-date = w_rate-conv_val+6(4) && w_rate-conv_val+3(2) && w_rate-conv_val+0(2).
+      MODIFY i_rate FROM w_rate TRANSPORTING conv_val date.
+      CLEAR : w_rate.
+    ENDLOOP.
+    SORT i_rate BY date DESCENDING.
+**SOC by Rohtash/Manoj Charm:4000008494 Date:16/07/2024
+*    READ TABLE i_rate INTO w_rate INDEX 1.
+*    IF sy-subrc = 0.
+*      w_gen_data-interest_rate = w_rate-zsoll.
+*    ENDIF.
+    LOOP AT i_rate INTO w_rate WHERE date GE lv_first_date AND date LE lv_last_date.
+      w_gen_data-interest_rate = w_rate-zsoll.
+      EXIT.
+    ENDLOOP.
+**EOC by Rohtash/Manoj Charm:4000008494 Date:16/07/2024
+  ENDIF.
+**SOC by Rohtash/Manoj Charm:4000008494 Date:16/07/2024
+  IF w_gen_data-interest_rate IS INITIAL.
+    CLEAR : w_gen_data-interest_rate.
+  ELSE.
+**EOC by Rohtash/Manoj Charm:4000008494 Date:16/07/2024
+    SPLIT w_gen_data-interest_rate AT '.' INTO w_gen_data-interest_rate lv_txt1.
+    w_gen_data-interest_rate = w_gen_data-interest_rate && '.' && lv_txt1+0(2) && '%'.
+  ENDIF.  "Added by Rohtash/Manoj Charm:4000008494 Date:16/07/2024
+** -> Begin of changes by of <Aditi> on <05/11/2024> for ATC
+*  SELECT SINGLE rfha FROM vtbfha INTO lv_rfha WHERE kontrh = cpf_no AND sgsart EQ 'T20' AND saktiv NE '3'.
+*  SELECT rfha FROM vtbfha INTO lv_rfha UP TO 1 ROWS WHERE kontrh = cpf_no AND sgsart EQ 'T20' AND saktiv NE '3' ORDER BY PRIMARY KEY.
+*  ENDSELECT.
+** -> End of changes by of <Aditi> on <05/11/2024> for ATC
+
+* SOC Kartik / Manoj Charm 4000009213 date 09/01/2025
+  SELECT kontrh, rfha , delfz FROM vtbfha INTO TABLE @DATA(it_rfha)
+     WHERE kontrh = @cpf_no  AND saktiv NE '3' AND bukrs = 'PF01'. "GROUP BY rfha, delfz.
+  SORT it_rfha DESCENDING BY delfz .
+  DELETE ADJACENT DUPLICATES FROM it_rfha COMPARING kontrh.
+  READ TABLE  it_rfha INTO DATA(wa_rfha) WITH  KEY kontrh = cpf_no.
+  IF sy-subrc = 0.
+    lv_rfha = wa_rfha-rfha.
+  ENDIF.
+
+** -> Begin of changes by of <Aditi> on <05/11/2024> for ATC
+*  SELECT SINGLE dbuchung FROM vtbfhapo INTO lv_set_date WHERE bukrs = 'PF01' AND rfha = lv_rfha AND rpzahl = cpf_no
+*                                                                             AND sfhazba = 'T105' AND sbewebe = '2'.
+*  SELECT dbuchung FROM vtbfhapo INTO lv_set_date UP TO 1 ROWS WHERE bukrs = 'PF01' AND rfha = lv_rfha AND rpzahl = cpf_no
+*                                                                             AND sfhazba = 'T105' AND sbewebe = '2' ORDER BY PRIMARY KEY.
+
+*  ENDSELECT.
+*SOC Kartik / Manoj Charm 4000009213 date 09/01/2025
+*  *  BEGIN OF CHANGES BY OF Vipul ON 04Feb25 FOR ATC
+  SELECT dzterm FROM vtbfhapo INTO lv_set_date up to 1 ROWS
+    WHERE bukrs = 'PF01' AND rfha = lv_rfha AND rpzahl = cpf_no
+                AND sfhazba = 'T105' AND sbewebe = '2' ORDER BY PRIMARY KEY .
+ENDSELECT.
+* *End of changes by of VIPUL on 04Feb25  for ATC
+* EOC Kartik / Manoj Charm 4000009213 date 09/01/2025
+
+** -> End of changes by of <Aditi> on <05/11/2024> for ATC
+**SOC by Rohtash/Manoj Charm:4000008494 Date:16/07/2024
+  IF w_gen_data-interest_rate IS NOT INITIAL AND lv_rfha IS NOT INITIAL.
+    CONDENSE w_gen_data-interest_rate.
+    DATA(lv_bearer_id) = |PF01| && |{ lv_rfha }|.
+** -> Begin of changes by of <Aditi> on <05/11/2024> for ATC
+*    SELECT SINGLE regi_state FROM triat INTO @DATA(lv_regi_state) WHERE bearer_cat EQ '02'
+*                                                                    AND bearer_id EQ @lv_bearer_id
+*                                                                    AND ira_date BETWEEN @lv_first_date AND @lv_last_date.
+    SELECT regi_state FROM triat INTO @DATA(lv_regi_state) UP TO 1 ROWS WHERE bearer_cat EQ '02'
+                                                                    AND bearer_id EQ @lv_bearer_id
+                                                                    AND ira_date BETWEEN @lv_first_date AND @lv_last_date
+                                                                    ORDER BY PRIMARY KEY.
+    ENDSELECT.
+** -> End of changes by of <Aditi> on <05/11/2024> for ATC
+    IF lv_regi_state NE '02'.
+      w_gen_data-interest_rate = |{ w_gen_data-interest_rate }| && | (Provisional)|.
+    ENDIF.
+  ENDIF.
+**EOC by Rohtash/Manoj Charm:4000008494 Date:16/07/2024
+  IF sy-subrc EQ 0.
+    CALL FUNCTION 'CONVERT_DATE_TO_EXTERNAL'
+      EXPORTING
+        date_internal            = lv_set_date
+      IMPORTING
+        date_external            = w_gen_data-date_of_settlement
+      EXCEPTIONS
+        date_internal_is_invalid = 1
+        OTHERS                   = 2 ##FM_SUBRC_OK.
+  ELSE.
+** -> Begin of changes by of <Aditi> on <05/11/2024> for ATC
+*    SELECT SINGLE dbuchung FROM vtbfhapo INTO lv_set_date WHERE bukrs = 'PF01' AND rfha = lv_rfha AND rpzahl = cpf_no
+*                                                                               AND sfhazba = 'T106' AND sbewebe = '2'.
+    SELECT dbuchung FROM vtbfhapo INTO lv_set_date UP TO 1 ROWS WHERE bukrs = 'PF01' AND rfha = lv_rfha AND rpzahl = cpf_no
+                                                                               AND sfhazba = 'T106' AND sbewebe = '2' ORDER BY PRIMARY KEY.
+    ENDSELECT.
+** -> End of changes by of <Aditi> on <05/11/2024> for ATC
+    IF sy-subrc EQ 0.
+      CALL FUNCTION 'CONVERT_DATE_TO_EXTERNAL'
+        EXPORTING
+          date_internal            = lv_set_date
+        IMPORTING
+          date_external            = w_gen_data-date_of_settlement
+        EXCEPTIONS
+          date_internal_is_invalid = 1
+          OTHERS                   = 2 ##FM_SUBRC_OK.
+    ENDIF.
+  ENDIF.
+
+  "Get Opening Balance Details
+  lv_lifnr = 'PF' && cpf_no+1(9).
+*  lv_fin_year = f_year && '-' && f_year1.
+
+  IF f_year = '2023'.
+    SELECT SINGLE yyop_bal_eps FROM yrfa_op_bal INTO lv_eps_95 WHERE yycpf_no = lv_lifnr AND yyfin_year = '2023-2024'.
+    w_opn_bal_det-eps_95 = lv_eps_95.
+  ELSE.
+    SELECT SINGLE yyop_bal_eps FROM yrfa_op_bal INTO lv_eps_95 WHERE yycpf_no = lv_lifnr AND yyfin_year = '2023-2024'.
+    SELECT * FROM bsis INTO TABLE it_bsis1 WHERE bukrs = 'PF01' AND hkont = '0000010070' AND zuonr = lv_lifnr AND gjahr LT f_year
+                                             AND gjahr GT '2022'.
+    LOOP AT it_bsis1 INTO wa_bsis1.
+      IF wa_bsis1-shkzg = 'H'.
+        w_opn_bal_det-eps_95 = w_opn_bal_det-eps_95 + wa_bsis1-wrbtr.
+      ELSEIF wa_bsis1-shkzg = 'S'.
+        w_opn_bal_det-eps_95 = w_opn_bal_det-eps_95 - wa_bsis1-wrbtr.
+      ENDIF.
+      CLEAR : wa_bsis1.
+    ENDLOOP.
+    w_opn_bal_det-eps_95 = w_opn_bal_det-eps_95 + lv_eps_95.
+  ENDIF.
+
+  SELECT * FROM bsis INTO TABLE it_bsis WHERE bukrs = 'PF01' AND hkont = '0000010070' AND zuonr = lv_lifnr AND gjahr = f_year
+                                          AND budat GE lv_first_date AND budat LE lv_last_date.
+
+  SELECT * FROM vtbfha   INTO TABLE @DATA(i_opn_bal) WHERE kontrh = @cpf_no AND sgsart IN ('T20','T21','T22','T23','T24','T30','T31') AND saktiv NE '3'.
+  IF i_opn_bal[] IS NOT INITIAL.
+    SELECT * FROM vtbfhapo INTO TABLE @DATA(i_intr) FOR ALL ENTRIES IN @i_opn_bal WHERE rfha = @i_opn_bal-rfha AND rpzahl = @cpf_no
+                                                                                    AND bukrs = 'PF01' AND sfhazba = 'T601'
+                                                                                    AND ( sbewebe NE '3' AND sbewebe NE '4' ).
+    SELECT * FROM vtbfhapo INTO TABLE @DATA(i_195) FOR ALL ENTRIES IN @i_opn_bal WHERE rfha = @i_opn_bal-rfha AND rpzahl = @cpf_no
+                                                                             AND bukrs = 'PF01' AND sfhazba = 'T195'
+                                                                             AND dfaell GE @lv_first_date AND dfaell LE @lv_last_date
+                                                                             AND ( sbewebe NE '3' AND sbewebe NE '4' ).
+    SELECT * FROM vtbfhapo INTO TABLE @DATA(i_105_106) FOR ALL ENTRIES IN @i_opn_bal WHERE rfha = @i_opn_bal-rfha AND rpzahl = @cpf_no
+                                                                             AND bukrs = 'PF01' AND sfhazba EQ 'T105'
+                                                                             AND dfaell GE @lv_first_date AND dfaell LE @lv_last_date
+                                                                             AND sbewebe EQ '2'.
+
+    SELECT * FROM vtbfhapo INTO TABLE @DATA(i_105_106_1) FOR ALL ENTRIES IN @i_opn_bal WHERE rfha = @i_opn_bal-rfha AND rpzahl = @cpf_no
+                                                                          AND bukrs = 'PF01' AND sfhazba EQ 'T106'
+                                                                          AND dfaell GE @lv_first_date AND dfaell LE @lv_last_date
+                                                                          AND sbewebe EQ '2'.
+*SOC Kartik / Manoj
+
+      SELECT * FROM vtbfhapo INTO TABLE @DATA(lt_105_106_open) FOR ALL ENTRIES IN @i_opn_bal WHERE rfha = @i_opn_bal-rfha AND rpzahl = @cpf_no
+                                                                          AND bukrs = 'PF01' AND sfhazba in ( 'T106','T105' )
+                                                                          AND dfaell LE @lv_first_date
+                                                                          AND sbewebe EQ '2'.
+lv_settle_dt = w_gen_data-date_of_settlement+6(4) &&  w_gen_data-date_of_settlement+3(2) &&  w_gen_data-date_of_settlement+0(2).
+
+ IF lv_settle_dt <  lv_first_date and w_gen_data-date_of_settlement ne '00.00.0000' .
+CLEAR  w_opn_bal_det-eps_95.
+      ENDIF.
+*EOC Kartik / Manoj
+
+
+  ENDIF.
+  LOOP AT i_opn_bal INTO DATA(w_opn_bal).
+    IF w_opn_bal-sgsart = 'T20'.
+      REFRESH : i_mainflow,i_addflow,i_pay_det,i_singledate,i_condition.
+      CLEAR : w_mainflow,w_deposit.
+      CALL FUNCTION 'BAPI_FTR_IRATE_DEALGET'
+        EXPORTING
+          companycode          = 'PF01'
+          financialtransaction = w_opn_bal-rfha
+        IMPORTING
+          returnirate          = w_deposit
+        TABLES
+          condition            = i_condition
+          formulavariable      = i_formula_var
+          singledate           = i_singledate
+          paymentdetail        = i_pay_det
+          addflow              = i_addflow
+          mainflow             = i_mainflow.
+      IF i_mainflow[] IS NOT INITIAL.
+        SORT i_mainflow BY flow_type.
+        LOOP AT i_mainflow INTO w_mainflow WHERE payment_date LT lv_first_date AND posting_status NE '3' AND posting_status NE '4'.
+          IF w_mainflow-flow_type = 'T100' OR w_mainflow-flow_type = 'T101' OR w_mainflow-flow_type = 'T300' OR w_mainflow-flow_type = 'T301'
+          OR w_mainflow-flow_type = 'T203' OR w_mainflow-flow_type = 'T403'.
+            w_opn_bal_det-erc_nt = w_opn_bal_det-erc_nt + w_mainflow-payment_amount.
+          ELSEIF w_mainflow-flow_type = 'T103' OR w_mainflow-flow_type = 'T105' OR w_mainflow-flow_type = 'T200' OR w_mainflow-flow_type = 'T400'
+          OR w_mainflow-flow_type = 'T201' OR w_mainflow-flow_type = 'T401' OR w_mainflow-flow_type = 'T303' OR w_mainflow-flow_type = 'T700'
+          OR w_mainflow-flow_type = 'T190'.
+            w_opn_bal_det-erc_nt = w_opn_bal_det-erc_nt - w_mainflow-payment_amount.
+          ENDIF.
+          CLEAR : w_mainflow.
+        ENDLOOP.
+* *SOC Kartik / Manoj
+       data(ls_105_106_open) = VALUE #( lt_105_106_open[ rfha = w_opn_bal-rfha sfhazba = 'T106'   ] OPTIONAL ).
+        w_opn_bal_det-erc_nt =  w_opn_bal_det-erc_nt - ls_105_106_open-BZBETR.
+
+         ls_105_106_open = VALUE #( lt_105_106_open[ rfha = w_opn_bal-rfha sfhazba = 'T105'   ] OPTIONAL ).
+        w_opn_bal_det-erc_nt =  w_opn_bal_det-erc_nt - ls_105_106_open-BZBETR.
+*EOC Kartik / Manoj
+*w_opn_bal_det-erc_nt = w_opn_bal_det-erc_nt + w_deposit-nominal_amount.
+      ELSE.
+*w_opn_bal_det-erc_nt = w_deposit-nominal_amount.
+      ENDIF.
+
+      " Input Fiscal Year Contribution
+      LOOP AT i_mainflow INTO w_mainflow WHERE payment_date GE lv_first_date AND payment_date LE lv_last_date AND posting_status NE '3' AND posting_status NE '4'..
+        IF w_mainflow-flow_type = 'T100' OR w_mainflow-flow_type = 'T200' OR w_mainflow-flow_type = 'T300' OR w_mainflow-flow_type = 'T400'
+        OR w_mainflow-flow_type = 'T195'.
+          w_erc-type = 'CONTR'.
+        ELSEIF w_mainflow-flow_type = 'T101' OR w_mainflow-flow_type = 'T201' OR w_mainflow-flow_type = 'T301' OR w_mainflow-flow_type = 'T401'.
+          w_erc-type = 'TRANS'.
+        ELSEIF w_mainflow-flow_type = 'T103' OR w_mainflow-flow_type = 'T203' OR w_mainflow-flow_type = 'T303' OR w_mainflow-flow_type = 'T403'.
+          w_erc-type = 'NRA'.
+        ELSEIF w_mainflow-flow_type = 'T700'.
+          w_erc-type = 'RET'.
+        ENDIF.
+        CALL FUNCTION 'GET_CURRENT_YEAR'
+          EXPORTING
+            bukrs = 'PF01'
+            date  = w_mainflow-payment_date
+          IMPORTING
+            currm = w_erc-period
+            curry = w_erc-year.
+        IF w_mainflow-flow_type = 'T100' OR w_mainflow-flow_type = 'T101' OR w_mainflow-flow_type = 'T103' OR w_mainflow-flow_type = 'T300'
+        OR w_mainflow-flow_type = 'T301' OR w_mainflow-flow_type = 'T303' OR w_mainflow-flow_type = 'T195' OR w_mainflow-flow_type = 'T700'.
+          w_erc-amount = w_mainflow-payment_amount.
+        ELSEIF w_mainflow-flow_type = 'T203' OR w_mainflow-flow_type = 'T105' OR w_mainflow-flow_type = 'T200' OR w_mainflow-flow_type = 'T201'
+        OR w_mainflow-flow_type = 'T403' OR w_mainflow-flow_type = 'T400' OR w_mainflow-flow_type = 'T401'.
+          w_erc-amount = w_mainflow-payment_amount * -1.
+        ENDIF.
+        APPEND w_erc TO i_erc.
+        CLEAR : w_mainflow , w_erc.
+      ENDLOOP.
+
+    ELSEIF w_opn_bal-sgsart = 'T21'.
+      REFRESH : i_mainflow,i_addflow,i_pay_det,i_singledate,i_condition.
+      CLEAR : w_mainflow,w_deposit.
+      CALL FUNCTION 'BAPI_FTR_IRATE_DEALGET'
+        EXPORTING
+          companycode          = 'PF01'
+          financialtransaction = w_opn_bal-rfha
+        IMPORTING
+          returnirate          = w_deposit
+        TABLES
+          condition            = i_condition
+          formulavariable      = i_formula_var
+          singledate           = i_singledate
+          paymentdetail        = i_pay_det
+          addflow              = i_addflow
+          mainflow             = i_mainflow.
+      IF i_mainflow[] IS NOT INITIAL.
+        SORT i_mainflow BY flow_type.
+        LOOP AT i_mainflow INTO w_mainflow WHERE payment_date LT lv_first_date AND posting_status NE '3' AND posting_status NE '4'.
+          IF w_mainflow-flow_type = 'T100' OR w_mainflow-flow_type = 'T101' OR w_mainflow-flow_type = 'T102'
+          OR w_mainflow-flow_type = 'T203' OR w_mainflow-flow_type = 'T204' OR w_mainflow-flow_type = 'T300' OR w_mainflow-flow_type = 'T301'
+          OR w_mainflow-flow_type = 'T302' OR w_mainflow-flow_type = 'T403' OR w_mainflow-flow_type = 'T404'.
+            w_opn_bal_det-eec_nt = w_opn_bal_det-eec_nt + w_mainflow-payment_amount.
+          ELSEIF w_mainflow-flow_type = 'T103' OR w_mainflow-flow_type = 'T104' OR w_mainflow-flow_type = 'T105'
+          OR w_mainflow-flow_type = 'T200' OR w_mainflow-flow_type = 'T201' OR w_mainflow-flow_type = 'T202' OR w_mainflow-flow_type = 'T303'
+          OR w_mainflow-flow_type = 'T304' OR w_mainflow-flow_type = 'T400' OR w_mainflow-flow_type = 'T401' OR w_mainflow-flow_type = 'T402'
+          OR w_mainflow-flow_type = 'T700' OR w_mainflow-flow_type = 'T190' OR w_mainflow-flow_type = 'T106'."kartik
+            w_opn_bal_det-eec_nt = w_opn_bal_det-eec_nt - w_mainflow-payment_amount.
+          ENDIF.
+          "Opening Balance of Refundable Advance Employee Contribution NT
+          IF w_mainflow-flow_type = 'T104' OR w_mainflow-flow_type = 'T204' OR w_mainflow-flow_type = 'T304' OR w_mainflow-flow_type = 'T404'.
+            w_opn_bal_det-ra_eec_nt = w_opn_bal_det-ra_eec_nt + w_mainflow-payment_amount.
+          ELSEIF w_mainflow-flow_type = 'T102' OR w_mainflow-flow_type = 'T202' OR w_mainflow-flow_type = 'T302' OR w_mainflow-flow_type = 'T402'.
+            w_opn_bal_det-ra_eec_nt = w_opn_bal_det-ra_eec_nt - w_mainflow-payment_amount.
+          ENDIF.
+          CLEAR : w_mainflow.
+        ENDLOOP.
+
+*SOC Kartik / Manoj
+       ls_105_106_open = VALUE #( lt_105_106_open[ rfha = w_opn_bal-rfha sfhazba = 'T106'   ] OPTIONAL ).
+        w_opn_bal_det-eec_nt =  w_opn_bal_det-eec_nt - ls_105_106_open-BZBETR.
+
+         ls_105_106_open = VALUE #( lt_105_106_open[ rfha = w_opn_bal-rfha sfhazba = 'T105'   ] OPTIONAL ).
+        w_opn_bal_det-eec_nt =  w_opn_bal_det-eec_nt - ls_105_106_open-BZBETR.
+*EOC Kartik / Manoj
+*w_opn_bal_det-eec_nt = w_opn_bal_det-eec_nt + w_deposit-nominal_amount.
+      ELSE.
+*w_opn_bal_det-eec_nt = w_deposit-nominal_amount.
+      ENDIF.
+
+
+      " Input Fiscal Year Contribution
+      LOOP AT i_mainflow INTO w_mainflow WHERE payment_date GE lv_first_date AND payment_date LE lv_last_date AND posting_status NE '3' AND posting_status NE '4'.
+        IF w_mainflow-flow_type = 'T100' OR w_mainflow-flow_type = 'T200' OR w_mainflow-flow_type = 'T300' OR w_mainflow-flow_type = 'T400'
+        OR w_mainflow-flow_type = 'T195'.
+          w_eec_nt-type = 'CONTR'.
+        ELSEIF w_mainflow-flow_type = 'T101' OR w_mainflow-flow_type = 'T201' OR w_mainflow-flow_type = 'T301' OR w_mainflow-flow_type = 'T401'.
+          w_eec_nt-type = 'TRANS'.
+        ELSEIF w_mainflow-flow_type = 'T102' OR w_mainflow-flow_type = 'T202' OR w_mainflow-flow_type = 'T302' OR w_mainflow-flow_type = 'T402'.
+          w_eec_nt-type = 'AR'.
+        ELSEIF w_mainflow-flow_type = 'T103' OR w_mainflow-flow_type = 'T203' OR w_mainflow-flow_type = 'T303' OR w_mainflow-flow_type = 'T403'.
+          w_eec_nt-type = 'NRA'.
+        ELSEIF w_mainflow-flow_type = 'T104' OR w_mainflow-flow_type = 'T204' OR w_mainflow-flow_type = 'T304' OR w_mainflow-flow_type = 'T404'.
+          w_eec_nt-type = 'RA'.
+        ELSEIF w_mainflow-flow_type = 'T700'.
+          w_eec_nt-type = 'RET'.
+        ENDIF.
+        CALL FUNCTION 'GET_CURRENT_YEAR'
+          EXPORTING
+            bukrs = 'PF01'
+            date  = w_mainflow-payment_date
+          IMPORTING
+            currm = w_eec_nt-period
+            curry = w_eec_nt-year.
+        IF w_mainflow-flow_type = 'T100' OR w_mainflow-flow_type = 'T101' OR w_mainflow-flow_type = 'T102' OR w_mainflow-flow_type = 'T103'
+        OR w_mainflow-flow_type = 'T104' OR w_mainflow-flow_type = 'T300' OR w_mainflow-flow_type = 'T301' OR w_mainflow-flow_type = 'T302'
+        OR w_mainflow-flow_type = 'T303' OR w_mainflow-flow_type = 'T304' OR w_mainflow-flow_type = 'T195' OR w_mainflow-flow_type = 'T700'.
+          w_eec_nt-amount = w_mainflow-payment_amount.
+        ELSEIF w_mainflow-flow_type = 'T203' OR w_mainflow-flow_type = 'T204' OR w_mainflow-flow_type = 'T105' OR w_mainflow-flow_type = 'T200'
+        OR w_mainflow-flow_type = 'T201' OR w_mainflow-flow_type = 'T202' OR w_mainflow-flow_type = 'T403' OR w_mainflow-flow_type = 'T404'
+        OR w_mainflow-flow_type = 'T400' OR w_mainflow-flow_type = 'T401' OR w_mainflow-flow_type = 'T402'.
+          w_eec_nt-amount = w_mainflow-payment_amount * -1.
+        ENDIF.
+        APPEND w_eec_nt TO i_eec_nt.
+        CLEAR : w_mainflow , w_eec_nt.
+      ENDLOOP.
+
+    ELSEIF w_opn_bal-sgsart = 'T22'.
+      REFRESH : i_mainflow,i_addflow,i_pay_det,i_singledate,i_condition.
+      CLEAR : w_mainflow,w_deposit.
+      CALL FUNCTION 'BAPI_FTR_IRATE_DEALGET'
+        EXPORTING
+          companycode          = 'PF01'
+          financialtransaction = w_opn_bal-rfha
+        IMPORTING
+          returnirate          = w_deposit
+        TABLES
+          condition            = i_condition
+          formulavariable      = i_formula_var
+          singledate           = i_singledate
+          paymentdetail        = i_pay_det
+          addflow              = i_addflow
+          mainflow             = i_mainflow.
+      IF i_mainflow[] IS NOT INITIAL.
+        SORT i_mainflow BY flow_type.
+        LOOP AT i_mainflow INTO w_mainflow WHERE payment_date LT lv_first_date AND posting_status NE '3' AND posting_status NE '4'.
+          IF w_mainflow-flow_type = 'T100' OR w_mainflow-flow_type = 'T101' OR w_mainflow-flow_type = 'T102'
+          OR w_mainflow-flow_type = 'T203' OR w_mainflow-flow_type = 'T204' OR w_mainflow-flow_type = 'T300' OR w_mainflow-flow_type = 'T301'
+          OR w_mainflow-flow_type = 'T302' OR w_mainflow-flow_type = 'T403' OR w_mainflow-flow_type = 'T404'.
+            w_opn_bal_det-eec_t = w_opn_bal_det-eec_t + w_mainflow-payment_amount.
+          ELSEIF w_mainflow-flow_type = 'T103' OR w_mainflow-flow_type = 'T104' OR w_mainflow-flow_type = 'T105'
+          OR w_mainflow-flow_type = 'T200' OR w_mainflow-flow_type = 'T201' OR w_mainflow-flow_type = 'T202' OR w_mainflow-flow_type = 'T303'
+          OR w_mainflow-flow_type = 'T304' OR w_mainflow-flow_type = 'T400' OR w_mainflow-flow_type = 'T401' OR w_mainflow-flow_type = 'T402'
+          OR w_mainflow-flow_type = 'T700' OR w_mainflow-flow_type = 'T190'.
+            w_opn_bal_det-eec_t = w_opn_bal_det-eec_t - w_mainflow-payment_amount.
+          ENDIF.
+          "Opening Balance of Refundable Advance Employee Contribution T
+          IF w_mainflow-flow_type = 'T104' OR w_mainflow-flow_type = 'T204' OR w_mainflow-flow_type = 'T304' OR w_mainflow-flow_type = 'T404'.
+            w_opn_bal_det-ra_eec_t = w_opn_bal_det-ra_eec_t + w_mainflow-payment_amount.
+          ELSEIF w_mainflow-flow_type = 'T102' OR w_mainflow-flow_type = 'T202' OR w_mainflow-flow_type = 'T302' OR w_mainflow-flow_type = 'T402'.
+            w_opn_bal_det-ra_eec_t = w_opn_bal_det-ra_eec_t - w_mainflow-payment_amount.
+          ENDIF.
+          CLEAR : w_mainflow.
+        ENDLOOP.
+*SOC Kartik / Manoj
+       ls_105_106_open = VALUE #( lt_105_106_open[ rfha = w_opn_bal-rfha sfhazba = 'T106'   ] OPTIONAL ).
+        w_opn_bal_det-eec_t =  w_opn_bal_det-eec_t - ls_105_106_open-BZBETR.
+
+         ls_105_106_open = VALUE #( lt_105_106_open[ rfha = w_opn_bal-rfha sfhazba = 'T105'   ] OPTIONAL ).
+        w_opn_bal_det-eec_t =  w_opn_bal_det-eec_t - ls_105_106_open-BZBETR.
+*EOC Kartik / Manoj
+
+
+*w_opn_bal_det-eec_t = w_opn_bal_det-eec_t + w_deposit-nominal_amount.
+      ELSE.
+*w_opn_bal_det-eec_t = w_deposit-nominal_amount.
+      ENDIF.
+
+      " Input Fiscal Year Contribution
+      LOOP AT i_mainflow INTO w_mainflow WHERE payment_date GE lv_first_date AND payment_date LE lv_last_date AND posting_status NE '3' AND posting_status NE '4'.
+        IF w_mainflow-flow_type = 'T100' OR w_mainflow-flow_type = 'T200' OR w_mainflow-flow_type = 'T300' OR w_mainflow-flow_type = 'T400'
+        OR w_mainflow-flow_type = 'T195'.
+          w_eec_t-type = 'CONTR'.
+        ELSEIF w_mainflow-flow_type = 'T101' OR w_mainflow-flow_type = 'T201' OR w_mainflow-flow_type = 'T301' OR w_mainflow-flow_type = 'T401'.
+          w_eec_t-type = 'TRANS'.
+        ELSEIF w_mainflow-flow_type = 'T102' OR w_mainflow-flow_type = 'T202' OR w_mainflow-flow_type = 'T302' OR w_mainflow-flow_type = 'T402'.
+          w_eec_t-type = 'AR'.
+        ELSEIF w_mainflow-flow_type = 'T103' OR w_mainflow-flow_type = 'T203' OR w_mainflow-flow_type = 'T303' OR w_mainflow-flow_type = 'T403'.
+          w_eec_t-type = 'NRA'.
+        ELSEIF w_mainflow-flow_type = 'T104' OR w_mainflow-flow_type = 'T204' OR w_mainflow-flow_type = 'T304' OR w_mainflow-flow_type = 'T404'.
+          w_eec_t-type = 'RA'.
+        ELSEIF w_mainflow-flow_type = 'T700'.
+          w_eec_t-type = 'RET'.
+        ENDIF.
+        CALL FUNCTION 'GET_CURRENT_YEAR'
+          EXPORTING
+            bukrs = 'PF01'
+            date  = w_mainflow-payment_date
+          IMPORTING
+            currm = w_eec_t-period
+            curry = w_eec_t-year.
+        IF w_mainflow-flow_type = 'T100' OR w_mainflow-flow_type = 'T101' OR w_mainflow-flow_type = 'T102' OR w_mainflow-flow_type = 'T103'
+        OR w_mainflow-flow_type = 'T104' OR w_mainflow-flow_type = 'T300' OR w_mainflow-flow_type = 'T301' OR w_mainflow-flow_type = 'T302'
+        OR w_mainflow-flow_type = 'T303' OR w_mainflow-flow_type = 'T304' OR w_mainflow-flow_type = 'T195' OR w_mainflow-flow_type = 'T700'.
+          w_eec_t-amount = w_mainflow-payment_amount.
+        ELSEIF w_mainflow-flow_type = 'T203' OR w_mainflow-flow_type = 'T204' OR w_mainflow-flow_type = 'T105' OR w_mainflow-flow_type = 'T200'
+        OR w_mainflow-flow_type = 'T201' OR w_mainflow-flow_type = 'T202' OR w_mainflow-flow_type = 'T403' OR w_mainflow-flow_type = 'T404'
+        OR w_mainflow-flow_type = 'T400' OR w_mainflow-flow_type = 'T401' OR w_mainflow-flow_type = 'T402'.
+          w_eec_t-amount = w_mainflow-payment_amount * -1.
+        ENDIF.
+        APPEND w_eec_t TO i_eec_t.
+        CLEAR : w_mainflow , w_eec_t.
+      ENDLOOP.
+
+    ELSEIF w_opn_bal-sgsart = 'T23'.
+      REFRESH : i_mainflow,i_addflow,i_pay_det,i_singledate,i_condition.
+      CLEAR : w_mainflow,w_deposit.
+      CALL FUNCTION 'BAPI_FTR_IRATE_DEALGET'
+        EXPORTING
+          companycode          = 'PF01'
+          financialtransaction = w_opn_bal-rfha
+        IMPORTING
+          returnirate          = w_deposit
+        TABLES
+          condition            = i_condition
+          formulavariable      = i_formula_var
+          singledate           = i_singledate
+          paymentdetail        = i_pay_det
+          addflow              = i_addflow
+          mainflow             = i_mainflow.
+      IF i_mainflow[] IS NOT INITIAL.
+        SORT i_mainflow BY flow_type.
+        LOOP AT i_mainflow INTO w_mainflow WHERE payment_date LT lv_first_date AND posting_status NE '3' AND posting_status NE '4'.
+          IF w_mainflow-flow_type = 'T100' OR w_mainflow-flow_type = 'T101' OR w_mainflow-flow_type = 'T102'
+          OR w_mainflow-flow_type = 'T203' OR w_mainflow-flow_type = 'T204' OR w_mainflow-flow_type = 'T300' OR w_mainflow-flow_type = 'T301'
+          OR w_mainflow-flow_type = 'T302' OR w_mainflow-flow_type = 'T403' OR w_mainflow-flow_type = 'T404'.
+            w_opn_bal_det-vpf_nt = w_opn_bal_det-vpf_nt + w_mainflow-payment_amount.
+          ELSEIF w_mainflow-flow_type = 'T103' OR w_mainflow-flow_type = 'T104' OR w_mainflow-flow_type = 'T105'
+          OR w_mainflow-flow_type = 'T200' OR w_mainflow-flow_type = 'T201' OR w_mainflow-flow_type = 'T202' OR w_mainflow-flow_type = 'T303'
+          OR w_mainflow-flow_type = 'T304' OR w_mainflow-flow_type = 'T400' OR w_mainflow-flow_type = 'T401' OR w_mainflow-flow_type = 'T402'
+          OR w_mainflow-flow_type = 'T700' OR w_mainflow-flow_type = 'T190'.
+            w_opn_bal_det-vpf_nt = w_opn_bal_det-vpf_nt - w_mainflow-payment_amount.
+          ENDIF.
+          "Opening Balance of Refundable Advance VPF NT
+          IF w_mainflow-flow_type = 'T104' OR w_mainflow-flow_type = 'T204' OR w_mainflow-flow_type = 'T304' OR w_mainflow-flow_type = 'T404'.
+            w_opn_bal_det-ra_vpf_nt = w_opn_bal_det-ra_vpf_nt + w_mainflow-payment_amount.
+          ELSEIF w_mainflow-flow_type = 'T102' OR w_mainflow-flow_type = 'T202' OR w_mainflow-flow_type = 'T302' OR w_mainflow-flow_type = 'T402'.
+            w_opn_bal_det-ra_vpf_nt = w_opn_bal_det-ra_vpf_nt - w_mainflow-payment_amount.
+          ENDIF.
+          CLEAR : w_mainflow.
+        ENDLOOP.
+* *SOC Kartik / Manoj
+       ls_105_106_open = VALUE #( lt_105_106_open[ rfha = w_opn_bal-rfha sfhazba = 'T106'   ] OPTIONAL ).
+        w_opn_bal_det-vpf_nt =  w_opn_bal_det-vpf_nt - ls_105_106_open-BZBETR.
+
+         ls_105_106_open = VALUE #( lt_105_106_open[ rfha = w_opn_bal-rfha sfhazba = 'T105'   ] OPTIONAL ).
+        w_opn_bal_det-vpf_nt =  w_opn_bal_det-vpf_nt - ls_105_106_open-BZBETR.
+*EOC Kartik / Manoj
+
+*w_opn_bal_det-vpf_nt = w_opn_bal_det-vpf_nt + w_deposit-nominal_amount.
+      ELSE.
+*w_opn_bal_det-vpf_nt = w_deposit-nominal_amount.
+      ENDIF.
+
+      " Input Fiscal Year Contribution
+      LOOP AT i_mainflow INTO w_mainflow WHERE payment_date GE lv_first_date AND payment_date LE lv_last_date AND posting_status NE '3' AND posting_status NE '4'.
+        IF w_mainflow-flow_type = 'T100' OR w_mainflow-flow_type = 'T200' OR w_mainflow-flow_type = 'T300' OR w_mainflow-flow_type = 'T400'
+        OR w_mainflow-flow_type = 'T195'.
+          w_vpf_nt-type = 'CONTR'.
+        ELSEIF w_mainflow-flow_type = 'T101' OR w_mainflow-flow_type = 'T201' OR w_mainflow-flow_type = 'T301' OR w_mainflow-flow_type = 'T401'.
+          w_vpf_nt-type = 'TRANS'.
+        ELSEIF w_mainflow-flow_type = 'T102' OR w_mainflow-flow_type = 'T202' OR w_mainflow-flow_type = 'T302' OR w_mainflow-flow_type = 'T402'.
+          w_vpf_nt-type = 'AR'.
+        ELSEIF w_mainflow-flow_type = 'T103' OR w_mainflow-flow_type = 'T203' OR w_mainflow-flow_type = 'T303' OR w_mainflow-flow_type = 'T403'.
+          w_vpf_nt-type = 'NRA'.
+        ELSEIF w_mainflow-flow_type = 'T104' OR w_mainflow-flow_type = 'T204' OR w_mainflow-flow_type = 'T304' OR w_mainflow-flow_type = 'T404'.
+          w_vpf_nt-type = 'RA'.
+        ELSEIF w_mainflow-flow_type = 'T700'.
+          w_vpf_nt-type = 'RET'.
+        ENDIF.
+        CALL FUNCTION 'GET_CURRENT_YEAR'
+          EXPORTING
+            bukrs = 'PF01'
+            date  = w_mainflow-payment_date
+          IMPORTING
+            currm = w_vpf_nt-period
+            curry = w_vpf_nt-year.
+        IF w_mainflow-flow_type = 'T100' OR w_mainflow-flow_type = 'T101' OR w_mainflow-flow_type = 'T102' OR w_mainflow-flow_type = 'T103'
+        OR w_mainflow-flow_type = 'T104' OR w_mainflow-flow_type = 'T300' OR w_mainflow-flow_type = 'T301' OR w_mainflow-flow_type = 'T302'
+        OR w_mainflow-flow_type = 'T303' OR w_mainflow-flow_type = 'T304' OR w_mainflow-flow_type = 'T195' OR w_mainflow-flow_type = 'T700'.
+          w_vpf_nt-amount = w_mainflow-payment_amount.
+        ELSEIF w_mainflow-flow_type = 'T203' OR w_mainflow-flow_type = 'T204' OR w_mainflow-flow_type = 'T105' OR w_mainflow-flow_type = 'T200'
+        OR w_mainflow-flow_type = 'T201' OR w_mainflow-flow_type = 'T202' OR w_mainflow-flow_type = 'T403' OR w_mainflow-flow_type = 'T404'
+        OR w_mainflow-flow_type = 'T400' OR w_mainflow-flow_type = 'T401' OR w_mainflow-flow_type = 'T402'.
+          w_vpf_nt-amount = w_mainflow-payment_amount * -1.
+        ENDIF.
+        APPEND w_vpf_nt TO i_vpf_nt.
+        CLEAR : w_mainflow , w_vpf_nt.
+      ENDLOOP.
+
+    ELSEIF w_opn_bal-sgsart = 'T24'.
+      REFRESH : i_mainflow,i_addflow,i_pay_det,i_singledate,i_condition.
+      CLEAR : w_mainflow,w_deposit.
+      CALL FUNCTION 'BAPI_FTR_IRATE_DEALGET'
+        EXPORTING
+          companycode          = 'PF01'
+          financialtransaction = w_opn_bal-rfha
+        IMPORTING
+          returnirate          = w_deposit
+        TABLES
+          condition            = i_condition
+          formulavariable      = i_formula_var
+          singledate           = i_singledate
+          paymentdetail        = i_pay_det
+          addflow              = i_addflow
+          mainflow             = i_mainflow.
+      IF i_mainflow[] IS NOT INITIAL.
+        SORT i_mainflow BY flow_type.
+        LOOP AT i_mainflow INTO w_mainflow WHERE payment_date LT lv_first_date AND posting_status NE '3' AND posting_status NE '4'.
+          IF w_mainflow-flow_type = 'T100' OR w_mainflow-flow_type = 'T101' OR w_mainflow-flow_type = 'T102'
+          OR w_mainflow-flow_type = 'T203' OR w_mainflow-flow_type = 'T204' OR w_mainflow-flow_type = 'T300' OR w_mainflow-flow_type = 'T301'
+          OR w_mainflow-flow_type = 'T302' OR w_mainflow-flow_type = 'T403' OR w_mainflow-flow_type = 'T404'.
+            w_opn_bal_det-vpf_t = w_opn_bal_det-vpf_t + w_mainflow-payment_amount.
+          ELSEIF w_mainflow-flow_type = 'T103' OR w_mainflow-flow_type = 'T104' OR w_mainflow-flow_type = 'T105'
+          OR w_mainflow-flow_type = 'T200' OR w_mainflow-flow_type = 'T201' OR w_mainflow-flow_type = 'T202' OR w_mainflow-flow_type = 'T303'
+          OR w_mainflow-flow_type = 'T304' OR w_mainflow-flow_type = 'T400' OR w_mainflow-flow_type = 'T401' OR w_mainflow-flow_type = 'T402'
+          OR w_mainflow-flow_type = 'T700' OR w_mainflow-flow_type = 'T190'.
+            w_opn_bal_det-vpf_t = w_opn_bal_det-vpf_t - w_mainflow-payment_amount.
+          ENDIF.
+          "Opening Balance of Refundable Advance VPF T
+          IF w_mainflow-flow_type = 'T104' OR w_mainflow-flow_type = 'T204' OR w_mainflow-flow_type = 'T304' OR w_mainflow-flow_type = 'T404'.
+            w_opn_bal_det-ra_vpf_t = w_opn_bal_det-ra_vpf_t + w_mainflow-payment_amount.
+          ELSEIF w_mainflow-flow_type = 'T102' OR w_mainflow-flow_type = 'T202' OR w_mainflow-flow_type = 'T302' OR w_mainflow-flow_type = 'T402'.
+            w_opn_bal_det-ra_vpf_t = w_opn_bal_det-ra_vpf_t - w_mainflow-payment_amount.
+          ENDIF.
+          CLEAR : w_mainflow.
+        ENDLOOP.
+
+*SOC Kartik / Manoj
+       ls_105_106_open = VALUE #( lt_105_106_open[ rfha = w_opn_bal-rfha sfhazba = 'T106'   ] OPTIONAL ).
+        w_opn_bal_det-vpf_t =  w_opn_bal_det-vpf_t - ls_105_106_open-BZBETR.
+
+         ls_105_106_open = VALUE #( lt_105_106_open[ rfha = w_opn_bal-rfha sfhazba = 'T105'   ] OPTIONAL ).
+        w_opn_bal_det-vpf_t =  w_opn_bal_det-vpf_t - ls_105_106_open-BZBETR.
+*EOC Kartik / Manoj
+
+*w_opn_bal_det-vpf_t = w_opn_bal_det-vpf_t + w_deposit-nominal_amount.
+      ELSE.
+*w_opn_bal_det-vpf_t = w_deposit-nominal_amount.
+      ENDIF.
+
+      " Input Fiscal Year Contribution
+      LOOP AT i_mainflow INTO w_mainflow WHERE payment_date GE lv_first_date AND payment_date LE lv_last_date AND posting_status NE '3' AND posting_status NE '4'.
+        IF w_mainflow-flow_type = 'T100' OR w_mainflow-flow_type = 'T200' OR w_mainflow-flow_type = 'T300' OR w_mainflow-flow_type = 'T400'
+        OR w_mainflow-flow_type = 'T195'.
+          w_vpf_t-type = 'CONTR'.
+        ELSEIF w_mainflow-flow_type = 'T101' OR w_mainflow-flow_type = 'T201' OR w_mainflow-flow_type = 'T301' OR w_mainflow-flow_type = 'T401'.
+          w_vpf_t-type = 'TRANS'.
+        ELSEIF w_mainflow-flow_type = 'T102' OR w_mainflow-flow_type = 'T202' OR w_mainflow-flow_type = 'T302' OR w_mainflow-flow_type = 'T402'.
+          w_vpf_t-type = 'AR'.
+        ELSEIF w_mainflow-flow_type = 'T103' OR w_mainflow-flow_type = 'T203' OR w_mainflow-flow_type = 'T303' OR w_mainflow-flow_type = 'T403'.
+          w_vpf_t-type = 'NRA'.
+        ELSEIF w_mainflow-flow_type = 'T104' OR w_mainflow-flow_type = 'T204' OR w_mainflow-flow_type = 'T304' OR w_mainflow-flow_type = 'T404'.
+          w_vpf_t-type = 'RA'.
+        ELSEIF w_mainflow-flow_type = 'T700'.
+          w_vpf_t-type = 'RET'.
+        ENDIF.
+        CALL FUNCTION 'GET_CURRENT_YEAR'
+          EXPORTING
+            bukrs = 'PF01'
+            date  = w_mainflow-payment_date
+          IMPORTING
+            currm = w_vpf_t-period
+            curry = w_vpf_t-year.
+        IF w_mainflow-flow_type = 'T100' OR w_mainflow-flow_type = 'T101' OR w_mainflow-flow_type = 'T102' OR w_mainflow-flow_type = 'T103'
+        OR w_mainflow-flow_type = 'T104' OR w_mainflow-flow_type = 'T300' OR w_mainflow-flow_type = 'T301' OR w_mainflow-flow_type = 'T302'
+        OR w_mainflow-flow_type = 'T303' OR w_mainflow-flow_type = 'T304' OR w_mainflow-flow_type = 'T195' OR w_mainflow-flow_type = 'T700'.
+          w_vpf_t-amount = w_mainflow-payment_amount.
+        ELSEIF w_mainflow-flow_type = 'T203' OR w_mainflow-flow_type = 'T204' OR w_mainflow-flow_type = 'T105' OR w_mainflow-flow_type = 'T200'
+        OR w_mainflow-flow_type = 'T201' OR w_mainflow-flow_type = 'T202' OR w_mainflow-flow_type = 'T403' OR w_mainflow-flow_type = 'T404'
+        OR w_mainflow-flow_type = 'T400' OR w_mainflow-flow_type = 'T401' OR w_mainflow-flow_type = 'T402'.
+          w_vpf_t-amount = w_mainflow-payment_amount * -1.
+        ENDIF.
+        APPEND w_vpf_t TO i_vpf_t.
+        CLEAR : w_mainflow , w_vpf_t.
+      ENDLOOP.
+
+    ELSEIF w_opn_bal-sgsart = 'T30' OR w_opn_bal-sgsart = 'T31'.
+      REFRESH : i_mainflow,i_addflow,i_pay_det,i_singledate,i_condition.
+      CLEAR : w_mainflow,w_deposit.
+      CALL FUNCTION 'BAPI_FTR_IRATE_DEALGET'
+        EXPORTING
+          companycode          = 'PF01'
+          financialtransaction = w_opn_bal-rfha
+        IMPORTING
+          returnirate          = w_deposit
+        TABLES
+          condition            = i_condition
+          formulavariable      = i_formula_var
+          singledate           = i_singledate
+          paymentdetail        = i_pay_det
+          addflow              = i_addflow
+          mainflow             = i_mainflow.
+      IF i_mainflow[] IS NOT INITIAL.
+        SORT i_mainflow BY flow_type.
+        LOOP AT i_mainflow INTO w_mainflow WHERE payment_date LT lv_first_date AND posting_status NE '3' AND posting_status NE '4'.
+          IF w_mainflow-flow_type = 'T100' OR w_mainflow-flow_type = 'T101' OR w_mainflow-flow_type = 'T102' OR w_mainflow-flow_type = 'T701'.
+            w_opn_bal_det-bal_aftr_sa = w_opn_bal_det-bal_aftr_sa + w_mainflow-payment_amount.
+          ELSEIF w_mainflow-flow_type = 'T103' OR w_mainflow-flow_type = 'T104' OR w_mainflow-flow_type = 'T105'.
+            w_opn_bal_det-bal_aftr_sa = w_opn_bal_det-bal_aftr_sa - w_mainflow-payment_amount.
+          ENDIF.
+          CLEAR : w_mainflow.
+        ENDLOOP.
+*w_opn_bal_det-bal_aftr_sa = w_opn_bal_det-bal_aftr_sa + w_deposit-nominal_amount.
+      ELSE.
+*w_opn_bal_det-bal_aftr_sa = w_deposit-nominal_amount.
+      ENDIF.
+
+      " Input Fiscal Year Contribution
+      LOOP AT i_mainflow INTO w_mainflow WHERE payment_date GE lv_first_date AND payment_date LE lv_last_date AND posting_status NE '3' AND posting_status NE '4'.
+        IF w_mainflow-flow_type = 'T100' OR w_mainflow-flow_type = 'T701'.
+          w_bal_aftr_sa-type = 'CONTR'.
+        ELSEIF w_mainflow-flow_type = 'T101'.
+          w_bal_aftr_sa-type = 'TRANS'.
+        ENDIF.
+        CALL FUNCTION 'GET_CURRENT_YEAR'
+          EXPORTING
+            bukrs = 'PF01'
+            date  = w_mainflow-payment_date
+          IMPORTING
+            currm = w_bal_aftr_sa-period
+            curry = w_bal_aftr_sa-year.
+        w_bal_aftr_sa-amount = w_mainflow-payment_amount.
+        APPEND w_bal_aftr_sa TO i_bal_aftr_sa.
+        CLEAR : w_mainflow , w_bal_aftr_sa.
+      ENDLOOP.
+
+    ENDIF.
+    CLEAR : w_opn_bal.
+  ENDLOOP.
+
+  " Adding T195 in the contribution
+  SORT i_195 BY rfha.
+  LOOP AT i_195 INTO DATA(w_195).
+    READ TABLE i_opn_bal INTO w_opn_bal WITH KEY rfha = w_195-rfha.
+    IF sy-subrc = 0.
+      CLEAR : lv_period , lv_year.
+      CALL FUNCTION 'GET_CURRENT_YEAR'
+        EXPORTING
+          bukrs = 'PF01'
+          date  = w_195-dfaell
+        IMPORTING
+          currm = lv_period
+          curry = lv_year.
+      IF w_opn_bal-sgsart = 'T20'.
+        w_erc-type   = 'CONTR'.
+        w_erc-period = lv_period.
+        w_erc-year   = lv_year.
+        w_erc-amount = w_195-bzbetr.
+        APPEND w_erc TO i_erc.
+        CLEAR : w_erc.
+      ELSEIF w_opn_bal-sgsart = 'T21'.
+        w_eec_nt-type   = 'CONTR'.
+        w_eec_nt-period = lv_period.
+        w_eec_nt-year   = lv_year.
+        w_eec_nt-amount = w_195-bzbetr.
+        APPEND w_eec_nt TO i_eec_nt.
+        CLEAR : w_eec_nt.
+      ELSEIF w_opn_bal-sgsart = 'T22'.
+        w_eec_t-type   = 'CONTR'.
+        w_eec_t-period = lv_period.
+        w_eec_t-year   = lv_year.
+        w_eec_t-amount = w_195-bzbetr.
+        APPEND w_eec_t TO i_eec_t.
+        CLEAR : w_eec_t.
+      ELSEIF w_opn_bal-sgsart = 'T23'.
+        w_vpf_nt-type   = 'CONTR'.
+        w_vpf_nt-period = lv_period.
+        w_vpf_nt-year   = lv_year.
+        w_vpf_nt-amount = w_195-bzbetr.
+        APPEND w_vpf_nt TO i_vpf_nt.
+        CLEAR : w_vpf_nt.
+      ELSEIF w_opn_bal-sgsart = 'T24'.
+        w_vpf_t-type   = 'CONTR'.
+        w_vpf_t-period = lv_period.
+        w_vpf_t-year   = lv_year.
+        w_vpf_t-amount = w_195-bzbetr.
+        APPEND w_vpf_t TO i_vpf_t.
+        CLEAR : w_vpf_t.
+      ENDIF.
+    ENDIF.
+    CLEAR : w_195 , w_opn_bal.
+  ENDLOOP.
+
+  " Adding T105 & T106 in the contribution
+  SORT i_105_106 BY rfha.
+  LOOP AT i_105_106 INTO DATA(w_105_106).
+    READ TABLE i_opn_bal INTO w_opn_bal WITH KEY rfha = w_105_106-rfha.
+    IF sy-subrc = 0.
+      CLEAR : lv_period , lv_year.
+      CALL FUNCTION 'GET_CURRENT_YEAR'
+        EXPORTING
+          bukrs = 'PF01'
+          date  = w_105_106-dfaell
+        IMPORTING
+          currm = lv_period
+          curry = lv_year.
+      IF w_opn_bal-sgsart = 'T20'.
+        w_erc-type   = 'FINAL'.
+        w_erc-period = lv_period.
+        w_erc-year   = lv_year.
+        w_erc-amount = w_105_106-bzbetr.
+        APPEND w_erc TO i_erc.
+        CLEAR : w_erc.
+      ELSEIF w_opn_bal-sgsart = 'T21'.
+        w_eec_nt-type   = 'FINAL'.
+        w_eec_nt-period = lv_period.
+        w_eec_nt-year   = lv_year.
+        w_eec_nt-amount = w_105_106-bzbetr.
+        APPEND w_eec_nt TO i_eec_nt.
+        CLEAR : w_eec_nt.
+      ELSEIF w_opn_bal-sgsart = 'T22'.
+        w_eec_t-type   = 'FINAL'.
+        w_eec_t-period = lv_period.
+        w_eec_t-year   = lv_year.
+        w_eec_t-amount = w_105_106-bzbetr.
+        APPEND w_eec_t TO i_eec_t.
+        CLEAR : w_eec_t.
+      ELSEIF w_opn_bal-sgsart = 'T23'.
+        w_vpf_nt-type   = 'FINAL'.
+        w_vpf_nt-period = lv_period.
+        w_vpf_nt-year   = lv_year.
+        w_vpf_nt-amount = w_105_106-bzbetr.
+        APPEND w_vpf_nt TO i_vpf_nt.
+        CLEAR : w_vpf_nt.
+      ELSEIF w_opn_bal-sgsart = 'T24'.
+        w_vpf_t-type   = 'FINAL'.
+        w_vpf_t-period = lv_period.
+        w_vpf_t-year   = lv_year.
+        w_vpf_t-amount = w_105_106-bzbetr.
+        APPEND w_vpf_t TO i_vpf_t.
+        CLEAR : w_vpf_t.
+      ELSEIF w_opn_bal-sgsart = 'T30' OR w_opn_bal-sgsart = 'T31'.
+        w_bal_aftr_sa-type   = 'FINAL'.
+        w_bal_aftr_sa-period = lv_period.
+        w_bal_aftr_sa-year   = lv_year.
+        w_bal_aftr_sa-amount = w_105_106-bzbetr.
+        APPEND w_bal_aftr_sa TO i_bal_aftr_sa.
+        CLEAR : w_bal_aftr_sa.
+      ENDIF.
+    ENDIF.
+    CLEAR : w_105_106 , w_opn_bal.
+  ENDLOOP.
+
+  "Clubbing all the contributions
+
+  SORT i_erc    BY type period.
+  SORT i_eec_nt BY type period.
+  SORT i_eec_t  BY type period.
+  SORT i_vpf_nt BY type period.
+  SORT i_vpf_t  BY type period.
+
+  i_erc1[] = i_erc[].
+  i_erc2[] = i_erc[].
+  SORT i_erc1 BY type period.
+  SORT i_erc2 BY type period.
+  DELETE ADJACENT DUPLICATES FROM i_erc1 COMPARING type period.
+  REFRESH : i_erc.
+  LOOP AT i_erc1 INTO w_erc1.
+    CLEAR : lv_amount.
+    LOOP AT i_erc2 INTO w_erc2 WHERE type = w_erc1-type AND year = w_erc1-year AND period = w_erc1-period.
+      lv_amount = lv_amount + w_erc2-amount.
+      CLEAR : w_erc2.
+    ENDLOOP.
+    w_erc-type   = w_erc1-type.
+    w_erc-year   = w_erc1-year.
+    w_erc-period = w_erc1-period.
+    w_erc-amount = lv_amount.
+    APPEND w_erc TO i_erc.
+    CLEAR : w_erc1 , w_erc.
+  ENDLOOP.
+
+  i_eec_nt1[] = i_eec_nt[].
+  i_eec_nt2[] = i_eec_nt[].
+  SORT i_eec_nt1 BY type period.
+  SORT i_eec_nt2 BY type period.
+  DELETE ADJACENT DUPLICATES FROM i_eec_nt1 COMPARING type period.
+  REFRESH : i_eec_nt.
+  LOOP AT i_eec_nt1 INTO w_eec_nt1.
+    CLEAR : lv_amount.
+    LOOP AT i_eec_nt2 INTO w_eec_nt2 WHERE type = w_eec_nt1-type AND year = w_eec_nt1-year AND period = w_eec_nt1-period.
+      lv_amount = lv_amount + w_eec_nt2-amount.
+      CLEAR : w_eec_nt2.
+    ENDLOOP.
+    w_eec_nt-type   = w_eec_nt1-type.
+    w_eec_nt-year   = w_eec_nt1-year.
+    w_eec_nt-period = w_eec_nt1-period.
+    w_eec_nt-amount = lv_amount.
+    APPEND w_eec_nt TO i_eec_nt.
+    CLEAR : w_eec_nt1 , w_eec_nt.
+  ENDLOOP.
+
+  i_eec_t1[] = i_eec_t[].
+  i_eec_t2[] = i_eec_t[].
+  SORT i_eec_t1 BY type period.
+  SORT i_eec_t2 BY type period.
+  DELETE ADJACENT DUPLICATES FROM i_eec_t1 COMPARING type period.
+  REFRESH : i_eec_t.
+  LOOP AT i_eec_t1 INTO w_eec_t1.
+    CLEAR : lv_amount.
+    LOOP AT i_eec_t2 INTO w_eec_t2 WHERE type = w_eec_t1-type AND year = w_eec_t1-year AND period = w_eec_t1-period.
+      lv_amount = lv_amount + w_eec_t2-amount.
+      CLEAR : w_eec_t2.
+    ENDLOOP.
+    w_eec_t-type   = w_eec_t1-type.
+    w_eec_t-year   = w_eec_t1-year.
+    w_eec_t-period = w_eec_t1-period.
+    w_eec_t-amount = lv_amount.
+    APPEND w_eec_t TO i_eec_t.
+    CLEAR : w_eec_t1 , w_eec_t.
+  ENDLOOP.
+
+  i_vpf_nt1[] = i_vpf_nt[].
+  i_vpf_nt2[] = i_vpf_nt[].
+  SORT i_vpf_nt1 BY type period.
+  SORT i_vpf_nt2 BY type period.
+  DELETE ADJACENT DUPLICATES FROM i_vpf_nt1 COMPARING type period.
+  REFRESH : i_vpf_nt.
+  LOOP AT i_vpf_nt1 INTO w_vpf_nt1.
+    CLEAR : lv_amount.
+    LOOP AT i_vpf_nt2 INTO w_vpf_nt2 WHERE type = w_vpf_nt1-type AND year = w_vpf_nt1-year AND period = w_vpf_nt1-period.
+      lv_amount = lv_amount + w_vpf_nt2-amount.
+      CLEAR : w_vpf_nt2.
+    ENDLOOP.
+    w_vpf_nt-type   = w_vpf_nt1-type.
+    w_vpf_nt-year   = w_vpf_nt1-year.
+    w_vpf_nt-period = w_vpf_nt1-period.
+    w_vpf_nt-amount = lv_amount.
+    APPEND w_vpf_nt TO i_vpf_nt.
+    CLEAR : w_vpf_nt1 , w_vpf_nt.
+  ENDLOOP.
+
+  i_vpf_t1[] = i_vpf_t[].
+  i_vpf_t2[] = i_vpf_t[].
+  SORT i_vpf_t1 BY type period.
+  SORT i_vpf_t2 BY type period.
+  DELETE ADJACENT DUPLICATES FROM i_vpf_t1 COMPARING type period.
+  REFRESH : i_vpf_t.
+  LOOP AT i_vpf_t1 INTO w_vpf_t1.
+    CLEAR : lv_amount.
+    LOOP AT i_vpf_t2 INTO w_vpf_t2 WHERE type = w_vpf_t1-type AND year = w_vpf_t1-year AND period = w_vpf_t1-period.
+      lv_amount = lv_amount + w_vpf_t2-amount.
+      CLEAR : w_vpf_t2.
+    ENDLOOP.
+    w_vpf_t-type   = w_vpf_t1-type.
+    w_vpf_t-year   = w_vpf_t1-year.
+    w_vpf_t-period = w_vpf_t1-period.
+    w_vpf_t-amount = lv_amount.
+    APPEND w_vpf_t TO i_vpf_t.
+    CLEAR : w_vpf_t1 , w_vpf_t.
+  ENDLOOP.
+
+  " Get Monthly Contribution
+  DELETE i_erc WHERE type IS INITIAL.
+  SORT i_erc         BY period type.
+  SORT i_eec_nt      BY period type.
+  SORT i_eec_t       BY period type.
+  SORT i_vpf_nt      BY period type.
+  SORT i_vpf_t       BY period type.
+  SORT i_bal_aftr_sa BY period type.
+
+  wa_cont_det-period = '01'.
+  wa_cont_det-ymonth = 'April'.
+  CLEAR : p_val_date , p_val_date1 , wa_cont_det-eps_95.
+  p_val_date  = f_year && '04' && '01'.
+  p_val_date1 = f_year && '04' && '30'.
+  LOOP AT it_bsis INTO wa_bsis WHERE budat GE p_val_date AND budat LE p_val_date1.
+    IF wa_bsis-shkzg = 'H'.
+      wa_cont_det-eps_95 = wa_cont_det-eps_95 + wa_bsis-wrbtr.
+    ELSEIF wa_bsis-shkzg = 'S'.
+      wa_cont_det-eps_95 = wa_cont_det-eps_95 - wa_bsis-wrbtr.
+    ENDIF.
+    CLEAR : wa_bsis.
+  ENDLOOP.
+  SPLIT wa_cont_det-eps_95 AT '.' INTO wa_cont_det-eps_95 lv_txt.
+  CONDENSE wa_cont_det-eps_95.
+  APPEND wa_cont_det TO it_cont_det.
+  wa_cont_det-period = '02'.
+  wa_cont_det-ymonth = 'May'.
+  CLEAR : p_val_date , p_val_date1 , wa_cont_det-eps_95.
+  p_val_date  = f_year && '05' && '01'.
+  p_val_date1 = f_year && '05' && '31'.
+  LOOP AT it_bsis INTO wa_bsis WHERE budat GE p_val_date AND budat LE p_val_date1.
+    IF wa_bsis-shkzg = 'H'.
+      wa_cont_det-eps_95 = wa_cont_det-eps_95 + wa_bsis-wrbtr.
+    ELSEIF wa_bsis-shkzg = 'S'.
+      wa_cont_det-eps_95 = wa_cont_det-eps_95 - wa_bsis-wrbtr.
+    ENDIF.
+    CLEAR : wa_bsis.
+  ENDLOOP.
+  SPLIT wa_cont_det-eps_95 AT '.' INTO wa_cont_det-eps_95 lv_txt.
+  CONDENSE wa_cont_det-eps_95.
+  APPEND wa_cont_det TO it_cont_det.
+  wa_cont_det-period = '03'.
+  wa_cont_det-ymonth = 'June'.
+  CLEAR : p_val_date , p_val_date1 , wa_cont_det-eps_95.
+  p_val_date  = f_year && '06' && '01'.
+  p_val_date1 = f_year && '06' && '30'.
+  LOOP AT it_bsis INTO wa_bsis WHERE budat GE p_val_date AND budat LE p_val_date1.
+    IF wa_bsis-shkzg = 'H'.
+      wa_cont_det-eps_95 = wa_cont_det-eps_95 + wa_bsis-wrbtr.
+    ELSEIF wa_bsis-shkzg = 'S'.
+      wa_cont_det-eps_95 = wa_cont_det-eps_95 - wa_bsis-wrbtr.
+    ENDIF.
+    CLEAR : wa_bsis.
+  ENDLOOP.
+  SPLIT wa_cont_det-eps_95 AT '.' INTO wa_cont_det-eps_95 lv_txt.
+  CONDENSE wa_cont_det-eps_95.
+  APPEND wa_cont_det TO it_cont_det.
+  wa_cont_det-period = '04'.
+  wa_cont_det-ymonth = 'July'.
+  CLEAR : p_val_date , p_val_date1 , wa_cont_det-eps_95.
+  p_val_date  = f_year && '07' && '01'.
+  p_val_date1 = f_year && '07' && '31'.
+  LOOP AT it_bsis INTO wa_bsis WHERE budat GE p_val_date AND budat LE p_val_date1.
+    IF wa_bsis-shkzg = 'H'.
+      wa_cont_det-eps_95 = wa_cont_det-eps_95 + wa_bsis-wrbtr.
+    ELSEIF wa_bsis-shkzg = 'S'.
+      wa_cont_det-eps_95 = wa_cont_det-eps_95 - wa_bsis-wrbtr.
+    ENDIF.
+    CLEAR : wa_bsis.
+  ENDLOOP.
+  SPLIT wa_cont_det-eps_95 AT '.' INTO wa_cont_det-eps_95 lv_txt.
+  CONDENSE wa_cont_det-eps_95.
+  APPEND wa_cont_det TO it_cont_det.
+  wa_cont_det-period = '05'.
+  wa_cont_det-ymonth = 'August'.
+  CLEAR : p_val_date , p_val_date1 , wa_cont_det-eps_95.
+  p_val_date  = f_year && '08' && '01'.
+  p_val_date1 = f_year && '08' && '31'.
+  LOOP AT it_bsis INTO wa_bsis WHERE budat GE p_val_date AND budat LE p_val_date1.
+    IF wa_bsis-shkzg = 'H'.
+      wa_cont_det-eps_95 = wa_cont_det-eps_95 + wa_bsis-wrbtr.
+    ELSEIF wa_bsis-shkzg = 'S'.
+      wa_cont_det-eps_95 = wa_cont_det-eps_95 - wa_bsis-wrbtr.
+    ENDIF.
+    CLEAR : wa_bsis.
+  ENDLOOP.
+  SPLIT wa_cont_det-eps_95 AT '.' INTO wa_cont_det-eps_95 lv_txt.
+  CONDENSE wa_cont_det-eps_95.
+  APPEND wa_cont_det TO it_cont_det.
+  wa_cont_det-period = '06'.
+  wa_cont_det-ymonth = 'September'.
+  CLEAR : p_val_date , p_val_date1 , wa_cont_det-eps_95.
+  p_val_date  = f_year && '09' && '01'.
+  p_val_date1 = f_year && '09' && '30'.
+  LOOP AT it_bsis INTO wa_bsis WHERE budat GE p_val_date AND budat LE p_val_date1.
+    IF wa_bsis-shkzg = 'H'.
+      wa_cont_det-eps_95 = wa_cont_det-eps_95 + wa_bsis-wrbtr.
+    ELSEIF wa_bsis-shkzg = 'S'.
+      wa_cont_det-eps_95 = wa_cont_det-eps_95 - wa_bsis-wrbtr.
+    ENDIF.
+    CLEAR : wa_bsis.
+  ENDLOOP.
+  SPLIT wa_cont_det-eps_95 AT '.' INTO wa_cont_det-eps_95 lv_txt.
+  CONDENSE wa_cont_det-eps_95.
+  APPEND wa_cont_det TO it_cont_det.
+  wa_cont_det-period = '07'.
+  wa_cont_det-ymonth = 'October'.
+  CLEAR : p_val_date , p_val_date1 , wa_cont_det-eps_95.
+  p_val_date  = f_year && '10' && '01'.
+  p_val_date1 = f_year && '10' && '31'.
+  LOOP AT it_bsis INTO wa_bsis WHERE budat GE p_val_date AND budat LE p_val_date1.
+    IF wa_bsis-shkzg = 'H'.
+      wa_cont_det-eps_95 = wa_cont_det-eps_95 + wa_bsis-wrbtr.
+    ELSEIF wa_bsis-shkzg = 'S'.
+      wa_cont_det-eps_95 = wa_cont_det-eps_95 - wa_bsis-wrbtr.
+    ENDIF.
+    CLEAR : wa_bsis.
+  ENDLOOP.
+  SPLIT wa_cont_det-eps_95 AT '.' INTO wa_cont_det-eps_95 lv_txt.
+  CONDENSE wa_cont_det-eps_95.
+  APPEND wa_cont_det TO it_cont_det.
+  wa_cont_det-period = '08'.
+  wa_cont_det-ymonth = 'November'.
+  CLEAR : p_val_date , p_val_date1 , wa_cont_det-eps_95.
+  p_val_date  = f_year && '11' && '01'.
+  p_val_date1 = f_year && '11' && '30'.
+  LOOP AT it_bsis INTO wa_bsis WHERE budat GE p_val_date AND budat LE p_val_date1.
+    IF wa_bsis-shkzg = 'H'.
+      wa_cont_det-eps_95 = wa_cont_det-eps_95 + wa_bsis-wrbtr.
+    ELSEIF wa_bsis-shkzg = 'S'.
+      wa_cont_det-eps_95 = wa_cont_det-eps_95 - wa_bsis-wrbtr.
+    ENDIF.
+    CLEAR : wa_bsis.
+  ENDLOOP.
+  SPLIT wa_cont_det-eps_95 AT '.' INTO wa_cont_det-eps_95 lv_txt.
+  CONDENSE wa_cont_det-eps_95.
+  APPEND wa_cont_det TO it_cont_det.
+  wa_cont_det-period = '09'.
+  wa_cont_det-ymonth = 'December'.
+  CLEAR : p_val_date , p_val_date1 , wa_cont_det-eps_95.
+  p_val_date  = f_year && '12' && '01'.
+  p_val_date1 = f_year && '12' && '31'.
+  LOOP AT it_bsis INTO wa_bsis WHERE budat GE p_val_date AND budat LE p_val_date1.
+    IF wa_bsis-shkzg = 'H'.
+      wa_cont_det-eps_95 = wa_cont_det-eps_95 + wa_bsis-wrbtr.
+    ELSEIF wa_bsis-shkzg = 'S'.
+      wa_cont_det-eps_95 = wa_cont_det-eps_95 - wa_bsis-wrbtr.
+    ENDIF.
+    CLEAR : wa_bsis.
+  ENDLOOP.
+  SPLIT wa_cont_det-eps_95 AT '.' INTO wa_cont_det-eps_95 lv_txt.
+  CONDENSE wa_cont_det-eps_95.
+  APPEND wa_cont_det TO it_cont_det.
+  wa_cont_det-period = '10'.
+  wa_cont_det-ymonth = 'January'.
+  CLEAR : p_val_date , p_val_date1 , wa_cont_det-eps_95.
+  p_val_date  = f_year1 && '01' && '01'.
+  p_val_date1 = f_year1 && '01' && '31'.
+  LOOP AT it_bsis INTO wa_bsis WHERE budat GE p_val_date AND budat LE p_val_date1.
+    IF wa_bsis-shkzg = 'H'.
+      wa_cont_det-eps_95 = wa_cont_det-eps_95 + wa_bsis-wrbtr.
+    ELSEIF wa_bsis-shkzg = 'S'.
+      wa_cont_det-eps_95 = wa_cont_det-eps_95 - wa_bsis-wrbtr.
+    ENDIF.
+    CLEAR : wa_bsis.
+  ENDLOOP.
+  SPLIT wa_cont_det-eps_95 AT '.' INTO wa_cont_det-eps_95 lv_txt.
+  CONDENSE wa_cont_det-eps_95.
+  APPEND wa_cont_det TO it_cont_det.
+  wa_cont_det-period = '11'.
+  wa_cont_det-ymonth = 'February'.
+  CLEAR : p_val_date , p_val_date1 , wa_cont_det-eps_95.
+  p_val_date  = f_year1 && '02' && '01'.
+  p_val_date1 = f_year1 && '02' && '29'.
+  LOOP AT it_bsis INTO wa_bsis WHERE budat GE p_val_date AND budat LE p_val_date1.
+    IF wa_bsis-shkzg = 'H'.
+      wa_cont_det-eps_95 = wa_cont_det-eps_95 + wa_bsis-wrbtr.
+    ELSEIF wa_bsis-shkzg = 'S'.
+      wa_cont_det-eps_95 = wa_cont_det-eps_95 - wa_bsis-wrbtr.
+    ENDIF.
+    CLEAR : wa_bsis.
+  ENDLOOP.
+  SPLIT wa_cont_det-eps_95 AT '.' INTO wa_cont_det-eps_95 lv_txt.
+  CONDENSE wa_cont_det-eps_95.
+  APPEND wa_cont_det TO it_cont_det.
+  wa_cont_det-period = '12'.
+  wa_cont_det-ymonth = 'March'.
+  CLEAR : p_val_date , p_val_date1 , wa_cont_det-eps_95.
+  p_val_date  = f_year1 && '03' && '01'.
+  p_val_date1 = f_year1 && '03' && '31'.
+  LOOP AT it_bsis INTO wa_bsis WHERE budat GE p_val_date AND budat LE p_val_date1.
+    IF wa_bsis-shkzg = 'H'.
+      wa_cont_det-eps_95 = wa_cont_det-eps_95 + wa_bsis-wrbtr.
+    ELSEIF wa_bsis-shkzg = 'S'.
+      wa_cont_det-eps_95 = wa_cont_det-eps_95 - wa_bsis-wrbtr.
+    ENDIF.
+    CLEAR : wa_bsis.
+  ENDLOOP.
+  SPLIT wa_cont_det-eps_95 AT '.' INTO wa_cont_det-eps_95 lv_txt.
+  CONDENSE wa_cont_det-eps_95.
+  APPEND wa_cont_det TO it_cont_det.
+
+
+  LOOP AT it_cont_det INTO wa_cont_det.
+    READ TABLE i_eec_nt INTO w_eec_nt WITH KEY period = wa_cont_det-period type = 'CONTR'.
+    IF sy-subrc EQ 0.
+      wa_cont_det-eec_nt = w_eec_nt-amount.
+      CLEAR : lv_txt.
+      SPLIT wa_cont_det-eec_nt AT '.' INTO wa_cont_det-eec_nt lv_txt.
+      IF lv_txt GE 5.
+        wa_cont_det-eec_nt = wa_cont_det-eec_nt + 1.
+      ENDIF.
+      IF w_eec_nt-amount LT 0.
+        wa_cont_det-eec_nt = '-' && wa_cont_det-eec_nt.
+      ENDIF.
+      CONDENSE wa_cont_det-eec_nt.
+    ENDIF.
+    READ TABLE i_eec_t INTO w_eec_t WITH KEY period = wa_cont_det-period type = 'CONTR'.
+    IF sy-subrc EQ 0.
+      wa_cont_det-eec_t = w_eec_t-amount.
+      CLEAR : lv_txt.
+      SPLIT wa_cont_det-eec_t AT '.' INTO wa_cont_det-eec_t lv_txt.
+      IF lv_txt GE 5.
+        wa_cont_det-eec_t = wa_cont_det-eec_t + 1.
+      ENDIF.
+      IF w_eec_t-amount LT 0.
+        wa_cont_det-eec_t = '-' && wa_cont_det-eec_t.
+      ENDIF.
+      CONDENSE wa_cont_det-eec_t.
+    ENDIF.
+    READ TABLE i_vpf_nt INTO w_vpf_nt WITH KEY period = wa_cont_det-period type = 'CONTR'.
+    IF sy-subrc EQ 0.
+      wa_cont_det-vpf_nt = w_vpf_nt-amount.
+      CLEAR : lv_txt.
+      SPLIT wa_cont_det-vpf_nt AT '.' INTO wa_cont_det-vpf_nt lv_txt.
+      IF lv_txt GE 5.
+        wa_cont_det-vpf_nt = wa_cont_det-vpf_nt + 1.
+      ENDIF.
+      IF w_vpf_nt-amount LT 0.
+        wa_cont_det-vpf_nt = '-' && wa_cont_det-vpf_nt.
+      ENDIF.
+      CONDENSE wa_cont_det-vpf_nt.
+    ENDIF.
+    READ TABLE i_vpf_t INTO w_vpf_t WITH KEY period = wa_cont_det-period type = 'CONTR'.
+    IF sy-subrc EQ 0.
+      wa_cont_det-vpf_t = w_vpf_t-amount.
+      CLEAR : lv_txt.
+      SPLIT wa_cont_det-vpf_t AT '.' INTO wa_cont_det-vpf_t lv_txt.
+      IF lv_txt GE 5.
+        wa_cont_det-vpf_t = wa_cont_det-vpf_t + 1.
+      ENDIF.
+      IF w_vpf_t-amount LT 0.
+        wa_cont_det-vpf_t = '-' && wa_cont_det-vpf_t.
+      ENDIF.
+      CONDENSE wa_cont_det-vpf_t.
+    ENDIF.
+    READ TABLE i_erc INTO w_erc WITH KEY period = wa_cont_det-period type = 'CONTR'.
+    IF sy-subrc EQ 0.
+      wa_cont_det-erc_nt = w_erc-amount.
+      CLEAR : lv_txt.
+      SPLIT wa_cont_det-erc_nt AT '.' INTO wa_cont_det-erc_nt lv_txt.
+      IF lv_txt GE 5.
+        wa_cont_det-erc_nt = wa_cont_det-erc_nt + 1.
+      ENDIF.
+      IF w_erc-amount LT 0.
+        wa_cont_det-erc_nt = '-' && wa_cont_det-erc_nt.
+      ENDIF.
+      CONDENSE wa_cont_det-erc_nt.
+    ENDIF.
+    READ TABLE i_eec_nt INTO w_eec_nt WITH KEY period = wa_cont_det-period type = 'NRA'.
+    IF sy-subrc EQ 0.
+      wa_cont_det-nra_eec_nt = w_eec_nt-amount.
+      CLEAR : lv_txt.
+      SPLIT wa_cont_det-nra_eec_nt AT '.' INTO wa_cont_det-nra_eec_nt lv_txt.
+      IF lv_txt GE 5.
+        wa_cont_det-nra_eec_nt = wa_cont_det-nra_eec_nt + 1.
+      ENDIF.
+      IF w_eec_nt-amount LT 0.
+        wa_cont_det-nra_eec_nt = '-' && wa_cont_det-nra_eec_nt.
+      ENDIF.
+      CONDENSE wa_cont_det-nra_eec_nt.
+    ENDIF.
+    READ TABLE i_eec_t INTO w_eec_t WITH KEY period = wa_cont_det-period type = 'NRA'.
+    IF sy-subrc EQ 0.
+      wa_cont_det-nra_eec_t = w_eec_t-amount.
+      CLEAR : lv_txt.
+      SPLIT wa_cont_det-nra_eec_t AT '.' INTO wa_cont_det-nra_eec_t lv_txt.
+      IF lv_txt GE 5.
+        wa_cont_det-nra_eec_t = wa_cont_det-nra_eec_t + 1.
+      ENDIF.
+      IF w_eec_t-amount LT 0.
+        wa_cont_det-nra_eec_t = '-' && wa_cont_det-nra_eec_t.
+      ENDIF.
+      CONDENSE wa_cont_det-nra_eec_t.
+    ENDIF.
+    READ TABLE i_vpf_nt INTO w_vpf_nt WITH KEY period = wa_cont_det-period type = 'NRA'.
+    IF sy-subrc EQ 0.
+      wa_cont_det-nra_vpf_nt = w_vpf_nt-amount.
+      CLEAR : lv_txt.
+      SPLIT wa_cont_det-nra_vpf_nt AT '.' INTO wa_cont_det-nra_vpf_nt lv_txt.
+      IF lv_txt GE 5.
+        wa_cont_det-nra_vpf_nt = wa_cont_det-nra_vpf_nt + 1.
+      ENDIF.
+      IF w_vpf_nt-amount LT 0.
+        wa_cont_det-nra_vpf_nt = '-' && wa_cont_det-nra_vpf_nt.
+      ENDIF.
+      CONDENSE wa_cont_det-nra_vpf_nt.
+    ENDIF.
+    READ TABLE i_vpf_t INTO w_vpf_t WITH KEY period = wa_cont_det-period type = 'NRA'.
+    IF sy-subrc EQ 0.
+      wa_cont_det-nra_vpf_t = w_vpf_t-amount.
+      CLEAR : lv_txt.
+      SPLIT wa_cont_det-nra_vpf_t AT '.' INTO wa_cont_det-nra_vpf_t lv_txt.
+      IF lv_txt GE 5.
+        wa_cont_det-nra_vpf_t = wa_cont_det-nra_vpf_t + 1.
+      ENDIF.
+      IF w_vpf_t-amount LT 0.
+        wa_cont_det-nra_vpf_t = '-' && wa_cont_det-nra_vpf_t.
+      ENDIF.
+      CONDENSE wa_cont_det-nra_vpf_t.
+    ENDIF.
+    READ TABLE i_erc INTO w_erc WITH KEY period = wa_cont_det-period type = 'NRA'.
+    IF sy-subrc EQ 0.
+      wa_cont_det-nra_erc_nt = w_erc-amount.
+      CLEAR : lv_txt.
+      SPLIT wa_cont_det-nra_erc_nt AT '.' INTO wa_cont_det-nra_erc_nt lv_txt.
+      IF lv_txt GE 5.
+        wa_cont_det-nra_erc_nt = wa_cont_det-nra_erc_nt + 1.
+      ENDIF.
+      IF w_erc-amount LT 0.
+        wa_cont_det-nra_erc_nt = '-' && wa_cont_det-nra_erc_nt.
+      ENDIF.
+      CONDENSE wa_cont_det-nra_erc_nt.
+    ENDIF.
+    READ TABLE i_eec_nt INTO w_eec_nt WITH KEY period = wa_cont_det-period type = 'RA'.
+    IF sy-subrc EQ 0.
+      wa_cont_det-ra_eec_nt = w_eec_nt-amount.
+      CLEAR : lv_txt.
+      SPLIT wa_cont_det-ra_eec_nt AT '.' INTO wa_cont_det-ra_eec_nt lv_txt.
+      IF lv_txt GE 5.
+        wa_cont_det-ra_eec_nt = wa_cont_det-ra_eec_nt + 1.
+      ENDIF.
+      IF w_eec_nt-amount LT 0.
+        wa_cont_det-ra_eec_nt = '-' && wa_cont_det-ra_eec_nt.
+      ENDIF.
+      CONDENSE wa_cont_det-ra_eec_nt.
+    ENDIF.
+    READ TABLE i_eec_t INTO w_eec_t WITH KEY period = wa_cont_det-period type = 'RA'.
+    IF sy-subrc EQ 0.
+      wa_cont_det-ra_eec_t = w_eec_t-amount.
+      CLEAR : lv_txt.
+      SPLIT wa_cont_det-ra_eec_t AT '.' INTO wa_cont_det-ra_eec_t lv_txt.
+      IF lv_txt GE 5.
+        wa_cont_det-ra_eec_t = wa_cont_det-ra_eec_t + 1.
+      ENDIF.
+      IF w_eec_t-amount LT 0.
+        wa_cont_det-ra_eec_t = '-' && wa_cont_det-ra_eec_t.
+      ENDIF.
+      CONDENSE wa_cont_det-ra_eec_t.
+    ENDIF.
+    READ TABLE i_vpf_nt INTO w_vpf_nt WITH KEY period = wa_cont_det-period type = 'RA'.
+    IF sy-subrc EQ 0.
+      wa_cont_det-ra_vpf_nt = w_vpf_nt-amount.
+      CLEAR : lv_txt.
+      SPLIT wa_cont_det-ra_vpf_nt AT '.' INTO wa_cont_det-ra_vpf_nt lv_txt.
+      IF lv_txt GE 5.
+        wa_cont_det-ra_vpf_nt = wa_cont_det-ra_vpf_nt + 1.
+      ENDIF.
+      IF w_vpf_nt-amount LT 0.
+        wa_cont_det-ra_vpf_nt = '-' && wa_cont_det-ra_vpf_nt.
+      ENDIF.
+      CONDENSE wa_cont_det-ra_vpf_nt.
+    ENDIF.
+    READ TABLE i_vpf_t INTO w_vpf_t WITH KEY period = wa_cont_det-period type = 'RA'.
+    IF sy-subrc EQ 0.
+      wa_cont_det-ra_vpf_t = w_vpf_t-amount.
+      CLEAR : lv_txt.
+      SPLIT wa_cont_det-ra_vpf_t AT '.' INTO wa_cont_det-ra_vpf_t lv_txt.
+      IF lv_txt GE 5.
+        wa_cont_det-ra_vpf_t = wa_cont_det-ra_vpf_t + 1.
+      ENDIF.
+      IF w_vpf_t-amount LT 0.
+        wa_cont_det-ra_vpf_t = '-' && wa_cont_det-ra_vpf_t.
+      ENDIF.
+      CONDENSE wa_cont_det-ra_vpf_t.
+    ENDIF.
+    READ TABLE i_eec_nt INTO w_eec_nt WITH KEY period = wa_cont_det-period type = 'AR'.
+    IF sy-subrc EQ 0.
+      wa_cont_det-ar_eec_nt = w_eec_nt-amount.
+      CLEAR : lv_txt.
+      SPLIT wa_cont_det-ar_eec_nt AT '.' INTO wa_cont_det-ar_eec_nt lv_txt.
+      IF lv_txt GE 5.
+        wa_cont_det-ar_eec_nt = wa_cont_det-ar_eec_nt + 1.
+      ENDIF.
+      IF w_eec_nt-amount LT 0.
+        wa_cont_det-ar_eec_nt = '-' && wa_cont_det-ar_eec_nt.
+      ENDIF.
+      CONDENSE wa_cont_det-ar_eec_nt.
+    ENDIF.
+    READ TABLE i_eec_t INTO w_eec_t WITH KEY period = wa_cont_det-period type = 'AR'.
+    IF sy-subrc EQ 0.
+      wa_cont_det-ar_eec_t = w_eec_t-amount.
+      CLEAR : lv_txt.
+      SPLIT wa_cont_det-ar_eec_t AT '.' INTO wa_cont_det-ar_eec_t lv_txt.
+      IF lv_txt GE 5.
+        wa_cont_det-ar_eec_t = wa_cont_det-ar_eec_t + 1.
+      ENDIF.
+      IF w_eec_t-amount LT 0.
+        wa_cont_det-ar_eec_t = '-' && wa_cont_det-ar_eec_t.
+      ENDIF.
+      CONDENSE wa_cont_det-ar_eec_t.
+    ENDIF.
+    READ TABLE i_vpf_nt INTO w_vpf_nt WITH KEY period = wa_cont_det-period type = 'AR'.
+    IF sy-subrc EQ 0.
+      wa_cont_det-ar_vpf_nt = w_vpf_nt-amount.
+      CLEAR : lv_txt.
+      SPLIT wa_cont_det-ar_vpf_nt AT '.' INTO wa_cont_det-ar_vpf_nt lv_txt.
+      IF lv_txt GE 5.
+        wa_cont_det-ar_vpf_nt = wa_cont_det-ar_vpf_nt + 1.
+      ENDIF.
+      IF w_vpf_nt-amount LT 0.
+        wa_cont_det-ar_vpf_nt = '-' && wa_cont_det-ar_vpf_nt.
+      ENDIF.
+      CONDENSE wa_cont_det-ar_vpf_nt.
+    ENDIF.
+    READ TABLE i_vpf_t INTO w_vpf_t WITH KEY period = wa_cont_det-period type = 'AR'.
+    IF sy-subrc EQ 0.
+      wa_cont_det-ar_vpf_t = w_vpf_t-amount.
+      CLEAR : lv_txt.
+      SPLIT wa_cont_det-ar_vpf_t AT '.' INTO wa_cont_det-ar_vpf_t lv_txt.
+      IF lv_txt GE 5.
+        wa_cont_det-ar_vpf_t = wa_cont_det-ar_vpf_t + 1.
+      ENDIF.
+      IF w_vpf_t-amount LT 0.
+        wa_cont_det-ar_vpf_t = '-' && wa_cont_det-ar_vpf_t.
+      ENDIF.
+      CONDENSE wa_cont_det-ar_vpf_t.
+    ENDIF.
+****    READ TABLE i_bal_aftr_sa INTO w_bal_aftr_sa WITH KEY period = wa_cont_det-period type = 'CONTR'.
+****    IF sy-subrc EQ 0.
+****      wa_cont_det-int_adv_rec = w_bal_aftr_sa-amount.
+****      CLEAR : lv_txt.
+****      SPLIT wa_cont_det-int_adv_rec AT '.' INTO wa_cont_det-int_adv_rec lv_txt.
+****      IF lv_txt GE 5.
+****        wa_cont_det-int_adv_rec = wa_cont_det-int_adv_rec + 1.
+****      ENDIF.
+****      CONDENSE wa_cont_det-int_adv_rec.
+****    ENDIF.
+
+*&---------------> Harsh Mishra SOC - 06.03.2024
+    LOOP AT i_bal_aftr_sa INTO w_bal_aftr_sa
+                          WHERE period = wa_cont_det-period
+                            AND type = 'CONTR'.
+      lv_int_adv_rec = lv_int_adv_rec + w_bal_aftr_sa-amount.
+
+      CLEAR : lv_txt, wa_cont_det-int_adv_rec.
+      wa_cont_det-int_adv_rec = lv_int_adv_rec.
+      SPLIT wa_cont_det-int_adv_rec AT '.' INTO wa_cont_det-int_adv_rec lv_txt.
+      IF lv_txt GE 5.
+        wa_cont_det-int_adv_rec = wa_cont_det-int_adv_rec + 1.
+      ENDIF.
+      CONDENSE wa_cont_det-int_adv_rec.
+    ENDLOOP.
+    CLEAR lv_int_adv_rec.
+*&---------------> Harsh Mishra SOC - 06.03.2024
+
+
+    MODIFY it_cont_det FROM wa_cont_det TRANSPORTING eec_nt eec_t vpf_nt vpf_t erc_nt nra_eec_nt nra_eec_t nra_vpf_nt nra_vpf_t
+                            nra_erc_nt ra_eec_nt ra_eec_t ra_vpf_nt ra_vpf_t ar_eec_nt ar_eec_t ar_vpf_nt ar_vpf_t int_adv_rec.
+    CLEAR : wa_cont_det,w_erc,w_vpf_nt,w_vpf_t,w_eec_nt,w_eec_t,w_bal_aftr_sa.
+  ENDLOOP.
+
+
+
+  " Inclusion of Transfer / Final Settlement Cases
+  REFRESH : it_cont_det1.
+  it_cont_det1[] = it_cont_det[].
+  LOOP AT it_cont_det1 INTO DATA(wa_cont_det1).
+    lv_index = wa_cont_det1-period + 1 + lv_count.
+    READ TABLE i_eec_nt INTO w_eec_nt WITH KEY period = wa_cont_det1-period type = 'TRANS'.
+    IF sy-subrc EQ 0.
+      wa_cont_det-ymonth = 'TRANSFER IN'.
+      wa_cont_det-period = wa_cont_det1-period.
+      wa_cont_det-eec_nt = w_eec_nt-amount.
+      CLEAR : lv_txt.
+      SPLIT wa_cont_det-eec_nt AT '.' INTO wa_cont_det-eec_nt lv_txt.
+      IF lv_txt GE 5.
+        wa_cont_det-eec_nt = wa_cont_det-eec_nt + 1.
+      ENDIF.
+      IF w_eec_nt-amount LT 0.
+        wa_cont_det-eec_nt = '-' && wa_cont_det-eec_nt.
+      ENDIF.
+      CONDENSE wa_cont_det-eec_nt.
+    ENDIF.
+    READ TABLE i_eec_nt INTO w_eec_nt WITH KEY period = wa_cont_det1-period type = 'FINAL'.
+    IF sy-subrc EQ 0.
+      wa_cont_det-ymonth = 'FINAL SETTLE'.
+      wa_cont_det-period = wa_cont_det1-period.
+      wa_cont_det-eec_nt = w_eec_nt-amount.
+      CLEAR : lv_txt.
+      SPLIT wa_cont_det-eec_nt AT '.' INTO wa_cont_det-eec_nt lv_txt.
+      IF lv_txt GE 5.
+        wa_cont_det-eec_nt = wa_cont_det-eec_nt + 1.
+      ENDIF.
+      IF w_eec_nt-amount LT 0.
+        wa_cont_det-eec_nt = '-' && wa_cont_det-eec_nt.
+      ENDIF.
+      CONDENSE wa_cont_det-eec_nt.
+    ENDIF.
+*    READ TABLE i_eec_nt INTO w_eec_nt WITH KEY period = wa_cont_det1-period type = 'RET'.
+*    IF sy-subrc EQ 0.
+*      wa_cont_det-ymonth = 'RETAINED BL'.
+*      wa_cont_det-period = wa_cont_det1-period.
+*      wa_cont_det-eec_nt = w_eec_nt-amount.
+*      CLEAR : lv_txt.
+*      SPLIT wa_cont_det-eec_nt AT '.' INTO wa_cont_det-eec_nt lv_txt.
+*      IF lv_txt GE 5.
+*        wa_cont_det-eec_nt = wa_cont_det-eec_nt + 1.
+*      ENDIF.
+*      IF w_eec_nt-amount LT 0.
+*        wa_cont_det-eec_nt = '-' && wa_cont_det-eec_nt.
+*      ENDIF.
+*      CONDENSE wa_cont_det-eec_nt.
+*    ENDIF.
+
+*&-------------> Harsh Mishra 06.03.2024 SOC
+    LOOP AT i_eec_nt INTO w_eec_nt WHERE period = wa_cont_det1-period AND type = 'RET'.
+*      IF sy-subrc EQ 0.
+      wa_cont_det-ymonth = 'RETAINED BL'.
+
+*      wa_cont_det-eec_nt = wa_cont_det-eec_nt + w_eec_nt-amount.
+      lv_ret_ecc_nt = lv_ret_ecc_nt + w_eec_nt-amount.
+
+      IF lv_ret_ecc_nt IS NOT INITIAL.
+        CLEAR : lv_txt, wa_cont_det-eec_nt.
+        wa_cont_det-eec_nt = lv_ret_ecc_nt.
+        SPLIT wa_cont_det-eec_nt AT '.' INTO wa_cont_det-eec_nt lv_txt.
+        IF lv_txt GE 5.
+          wa_cont_det-eec_nt = wa_cont_det-eec_nt + 1.
+        ENDIF.
+        IF w_eec_nt-amount LT 0.
+          wa_cont_det-eec_nt = '-' && wa_cont_det-eec_nt.
+        ENDIF.
+        CONDENSE wa_cont_det-eec_nt.
+*        lv_ret_fin_ecc_nt = lv_ret_fin_ecc_nt + lv_ret_ecc_nt.
+      ENDIF.
+    ENDLOOP.
+    CLEAR lv_ret_ecc_nt.
+*&-------------> Harsh Mishra 06.03.2024 EOC
+
+
+
+    READ TABLE i_eec_t INTO w_eec_t WITH KEY period = wa_cont_det1-period type = 'TRANS'.
+    IF sy-subrc EQ 0.
+      wa_cont_det-ymonth = 'TRANSFER IN'.
+      wa_cont_det-period = wa_cont_det1-period.
+      wa_cont_det-eec_t = w_eec_t-amount.
+      CLEAR : lv_txt.
+      SPLIT wa_cont_det-eec_t AT '.' INTO wa_cont_det-eec_t lv_txt.
+      IF lv_txt GE 5.
+        wa_cont_det-eec_t = wa_cont_det-eec_t + 1.
+      ENDIF.
+      IF w_eec_t-amount LT 0.
+        wa_cont_det-eec_t = '-' && wa_cont_det-eec_t.
+      ENDIF.
+      CONDENSE wa_cont_det-eec_t.
+    ENDIF.
+
+    READ TABLE i_eec_t INTO w_eec_t WITH KEY period = wa_cont_det1-period type = 'FINAL'.
+    IF sy-subrc EQ 0.
+      wa_cont_det-ymonth = 'FINAL SETTLE'.
+      wa_cont_det-period = wa_cont_det1-period.
+      wa_cont_det-eec_t = w_eec_t-amount.
+      CLEAR : lv_txt.
+      SPLIT wa_cont_det-eec_t AT '.' INTO wa_cont_det-eec_t lv_txt.
+      IF lv_txt GE 5.
+        wa_cont_det-eec_t = wa_cont_det-eec_t + 1.
+      ENDIF.
+      IF w_eec_t-amount LT 0.
+        wa_cont_det-eec_t = '-' && wa_cont_det-eec_t.
+      ENDIF.
+      CONDENSE wa_cont_det-eec_t.
+    ENDIF.
+
+****    READ TABLE i_eec_t INTO w_eec_t WITH KEY period = wa_cont_det1-period type = 'RET'.
+****    IF sy-subrc EQ 0.
+****      wa_cont_det-ymonth = 'RETAINED BL'.
+****      wa_cont_det-period = wa_cont_det1-period.
+****      wa_cont_det-eec_t = w_eec_t-amount.
+****      CLEAR : lv_txt.
+****      SPLIT wa_cont_det-eec_t AT '.' INTO wa_cont_det-eec_t lv_txt.
+****      IF lv_txt GE 5.
+****        wa_cont_det-eec_t = wa_cont_det-eec_t + 1.
+****      ENDIF.
+****      IF w_eec_t-amount LT 0.
+****        wa_cont_det-eec_t = '-' && wa_cont_det-eec_t.
+****      ENDIF.
+****      CONDENSE wa_cont_det-eec_t.
+****    ENDIF.
+
+
+*&-------------> Harsh Mishra 06.03.2024 SOC
+    LOOP AT i_eec_t INTO w_eec_t WHERE period = wa_cont_det1-period AND type = 'RET'.
+*      IF sy-subrc EQ 0.
+      wa_cont_det-ymonth = 'RETAINED BL'.
+      wa_cont_det-period = wa_cont_det1-period.
+
+*      wa_cont_det-eec_nt = wa_cont_det-eec_nt + w_eec_nt-amount.
+      lv_ret_ecc_t = lv_ret_ecc_t + w_eec_t-amount.
+
+      IF lv_ret_ecc_t IS NOT INITIAL.
+        CLEAR : lv_txt, wa_cont_det-eec_t.
+        wa_cont_det-eec_t = lv_ret_ecc_t.
+        SPLIT wa_cont_det-eec_t AT '.' INTO wa_cont_det-eec_t lv_txt.
+        IF lv_txt GE 5.
+          wa_cont_det-eec_t = wa_cont_det-eec_t + 1.
+        ENDIF.
+        IF w_eec_t-amount LT 0.
+          wa_cont_det-eec_t = '-' && wa_cont_det-eec_t.
+        ENDIF.
+        CONDENSE wa_cont_det-eec_t.
+*        lv_ret_fin_ecc_t = lv_ret_fin_ecc_t + lv_ret_ecc_t.
+      ENDIF.
+    ENDLOOP.
+    CLEAR lv_ret_ecc_t.
+*&-------------> Harsh Mishra 06.03.2024 EOC
+    READ TABLE i_vpf_nt INTO w_vpf_nt WITH KEY period = wa_cont_det1-period type = 'TRANS'.
+    IF sy-subrc EQ 0.
+      wa_cont_det-ymonth = 'TRANSFER IN'.
+      wa_cont_det-period = wa_cont_det1-period.
+      wa_cont_det-vpf_nt = w_vpf_nt-amount.
+      CLEAR : lv_txt.
+      SPLIT wa_cont_det-vpf_nt AT '.' INTO wa_cont_det-vpf_nt lv_txt.
+      IF lv_txt GE 5.
+        wa_cont_det-vpf_nt = wa_cont_det-vpf_nt + 1.
+      ENDIF.
+      IF w_vpf_nt-amount LT 0.
+        wa_cont_det-vpf_nt = '-' && wa_cont_det-vpf_nt.
+      ENDIF.
+      CONDENSE wa_cont_det-vpf_nt.
+    ENDIF.
+    READ TABLE i_vpf_nt INTO w_vpf_nt WITH KEY period = wa_cont_det1-period type = 'FINAL'.
+    IF sy-subrc EQ 0.
+      wa_cont_det-ymonth = 'FINAL SETTLE'.
+      wa_cont_det-period = wa_cont_det1-period.
+      wa_cont_det-vpf_nt = w_vpf_nt-amount.
+      CLEAR : lv_txt.
+      SPLIT wa_cont_det-vpf_nt AT '.' INTO wa_cont_det-vpf_nt lv_txt.
+      IF lv_txt GE 5.
+        wa_cont_det-vpf_nt = wa_cont_det-vpf_nt + 1.
+      ENDIF.
+      IF w_vpf_nt-amount LT 0.
+        wa_cont_det-vpf_nt = '-' && wa_cont_det-vpf_nt.
+      ENDIF.
+      CONDENSE wa_cont_det-vpf_nt.
+    ENDIF.
+
+
+****    READ TABLE i_vpf_nt INTO w_vpf_nt WITH KEY period = wa_cont_det1-period type = 'RET'.
+****    IF sy-subrc EQ 0.
+****      wa_cont_det-ymonth = 'RETAINED BL'.
+****      wa_cont_det-period = wa_cont_det1-period.
+****      wa_cont_det-vpf_nt = w_vpf_nt-amount.
+****      CLEAR : lv_txt.
+****      SPLIT wa_cont_det-vpf_nt AT '.' INTO wa_cont_det-vpf_nt lv_txt.
+****      IF lv_txt GE 5.
+****        wa_cont_det-vpf_nt = wa_cont_det-vpf_nt + 1.
+****      ENDIF.
+****      IF w_vpf_nt-amount LT 0.
+****        wa_cont_det-vpf_nt = '-' && wa_cont_det-vpf_nt.
+****      ENDIF.
+****      CONDENSE wa_cont_det-vpf_nt.
+****    ENDIF.
+
+*&-------------> Harsh Mishra 06.03.2024 SOC
+    LOOP AT i_vpf_nt INTO w_vpf_nt WHERE period = wa_cont_det1-period AND type = 'RET'.
+*      IF sy-subrc EQ 0.
+      wa_cont_det-ymonth = 'RETAINED BL'.
+      wa_cont_det-period = wa_cont_det1-period.
+
+*      wa_cont_det-eec_nt = wa_cont_det-eec_nt + w_eec_nt-amount.
+      lv_ret_vpf_nt = lv_ret_vpf_nt + w_vpf_nt-amount.
+
+      IF lv_ret_vpf_nt IS NOT INITIAL.
+        CLEAR : lv_txt, wa_cont_det-vpf_nt.
+        wa_cont_det-vpf_nt = lv_ret_vpf_nt.
+        SPLIT wa_cont_det-vpf_nt AT '.' INTO wa_cont_det-vpf_nt lv_txt.
+        IF lv_txt GE 5.
+          wa_cont_det-vpf_nt = wa_cont_det-vpf_nt + 1.
+        ENDIF.
+        IF w_vpf_nt-amount LT 0.
+          wa_cont_det-vpf_nt = '-' && wa_cont_det-vpf_nt.
+        ENDIF.
+        CONDENSE wa_cont_det-vpf_nt.
+*        lv_ret_fin_vpf_nt = lv_ret_fin_vpf_nt + lv_ret_vpf_nt.
+      ENDIF.
+    ENDLOOP.
+    CLEAR lv_ret_vpf_nt.
+*&-------------> Harsh Mishra 06.03.2024 EOC
+
+
+
+
+    READ TABLE i_vpf_t INTO w_vpf_t WITH KEY period = wa_cont_det1-period type = 'TRANS'.
+    IF sy-subrc EQ 0.
+      wa_cont_det-ymonth = 'TRANSFER IN'.
+      wa_cont_det-period = wa_cont_det1-period.
+      wa_cont_det-vpf_t  = w_vpf_t-amount.
+      CLEAR : lv_txt.
+      SPLIT wa_cont_det-vpf_t AT '.' INTO wa_cont_det-vpf_t lv_txt.
+      IF lv_txt GE 5.
+        wa_cont_det-vpf_t = wa_cont_det-vpf_t + 1.
+      ENDIF.
+      IF w_vpf_t-amount LT 0.
+        wa_cont_det-vpf_t = '-' && wa_cont_det-vpf_t.
+      ENDIF.
+      CONDENSE wa_cont_det-vpf_t.
+    ENDIF.
+
+    READ TABLE i_vpf_t INTO w_vpf_t WITH KEY period = wa_cont_det1-period type = 'FINAL'.
+    IF sy-subrc EQ 0.
+      wa_cont_det-ymonth = 'FINAL SETTLE'.
+      wa_cont_det-period = wa_cont_det1-period.
+      wa_cont_det-vpf_t  = w_vpf_t-amount.
+      CLEAR : lv_txt.
+      SPLIT wa_cont_det-vpf_t AT '.' INTO wa_cont_det-vpf_t lv_txt.
+      IF lv_txt GE 5.
+        wa_cont_det-vpf_t = wa_cont_det-vpf_t + 1.
+      ENDIF.
+      IF w_vpf_t-amount LT 0.
+        wa_cont_det-vpf_t = '-' && wa_cont_det-vpf_t.
+      ENDIF.
+      CONDENSE wa_cont_det-vpf_t.
+    ENDIF.
+
+
+****    READ TABLE i_vpf_t INTO w_vpf_t WITH KEY period = wa_cont_det1-period type = 'RET'.
+****    IF sy-subrc EQ 0.
+****      wa_cont_det-ymonth = 'RETAINED BL'.
+****      wa_cont_det-period = wa_cont_det1-period.
+****      wa_cont_det-vpf_t  = w_vpf_t-amount.
+****      CLEAR : lv_txt.
+****      SPLIT wa_cont_det-vpf_t AT '.' INTO wa_cont_det-vpf_t lv_txt.
+****      IF lv_txt GE 5.
+****        wa_cont_det-vpf_t = wa_cont_det-vpf_t + 1.
+****      ENDIF.
+****      IF w_vpf_t-amount LT 0.
+****        wa_cont_det-vpf_t = '-' && wa_cont_det-vpf_t.
+****      ENDIF.
+****      CONDENSE wa_cont_det-vpf_t.
+****    ENDIF.
+
+*&-------------> Harsh Mishra 06.03.2024 SOC
+    LOOP AT i_vpf_t INTO w_vpf_t WHERE period = wa_cont_det1-period AND type = 'RET'.
+*      IF sy-subrc EQ 0.
+      wa_cont_det-ymonth = 'RETAINED BL'.
+      wa_cont_det-period = wa_cont_det1-period.
+
+*      wa_cont_det-eec_nt = wa_cont_det-eec_nt + w_eec_nt-amount.
+      lv_ret_vpf_t = lv_ret_vpf_t + w_vpf_t-amount.
+
+      IF lv_ret_vpf_t IS NOT INITIAL.
+        CLEAR : lv_txt, wa_cont_det-vpf_t.
+        wa_cont_det-vpf_t = lv_ret_vpf_t.
+        SPLIT wa_cont_det-vpf_t AT '.' INTO wa_cont_det-vpf_t lv_txt.
+        IF lv_txt GE 5.
+          wa_cont_det-vpf_t = wa_cont_det-vpf_t + 1.
+        ENDIF.
+        IF w_vpf_t-amount LT 0.
+          wa_cont_det-vpf_t = '-' && wa_cont_det-vpf_t.
+        ENDIF.
+        CONDENSE wa_cont_det-vpf_t.
+      ENDIF.
+    ENDLOOP.
+    CLEAR lv_ret_vpf_t.
+*&-------------> Harsh Mishra 06.03.2024 EOC
+
+
+
+    READ TABLE i_erc INTO w_erc WITH KEY period = wa_cont_det1-period type = 'TRANS'.
+    IF sy-subrc EQ 0.
+      wa_cont_det-ymonth = 'TRANSFER IN'.
+      wa_cont_det-period = wa_cont_det1-period.
+      wa_cont_det-erc_nt = w_erc-amount.
+      CLEAR : lv_txt.
+      SPLIT wa_cont_det-erc_nt AT '.' INTO wa_cont_det-erc_nt lv_txt.
+      IF lv_txt GE 5.
+        wa_cont_det-erc_nt = wa_cont_det-erc_nt + 1.
+      ENDIF.
+      IF w_erc-amount LT 0.
+        wa_cont_det-erc_nt = '-' && wa_cont_det-erc_nt.
+      ENDIF.
+      CONDENSE wa_cont_det-erc_nt.
+    ENDIF.
+
+    READ TABLE i_erc INTO w_erc WITH KEY period = wa_cont_det1-period type = 'FINAL'.
+    IF sy-subrc EQ 0.
+      wa_cont_det-ymonth = 'FINAL SETTLE'.
+      wa_cont_det-period = wa_cont_det1-period.
+      wa_cont_det-erc_nt = w_erc-amount.
+      CLEAR : lv_txt.
+      SPLIT wa_cont_det-erc_nt AT '.' INTO wa_cont_det-erc_nt lv_txt.
+      IF lv_txt GE 5.
+        wa_cont_det-erc_nt = wa_cont_det-erc_nt + 1.
+      ENDIF.
+      IF w_erc-amount LT 0.
+        wa_cont_det-erc_nt = '-' && wa_cont_det-erc_nt.
+      ENDIF.
+      CONDENSE wa_cont_det-erc_nt.
+    ENDIF.
+
+
+****    READ TABLE i_erc INTO w_erc WITH KEY period = wa_cont_det1-period type = 'RET'.
+****    IF sy-subrc EQ 0.
+****      wa_cont_det-ymonth = 'RETAINED BL'.
+****      wa_cont_det-period = wa_cont_det1-period.
+****      wa_cont_det-erc_nt = w_erc-amount.
+****      CLEAR : lv_txt.
+****      SPLIT wa_cont_det-erc_nt AT '.' INTO wa_cont_det-erc_nt lv_txt.
+****      IF lv_txt GE 5.
+****        wa_cont_det-erc_nt = wa_cont_det-erc_nt + 1.
+****      ENDIF.
+****      IF w_erc-amount LT 0.
+****        wa_cont_det-erc_nt = '-' && wa_cont_det-erc_nt.
+****      ENDIF.
+****      CONDENSE wa_cont_det-erc_nt.
+****    ENDIF.
+
+
+*&-------------> Harsh Mishra 06.03.2024 SOC
+    LOOP AT i_erc INTO w_erc WHERE period = wa_cont_det1-period AND type = 'RET'.
+*      IF sy-subrc EQ 0.
+      wa_cont_det-ymonth = 'RETAINED BL'.
+      wa_cont_det-period = wa_cont_det1-period.
+
+**soc  kartik Gupta & Manoj Rane Charm: 4000008316 Bug fix for retained bal in PF card
+      wa_cont_det-erc_nt = w_erc-amount.
+      SPLIT wa_cont_det-erc_nt AT '.' INTO wa_cont_det-erc_nt lv_txt.
+
+      IF  wa_cont_det-erc_nt LT 0.
+        wa_cont_det-erc_nt = wa_cont_det-erc_nt * -1.
+      ENDIF.
+
+      CONDENSE wa_cont_det-erc_nt.
+*      ENDIF.
+
+
+*      lv_ret_erc_nt = lv_ret_erc_nt + w_vpf_t-amount.
+*
+*      IF lv_ret_erc_nt IS NOT INITIAL.
+*        CLEAR : lv_txt, wa_cont_det-erc_nt.
+*        wa_cont_det-erc_nt = lv_ret_erc_nt." lv_ret_vpf_t.
+*        SPLIT wa_cont_det-erc_nt AT '.' INTO wa_cont_det-erc_nt lv_txt.
+*        IF lv_txt GE 5.
+*          wa_cont_det-erc_nt = wa_cont_det-erc_nt + 1.
+*        ENDIF.
+*        IF w_erc-amount LT 0.
+*          wa_cont_det-erc_nt = '-' && wa_cont_det-erc_nt.
+*        ENDIF.
+*        CONDENSE wa_cont_det-erc_nt.
+*      ENDIF.
+**Eoc  kartik Gupta & Manoj Rane Charm: 4000008316 Bug fix for retained bal in PF card
+    ENDLOOP.
+    CLEAR lv_ret_vpf_t.
+*&-------------> Harsh Mishra 06.03.2024 EOC
+
+
+****    READ TABLE i_bal_aftr_sa INTO w_bal_aftr_sa WITH KEY period = wa_cont_det1-period type = 'TRANS'.
+****    IF sy-subrc EQ 0.
+****      wa_cont_det-ymonth = 'TRANSFER IN'.
+****      wa_cont_det-period = wa_cont_det1-period.
+****      wa_cont_det-int_adv_rec = w_bal_aftr_sa-amount.
+****      CLEAR : lv_txt.
+****      SPLIT wa_cont_det-int_adv_rec AT '.' INTO wa_cont_det-int_adv_rec lv_txt.
+****      IF lv_txt GE 5.
+****        wa_cont_det-int_adv_rec = wa_cont_det-int_adv_rec + 1.
+****      ENDIF.
+****      CONDENSE wa_cont_det-int_adv_rec.
+****    ENDIF.
+
+*&---------------> Harsh Mishra SOC - 06.03.2024
+    LOOP AT i_bal_aftr_sa INTO w_bal_aftr_sa
+                          WHERE period = wa_cont_det1-period
+                            AND type = 'TRANS'.
+
+      wa_cont_det-ymonth = 'TRANSFER IN'.
+      wa_cont_det-period = wa_cont_det1-period.
+      lv_int_adv_rec = lv_int_adv_rec + w_bal_aftr_sa-amount.
+      CLEAR wa_cont_det-int_adv_rec.
+      CLEAR : lv_txt.
+      wa_cont_det-int_adv_rec = lv_int_adv_rec.
+      SPLIT wa_cont_det-int_adv_rec AT '.' INTO wa_cont_det-int_adv_rec lv_txt.
+      IF lv_txt GE 5.
+        wa_cont_det-int_adv_rec = wa_cont_det-int_adv_rec + 1.
+      ENDIF.
+      CONDENSE wa_cont_det-int_adv_rec.
+    ENDLOOP.
+    CLEAR lv_int_adv_rec.
+*&---------------> Harsh Mishra EOC - 06.03.2024
+
+****    READ TABLE i_bal_aftr_sa INTO w_bal_aftr_sa WITH KEY period = wa_cont_det1-period type = 'FINAL'.
+****    IF sy-subrc EQ 0.
+****      wa_cont_det-ymonth = 'FINAL SETTLE'.
+****      wa_cont_det-period = wa_cont_det1-period.
+****      wa_cont_det-int_adv_rec = w_bal_aftr_sa-amount.
+****      CLEAR : lv_txt.
+****      SPLIT wa_cont_det-int_adv_rec AT '.' INTO wa_cont_det-int_adv_rec lv_txt.
+****      IF lv_txt GE 5.
+****        wa_cont_det-int_adv_rec = wa_cont_det-int_adv_rec + 1.
+****      ENDIF.
+****      CONDENSE wa_cont_det-int_adv_rec.
+****    ENDIF.
+
+*&---------------> Harsh Mishra SOC - 06.03.2024
+    LOOP AT i_bal_aftr_sa INTO w_bal_aftr_sa
+                          WHERE period = wa_cont_det1-period
+                            AND type = 'FINAL'.
+
+      wa_cont_det-ymonth = 'FINAL SETTLE'.
+      wa_cont_det-period = wa_cont_det1-period.
+
+      lv_int_adv_rec = lv_int_adv_rec + w_bal_aftr_sa-amount.
+
+      CLEAR : lv_txt, wa_cont_det-int_adv_rec.
+      wa_cont_det-int_adv_rec = lv_int_adv_rec.
+
+      SPLIT wa_cont_det-int_adv_rec AT '.' INTO wa_cont_det-int_adv_rec lv_txt.
+      IF lv_txt GE 5.
+        wa_cont_det-int_adv_rec = wa_cont_det-int_adv_rec + 1.
+      ENDIF.
+      CONDENSE wa_cont_det-int_adv_rec.
+    ENDLOOP.
+    CLEAR lv_int_adv_rec.
+*&---------------> Harsh Mishra EOC - 06.03.2024
+
+****    READ TABLE i_bal_aftr_sa INTO w_bal_aftr_sa WITH KEY period = wa_cont_det1-period type = 'RET'.
+****    IF sy-subrc EQ 0.
+****      wa_cont_det-ymonth = 'RETAINED BL'.
+****      wa_cont_det-period = wa_cont_det1-period.
+****      wa_cont_det-int_adv_rec = w_bal_aftr_sa-amount.
+****      CLEAR : lv_txt.
+****      SPLIT wa_cont_det-int_adv_rec AT '.' INTO wa_cont_det-int_adv_rec lv_txt.
+****      IF lv_txt GE 5.
+****        wa_cont_det-int_adv_rec = wa_cont_det-int_adv_rec + 1.
+****      ENDIF.
+****      CONDENSE wa_cont_det-int_adv_rec.
+****    ENDIF.
+
+*&---------------> Harsh Mishra SOC - 06.03.2024
+    LOOP AT i_bal_aftr_sa INTO w_bal_aftr_sa
+                          WHERE period = wa_cont_det1-period
+                            AND type = 'RET'.
+
+      wa_cont_det-ymonth = 'RETAINED BL'.
+      wa_cont_det-period = wa_cont_det1-period.
+      lv_int_adv_rec = lv_int_adv_rec + w_bal_aftr_sa-amount.
+      CLEAR : lv_txt, wa_cont_det-int_adv_rec.
+      wa_cont_det-int_adv_rec = lv_int_adv_rec.
+      SPLIT wa_cont_det-int_adv_rec AT '.' INTO wa_cont_det-int_adv_rec lv_txt.
+      IF lv_txt GE 5.
+        wa_cont_det-int_adv_rec = wa_cont_det-int_adv_rec + 1.
+      ENDIF.
+      CONDENSE wa_cont_det-int_adv_rec.
+
+    ENDLOOP.
+    CLEAR lv_int_adv_rec.
+*&---------------> Harsh Mishra EOC - 06.03.2024
+
+    IF wa_cont_det-ymonth = 'TRANSFER IN' OR wa_cont_det-ymonth = 'FINAL SETTLE' OR wa_cont_det-ymonth = 'RETAINED BL'.
+      INSERT wa_cont_det INTO it_cont_det INDEX lv_index.
+      lv_count = lv_count + 1.
+    ENDIF.
+    CLEAR : wa_cont_det1,w_erc,w_vpf_nt,w_vpf_t,w_eec_nt,w_eec_t,lv_index,wa_cont_det.
+  ENDLOOP.
+
+  " Yearly Total Amount
+  LOOP AT it_cont_det INTO wa_cont_det WHERE ymonth NE 'FINAL SETTLE' AND ymonth NE 'RETAINED BL'.
+    w_yearly_tot-eec_nt      = w_yearly_tot-eec_nt      + wa_cont_det-eec_nt.
+    w_yearly_tot-eec_t       = w_yearly_tot-eec_t       + wa_cont_det-eec_t.
+    w_yearly_tot-vpf_nt      = w_yearly_tot-vpf_nt      + wa_cont_det-vpf_nt.
+    w_yearly_tot-vpf_t       = w_yearly_tot-vpf_t       + wa_cont_det-vpf_t.
+    w_yearly_tot-erc_nt      = w_yearly_tot-erc_nt      + wa_cont_det-erc_nt.
+    w_yearly_tot-eps_95      = w_yearly_tot-eps_95      + wa_cont_det-eps_95.
+    w_yearly_tot-nra_eec_nt  = w_yearly_tot-nra_eec_nt  + wa_cont_det-nra_eec_nt.
+    w_yearly_tot-nra_eec_t   = w_yearly_tot-nra_eec_t   + wa_cont_det-nra_eec_t.
+    w_yearly_tot-nra_vpf_nt  = w_yearly_tot-nra_vpf_nt  + wa_cont_det-nra_vpf_nt.
+    w_yearly_tot-nra_vpf_t   = w_yearly_tot-nra_vpf_t   + wa_cont_det-nra_vpf_t.
+    w_yearly_tot-nra_erc_nt  = w_yearly_tot-nra_erc_nt  + wa_cont_det-nra_erc_nt.
+    w_yearly_tot-ra_eec_nt   = w_yearly_tot-ra_eec_nt   + wa_cont_det-ra_eec_nt.
+    w_yearly_tot-ra_eec_t    = w_yearly_tot-ra_eec_t    + wa_cont_det-ra_eec_t.
+    w_yearly_tot-ra_vpf_nt   = w_yearly_tot-ra_vpf_nt   + wa_cont_det-ra_vpf_nt.
+    w_yearly_tot-ra_vpf_t    = w_yearly_tot-ra_vpf_t    + wa_cont_det-ra_vpf_t.
+    w_yearly_tot-ar_eec_nt   = w_yearly_tot-ar_eec_nt   + wa_cont_det-ar_eec_nt.
+    w_yearly_tot-ar_eec_t    = w_yearly_tot-ar_eec_t    + wa_cont_det-ar_eec_t.
+    w_yearly_tot-ar_vpf_nt   = w_yearly_tot-ar_vpf_nt   + wa_cont_det-ar_vpf_nt.
+    w_yearly_tot-ar_vpf_t    = w_yearly_tot-ar_vpf_t    + wa_cont_det-ar_vpf_t.
+    w_yearly_tot-bal_aftr_sa = w_yearly_tot-bal_aftr_sa + wa_cont_det-int_adv_rec.
+    CLEAR : wa_cont_det.
+  ENDLOOP.
+
+  "Rounding Off
+  CLEAR : lv_txt.
+  SPLIT w_yearly_tot-eec_nt AT '.' INTO w_yearly_tot-eec_nt lv_txt.
+  IF lv_txt GE 5.
+    w_yearly_tot-eec_nt = w_yearly_tot-eec_nt + 1.
+  ENDIF.
+  CONDENSE w_yearly_tot-eec_nt.
+  CLEAR : lv_txt.
+  SPLIT w_yearly_tot-eec_t AT '.' INTO w_yearly_tot-eec_t lv_txt.
+  IF lv_txt GE 5.
+    w_yearly_tot-eec_t = w_yearly_tot-eec_t + 1.
+  ENDIF.
+  CONDENSE w_yearly_tot-eec_t.
+  CLEAR : lv_txt.
+  SPLIT w_yearly_tot-vpf_nt AT '.' INTO w_yearly_tot-vpf_nt lv_txt.
+  IF lv_txt GE 5.
+    w_yearly_tot-vpf_nt = w_yearly_tot-vpf_nt + 1.
+  ENDIF.
+  CONDENSE w_yearly_tot-vpf_nt.
+  CLEAR : lv_txt.
+  SPLIT w_yearly_tot-vpf_t AT '.' INTO w_yearly_tot-vpf_t lv_txt.
+  IF lv_txt GE 5.
+    w_yearly_tot-vpf_t = w_yearly_tot-vpf_t + 1.
+  ENDIF.
+  CONDENSE w_yearly_tot-vpf_t.
+  CLEAR : lv_txt.
+  SPLIT w_yearly_tot-erc_nt AT '.' INTO w_yearly_tot-erc_nt lv_txt.
+  IF lv_txt GE 5.
+    w_yearly_tot-erc_nt = w_yearly_tot-erc_nt + 1.
+  ENDIF.
+  CONDENSE w_yearly_tot-erc_nt.
+  CLEAR : lv_txt.
+  SPLIT w_yearly_tot-eps_95 AT '.' INTO w_yearly_tot-eps_95 lv_txt.
+  IF lv_txt GE 5.
+    w_yearly_tot-eps_95 = w_yearly_tot-eps_95 + 1.
+  ENDIF.
+  CONDENSE w_yearly_tot-eps_95.
+  CLEAR : lv_txt.
+  SPLIT w_yearly_tot-nra_eec_nt AT '.' INTO w_yearly_tot-nra_eec_nt lv_txt.
+  IF lv_txt GE 5.
+    w_yearly_tot-nra_eec_nt = w_yearly_tot-nra_eec_nt + 1.
+  ENDIF.
+  CONDENSE w_yearly_tot-nra_eec_nt.
+  CLEAR : lv_txt.
+  SPLIT w_yearly_tot-nra_eec_t AT '.' INTO w_yearly_tot-nra_eec_t lv_txt.
+  IF lv_txt GE 5.
+    w_yearly_tot-nra_eec_t = w_yearly_tot-nra_eec_t + 1.
+  ENDIF.
+  CONDENSE w_yearly_tot-nra_eec_t.
+  CLEAR : lv_txt.
+  SPLIT w_yearly_tot-nra_vpf_nt AT '.' INTO w_yearly_tot-nra_vpf_nt lv_txt.
+  IF lv_txt GE 5.
+    w_yearly_tot-nra_vpf_nt = w_yearly_tot-nra_vpf_nt + 1.
+  ENDIF.
+  CONDENSE w_yearly_tot-nra_vpf_nt.
+  CLEAR : lv_txt.
+  SPLIT w_yearly_tot-nra_vpf_t AT '.' INTO w_yearly_tot-nra_vpf_t lv_txt.
+  IF lv_txt GE 5.
+    w_yearly_tot-nra_vpf_t = w_yearly_tot-nra_vpf_t + 1.
+  ENDIF.
+  CONDENSE w_yearly_tot-nra_vpf_t.
+  CLEAR : lv_txt.
+  SPLIT w_yearly_tot-nra_erc_nt AT '.' INTO w_yearly_tot-nra_erc_nt lv_txt.
+  IF lv_txt GE 5.
+    w_yearly_tot-nra_erc_nt = w_yearly_tot-nra_erc_nt + 1.
+  ENDIF.
+  CONDENSE w_yearly_tot-nra_erc_nt.
+  CLEAR : lv_txt.
+  SPLIT w_yearly_tot-ra_eec_nt AT '.' INTO w_yearly_tot-ra_eec_nt lv_txt.
+  IF lv_txt GE 5.
+    w_yearly_tot-ra_eec_nt = w_yearly_tot-ra_eec_nt + 1.
+  ENDIF.
+  CONDENSE w_yearly_tot-ra_eec_nt.
+  CLEAR : lv_txt.
+  SPLIT w_yearly_tot-ra_eec_t AT '.' INTO w_yearly_tot-ra_eec_t lv_txt.
+  IF lv_txt GE 5.
+    w_yearly_tot-ra_eec_t = w_yearly_tot-ra_eec_t + 1.
+  ENDIF.
+  CONDENSE w_yearly_tot-ra_eec_t.
+  CLEAR : lv_txt.
+  SPLIT w_yearly_tot-ra_vpf_nt AT '.' INTO w_yearly_tot-ra_vpf_nt lv_txt.
+  IF lv_txt GE 5.
+    w_yearly_tot-ra_vpf_nt = w_yearly_tot-ra_vpf_nt + 1.
+  ENDIF.
+  CONDENSE w_yearly_tot-ra_vpf_nt.
+  CLEAR : lv_txt.
+  SPLIT w_yearly_tot-ra_vpf_t AT '.' INTO w_yearly_tot-ra_vpf_t lv_txt.
+  IF lv_txt GE 5.
+    w_yearly_tot-ra_vpf_t = w_yearly_tot-ra_vpf_t + 1.
+  ENDIF.
+  CONDENSE w_yearly_tot-ra_vpf_t.
+  CLEAR : lv_txt.
+  SPLIT w_yearly_tot-ar_eec_nt AT '.' INTO w_yearly_tot-ar_eec_nt lv_txt.
+  IF lv_txt GE 5.
+    w_yearly_tot-ar_eec_nt = w_yearly_tot-ar_eec_nt + 1.
+  ENDIF.
+  CONDENSE w_yearly_tot-ar_eec_nt.
+  CLEAR : lv_txt.
+  SPLIT w_yearly_tot-ar_eec_t AT '.' INTO w_yearly_tot-ar_eec_t lv_txt.
+  IF lv_txt GE 5.
+    w_yearly_tot-ar_eec_t = w_yearly_tot-ar_eec_t + 1.
+  ENDIF.
+  CONDENSE w_yearly_tot-ar_eec_t.
+  CLEAR : lv_txt.
+  SPLIT w_yearly_tot-ar_vpf_nt AT '.' INTO w_yearly_tot-ar_vpf_nt lv_txt.
+  IF lv_txt GE 5.
+    w_yearly_tot-ar_vpf_nt = w_yearly_tot-ar_vpf_nt + 1.
+  ENDIF.
+  CONDENSE w_yearly_tot-ar_vpf_nt.
+  CLEAR : lv_txt.
+  SPLIT w_yearly_tot-ar_vpf_t AT '.' INTO w_yearly_tot-ar_vpf_t lv_txt.
+  IF lv_txt GE 5.
+    w_yearly_tot-ar_vpf_t = w_yearly_tot-ar_vpf_t + 1.
+  ENDIF.
+  CONDENSE w_yearly_tot-ar_vpf_t.
+  CLEAR : lv_txt.
+  SPLIT w_yearly_tot-bal_aftr_sa AT '.' INTO w_yearly_tot-bal_aftr_sa lv_txt.
+  IF lv_txt GE 5.
+    w_yearly_tot-bal_aftr_sa = w_yearly_tot-bal_aftr_sa + 1.
+  ENDIF.
+  CONDENSE w_yearly_tot-bal_aftr_sa.
+
+  "Adding Interest in Opening Balance
+  LOOP AT i_intr INTO DATA(w_intr) WHERE dfaell LT lv_first_date.
+    READ TABLE i_opn_bal INTO w_opn_bal WITH KEY rfha = w_intr-rfha.
+    IF sy-subrc = 0.
+      IF w_opn_bal-sgsart = 'T21'.
+        w_opn_bal_det-eec_nt = w_opn_bal_det-eec_nt + w_intr-bzbetr.
+      ELSEIF w_opn_bal-sgsart = 'T22'.
+        w_opn_bal_det-eec_t = w_opn_bal_det-eec_t + w_intr-bzbetr.
+      ELSEIF w_opn_bal-sgsart = 'T23'.
+        w_opn_bal_det-vpf_nt = w_opn_bal_det-vpf_nt + w_intr-bzbetr.
+      ELSEIF w_opn_bal-sgsart = 'T24'.
+        w_opn_bal_det-vpf_t = w_opn_bal_det-vpf_t + w_intr-bzbetr.
+      ELSEIF w_opn_bal-sgsart = 'T20'.
+        w_opn_bal_det-erc_nt = w_opn_bal_det-erc_nt + w_intr-bzbetr.
+      ELSEIF w_opn_bal-sgsart = 'T30' OR w_opn_bal-sgsart = 'T31'.
+        w_opn_bal_det-bal_aftr_sa = w_opn_bal_det-bal_aftr_sa + w_intr-bzbetr.
+      ENDIF.
+    ENDIF.
+    CLEAR : w_intr , w_opn_bal.
+  ENDLOOP.
+
+  "Rounding Off
+  CLEAR : lv_txt.
+  SPLIT w_opn_bal_det-eec_nt AT '.' INTO w_opn_bal_det-eec_nt lv_txt.
+  IF lv_txt GE 5.
+    w_opn_bal_det-eec_nt = w_opn_bal_det-eec_nt + 1.
+  ENDIF.
+  CONDENSE w_opn_bal_det-eec_nt.
+  CLEAR : lv_txt.
+  SPLIT w_opn_bal_det-eec_t AT '.' INTO w_opn_bal_det-eec_t lv_txt.
+  IF lv_txt GE 5.
+    w_opn_bal_det-eec_t = w_opn_bal_det-eec_t + 1.
+  ENDIF.
+  CONDENSE w_opn_bal_det-eec_t.
+  CLEAR : lv_txt.
+  SPLIT w_opn_bal_det-vpf_nt AT '.' INTO w_opn_bal_det-vpf_nt lv_txt.
+  IF lv_txt GE 5.
+    w_opn_bal_det-vpf_nt = w_opn_bal_det-vpf_nt + 1.
+  ENDIF.
+  CONDENSE w_opn_bal_det-vpf_nt.
+  CLEAR : lv_txt.
+  SPLIT w_opn_bal_det-vpf_t AT '.' INTO w_opn_bal_det-vpf_t lv_txt.
+  IF lv_txt GE 5.
+    w_opn_bal_det-vpf_t = w_opn_bal_det-vpf_t + 1.
+  ENDIF.
+  CONDENSE w_opn_bal_det-vpf_t.
+  CLEAR : lv_txt.
+  SPLIT w_opn_bal_det-erc_nt AT '.' INTO w_opn_bal_det-erc_nt lv_txt.
+  IF lv_txt GE 5.
+    w_opn_bal_det-erc_nt = w_opn_bal_det-erc_nt + 1.
+  ENDIF.
+  CONDENSE w_opn_bal_det-erc_nt.
+  CLEAR : lv_txt.
+  SPLIT w_opn_bal_det-eps_95 AT '.' INTO w_opn_bal_det-eps_95 lv_txt.
+  IF lv_txt GE 5.
+    w_opn_bal_det-eps_95 = w_opn_bal_det-eps_95 + 1.
+  ENDIF.
+  CONDENSE w_opn_bal_det-eps_95.
+  CLEAR : lv_txt.
+  SPLIT w_opn_bal_det-ra_eec_nt AT '.' INTO w_opn_bal_det-ra_eec_nt lv_txt.
+  IF lv_txt GE 5.
+    w_opn_bal_det-ra_eec_nt = w_opn_bal_det-ra_eec_nt + 1.
+  ENDIF.
+  CONDENSE w_opn_bal_det-ra_eec_nt.
+  CLEAR : lv_txt.
+  SPLIT w_opn_bal_det-ra_eec_t AT '.' INTO w_opn_bal_det-ra_eec_t lv_txt.
+  IF lv_txt GE 5.
+    w_opn_bal_det-ra_eec_t = w_opn_bal_det-ra_eec_t + 1.
+  ENDIF.
+  CONDENSE w_opn_bal_det-ra_eec_t.
+  CLEAR : lv_txt.
+  SPLIT w_opn_bal_det-ra_vpf_nt AT '.' INTO w_opn_bal_det-ra_vpf_nt lv_txt.
+  IF lv_txt GE 5.
+    w_opn_bal_det-ra_vpf_nt = w_opn_bal_det-ra_vpf_nt + 1.
+  ENDIF.
+  CONDENSE w_opn_bal_det-ra_vpf_nt.
+  CLEAR : lv_txt.
+  SPLIT w_opn_bal_det-ra_vpf_t AT '.' INTO w_opn_bal_det-ra_vpf_t lv_txt.
+  IF lv_txt GE 5.
+    w_opn_bal_det-ra_vpf_t = w_opn_bal_det-ra_vpf_t + 1.
+  ENDIF.
+  CONDENSE w_opn_bal_det-ra_vpf_t.
+  CLEAR : lv_txt.
+  SPLIT w_opn_bal_det-bal_aftr_sa AT '.' INTO w_opn_bal_det-bal_aftr_sa lv_txt.
+  IF lv_txt GE 5.
+    w_opn_bal_det-bal_aftr_sa = w_opn_bal_det-bal_aftr_sa + 1.
+  ENDIF.
+  CONDENSE w_opn_bal_det-bal_aftr_sa.
+
+  " Total Contribution
+  READ TABLE it_cont_det INTO DATA(w_retained_bal) WITH KEY ymonth = 'RETAINED BL'.
+  READ TABLE it_cont_det INTO wa_cont_det WITH KEY ymonth = 'FINAL SETTLE'.
+  IF sy-subrc = 0.
+    w_tot_values-tot_cont_eec_nt = w_opn_bal_det-eec_nt + w_yearly_tot-eec_nt - w_yearly_tot-nra_eec_nt + w_yearly_tot-ar_eec_nt
+                                 - wa_cont_det-eec_nt   - w_yearly_tot-ra_eec_nt - w_retained_bal-eec_nt.
+    w_tot_values-tot_cont_eec_t  = w_opn_bal_det-eec_t  + w_yearly_tot-eec_t  - w_yearly_tot-nra_eec_t  + w_yearly_tot-ar_eec_t
+                                 - wa_cont_det-eec_t    - w_yearly_tot-ra_eec_t - w_retained_bal-eec_t.
+    w_tot_values-tot_cont_vpf_nt = w_opn_bal_det-vpf_nt + w_yearly_tot-vpf_nt - w_yearly_tot-nra_vpf_nt + w_yearly_tot-ar_vpf_nt
+                                 - wa_cont_det-vpf_nt   - w_yearly_tot-ra_vpf_nt - w_retained_bal-vpf_nt.
+    w_tot_values-tot_cont_vpf_t  = w_opn_bal_det-vpf_t  + w_yearly_tot-vpf_t  - w_yearly_tot-nra_vpf_t  + w_yearly_tot-ar_vpf_t
+                                 - wa_cont_det-vpf_t    - w_yearly_tot-ra_vpf_t - w_retained_bal-vpf_t.
+    w_tot_values-tot_cont_erc_nt = w_opn_bal_det-erc_nt + w_yearly_tot-erc_nt - w_yearly_tot-nra_erc_nt - wa_cont_det-erc_nt
+                                 - w_retained_bal-erc_nt.
+    w_tot_values-tot_cont_eps_95 = w_opn_bal_det-eps_95 + w_yearly_tot-eps_95.
+    w_tot_values-tot_cont_bal_sa = w_opn_bal_det-bal_aftr_sa + w_yearly_tot-bal_aftr_sa - wa_cont_det-int_adv_rec.
+  ELSE.
+    w_tot_values-tot_cont_eec_nt = w_opn_bal_det-eec_nt + w_yearly_tot-eec_nt - w_yearly_tot-nra_eec_nt + w_yearly_tot-ar_eec_nt
+                                 - w_yearly_tot-ra_eec_nt - w_retained_bal-eec_nt.
+    w_tot_values-tot_cont_eec_t  = w_opn_bal_det-eec_t  + w_yearly_tot-eec_t  - w_yearly_tot-nra_eec_t  + w_yearly_tot-ar_eec_t
+                                 - w_yearly_tot-ra_eec_t - w_retained_bal-eec_t.
+    w_tot_values-tot_cont_vpf_nt = w_opn_bal_det-vpf_nt + w_yearly_tot-vpf_nt - w_yearly_tot-nra_vpf_nt + w_yearly_tot-ar_vpf_nt
+                                 - w_yearly_tot-ra_vpf_nt - w_retained_bal-vpf_nt.
+    w_tot_values-tot_cont_vpf_t  = w_opn_bal_det-vpf_t  + w_yearly_tot-vpf_t  - w_yearly_tot-nra_vpf_t  + w_yearly_tot-ar_vpf_t
+                                 - w_yearly_tot-ra_vpf_t - w_retained_bal-vpf_t.
+    w_tot_values-tot_cont_erc_nt = w_opn_bal_det-erc_nt + w_yearly_tot-erc_nt - w_yearly_tot-nra_erc_nt - w_retained_bal-erc_nt.
+    w_tot_values-tot_cont_eps_95 = w_opn_bal_det-eps_95 + w_yearly_tot-eps_95.
+    w_tot_values-tot_cont_bal_sa = w_opn_bal_det-bal_aftr_sa + w_yearly_tot-bal_aftr_sa.
+
+  ENDIF.
+
+  "Rounding Off
+  CLEAR : lv_txt.
+  SPLIT w_tot_values-tot_cont_eec_nt AT '.' INTO w_tot_values-tot_cont_eec_nt lv_txt.
+  IF lv_txt GE 5.
+    w_tot_values-tot_cont_eec_nt = w_tot_values-tot_cont_eec_nt + 1.
+  ENDIF.
+  CONDENSE w_tot_values-tot_cont_eec_nt.
+  CLEAR : lv_txt.
+  SPLIT w_tot_values-tot_cont_eec_t AT '.' INTO w_tot_values-tot_cont_eec_t lv_txt.
+  IF lv_txt GE 5.
+    w_tot_values-tot_cont_eec_t = w_tot_values-tot_cont_eec_t + 1.
+  ENDIF.
+  CONDENSE w_tot_values-tot_cont_eec_t.
+  CLEAR : lv_txt.
+  SPLIT w_tot_values-tot_cont_vpf_nt AT '.' INTO w_tot_values-tot_cont_vpf_nt lv_txt.
+  IF lv_txt GE 5.
+    w_tot_values-tot_cont_vpf_nt = w_tot_values-tot_cont_vpf_nt + 1.
+  ENDIF.
+  CONDENSE w_tot_values-tot_cont_vpf_nt.
+  CLEAR : lv_txt.
+  SPLIT w_tot_values-tot_cont_vpf_t AT '.' INTO w_tot_values-tot_cont_vpf_t lv_txt.
+  IF lv_txt GE 5.
+    w_tot_values-tot_cont_vpf_t = w_tot_values-tot_cont_vpf_t + 1.
+  ENDIF.
+  CONDENSE w_tot_values-tot_cont_vpf_t.
+  CLEAR : lv_txt.
+  SPLIT w_tot_values-tot_cont_erc_nt AT '.' INTO w_tot_values-tot_cont_erc_nt lv_txt.
+  IF lv_txt GE 5.
+    w_tot_values-tot_cont_erc_nt = w_tot_values-tot_cont_erc_nt + 1.
+  ENDIF.
+  CONDENSE w_tot_values-tot_cont_erc_nt.
+  CLEAR : lv_txt.
+  SPLIT w_tot_values-tot_cont_eps_95 AT '.' INTO w_tot_values-tot_cont_eps_95 lv_txt.
+  IF lv_txt GE 5.
+    w_tot_values-tot_cont_eps_95 = w_tot_values-tot_cont_eps_95 + 1.
+  ENDIF.
+  CONDENSE w_tot_values-tot_cont_eps_95.
+
+  READ TABLE i_opn_bal INTO w_opn_bal WITH KEY sgsart = 'T21'.
+  IF sy-subrc = 0.
+*    READ TABLE i_intr INTO w_intr WITH KEY rfha = w_opn_bal-rfha dfaell = int_date.
+    LOOP AT i_intr INTO w_intr WHERE rfha = w_opn_bal-rfha AND dfaell GE lv_first_date AND dfaell LE lv_last_date.
+*    IF sy-subrc = 0.
+      w_tot_values-tot_intr_eec_nt = w_tot_values-tot_intr_eec_nt + w_intr-bzbetr.
+*    ENDIF.
+      CLEAR : w_intr.
+    ENDLOOP.
+  ENDIF.
+  READ TABLE i_opn_bal INTO w_opn_bal WITH KEY sgsart = 'T22'.
+  IF sy-subrc = 0.
+*    READ TABLE i_intr INTO w_intr WITH KEY rfha = w_opn_bal-rfha dfaell = int_date.
+*    IF sy-subrc = 0.
+    LOOP AT i_intr INTO w_intr WHERE rfha = w_opn_bal-rfha AND dfaell GE lv_first_date AND dfaell LE lv_last_date.
+      w_tot_values-tot_intr_eec_t  = w_tot_values-tot_intr_eec_t + w_intr-bzbetr.
+*    ENDIF.
+      CLEAR : w_intr.
+    ENDLOOP.
+  ENDIF.
+  READ TABLE i_opn_bal INTO w_opn_bal WITH KEY sgsart = 'T23'.
+  IF sy-subrc = 0.
+*    READ TABLE i_intr INTO w_intr WITH KEY rfha = w_opn_bal-rfha dfaell = int_date.
+*    IF sy-subrc = 0.
+    LOOP AT i_intr INTO w_intr WHERE rfha = w_opn_bal-rfha AND dfaell GE lv_first_date AND dfaell LE lv_last_date.
+      w_tot_values-tot_intr_vpf_nt = w_tot_values-tot_intr_vpf_nt + w_intr-bzbetr.
+*    ENDIF.
+      CLEAR : w_intr.
+    ENDLOOP.
+  ENDIF.
+  READ TABLE i_opn_bal INTO w_opn_bal WITH KEY sgsart = 'T24'.
+  IF sy-subrc = 0.
+*    READ TABLE i_intr INTO w_intr WITH KEY rfha = w_opn_bal-rfha dfaell = int_date.
+*    IF sy-subrc = 0.
+    LOOP AT i_intr INTO w_intr WHERE rfha = w_opn_bal-rfha AND dfaell GE lv_first_date AND dfaell LE lv_last_date.
+      w_tot_values-tot_intr_vpf_t  = w_tot_values-tot_intr_vpf_t + w_intr-bzbetr.
+*    ENDIF.
+      CLEAR : w_intr.
+    ENDLOOP.
+  ENDIF.
+  READ TABLE i_opn_bal INTO w_opn_bal WITH KEY sgsart = 'T20'.
+  IF sy-subrc = 0.
+*    READ TABLE i_intr INTO w_intr WITH KEY rfha = w_opn_bal-rfha dfaell = int_date.
+*    IF sy-subrc = 0.
+    LOOP AT i_intr INTO w_intr WHERE rfha = w_opn_bal-rfha AND dfaell GE lv_first_date AND dfaell LE lv_last_date.
+      w_tot_values-tot_intr_erc_nt = w_tot_values-tot_intr_erc_nt + w_intr-bzbetr.
+*    ENDIF.
+      CLEAR : w_intr.
+    ENDLOOP.
+  ENDIF.
+  READ TABLE i_opn_bal INTO w_opn_bal WITH KEY sgsart = 'T30'.
+  IF sy-subrc = 0.
+*    READ TABLE i_intr INTO w_intr WITH KEY rfha = w_opn_bal-rfha dfaell = int_date.
+*    IF sy-subrc = 0.
+    LOOP AT i_intr INTO w_intr WHERE rfha = w_opn_bal-rfha AND dfaell GE lv_first_date AND dfaell LE lv_last_date.
+      w_tot_values-tot_intr_sa = w_tot_values-tot_intr_sa + w_intr-bzbetr.
+*    ENDIF.
+      CLEAR : w_intr.
+    ENDLOOP.
+  ENDIF.
+  READ TABLE i_opn_bal INTO w_opn_bal WITH KEY sgsart = 'T31'.
+  IF sy-subrc = 0.
+*    READ TABLE i_intr INTO w_intr WITH KEY rfha = w_opn_bal-rfha dfaell = int_date.
+*    IF sy-subrc = 0.
+    LOOP AT i_intr INTO w_intr WHERE rfha = w_opn_bal-rfha AND dfaell GE lv_first_date AND dfaell LE lv_last_date.
+      w_tot_values-tot_intr_sa = w_tot_values-tot_intr_sa + w_intr-bzbetr.
+*    ENDIF.
+      CLEAR : w_intr.
+    ENDLOOP.
+  ENDIF.
+
+  "Rounding Off
+  CLEAR : lv_txt.
+  SPLIT w_tot_values-tot_intr_eec_nt AT '.' INTO w_tot_values-tot_intr_eec_nt lv_txt.
+  IF lv_txt GE 5.
+    w_tot_values-tot_intr_eec_nt = w_tot_values-tot_intr_eec_nt + 1.
+  ENDIF.
+  CONDENSE w_tot_values-tot_intr_eec_nt.
+  CLEAR : lv_txt.
+  SPLIT w_tot_values-tot_intr_eec_t AT '.' INTO w_tot_values-tot_intr_eec_t lv_txt.
+  IF lv_txt GE 5.
+    w_tot_values-tot_intr_eec_t = w_tot_values-tot_intr_eec_t + 1.
+  ENDIF.
+  CONDENSE w_tot_values-tot_intr_eec_t.
+  CLEAR : lv_txt.
+  SPLIT w_tot_values-tot_intr_vpf_nt AT '.' INTO w_tot_values-tot_intr_vpf_nt lv_txt.
+  IF lv_txt GE 5.
+    w_tot_values-tot_intr_vpf_nt = w_tot_values-tot_intr_vpf_nt + 1.
+  ENDIF.
+  CONDENSE w_tot_values-tot_intr_vpf_nt.
+  CLEAR : lv_txt.
+  SPLIT w_tot_values-tot_intr_vpf_t AT '.' INTO w_tot_values-tot_intr_vpf_t lv_txt.
+  IF lv_txt GE 5.
+    w_tot_values-tot_intr_vpf_t = w_tot_values-tot_intr_vpf_t + 1.
+  ENDIF.
+  CONDENSE w_tot_values-tot_intr_vpf_t.
+  CLEAR : lv_txt.
+  SPLIT w_tot_values-tot_intr_erc_nt AT '.' INTO w_tot_values-tot_intr_erc_nt lv_txt.
+  IF lv_txt GE 5.
+    w_tot_values-tot_intr_erc_nt = w_tot_values-tot_intr_erc_nt + 1.
+  ENDIF.
+  CONDENSE w_tot_values-tot_intr_erc_nt.
+  CLEAR : lv_txt.
+  SPLIT w_tot_values-tot_intr_sa AT '.' INTO w_tot_values-tot_intr_sa lv_txt.
+  IF lv_txt GE 5.
+    w_tot_values-tot_intr_sa = w_tot_values-tot_intr_sa + 1.
+  ENDIF.
+  CONDENSE w_tot_values-tot_intr_sa.
+
+  "Net Interest
+*  IF i_105_106_1 IS  INITIAL.
+
+  w_tot_values-net_intr_eec_nt = w_tot_values-tot_intr_eec_nt."t21
+  w_tot_values-net_intr_eec_t  = w_tot_values-tot_intr_eec_t."t22
+  w_tot_values-net_intr_vpf_nt = w_tot_values-tot_intr_vpf_nt."t23
+  w_tot_values-net_intr_vpf_t  = w_tot_values-tot_intr_vpf_t."t24
+  w_tot_values-net_intr_erc_nt = w_tot_values-tot_intr_erc_nt."t20
+  w_tot_values-net_intr_sa     = w_tot_values-tot_intr_sa."t30
+
+*    else.
+**soc  kartik Gupta & Manoj Rane Charm: 4000008316 Bug fix for retained bal in PF card
+  LOOP AT i_105_106_1 INTO DATA(w_105_106_1).
+
+    READ TABLE i_opn_bal INTO w_opn_bal WITH KEY rfha = w_105_106_1-rfha.
+
+    CASE  w_opn_bal-sgsart.
+      WHEN 'T20'.
+        CLEAR: w_tot_values-net_intr_erc_nt.
+      WHEN 'T21'.
+        CLEAR:w_tot_values-net_intr_eec_nt.
+      WHEN 'T22'.
+        CLEAR:w_tot_values-net_intr_eec_t.
+      WHEN 'T23'.
+        CLEAR:w_tot_values-net_intr_vpf_nt.
+      WHEN 'T24'.
+        CLEAR:w_tot_values-net_intr_vpf_t.
+      WHEN 'T30'.
+        CLEAR:w_tot_values-net_intr_sa.
+    ENDCASE.
+
+  ENDLOOP.
+**Eoc  kartik Gupta & Manoj Rane Charm: 4000008316 Bug fix for retained bal in PF card
+*  ENDIF.
+
+  "Rounding Off
+  CLEAR : lv_txt.
+  SPLIT w_tot_values-net_intr_eec_nt AT '.' INTO w_tot_values-net_intr_eec_nt lv_txt.
+  IF lv_txt GE 5.
+    w_tot_values-net_intr_eec_nt = w_tot_values-net_intr_eec_nt + 1.
+  ENDIF.
+  CONDENSE w_tot_values-net_intr_eec_nt.
+  CLEAR : lv_txt.
+  SPLIT w_tot_values-net_intr_eec_t AT '.' INTO w_tot_values-net_intr_eec_t lv_txt.
+  IF lv_txt GE 5.
+    w_tot_values-net_intr_eec_t = w_tot_values-net_intr_eec_t + 1.
+  ENDIF.
+  CONDENSE w_tot_values-net_intr_eec_t.
+  CLEAR : lv_txt.
+  SPLIT w_tot_values-net_intr_vpf_nt AT '.' INTO w_tot_values-net_intr_vpf_nt lv_txt.
+  IF lv_txt GE 5.
+    w_tot_values-net_intr_vpf_nt = w_tot_values-net_intr_vpf_nt + 1.
+  ENDIF.
+  CONDENSE w_tot_values-net_intr_vpf_nt.
+  CLEAR : lv_txt.
+  SPLIT w_tot_values-net_intr_vpf_t AT '.' INTO w_tot_values-net_intr_vpf_t lv_txt.
+  IF lv_txt GE 5.
+    w_tot_values-net_intr_vpf_t = w_tot_values-net_intr_vpf_t + 1.
+  ENDIF.
+  CONDENSE w_tot_values-net_intr_vpf_t.
+  CLEAR : lv_txt.
+  SPLIT w_tot_values-net_intr_erc_nt AT '.' INTO w_tot_values-net_intr_erc_nt lv_txt.
+  IF lv_txt GE 5.
+    w_tot_values-net_intr_erc_nt = w_tot_values-net_intr_erc_nt + 1.
+  ENDIF.
+  CONDENSE w_tot_values-net_intr_erc_nt.
+  CLEAR : lv_txt.
+  SPLIT w_tot_values-net_intr_sa AT '.' INTO w_tot_values-net_intr_sa lv_txt.
+  IF lv_txt GE 5.
+    w_tot_values-net_intr_sa = w_tot_values-net_intr_sa + 1.
+  ENDIF.
+  CONDENSE w_tot_values-net_intr_sa.
+
+  "Grand Total
+  w_tot_values-gt_eec_nt       = w_tot_values-tot_cont_eec_nt + w_tot_values-net_intr_eec_nt.
+  w_tot_values-gt_eec_t        = w_tot_values-tot_cont_eec_t  + w_tot_values-net_intr_eec_t.
+  w_tot_values-gt_vpf_nt       = w_tot_values-tot_cont_vpf_nt + w_tot_values-net_intr_vpf_nt.
+  w_tot_values-gt_vpf_t        = w_tot_values-tot_cont_vpf_t  + w_tot_values-net_intr_vpf_t.
+  w_tot_values-gt_erc_nt       = w_tot_values-tot_cont_erc_nt + w_tot_values-net_intr_erc_nt.
+  w_tot_values-gt_bal_after_sa = w_tot_values-tot_cont_bal_sa + w_tot_values-net_intr_sa.
+
+  "Rounding Off
+  CLEAR : lv_txt.
+  SPLIT w_tot_values-gt_eec_nt AT '.' INTO w_tot_values-gt_eec_nt lv_txt.
+  IF lv_txt GE 5.
+    w_tot_values-gt_eec_nt = w_tot_values-gt_eec_nt + 1.
+  ENDIF.
+  CONDENSE w_tot_values-gt_eec_nt.
+  CLEAR : lv_txt.
+  SPLIT w_tot_values-gt_eec_t AT '.' INTO w_tot_values-gt_eec_t lv_txt.
+  IF lv_txt GE 5.
+    w_tot_values-gt_eec_t = w_tot_values-gt_eec_t + 1.
+  ENDIF.
+  CONDENSE w_tot_values-gt_eec_t.
+  CLEAR : lv_txt.
+  SPLIT w_tot_values-gt_vpf_nt AT '.' INTO w_tot_values-gt_vpf_nt lv_txt.
+  IF lv_txt GE 5.
+    w_tot_values-gt_vpf_nt = w_tot_values-gt_vpf_nt + 1.
+  ENDIF.
+  CONDENSE w_tot_values-gt_vpf_nt.
+  CLEAR : lv_txt.
+  SPLIT w_tot_values-gt_vpf_t AT '.' INTO w_tot_values-gt_vpf_t lv_txt.
+  IF lv_txt GE 5.
+    w_tot_values-gt_vpf_t = w_tot_values-gt_vpf_t + 1.
+  ENDIF.
+  CONDENSE w_tot_values-gt_vpf_t.
+  CLEAR : lv_txt.
+  SPLIT w_tot_values-gt_erc_nt AT '.' INTO w_tot_values-gt_erc_nt lv_txt.
+  IF lv_txt GE 5.
+    w_tot_values-gt_erc_nt = w_tot_values-gt_erc_nt + 1.
+  ENDIF.
+  CONDENSE w_tot_values-gt_erc_nt.
+  CLEAR : lv_txt.
+  SPLIT w_tot_values-gt_bal_after_sa AT '.' INTO w_tot_values-gt_bal_after_sa lv_txt.
+  IF lv_txt GE 5.
+    w_tot_values-gt_bal_after_sa = w_tot_values-gt_bal_after_sa + 1.
+  ENDIF.
+  CONDENSE w_tot_values-gt_bal_after_sa.
+
+  " Closing Value
+  w_tot_values-closing_total = w_tot_values-gt_eec_nt + w_tot_values-gt_eec_t + w_tot_values-gt_vpf_nt + w_tot_values-gt_vpf_t +
+                               w_tot_values-gt_erc_nt + w_tot_values-gt_bal_after_sa.
+
+  "Rounding Off
+  CLEAR : lv_txt.
+  SPLIT w_tot_values-closing_total AT '.' INTO w_tot_values-closing_total lv_txt.
+  IF lv_txt GE 5.
+    w_tot_values-closing_total = w_tot_values-closing_total + 1.
+  ENDIF.
+  CONDENSE w_tot_values-closing_total.
+
+ENDFUNCTION.

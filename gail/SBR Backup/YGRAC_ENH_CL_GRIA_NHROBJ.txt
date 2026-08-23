@@ -1,0 +1,824 @@
+  METHOD iow_ygrac_enh_cl_gria_nhrobj~add_role_user.
+*"------------------------------------------------------------------------*
+*" Declaration of Overwrite-method, do not insert any comments here please!
+*"
+*"class-methods ADD_ROLE_USER
+*"  importing
+*"    !IV_USR type XUBNAME
+*"    !IT_ROLE type /GRCPI/GRIA_T_USR_ASGN_ROLE
+*"  exporting
+*"    !ET_MESSAGE type BAPIRET2_TAB
+*"    !EV_RETURN_CODE type /GRCPI/GRIA_COUNT
+*"    !ET_OPERATION_RESULT type /GRCPI/GRIA_T_OPREATION_RESULT .
+*"------------------------------------------------------------------------*
+
+    "--------------------------------------------
+* This method is used to add role and user.
+    "---------------------------------------------
+
+    DATA: ls_role      TYPE /grcpi/gria_s_usr_asgn_role,
+          lt_bapiagr   TYPE TABLE OF bapiagr,
+          ls_bapiagr   TYPE bapiagr,
+          lt_usr_roles TYPE TABLE OF usagr,
+          ls_usr_roles TYPE usagr.
+
+    "" SOC by harsh on 10/04/25 for License Customization
+    DATA: lt_bapiagr_temp TYPE TABLE OF bapiagr,
+          lv_flag         TYPE char1.
+    "" EOC by RICHA on 10/04/25 for License Customization
+
+    REFRESH lt_usr_roles.
+
+    CALL FUNCTION 'SUSR_USER_AGR_BUFFER_CLEAR'. "Buffer required to be cleared for 731
+    CALL FUNCTION 'SUSR_USER_AGR_ACTIVITYGR_GET'
+      EXPORTING
+        user_name           = iv_usr
+      TABLES
+        user_activitygroups = lt_usr_roles
+      EXCEPTIONS
+        user_name_not_exist = 1
+        OTHERS              = 2.
+    IF sy-subrc <> 0.
+    ENDIF.
+
+    LOOP AT it_role INTO ls_role WHERE uname = iv_usr OR uname = ''.
+      READ TABLE lt_usr_roles TRANSPORTING NO FIELDS
+        WITH KEY  agr_name = ls_role-agr_name
+                  from_dat = ls_role-begda
+                  to_dat = ls_role-endda.
+      IF sy-subrc <> 0.
+        ls_bapiagr-agr_name = ls_role-agr_name.
+        ls_bapiagr-from_dat = ls_role-begda.
+        ls_bapiagr-to_dat = ls_role-endda.
+        "" SOC by harsh on 10/04/25 for License Customization
+* COLLECT ls_bapiagr INTO lt_bapiagr.
+        COLLECT ls_bapiagr INTO lt_bapiagr_temp.
+        "" EOC by harsh on 10/04/25 for License Customizatio
+      ELSE.
+        DATA lt_message TYPE bapiret2_tab.
+        REFRESH lt_message.
+        lt_message = /grcpi/cl_gria_util=>get_return_message(
+                           iv_type   = 'E'
+                           iv_number = '158'
+                           iv_par1 = ls_role-agr_name
+                           iv_par2 = iv_usr              ).
+
+        ev_return_code = 0.
+      ENDIF.
+    ENDLOOP.
+
+    "" SOC by harsh on 10/04/25 for License Customization
+    TYPES: BEGIN OF ty_role_name,
+             role_name TYPE agr_name,
+           END OF ty_role_name.
+    DATA: lt_role_name TYPE STANDARD TABLE OF ty_role_name,
+          ls_role_name TYPE ty_role_name,
+          lt_role_old  TYPE STANDARD TABLE OF ty_role_name,
+          ls_role_old  TYPE ty_role_name.
+    TYPES: BEGIN OF ty_role_lic,
+             role_name   TYPE char300,
+             sensitivity TYPE numc3,
+           END OF ty_role_lic.
+    DATA: lt_role_lic TYPE STANDARD TABLE OF ty_role_lic,
+          ls_role_lic TYPE ty_role_lic,
+          lt_sens_old TYPE STANDARD TABLE OF ty_role_lic,
+          ls_sens_old TYPE ty_role_lic.
+    TYPES: BEGIN OF ty_lic_data,
+             mandt         TYPE mandt,
+             connector     TYPE rfcdest, ""char3,
+             lic_type      TYPE ylic_typ, ""char3,
+             utyptext      TYPE ylic_des, ""utyptext,
+             available_lic TYPE yavail_lic, ""zgrc_lic_count,
+             used_lic      TYPE yused_lic, ""zgrc_lic_count,
+           END OF ty_lic_data.
+    DATA: lt_lic_data              TYPE STANDARD TABLE OF ty_lic_data,
+          lt_lic_data1             TYPE STANDARD TABLE OF ty_lic_data,
+          ls_lic_data_p            TYPE ty_lic_data,
+          ls_lic_data_m            TYPE ty_lic_data,
+          ls_lic_data_s            TYPE ty_lic_data,
+          ls_lic_data_mnt          TYPE ty_lic_data,
+          ls_lic_data_p_update     TYPE ty_lic_data,
+          ls_lic_data_m_update     TYPE ty_lic_data,
+          ls_lic_data_s_update     TYPE ty_lic_data,
+          ls_lic_data_mnt_update   TYPE ty_lic_data,
+          ls_lic_data_grc_update   TYPE ty_lic_data,
+          ls_lic_data_multi_update TYPE ty_lic_data.
+    DATA: lv_lic_type_old TYPE usertypen,
+          lv_lic_type_new TYPE usertypen,
+          lv_connector    TYPE rfcdest,
+          ls_uclass       TYPE bapiuclass,
+          ls_uclassx      TYPE bapiuclassx,
+          lt_return       TYPE STANDARD TABLE OF bapiret2,
+          lv_msg          TYPE char1,
+          lv_lic_type_grc TYPE usertypen,
+          cv_connector    TYPE rfcdest,
+          cv_connector1   TYPE rfcdest,
+          et_lic_data     TYPE TABLE OF ygrc_lic_user.
+    CONSTANTS: cv_lic_prof  TYPE char2 VALUE 'GA', ""'52',
+               cv_lic_med   TYPE char2 VALUE 'GB',   ""'53',
+               cv_lic_shp   TYPE char2 VALUE 'GC',
+               cv_lic_mnt   TYPE char2 VALUE 'GD',
+               cv_lic_gf    TYPE char2 VALUE 'GF',
+               cv_lic_emp   TYPE char2 VALUE 'CE',  ""'54',
+               cv_error     TYPE string VALUE 'E',
+*               cv_connector  TYPE char3 VALUE 'ECC',
+*               cv_connector1 TYPE char3 VALUE 'GRC',
+               cv_role_prof TYPE numc3 VALUE 1,
+               cv_role_med  TYPE numc3 VALUE 2,
+               cv_role_shp  TYPE numc3 VALUE 3,
+               cv_role_mnt  TYPE numc3 VALUE 4,
+               cv_role_gf   TYPE numc3 VALUE 5,
+               cv_success   TYPE char1 VALUE 'S',
+               cv_lic_grc   TYPE char2 VALUE '71',
+               cv_lic_multi TYPE char2 VALUE '11',
+               cv_client    TYPE char3 VALUE '131',
+               cv_core      TYPE p DECIMALS 4 VALUE '0.2000',
+               cv_ess       TYPE p DECIMALS 4 VALUE '0.0333'.
+*               cv_lic_shp    TYPE char2 VALUE 'FF',
+*               cv_lic_mnt    TYPE char2 VALUE 'FG'.
+    READ TABLE lt_message TRANSPORTING NO FIELDS WITH KEY number = cv_error.
+    IF sy-subrc <> 0.
+      "" Get user license
+      CALL FUNCTION 'YGRC_GET_USER_LICENSE'
+        EXPORTING
+          iv_user     = iv_usr
+        IMPORTING
+          ev_lic_type = lv_lic_type_old.
+* -> BEGIN OF CHANGES BY Arnav ON 04Jun25
+      SELECT connector INTO lv_connector UP TO 1 ROWS FROM ygrc_client ORDER BY PRIMARY KEY. ENDSELECT.
+* -> END OF CHANGES BY Arnav ON 04Jun25
+      IF sy-subrc = 0.
+        LOOP AT it_role INTO ls_role.
+          ls_role_name-role_name = ls_role-agr_name.
+          APPEND ls_role_name TO lt_role_name.
+        ENDLOOP.
+
+        SELECT * FROM agr_users INTO TABLE @DATA(lt_agr_users)
+                                WHERE uname EQ @iv_usr
+                                AND to_dat GE @sy-datum.
+        IF lt_agr_users IS NOT INITIAL.
+          LOOP AT lt_agr_users INTO DATA(ls_agr_users).
+            ls_role_old-role_name = ls_agr_users-agr_name.
+            APPEND ls_role_old TO lt_role_old.
+            CLEAR:ls_role_old,ls_agr_users.
+          ENDLOOP.
+        ENDIF.
+        "" Get role sensitivity
+        CALL FUNCTION 'YGRC_GET_ROLE_SENSITIVITY'
+          DESTINATION lv_connector
+          TABLES
+            it_role             = lt_role_name
+            et_role_sensitivity = lt_role_lic
+            it_role_old         = lt_role_old
+            et_sens_old         = lt_sens_old.
+        "" For advanced user
+        READ TABLE lt_role_lic INTO ls_role_lic WITH KEY sensitivity = cv_role_prof.
+        IF sy-subrc = 0.
+          READ TABLE lt_sens_old INTO ls_sens_old WITH KEY sensitivity = cv_role_prof.
+          IF sy-subrc = 0 AND lv_lic_type_old NE cv_lic_prof.
+            lt_bapiagr = lt_bapiagr_temp.
+            lv_lic_type_new = cv_lic_prof.
+            lv_flag = abap_true.
+          ELSEIF sy-subrc IS NOT INITIAL.
+            lt_bapiagr = lt_bapiagr_temp.
+            lv_lic_type_new = cv_lic_prof.
+            lv_flag = abap_true.
+          ENDIF.
+        ELSE.
+          READ TABLE lt_role_lic INTO ls_role_lic WITH KEY sensitivity = cv_role_med.
+          IF sy-subrc = 0.
+            READ TABLE lt_sens_old INTO ls_sens_old WITH KEY sensitivity = cv_role_prof.
+            IF sy-subrc = 0 AND lv_lic_type_old EQ cv_lic_prof.
+            ELSEIF sy-subrc = 0 AND lv_lic_type_old NE cv_lic_prof.
+              lt_bapiagr = lt_bapiagr_temp.
+              lv_lic_type_new = cv_lic_prof.
+              lv_flag = abap_true.
+            ELSE.
+              READ TABLE lt_sens_old INTO ls_sens_old WITH KEY sensitivity = cv_role_med.
+              IF sy-subrc = 0 AND lv_lic_type_old EQ cv_lic_med.
+              ELSEIF sy-subrc = 0 AND lv_lic_type_old NE cv_lic_med.
+                lt_bapiagr = lt_bapiagr_temp.
+                lv_lic_type_new = cv_lic_med.
+                lv_flag = abap_true.
+              ELSEIF sy-subrc IS NOT INITIAL.
+                lt_bapiagr = lt_bapiagr_temp.
+                lv_lic_type_new = cv_lic_med.
+                lv_flag = abap_true.
+              ENDIF.
+            ENDIF.
+          ELSE.
+            READ TABLE lt_role_lic INTO ls_role_lic WITH KEY sensitivity = cv_role_shp.
+            IF sy-subrc = 0.
+              READ TABLE lt_sens_old INTO ls_sens_old WITH KEY sensitivity = cv_role_prof.
+              IF sy-subrc = 0 AND lv_lic_type_old EQ cv_lic_prof.
+              ELSEIF sy-subrc = 0 AND lv_lic_type_old NE cv_lic_prof.
+                lt_bapiagr = lt_bapiagr_temp.
+                lv_lic_type_new = cv_lic_prof.
+                lv_flag = abap_true.
+              ELSE.
+                READ TABLE lt_sens_old INTO ls_sens_old WITH KEY sensitivity = cv_role_med.
+                IF sy-subrc = 0 AND lv_lic_type_old EQ cv_lic_med.
+                ELSEIF sy-subrc = 0 AND lv_lic_type_old NE cv_lic_med.
+                  lt_bapiagr = lt_bapiagr_temp.
+                  lv_lic_type_new = cv_lic_med.
+                  lv_flag = abap_true.
+                ELSE.
+                  READ TABLE lt_sens_old INTO ls_sens_old WITH KEY sensitivity = cv_role_shp.
+                  IF sy-subrc = 0 AND lv_lic_type_old EQ cv_lic_shp.
+                  ELSEIF sy-subrc = 0 AND lv_lic_type_old NE cv_lic_shp.
+                    lt_bapiagr = lt_bapiagr_temp.
+                    lv_lic_type_new = cv_lic_shp.
+                    lv_flag = abap_true.
+                  ELSEIF sy-subrc IS NOT INITIAL.
+                    lt_bapiagr = lt_bapiagr_temp.
+                    lv_lic_type_new = cv_lic_shp.
+                    lv_flag = abap_true.
+                  ENDIF.
+                ENDIF.
+              ENDIF.
+            ELSE.
+              READ TABLE lt_role_lic INTO ls_role_lic WITH KEY sensitivity = cv_role_mnt.
+              IF sy-subrc = 0.
+                READ TABLE lt_sens_old INTO ls_sens_old WITH KEY sensitivity = cv_role_prof.
+                IF sy-subrc = 0 AND lv_lic_type_old EQ cv_lic_prof.
+                ELSEIF sy-subrc = 0 AND lv_lic_type_old NE cv_lic_prof.
+                  lt_bapiagr = lt_bapiagr_temp.
+                  lv_lic_type_new = cv_lic_prof.
+                  lv_flag = abap_true.
+                ELSE.
+                  READ TABLE lt_sens_old INTO ls_sens_old WITH KEY sensitivity = cv_role_med.
+                  IF sy-subrc = 0 AND lv_lic_type_old EQ cv_lic_med.
+                  ELSEIF sy-subrc = 0 AND lv_lic_type_old NE cv_lic_med.
+                    lt_bapiagr = lt_bapiagr_temp.
+                    lv_lic_type_new = cv_lic_med.
+                    lv_flag = abap_true.
+                  ELSE.
+                    READ TABLE lt_sens_old INTO ls_sens_old WITH KEY sensitivity = cv_role_shp.
+                    IF sy-subrc = 0 AND lv_lic_type_old EQ cv_lic_shp.
+                    ELSEIF sy-subrc = 0 AND lv_lic_type_old NE cv_lic_shp.
+                      lt_bapiagr = lt_bapiagr_temp.
+                      lv_lic_type_new = cv_lic_shp.
+                      lv_flag = abap_true.
+                    ELSE.
+                      READ TABLE lt_sens_old INTO ls_sens_old WITH KEY sensitivity = cv_role_mnt.
+                      IF sy-subrc = 0 AND lv_lic_type_old EQ cv_lic_mnt.
+                      ELSEIF sy-subrc = 0 AND lv_lic_type_old NE cv_lic_mnt.
+                        lt_bapiagr = lt_bapiagr_temp.
+                        lv_lic_type_new = cv_lic_mnt.
+                        lv_flag = abap_true.
+                      ELSEIF sy-subrc IS NOT INITIAL.
+                        lt_bapiagr = lt_bapiagr_temp.
+                        lv_lic_type_new = cv_lic_mnt.
+                        lv_flag = abap_true.
+                      ENDIF.
+                    ENDIF.
+                  ENDIF.
+                ENDIF.
+              ELSE.
+                READ TABLE lt_role_lic INTO ls_role_lic WITH KEY sensitivity = cv_role_gf.
+                IF sy-subrc = 0.
+                  READ TABLE lt_sens_old INTO ls_sens_old WITH KEY sensitivity = cv_role_prof.
+                  IF sy-subrc = 0 AND lv_lic_type_old EQ cv_lic_prof.
+                  ELSEIF sy-subrc = 0 AND lv_lic_type_old NE cv_lic_prof.
+                    lt_bapiagr = lt_bapiagr_temp.
+                    lv_lic_type_new = cv_lic_prof.
+                    lv_flag = abap_true.
+                  ELSE.
+                    READ TABLE lt_sens_old INTO ls_sens_old WITH KEY sensitivity = cv_role_med.
+                    IF sy-subrc = 0 AND lv_lic_type_old EQ cv_lic_med.
+                    ELSEIF sy-subrc = 0 AND lv_lic_type_old NE cv_lic_med.
+                      lt_bapiagr = lt_bapiagr_temp.
+                      lv_lic_type_new = cv_lic_med.
+                      lv_flag = abap_true.
+                    ELSE.
+                      READ TABLE lt_sens_old INTO ls_sens_old WITH KEY sensitivity = cv_role_shp.
+                      IF sy-subrc = 0 AND lv_lic_type_old EQ cv_lic_shp.
+                      ELSEIF sy-subrc = 0 AND lv_lic_type_old NE cv_lic_shp.
+                        lt_bapiagr = lt_bapiagr_temp.
+                        lv_lic_type_new = cv_lic_shp.
+                        lv_flag = abap_true.
+                      ELSE.
+                        READ TABLE lt_sens_old INTO ls_sens_old WITH KEY sensitivity = cv_role_mnt.
+                        IF sy-subrc = 0 AND lv_lic_type_old EQ cv_lic_mnt.
+                        ELSEIF sy-subrc = 0 AND lv_lic_type_old NE cv_lic_mnt.
+                          lt_bapiagr = lt_bapiagr_temp.
+                          lv_lic_type_new = cv_lic_mnt.
+                          lv_flag = abap_true.
+                        ELSE.
+                          READ TABLE lt_sens_old INTO ls_sens_old WITH KEY sensitivity = cv_role_gf.
+                          IF sy-subrc = 0 AND lv_lic_type_old EQ cv_lic_gf.
+                          ELSEIF sy-subrc = 0 AND lv_lic_type_old NE cv_lic_gf.
+                            lt_bapiagr = lt_bapiagr_temp.
+                            lv_lic_type_new = cv_lic_gf.
+                            lv_flag = abap_true.
+                          ELSEIF sy-subrc IS NOT INITIAL.
+                            lt_bapiagr = lt_bapiagr_temp.
+                            lv_lic_type_new = cv_lic_gf.
+                            lv_flag = abap_true.
+                          ENDIF.
+                        ENDIF.
+                      ENDIF.
+                    ENDIF.
+                  ENDIF.
+                ENDIF.
+              ENDIF.
+            ENDIF.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+
+    IF lt_bapiagr IS INITIAL.
+      lt_bapiagr = lt_bapiagr_temp.
+    ENDIF.
+    "" EOC by harsh on 10/04/25 for License Customization
+
+    IF lt_bapiagr IS NOT INITIAL.
+
+      REFRESH lt_bapiagr. CLEAR lt_bapiagr.
+      APPEND LINES OF lt_usr_roles TO lt_bapiagr .
+      LOOP AT it_role INTO ls_role WHERE uname = iv_usr OR uname = ''.
+        ls_bapiagr-agr_name = ls_role-agr_name.
+        ls_bapiagr-from_dat = ls_role-begda.
+        ls_bapiagr-to_dat = ls_role-endda.
+        COLLECT ls_bapiagr INTO lt_bapiagr.
+      ENDLOOP.
+    ENDIF.
+
+
+    IF NOT lt_bapiagr IS INITIAL.
+      CALL FUNCTION 'SUSR_BAPI_USER_ACTGROUPS_ASSIG'
+        EXPORTING
+          username       = iv_usr
+        TABLES
+          activitygroups = lt_bapiagr
+          return         = et_message.
+
+      "" SOC by harsh on 10/04/25 for License Customization
+      IF lv_flag IS NOT INITIAL AND lv_lic_type_old NE lv_lic_type_new.
+        "" Update user license
+        ls_uclass-lic_type = lv_lic_type_new.
+        ls_uclassx-uclass = abap_true.
+        CALL FUNCTION 'BAPI_USER_CHANGE'
+          EXPORTING
+            username = iv_usr
+            uclass   = ls_uclass
+            uclassx  = ls_uclassx
+          TABLES
+            return   = lt_return.
+      ENDIF.
+      "" EOC by harsh on 10.04.25 for License Customization
+    ENDIF.
+
+    APPEND LINES OF lt_message TO et_message.
+    DELETE et_message WHERE type = 'S' OR type = 'I'.
+  ENDMETHOD.
+
+
+
+  METHOD iow_ygrac_enh_cl_gria_nhrobj~del_role_user.
+*"------------------------------------------------------------------------*
+*" Declaration of Overwrite-method, do not insert any comments here please!
+*"
+*"class-methods DEL_ROLE_USER
+*"  importing
+*"    !IV_USR type XUBNAME
+*"    !IT_ROLE type /GRCPI/GRIA_T_USR_ASGN_ROLE
+*"  exporting
+*"    !ET_MESSAGE type BAPIRET2_TAB
+*"    !EV_RETURN_CODE type /GRCPI/GRIA_COUNT .
+*"------------------------------------------------------------------------*
+
+    "--------------------------------------------
+* This method is used to delete role and user and thats all it is supposed to do
+    "---------------------------------------------
+
+*IF IT_SUBSYSTEM IS INITIAL.
+
+*  TYPES  : BEGIN OF s_role_temp,
+*               uname TYPE agr_users-uname,
+*               agr_name TYPE agr_users-agr_name,
+*               from_dat TYPE agr_users-from_dat,
+*               to_dat  TYPE agr_users-to_dat,
+*             END OF s_role_temp.
+*
+*  TYPES : BEGIN OF s_sing_roles,
+*           agr_name TYPE agr_users-agr_name,
+*           child_agr TYPE agr_agrs-child_agr,
+*          END OF s_sing_roles.
+*
+*  DATA ls_role_temp TYPE s_role_temp.
+*  DATA lt_role_temp TYPE TABLE OF s_role_temp.
+*  DATA lt_single_role TYPE TABLE OF s_sing_roles.
+*  DATA ls_single_role LIKE LINE OF lt_single_role.
+*
+*  DATA: lt_all_roles TYPE TABLE OF str_agrs,
+*        ls_all_roles LIKE LINE OF lt_all_roles.
+*
+*  DATA : lt_del_usr_names TYPE TABLE OF ust04,
+*         ls_del_usr_names LIKE LINE OF lt_del_usr_names,
+*         lt_del_usr_temp TYPE TABLE OF ust04.
+
+    DATA: lt_usr_roles    TYPE TABLE OF usagr,
+          ls_usr_roles    TYPE usagr,
+          lt_roles_assign TYPE TABLE OF usagr,
+          ls_roles_assign TYPE usagr.
+
+    DATA ls_input_role LIKE LINE OF it_role.
+
+    READ TABLE it_role INTO ls_input_role INDEX 1.
+
+    IF it_role IS NOT INITIAL.
+
+      CALL FUNCTION 'SUSR_USER_AGR_BUFFER_CLEAR'.
+
+      CALL FUNCTION 'SUSR_USER_AGR_ACTIVITYGR_GET'
+        EXPORTING
+          user_name           = iv_usr
+        TABLES
+          user_activitygroups = lt_usr_roles
+        EXCEPTIONS
+          user_name_not_exist = 1
+          OTHERS              = 2.
+
+      LOOP AT lt_usr_roles INTO ls_usr_roles.
+
+        IF ls_input_role-begda IS NOT INITIAL AND ls_input_role-endda IS NOT INITIAL.
+
+          READ TABLE it_role WITH KEY agr_name = ls_usr_roles-agr_name
+               begda = ls_usr_roles-from_dat endda = ls_usr_roles-to_dat
+               TRANSPORTING NO FIELDS.
+
+        ELSE.
+
+
+          READ TABLE it_role WITH KEY agr_name = ls_usr_roles-agr_name
+*             begda = ls_usr_roles-from_dat endda = ls_usr_roles-to_dat
+                 TRANSPORTING NO FIELDS.
+        ENDIF.
+
+        IF sy-subrc = 0.
+
+          CONTINUE.
+
+        ELSE.
+
+          APPEND ls_usr_roles TO lt_roles_assign.
+
+        ENDIF.
+
+      ENDLOOP.
+
+      """Begin of code by harsh goyal on 28.04.25"""""""
+      CLEAR ls_roles_assign.
+      TYPES: BEGIN OF ty_role_name,
+               role_name TYPE agr_name,
+             END OF ty_role_name.
+
+      DATA: lt_role_name TYPE STANDARD TABLE OF ty_role_name,
+            ls_role_name TYPE ty_role_name,
+            lt_role_old  TYPE STANDARD TABLE OF ty_role_name,
+            ls_role_old  TYPE ty_role_name.
+
+      TYPES: BEGIN OF ty_role_lic,
+               role_name   TYPE char300,
+               sensitivity TYPE numc3,
+             END OF ty_role_lic.
+
+      DATA: lt_role_lic TYPE STANDARD TABLE OF ty_role_lic,
+            ls_role_lic TYPE ty_role_lic,
+            lt_sens_old TYPE STANDARD TABLE OF ty_role_lic,
+            ls_sens_old TYPE ty_role_lic.
+
+      TYPES: BEGIN OF ty_lic_data,
+               mandt         TYPE mandt,
+               connector     TYPE char3,
+               lic_type      TYPE char3,
+               utyptext      TYPE utyptext,
+               available_lic TYPE int2,
+               used_lic      TYPE int2,
+             END OF ty_lic_data.
+      DATA: lt_lic_data            TYPE STANDARD TABLE OF ty_lic_data,
+            ls_lic_data_p          TYPE ty_lic_data,
+            ls_lic_data_m          TYPE ty_lic_data,
+            ls_lic_data_s          TYPE ty_lic_data,
+            ls_lic_data_mnt        TYPE ty_lic_data,
+            ls_lic_data_p_update   TYPE ty_lic_data,
+            ls_lic_data_m_update   TYPE ty_lic_data,
+            ls_lic_data_s_update   TYPE ty_lic_data,
+            ls_lic_data_mnt_update TYPE ty_lic_data.
+
+      DATA: lv_lic_type_old TYPE usertypen,
+            lv_lic_type_new TYPE usertypen,
+            lv_connector    TYPE rfcdest,
+            lt_message      TYPE bapiret2_tab,
+            lv_flag         TYPE char1,
+            ls_uclass       TYPE bapiuclass,
+            ls_uclassx      TYPE bapiuclassx,
+            lt_return       TYPE STANDARD TABLE OF bapiret2,
+            cv_connector    TYPE rfcdest,
+            lv_msg          TYPE char1.
+
+      CONSTANTS:cv_lic_prof  TYPE char2 VALUE 'GA',
+                cv_lic_med   TYPE char2 VALUE 'GB',
+                cv_lic_shp   TYPE char2 VALUE 'GC',
+                cv_lic_mnt   TYPE char2 VALUE 'GD',
+                cv_lic_gf    TYPE char2 VALUE 'GF',
+                cv_lic_emp   TYPE char2 VALUE 'CE',
+                cv_role_prof TYPE numc3 VALUE 1,
+                cv_role_med  TYPE numc3 VALUE 2,
+                cv_role_shp  TYPE numc3 VALUE 3,
+                cv_role_mnt  TYPE numc3 VALUE 4,
+                cv_role_gf   TYPE numc3 VALUE 5,
+                cv_core      TYPE p DECIMALS 4 VALUE '0.2000',
+                cv_ess       TYPE p DECIMALS 4 VALUE '0.0333',
+                cv_error     TYPE char1 VALUE 'E'.
+
+
+      LOOP AT lt_roles_assign INTO ls_roles_assign.
+        ls_role_name-role_name = ls_roles_assign-agr_name.
+        APPEND ls_role_name TO lt_role_name.
+        CLEAR ls_role_name.
+      ENDLOOP.
+
+      "" Get user license
+      CALL FUNCTION 'YGRC_GET_USER_LICENSE'
+        EXPORTING
+          iv_user     = iv_usr
+        IMPORTING
+          ev_lic_type = lv_lic_type_old.
+* -> BEGIN OF CHANGES BY Arnav ON 04Jun25
+      SELECT connector INTO lv_connector UP TO 1 ROWS FROM ygrc_client ORDER BY PRIMARY KEY. ENDSELECT.
+* -> END OF CHANGES BY Arnav ON 04Jun25
+      IF sy-subrc = 0.
+        SELECT * FROM agr_users INTO TABLE @DATA(lt_agr_users)
+                        WHERE uname EQ @iv_usr
+                        AND to_dat GE @sy-datum.
+        IF lt_agr_users IS NOT INITIAL.
+          LOOP AT lt_agr_users INTO DATA(ls_agr_users).
+            ls_role_old-role_name = ls_agr_users-agr_name.
+            READ TABLE it_role INTO DATA(ls_rol) WITH KEY agr_name = ls_role_old-role_name.
+            IF sy-subrc NE 0.
+              APPEND ls_role_old TO lt_role_old.
+            ENDIF.
+            CLEAR:ls_role_old,ls_agr_users,ls_rol.
+          ENDLOOP.
+        ENDIF.
+        "" Get role sensitivity
+        CALL FUNCTION 'YGRC_GET_ROLE_SENSITIVITY'
+          DESTINATION lv_connector
+          TABLES
+            it_role             = lt_role_name
+            et_role_sensitivity = lt_role_lic
+            it_role_old         = lt_role_old
+            et_sens_old         = lt_sens_old.
+
+        "" Read license type
+        READ TABLE lt_role_lic TRANSPORTING NO FIELDS WITH KEY sensitivity = cv_role_prof.
+        IF sy-subrc <> 0.
+          READ TABLE lt_role_lic TRANSPORTING NO FIELDS WITH KEY sensitivity = cv_role_med.
+          IF sy-subrc = 0.
+            READ TABLE lt_sens_old INTO ls_sens_old WITH KEY sensitivity = cv_role_med.
+            IF sy-subrc = 0.
+              IF lv_lic_type_old = cv_lic_prof.
+                lv_lic_type_new = cv_lic_med.
+                lv_flag = abap_true.
+              ELSEIF lv_lic_type_old NE cv_lic_med.
+                lv_lic_type_new = cv_lic_med.
+                lv_flag = abap_true.
+              ENDIF.
+            ENDIF.
+          ELSE.
+            READ TABLE lt_role_lic TRANSPORTING NO FIELDS WITH KEY sensitivity = cv_role_shp.
+            IF sy-subrc = 0.
+              READ TABLE lt_sens_old INTO ls_sens_old WITH KEY sensitivity = cv_role_shp.
+              IF sy-subrc = 0.
+                IF lv_lic_type_old = cv_lic_prof.
+                  lv_lic_type_new = cv_lic_shp.
+                  lv_flag = abap_true.
+                ELSEIF lv_lic_type_old = cv_lic_med.
+                  lv_lic_type_new = cv_lic_shp.
+                  lv_flag = abap_true.
+                ELSEIF lv_lic_type_old NE cv_lic_shp.
+                  lv_lic_type_new = cv_lic_shp.
+                  lv_flag = abap_true.
+                ENDIF.
+              ENDIF.
+            ELSE.
+              READ TABLE lt_role_lic TRANSPORTING NO FIELDS WITH KEY sensitivity = cv_role_mnt.
+              IF sy-subrc = 0.
+                READ TABLE lt_sens_old INTO ls_sens_old WITH KEY sensitivity = cv_role_mnt.
+                IF sy-subrc = 0.
+                  IF lv_lic_type_old = cv_lic_prof.
+                    lv_lic_type_new = cv_lic_mnt.
+                    lv_flag = abap_true.
+                  ELSEIF lv_lic_type_old = cv_lic_med.
+                    lv_lic_type_new = cv_lic_mnt.
+                    lv_flag = abap_true.
+                  ELSEIF lv_lic_type_old = cv_lic_shp.
+                    lv_lic_type_new = cv_lic_mnt.
+                    lv_flag = abap_true.
+                  ELSEIF lv_lic_type_old NE cv_lic_mnt.
+                    lv_lic_type_new = cv_lic_mnt.
+                    lv_flag = abap_true.
+                  ENDIF.
+                ENDIF.
+              ELSE.
+                READ TABLE lt_role_lic TRANSPORTING NO FIELDS WITH KEY sensitivity = cv_role_gf.
+                IF sy-subrc = 0.
+                  READ TABLE lt_sens_old INTO ls_sens_old WITH KEY sensitivity = cv_role_gf.
+                  IF sy-subrc = 0.
+                    IF lv_lic_type_old = cv_lic_prof.
+                      lv_lic_type_new = cv_lic_gf.
+                      lv_flag = abap_true.
+                    ELSEIF lv_lic_type_old = cv_lic_med.
+                      lv_lic_type_new = cv_lic_gf.
+                      lv_flag = abap_true.
+                    ELSEIF lv_lic_type_old = cv_lic_shp.
+                      lv_lic_type_new = cv_lic_gf.
+                      lv_flag = abap_true.
+                    ELSEIF lv_lic_type_old = cv_lic_mnt.
+                      lv_lic_type_new = cv_lic_gf.
+                      lv_flag = abap_true.
+                    ELSEIF lv_lic_type_old NE cv_lic_gf.
+                      lv_lic_type_new = cv_lic_gf.
+                      lv_flag = abap_true.
+                    ENDIF.
+                  ELSE.
+                    lv_lic_type_new = cv_lic_gf.
+                    lv_flag = abap_true.
+                  ENDIF.
+                ELSE.
+                  lv_lic_type_new = cv_lic_gf.
+                  lv_flag = abap_true.
+                ENDIF.
+              ENDIF.
+            ENDIF.
+          ENDIF.
+        ELSE.
+          READ TABLE lt_sens_old INTO ls_sens_old WITH KEY sensitivity = cv_role_prof.
+          IF sy-subrc = 0 AND lv_lic_type_old NE cv_lic_prof.
+            lv_lic_type_new = cv_lic_prof.
+            lv_flag = abap_true.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+
+      IF lt_message IS INITIAL.
+        CALL FUNCTION 'BAPI_USER_ACTGROUPS_ASSIGN'
+          EXPORTING
+            username       = iv_usr
+          TABLES
+            activitygroups = lt_roles_assign
+            return         = et_message.
+      ENDIF.
+
+      IF lv_flag IS NOT INITIAL.
+        "" Update user license
+        ls_uclass-lic_type = lv_lic_type_new.
+        ls_uclassx-uclass = abap_true.
+        CALL FUNCTION 'BAPI_USER_CHANGE'
+          EXPORTING
+            username = iv_usr
+            uclass   = ls_uclass
+            uclassx  = ls_uclassx
+          TABLES
+            return   = lt_return.
+
+      ENDIF.
+
+      APPEND LINES OF lt_message TO et_message.
+      DELETE et_message WHERE type = 'I' OR type = 'S'.
+
+      """End of code by harsh goyal on 28.04.25"""""""""
+
+*    IF lt_roles_assign IS NOT INITIAL.
+
+      """Commented by harsh goyal on 29.04.25"""""""""""""
+*      CALL FUNCTION 'BAPI_USER_ACTGROUPS_ASSIGN'
+*        EXPORTING
+*          username       = iv_usr
+*        TABLES
+*          activitygroups = lt_roles_assign
+*          return         = et_message.
+*
+*      DELETE et_message WHERE type = 'I' OR type = 'S'. "Note 2468685
+      """End of commented by harsh goyal on 29.04.25"""""""""""""
+*    ENDIF.
+
+    ENDIF.
+
+*  IF it_role IS NOT INITIAL.
+*    SELECT uname agr_name from_dat to_dat FROM agr_users
+*        INTO TABLE lt_role_temp
+*        FOR ALL ENTRIES IN it_role
+*        WHERE uname = it_role-uname
+*          AND agr_name = it_role-agr_name.
+*  ENDIF.
+*
+*  IF lt_role_temp IS NOT INITIAL.
+*    LOOP AT lt_role_temp INTO ls_role_temp .
+*      MOVE-CORRESPONDING ls_role_temp TO ls_all_roles.
+*      COLLECT ls_all_roles INTO lt_all_roles.
+*      CLEAR ls_role_temp.
+*    ENDLOOP.
+*
+*    SELECT agr_name child_agr FROM agr_agrs INTO TABLE lt_single_role
+*    FOR ALL ENTRIES IN lt_role_temp
+*    WHERE agr_name = lt_role_temp-agr_name.
+*    IF lt_single_role IS NOT INITIAL.
+*      LOOP AT lt_single_role INTO ls_single_role.
+*        READ TABLE lt_role_temp INTO ls_role_temp
+*          WITH KEY agr_name = ls_single_role-agr_name.
+*        IF sy-subrc = 0.
+*          ls_all_roles-uname = ls_role_temp-uname.
+*          ls_all_roles-agr_name = ls_single_role-child_agr.
+*          ls_all_roles-from_dat = ls_role_temp-from_dat.
+*          ls_all_roles-to_dat =  ls_role_temp-to_dat.
+*          COLLECT ls_all_roles INTO lt_all_roles.
+*          CLEAR ls_all_roles.
+*        ENDIF.
+*      ENDLOOP.
+*    ENDIF.
+*
+*    CALL FUNCTION 'PRGN_USER_ASSIGNMENT_CHANGE'
+*      EXPORTING
+*        no_commit                   = 'X'
+*        show_error_messages         = 'X'
+*        check_zbv_is_active         = ''
+*      TABLES
+*        delete_users_from_actgroups = lt_all_roles
+*        it_bapiret2                 = et_message.
+*    DELETE et_message WHERE type = 'I' OR type = 'S'.
+*    IF et_message IS NOT INITIAL.
+*      ev_return_code = 4.
+*    ELSE.
+*      LOOP AT lt_single_role INTO ls_single_role.
+*        DELETE lt_all_roles WHERE agr_name = ls_single_role-agr_name.
+*      ENDLOOP.
+*      IF lt_all_roles IS NOT INITIAL.
+*        SELECT * FROM ust04 INTO TABLE lt_del_usr_names
+*             FOR ALL ENTRIES IN lt_all_roles WHERE bname = lt_all_roles-uname.
+*        SORT lt_all_roles.
+*        LOOP AT lt_all_roles INTO ls_all_roles.
+*          READ TABLE lt_del_usr_names INTO ls_del_usr_names
+*                    WITH KEY bname = ls_all_roles-uname BINARY SEARCH .
+*          INSERT ls_del_usr_names INTO TABLE lt_del_usr_temp.
+*
+*
+*
+*
+*            CALL FUNCTION 'PRGN_ACTIVITY_GROUP_USERPROF'
+*              EXPORTING
+*               activity_group                      = ls_all_roles-agr_name
+*               action_delete                       = 'X'
+*               display_messages                    = 'X'
+*             TABLES
+*               del_tab                             = lt_del_usr_temp
+*             EXCEPTIONS
+*               no_authority_for_user_compare       = 1
+*               at_least_one_user_enqueued          = 2
+*               authority_incomplete                = 3
+*               no_profiles_available               = 4
+**             TOO_MANY_PROFILES_IN_USER           = 5
+**             CHILD_AGR_ENQUEUED                  = 6
+**             OTHERS                              = 7
+*                      .
+*            IF sy-subrc <> 0.
+*              ROLLBACK WORK.
+*              CASE sy-subrc.
+*                WHEN 1.
+*                  et_message = /grcpi/cl_gria_util=>get_return_message(
+*                    iv_type   = 'E'
+*                    iv_number = '082' ).
+*                  ev_return_code = /grcpi/cl_gria_util=>gc_return_false.
+*                WHEN 2.
+*                  et_message = /grcpi/cl_gria_util=>get_return_message(
+*                     iv_type   = 'E'
+*                     iv_number = '083' ).
+*                  ev_return_code = /grcpi/cl_gria_util=>gc_return_false.
+*                WHEN 3.
+*                  et_message = /grcpi/cl_gria_util=>get_return_message(
+*                     iv_type   = 'E'
+*                     iv_number = '084' ).
+*                  ev_return_code = /grcpi/cl_gria_util=>gc_return_false.
+*                WHEN 4.
+*                  et_message = /grcpi/cl_gria_util=>get_return_message(
+*                      iv_type   = 'E'
+*                      iv_number = '085' ).
+*                  ev_return_code = /grcpi/cl_gria_util=>gc_return_false.
+*                WHEN OTHERS.
+*              ENDCASE.
+*            ENDIF.
+*            REFRESH lt_del_usr_temp.
+*          ENDLOOP.
+*        ENDIF.
+*        COMMIT WORK.
+*      ENDIF.
+*
+*
+*
+*    ENDIF.
+
+
+  ENDMETHOD.

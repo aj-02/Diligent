@@ -1,0 +1,100 @@
+@AbapCatalog.sqlViewName: 'YGRC_HR_TRAN'
+
+
+@AbapCatalog.compiler.compareFilter: true
+
+
+@AbapCatalog.preserveKey: true
+
+
+@AccessControl.authorizationCheck: #NOT_REQUIRED
+
+
+@EndUserText.label: 'GRC Employee Transfer Data'
+
+
+@Metadata.ignorePropagatedAnnotations: true
+
+
+define view YGRC_HR_USER_TRANSFER 
+
+
+with parameters sydat : abap.dats @<Environment.systemField: #SYSTEM_DATE
+
+
+as select distinct from usr02 as _user
+
+
+    inner join pa0105 as _id on _user.bname = _id.usrid
+
+
+    inner join pa0000 as _hr on _id.pernr = _hr.pernr
+
+
+{
+
+
+  key _user.bname,
+
+
+      _hr.pernr,
+
+
+      _hr.begda,
+
+
+      _hr.endda,
+
+
+      _hr.aedtm,
+
+
+      _hr.massn,
+
+
+      _hr.massg
+
+
+}
+
+
+where
+
+
+_id.usrty = '0001' and ( ( _hr.massn = 'A5' and _hr.massg = '03' ) 
+
+
+  or ( _hr.massn = 'A5' and _hr.massg = '08' )
+
+
+  or ( _hr.massn = 'A5' and _hr.massg = '10' )
+
+
+  or ( _hr.massn = 'A5' and _hr.massg = '12' )
+
+
+  or ( _hr.massn = 'A7' and _hr.massg = '01' ) 
+
+
+  or ( _hr.massn = 'A7' and _hr.massg = '03' )
+
+
+  or ( _hr.massn = 'A7' and _hr.massg = '04' )
+
+
+  or ( _hr.massn = 'A7' and _hr.massg = '06' )
+
+
+  or ( _hr.massn = 'A7' and _hr.massg = '08' )
+
+
+  or ( _hr.massn = 'A7' and _hr.massg = '13' ) 
+
+
+  or ( _hr.massn = 'A7' and _hr.massg = '15' ) 
+
+
+  or ( _hr.massn = 'A7' and _hr.massg = '16' )
+
+
+  or ( _hr.massn = 'A7' and _hr.massg = '17' ) 

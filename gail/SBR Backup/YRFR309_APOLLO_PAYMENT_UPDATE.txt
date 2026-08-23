@@ -1,0 +1,287 @@
+*&---------------------------------------------------------------------*
+*& Report YRFR309_APOLLO_PAYMENT_UPDATE
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+REPORT yrfr309_apollo_payment_update.
+
+TABLES: yrfa_cl_med_pi_h.
+
+INCLUDE yrfr309_apollo_payment_top.   "Data Declaration
+INCLUDE yrfr309_apollo_payment_scr.   "Selection-Screen
+
+
+START-OF-SELECTION.
+
+  IF s_date IS NOT INITIAL.
+    SELECT company_code,
+           document_no,
+*           clr_doc_no,
+*           clr_doc_cc,        "Added by Rohtash/Brijesh Charm:4000008380 Date:14/06/2024
+           fiscal_year,
+           posting_date,
+           payment_doc_no
+      FROM yrfa_cl_med_pi_h
+      INTO TABLE @DATA(li_medh)
+      WHERE posting_date IN @s_date.
+    IF sy-subrc EQ 0 AND li_medh IS NOT INITIAL.
+
+      "get all docuemnts with NO Paymeny document
+      gi_payment =  VALUE #( FOR ls IN li_medh
+                             WHERE ( payment_doc_no IS INITIAL )
+                                   ( belnr = ls-document_no
+*                                   ( belnr = ls-clr_doc_no
+                                     bukrs = ls-company_code
+*                                     bukrs = ls-clr_doc_cc
+                                     gjahr = ls-fiscal_year ) ).
+
+      IF gi_payment IS NOT INITIAL.
+        "Get Payemnt details using FM
+        CALL FUNCTION 'YFI_PAYMENT_DETAILS'
+          EXPORTING
+            it_payment_details = gi_payment
+          IMPORTING
+            et_payment_deatils = ge_payment.
+
+        IF ge_payment IS NOT INITIAL.
+
+          LOOP AT ge_payment INTO DATA(ls_payment).
+
+            CALL FUNCTION 'ENQUEUE_E_TABLE'  "Lock table
+              EXPORTING
+                tabname        = 'YRFA_CL_MED_PI_H'
+              EXCEPTIONS
+                foreign_lock   = 1
+                system_failure = 2
+                OTHERS         = 3.
+            IF sy-subrc EQ 0.
+
+  """""""""""""""""""""""""""""""soc mobin/brijesh 23.07.2023"""""""""""""""
+**               SELECT SINGLE MESSAGE FROM YRFA_ICICI_PROXY  INTO @DATA(lv_msg) WHERE STATUS = '000001'
+**                                                                                  AND BELNR = @ls_payment-payment_doc_no
+**                                                                                  AND BUKRS = @ls_payment-pay_cc
+**                                                                                  AND GJAHR = @ls_payment-pay_year.
+**                 if sy-subrc eq 0.
+**                   IF  lv_msg+0(4) = 'ICIC'.
+**                       ls_payment-utr_no    = LV_MSG+0(22).
+**                    ENDIF.
+**                   endif.
+  """"""""""""""""""""""""""""""eoc mobin/brijesh 23.07.2023""""""""""""""""
+
+
+
+              ""Update table with corresponding records
+              UPDATE yrfa_cl_med_pi_h SET payment_doc_no  = ls_payment-payment_doc_no
+                                          pay_cc          = ls_payment-pay_cc
+                                          pay_year        = ls_payment-pay_year
+                                          payment_date    = ls_payment-payment_date
+                                          utr_no          = ls_payment-utr_no
+                                          apollo_bnk_name = ls_payment-apollo_bnk_name
+                                          apollo_acc_no   = ls_payment-apollo_acc_no
+                                          ifsc_code       = ls_payment-ifsc_code
+                                       WHERE document_no  = ls_payment-document_no
+                                         AND fiscal_year  = ls_payment-fiscal_year.
+
+
+            ENDIF.
+
+            CALL FUNCTION 'DEQUEUE_E_TABLE'  "Unlock table
+              EXPORTING
+                tabname = 'YRFA_CL_MED_PI_H'.
+
+          ENDLOOP.
+          WAIT UP TO 2 SECONDS.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+
+*just for sake of easiness
+
+*  DATA: gi_alv TYPE TABLE OF ty_alv,
+*      lt_gi type STANDARD TABLE OF ty_alv,
+*      me type ref to YCO_SI_APOLLO_MED_PAYMENT_SAP,
+*      wa_mt_gi type YDT_APOLLO_MED_PAYMENT_SAP,
+*      mt_gi type STANDARD TABLE OF YDT_APOLLO_MED_PAYMENT_SAP,
+*      i_output type STANDARD TABLE OF YMT_APOLLO_MED_PAYMENT_SAP WITH HEADER LINE.
+
+  ""Display ALV
+
+
+  IF p_alv IS NOT INITIAL.
+*    BREAK-POINT.
+    PERFORM get_data.
+
+    IF gi_alv[] IS NOT INITIAL.
+
+      TRY.
+          CALL METHOD cl_salv_table=>factory
+            IMPORTING
+              r_salv_table = gr_salv
+            CHANGING
+              t_table      = gi_alv.
+
+** Display Sort, Filter, Export etc buttons
+          gr_functions = gr_salv->get_functions( ).
+          gr_functions->set_all( abap_true ).
+          gr_display = gr_salv->get_display_settings( ).
+
+          gr_columns = gr_salv->get_columns( ).
+          gr_columns->set_optimize( ).
+
+** Display ALV
+          gr_salv->display( ).
+
+        CATCH cx_salv_msg .
+      ENDTRY.
+    ENDIF.
+
+  ENDIF.  "IF p_alv IS NOT INITIAL AND gi_alv IS NOT INITIAL.
+
+*  DATA: gi_alv TYPE TABLE OF ty_alv,
+*      lt_gi type STANDARD TABLE OF ty_alv,
+*      me type ref to YCO_SI_APOLLO_MED_PAYMENT_SAP,
+*      wa_mt_gi type YDT_APOLLO_MED_PAYMENT_SAP,
+*      mt_gi type STANDARD TABLE OF YDT_APOLLO_MED_PAYMENT_SAP,
+*      i_output type STANDARD TABLE OF YMT_APOLLO_MED_PAYMENT_SAP WITH HEADER LINE.
+
+  IF p_send IS NOT INITIAL.
+
+    PERFORM get_data.
+
+    CLEAR:  wa_gi.
+    IF gi_alv[] IS NOT INITIAL.
+      LOOP AT gi_alv INTO wa_gi.
+        wa_mt_gi-apollo_acc_no = wa_gi-apollo_acc_no.
+        wa_mt_gi-apollo_bnk_name = wa_gi-apollo_bnk_name.
+        wa_mt_gi-apollo_gst_no = wa_gi-apollo_gst_no.
+        wa_mt_gi-deduction_disc = wa_gi-deduction_disc.
+        wa_mt_gi-gail_gst_no = wa_gi-gail_gst_no.
+        wa_mt_gi-gail_order_id = wa_gi-gail_order_id.
+        wa_mt_gi-gst_tds_amt = wa_gi-gst_tds_amt.
+        wa_mt_gi-ifsc_code = wa_gi-ifsc_code.
+        wa_mt_gi-it_tds_amt = wa_gi-it_tds_amt.
+        wa_mt_gi-other_deduction = wa_gi-other_deduction.
+        wa_mt_gi-payment_amt = wa_gi-payment_amt.
+        wa_mt_gi-payment_date = wa_gi-payment_date.
+        wa_mt_gi-utr_no = wa_gi-utr_no.
+
+        APPEND wa_mt_gi TO mt_gi.
+        CLEAR wa_mt_gi.
+      ENDLOOP.
+
+      CREATE OBJECT me.
+
+      i_output-mt_apollo_med_payment_sap-records = mt_gi.
+
+      CALL METHOD me->si_apollo_med_payment_sap_oa
+        EXPORTING
+          output = i_output.
+      COMMIT WORK.
+      IF sy-subrc = 0.
+        MESSAGE 'Data sent to portal Successfully.' TYPE 'S'.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+*&---------------------------------------------------------------------*
+*&      Form  GET_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM get_data .
+
+  SELECT a~gail_order_id, a~apollo_order_id, a~order_date, a~bill_no, a~bill_date, a~net_invoice_amt, a~apollo_gst_no,
+           a~gail_gst_no, b~other_deduction, a~apollo_acc_no, a~utr_no, a~payment_amt, a~payment_date, a~apollo_bnk_name,
+           a~ifsc_code, a~it_tds_amt, a~gst_tds_amt, b~deduction_disc
+      FROM yrfa_cl_med_pi_h AS a
+      INNER JOIN yrfa_cl_med_pi_i AS b
+      ON a~gail_order_id = b~gail_order_id
+      INTO TABLE @gi_alv
+      WHERE a~payment_date IN @s_date.
+*      GROUP BY a~gail_order_id, a~apollo_order_id, a~order_date, a~bill_no, a~bill_date.
+  IF sy-subrc EQ 0.
+    DATA(gi_data) = gi_alv[].
+    SORT gi_alv BY gail_order_id.
+    DELETE ADJACENT DUPLICATES FROM gi_alv.
+
+    LOOP AT gi_alv ASSIGNING FIELD-SYMBOL(<lfs_alv>).
+
+      "Other Deduction
+      lv_oth_dis = REDUCE yy_other_disc( INIT x TYPE yy_other_disc FOR lw IN gi_data
+                                         WHERE ( gail_order_id = <lfs_alv>-gail_order_id )
+                                         NEXT x = x + lw-other_deduction ).
+      <lfs_alv>-other_deduction = lv_oth_dis.
+
+      "Deduction Discount
+      lv_ded_dis = REDUCE yy_deduct_disc( INIT x TYPE yy_deduct_disc FOR lw IN gi_data
+                                          WHERE ( gail_order_id = <lfs_alv>-gail_order_id )
+                                          NEXT x = x + lw-deduction_disc ).
+      <lfs_alv>-deduction_disc = lv_ded_dis.
+
+    ENDLOOP.
+
+  ENDIF.
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&  Include           YRFR309_APOLLO_PAYMENT_TOP
+*&---------------------------------------------------------------------*
+
+DATA: gi_payment TYPE TABLE OF yfi_st_acc_doc,
+      ge_payment TYPE TABLE OF yfi_st_payment_details.
+
+TYPES: BEGIN OF ty_alv,
+         gail_order_id   TYPE yrfa_cl_med_pi_h-gail_order_id,
+         apollo_order_id TYPE yrfa_cl_med_pi_h-apollo_order_id,
+         order_date      TYPE yrfa_cl_med_pi_h-order_date,
+         bill_no         TYPE yrfa_cl_med_pi_h-bill_no,
+         bill_date       TYPE yrfa_cl_med_pi_h-bill_date,
+         net_invoice_amt TYPE yrfa_cl_med_pi_h-net_invoice_amt,
+         apollo_gst_no   TYPE yrfa_cl_med_pi_h-apollo_gst_no,
+         gail_gst_no     TYPE yrfa_cl_med_pi_h-gail_gst_no,
+         other_deduction TYPE yrfa_cl_med_pi_i-other_deduction,
+         apollo_acc_no   TYPE yrfa_cl_med_pi_h-apollo_acc_no,
+         utr_no          TYPE yrfa_cl_med_pi_h-utr_no,
+         payment_amt     TYPE yrfa_cl_med_pi_h-payment_amt,
+         payment_date    TYPE yrfa_cl_med_pi_h-payment_date,
+         apollo_bnk_name TYPE yrfa_cl_med_pi_h-apollo_bnk_name,
+         ifsc_code       TYPE yrfa_cl_med_pi_h-ifsc_code,
+         it_tds_amt      TYPE yrfa_cl_med_pi_h-it_tds_amt,
+         gst_tds_amt     TYPE yrfa_cl_med_pi_h-gst_tds_amt,
+         deduction_disc  TYPE yrfa_cl_med_pi_i-deduction_disc,
+       END OF ty_alv.
+
+DATA: gi_alv TYPE TABLE OF ty_alv,
+      lt_gi type STANDARD TABLE OF ty_alv,
+      wa_gi type ty_alv,
+      me type ref to YCO_SI_APOLLO_MED_PAYMENT_SAP,
+      wa_mt_gi type YDT_APOLLO_MED_PAYMENT_SAP_REC,
+      mt_gi type STANDARD TABLE OF YDT_APOLLO_MED_PAYMENT_SAP_REC,
+      i_output type STANDARD TABLE OF YMT_APOLLO_MED_PAYMENT_SAP WITH HEADER LINE.
+
+ DATA: lv_ded_dis TYPE yy_deduct_disc,
+          lv_oth_dis TYPE yy_other_disc.
+
+
+DATA: gr_salv      TYPE REF TO cl_salv_table,
+      gr_functions TYPE REF TO cl_salv_functions,
+      gr_display   TYPE REF TO cl_salv_display_settings,
+      gr_columns   TYPE REF TO cl_salv_columns_table.
+
+
+*&---------------------------------------------------------------------*
+*&  Include           YRFR309_APOLLO_PAYMENT_SCR
+*&---------------------------------------------------------------------*
+
+SELECTION-SCREEN: BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
+
+SELECT-OPTIONS: s_date FOR yrfa_cl_med_pi_h-posting_date OBLIGATORY.
+PARAMETERS: p_alv AS CHECKBOX.
+PARAMETERS : p_send as CHECKBOX.
+
+
+SELECTION-SCREEN: END OF BLOCK b1.

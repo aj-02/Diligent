@@ -1,0 +1,626 @@
+IF_HRFIO_ORGCHART~GET_ROOT_NODES
+IF_HRFIO_ORGCHART~GET_CHILD_NODES
+IF_HRFIO_ORGCHART~GET_ATTRIBUTE_VALUES
+IF_HRFIO_ORGCHART~GET_PARENT_FOR_ROOT_NODE
+IF_HRFIO_ORGCHART~GET_NODE_TYPE
+IF_HRFIO_ORGCHART~GET_NODE_DATA
+IF_HRFIO_ORGCHART~GET_OBJECT_DETAILS
+IF_HRFIO_ORGCHART~GET_ACTIONS
+
+
+  METHOD if_hrfio_orgchart~get_root_nodes.
+
+    DATA ls_root_node TYPE hrrootob.
+    DATA ls_error_message TYPE bapiret2.
+    DATA lv_objid TYPE hrobjid.
+    DATA lv_realo TYPE realo.
+    DATA lv_pernr TYPE pernr_d.
+
+    CASE iv_view_id.
+      WHEN 'MY_ORGANIZATION' OR 'MY_ORGUNITS_WITH_PEOPLE'.
+        lv_objid = iv_start_objid. "we need objid with the leading zeros
+        lv_realo = lv_objid.
+*       determine the orgunits lead by the given P
+        CALL FUNCTION 'HRWPC_GET_PATHROOTS'
+          EXPORTING
+            user                    = sy-uname
+            otype                   = iv_start_otype
+            objid                   = lv_realo
+            pathid                  = 'SAP_MANG'
+            begda                   = sy-datlo
+            endda                   = sy-datlo
+          TABLES
+            root_objects            = et_root_nodes
+          EXCEPTIONS
+            no_roots_found          = 1
+            invalid_function_module = 2
+            OTHERS                  = 3.
+        IF sy-subrc <> 0.
+          CLEAR et_root_nodes.
+        ENDIF.
+        DELETE et_root_nodes WHERE otype <> 'O'.
+
+      WHEN 'MY_TEAM' OR 'PAO_EMPLOYEES' OR 'ESS_EMPLOYEES'.
+*       take the given assignment as root object
+        ls_root_node-otype = iv_start_otype.
+        ls_root_node-objid = iv_start_objid.
+        APPEND ls_root_node TO et_root_nodes.
+
+      WHEN 'PAO_ORGANIZATION'.
+*       get orgunit for given employee
+        lv_pernr = iv_start_objid.
+        ls_root_node-otype = 'O'.
+        ls_root_node-objid = cl_hrfio_orgchart_utility=>get_orgunit_for_employee( iv_pernr =  lv_pernr ).
+        IF ls_root_node-objid IS NOT INITIAL.
+          APPEND ls_root_node TO et_root_nodes.
+        ENDIF.
+
+      WHEN OTHERS.
+*       unknown view ID
+        ls_error_message-id = 'HRFIO_ORGCHART'.
+        ls_error_message-number = '002'.
+        ls_error_message-type = 'E'.
+        ls_error_message-message_v1 = iv_view_id.
+        APPEND ls_error_message TO et_error_messages.
+    ENDCASE.
+
+  ENDMETHOD.
+
+
+  METHOD if_hrfio_orgchart~get_child_nodes.
+    DATA ls_root_node TYPE hrrootob.
+    DATA ls_node TYPE hrfio_s_org_node.
+    DATA ls_child_node TYPE hrfio_s_org_node.
+    DATA lv_manager_pernr TYPE pernr_d.
+    DATA lt_directreport_pernrs TYPE pernr_tab.
+    DATA lv_directreport_pernr TYPE pernr_d.
+    DATA lv_pernr TYPE pernr_d.
+    DATA lt_objects TYPE TABLE OF objec.
+    DATA lt_child_objects TYPE TABLE OF objec.
+    DATA ls_object TYPE objec.
+    DATA lt_parent_objects TYPE TABLE OF objec.
+    DATA ls_parent_object TYPE objec.
+    DATA lt_struc TYPE TABLE OF struc.
+    DATA ls_struc TYPE struc.
+    DATA lv_evaluation_path TYPE wegid.
+    DATA lv_tabix TYPE sytabix.
+    DATA ls_error_message TYPE bapiret2.
+
+    LOOP AT it_root_nodes INTO ls_root_node.
+
+*     nodes for the child objects
+      CASE iv_view_id.
+        WHEN 'MY_TEAM' OR 'PAO_EMPLOYEES' OR 'ESS_EMPLOYEES'.
+*         get the direct reports of the given manager
+          lv_manager_pernr = ls_root_node-objid.
+          lt_directreport_pernrs = go_employee_api->get_direct_reports( lv_manager_pernr ).
+          LOOP AT lt_directreport_pernrs INTO lv_directreport_pernr.
+            ls_child_node-parent_object_id = ls_root_node-objid.
+            ls_child_node-parent_object_type = ls_root_node-otype.
+            ls_child_node-num_children = 0.
+            ls_child_node-object_id = lv_directreport_pernr.
+            ls_child_node-object_type = 'P'.
+*           calculate number of children
+            IF go_employee_api->is_manager( lv_directreport_pernr ) = abap_true.
+              ls_child_node-num_children  =
+              lines( go_employee_api->get_direct_reports( lv_directreport_pernr ) ).
+            ENDIF.
+            APPEND ls_child_node TO et_child_nodes.
+          ENDLOOP.
+
+
+        WHEN 'MY_ORGANIZATION' OR 'MY_ORGUNITS_WITH_PEOPLE' OR 'PAO_ORGANIZATION'.
+          IF iv_view_id = 'MY_ORGANIZATION'.
+            lv_evaluation_path = 'O-O_DOWN'.
+          ELSE.
+            lv_evaluation_path = 'PLSTE'.
+          ENDIF.
+          CALL FUNCTION 'RH_STRUC_GET'
+            EXPORTING
+              act_otype      = ls_root_node-otype
+              act_objid      = ls_root_node-objid
+              act_wegid      = lv_evaluation_path
+*             ACT_INT_FLAG   =
+*             ACT_PLVAR      = ' '
+*             ACT_BEGDA      = SY-DATUM
+*             ACT_ENDDA      = SY-DATUM
+              act_tdepth     = 2
+*             ACT_TFLAG      = 'X'
+*             ACT_VFLAG      = 'X'
+*             AUTHORITY_CHECK        = 'X'
+*             TEXT_BUFFER_FILL       =
+*             BUFFER_MODE    =
+*           IMPORTING
+*             ACT_PLVAR      =
+            TABLES
+*             RESULT_TAB     =
+              result_objec   = lt_objects
+              result_struc   = lt_struc
+            EXCEPTIONS
+              no_plvar_found = 1
+              no_entry_found = 2
+              OTHERS         = 3.
+          IF sy-subrc <> 0.
+* Implement suitable error handling here
+          ENDIF.
+          LOOP AT lt_struc INTO ls_struc.
+            IF sy-tabix = 1.
+              CONTINUE. "first entry is the root
+            ENDIF.
+            CLEAR ls_child_node.
+            ls_child_node-object_id = ls_struc-objid.
+            ls_child_node-object_type = ls_struc-otype.
+            READ TABLE lt_objects INTO ls_object WITH KEY otype = ls_struc-otype realo = ls_struc-objid.
+*           set parent node and number of children
+*             child nodes
+            ls_child_node-parent_object_id = ls_root_node-objid.
+            ls_child_node-parent_object_type = ls_root_node-otype.
+            IF ls_struc-dflag = abap_true AND NOT ( ( iv_view_id = 'MY_ORGUNITS_WITH_PEOPLE' AND ls_struc-otype = 'S' ) OR ( iv_view_id = 'PAO_ORGANIZATION' AND ls_struc-otype = 'S') ).
+              CALL FUNCTION 'RH_STRUC_GET'
+                EXPORTING
+                  act_otype      = ls_struc-otype
+                  act_objid      = ls_struc-objid
+                  act_wegid      = lv_evaluation_path
+*                 ACT_INT_FLAG   =
+*                 ACT_PLVAR      = ' '
+*                 ACT_BEGDA      = SY-DATUM
+*                 ACT_ENDDA      = SY-DATUM
+                  act_tdepth     = 2
+*                 ACT_TFLAG      = 'X'
+*                 ACT_VFLAG      = 'X'
+*                 AUTHORITY_CHECK        = 'X'
+*                 TEXT_BUFFER_FILL       =
+*                 BUFFER_MODE    =
+*           IMPORTING
+*                 ACT_PLVAR      =
+                TABLES
+*                 RESULT_TAB     =
+                  result_objec   = lt_child_objects
+*                 result_struc   = lt_struc
+                EXCEPTIONS
+                  no_plvar_found = 1
+                  no_entry_found = 2
+                  OTHERS         = 3.
+              IF sy-subrc <> 0.
+* Implement suitable error handling here
+              ENDIF.
+              ls_child_node-num_children = lines( lt_child_objects ) - 1.
+            ELSE.
+              ls_child_node-num_children = 0.
+            ENDIF.
+
+            APPEND ls_child_node TO et_child_nodes.
+          ENDLOOP.
+
+        WHEN OTHERS.
+*         unknown view ID
+          ls_error_message-id = 'HRFIO_ORGCHART'.
+          ls_error_message-number = '002'.
+          ls_error_message-type = 'E'.
+          ls_error_message-message_v1 = iv_view_id.
+          APPEND ls_error_message TO et_error_messages.
+      ENDCASE.
+    ENDLOOP.
+
+  ENDMETHOD.
+
+
+  METHOD if_hrfio_orgchart~get_attribute_values.
+    DATA lt_leading_positions TYPE hrobject_t.
+    DATA ls_leading_position TYPE hrobject.
+    DATA lt_holders TYPE keyobjec_t.
+    DATA ls_holder TYPE tree_objec.
+    DATA ls_attribute_value TYPE hrfio_s_org_attribute_value.
+    DATA ls_error_message TYPE bapiret2.
+
+* get the values for attributes with multiple values (for detail selection popup)
+    CASE iv_attribute_id.
+      WHEN 'MANAGER_OF_ORGUNIT'.
+*       manager for Orgunit
+        CALL FUNCTION 'RH_GET_LEADING_POSITION'
+          EXPORTING
+            plvar             = me->gv_plvar
+            otype             = iv_object_type
+            sobid             = iv_object_id
+*           DATE              = SY-DATUM
+*           AUTH              = 'X'
+*           BUFFER_MODE       = ' '
+*           CONSIDER_VAC_POS  = ' '
+          TABLES
+            leading_pos       = lt_leading_positions
+          EXCEPTIONS
+            no_lead_pos_found = 1
+            OTHERS            = 2.
+        IF sy-subrc = 0.
+          LOOP AT lt_leading_positions INTO ls_leading_position.
+            CALL FUNCTION 'RH_OM_GET_HOLDER_OF_POSITION'
+              EXPORTING
+*               PLVAR           =
+                otype           = ls_leading_position-otype
+                objid           = ls_leading_position-objid
+*               REFRESH         =
+                begda           = sy-datlo
+                endda           = sy-datlo
+              TABLES
+                disp_tab        = lt_holders
+*               RELAT_TAB       =
+              EXCEPTIONS
+                no_active_plvar = 1
+                OTHERS          = 2.
+            IF sy-subrc = 0.
+              DELETE lt_holders WHERE otype <> 'P'.
+              LOOP AT lt_holders INTO ls_holder.
+                ls_attribute_value-attribute_id = iv_attribute_id.
+                ls_attribute_value-attribute_value = go_employee_api->get_name( ls_holder-objid ).
+                ls_attribute_value-detail_object_type = ls_holder-otype.
+                ls_attribute_value-detail_object_id = ls_holder-objid.
+                CASE iv_view_id.
+                  WHEN 'PAO_ORGANIZATION'.
+                    ls_attribute_value-detail_config_id = 'PAO_EMPLOYEE_DETAIL'.
+
+                  WHEN 'MY_ORGANIZATION' OR 'MY_ORGUNITS_WITH_PEOPLE'.
+                    ls_attribute_value-detail_config_id = 'ORG_EMPLOYEE_DETAIL'.
+
+                  WHEN OTHERS.
+                    ls_attribute_value-detail_config_id = 'EMPLOYEE_DETAIL'.
+                ENDCASE.
+                APPEND ls_attribute_value TO et_attribute_values.
+              ENDLOOP.
+            ENDIF.
+          ENDLOOP.
+        ENDIF.
+
+      WHEN 'POSITION_HOLDER'.
+*       holder of postion
+        CALL FUNCTION 'RH_OM_GET_HOLDER_OF_POSITION'
+          EXPORTING
+*           PLVAR           =
+            otype           = iv_object_type
+            objid           = iv_object_id
+*           REFRESH         =
+            begda           = sy-datlo
+            endda           = sy-datlo
+          TABLES
+            disp_tab        = lt_holders
+*           RELAT_TAB       =
+          EXCEPTIONS
+            no_active_plvar = 1
+            OTHERS          = 2.
+        IF sy-subrc = 0.
+          DELETE lt_holders WHERE otype <> 'P'.
+          LOOP AT lt_holders INTO ls_holder.
+            ls_attribute_value-attribute_id = iv_attribute_id.
+            ls_attribute_value-attribute_value = go_employee_api->get_name( ls_holder-objid ).
+            ls_attribute_value-detail_object_type = ls_holder-otype.
+            ls_attribute_value-detail_object_id = ls_holder-objid.
+            CASE iv_view_id.
+              WHEN 'PAO_ORGANIZATION'.
+                ls_attribute_value-detail_config_id = 'PAO_EMPLOYEE_DETAIL'.
+
+              WHEN 'MY_ORGANIZATION' OR 'MY_ORGUNITS_WITH_PEOPLE'.
+                ls_attribute_value-detail_config_id = 'ORG_EMPLOYEE_DETAIL'.
+
+              WHEN OTHERS.
+                ls_attribute_value-detail_config_id = 'EMPLOYEE_DETAIL'.
+            ENDCASE.
+            APPEND ls_attribute_value TO et_attribute_values.
+          ENDLOOP.
+        ENDIF.
+
+      WHEN OTHERS.
+*       unknown attribute ID
+        ls_error_message-id = 'HRFIO_ORGCHART'.
+        ls_error_message-number = '004'.
+        ls_error_message-type = 'E'.
+        ls_error_message-message_v1 = iv_view_id.
+        APPEND ls_error_message TO et_error_messages.
+    ENDCASE.
+
+  ENDMETHOD.
+
+
+
+  METHOD if_hrfio_orgchart~get_parent_for_root_node.
+    DATA lv_pernr TYPE pernr_d.
+    DATA lv_manager_pernr TYPE pernr_d.
+    DATA lt_parent_objects TYPE TABLE OF objec.
+    DATA ls_parent_object TYPE objec.
+    DATA ls_error_message TYPE bapiret2.
+
+    CLEAR es_parent_object.
+
+    CASE iv_view_id.
+      WHEN 'MY_TEAM' or 'PAO_EMPLOYEES' OR 'ESS_EMPLOYEES'.
+        lv_pernr = iv_root_objid.
+        go_employee_api->get_employeenumber_of_manager(
+        EXPORTING
+          iv_employee_pernr = lv_pernr
+        RECEIVING
+          rv_manager_pernr  = lv_manager_pernr ).
+        IF lv_manager_pernr IS NOT INITIAL.
+          es_parent_object-otype = 'P'.
+          es_parent_object-objid = lv_manager_pernr.
+        ENDIF.
+
+      WHEN 'MY_ORGANIZATION' OR 'MY_ORGUNITS_WITH_PEOPLE' OR 'PAO_ORGANIZATION'.
+        IF iv_root_otype = 'O'.
+          CALL FUNCTION 'RH_STRUC_GET'
+            EXPORTING
+              act_otype      = iv_root_otype
+              act_objid      = iv_root_objid
+              act_wegid      = 'O-O'
+*             ACT_INT_FLAG   =
+*             ACT_PLVAR      = ' '
+*             ACT_BEGDA      = SY-DATUM
+*             ACT_ENDDA      = SY-DATUM
+              act_tdepth     = 2
+*             ACT_TFLAG      = 'X'
+*             ACT_VFLAG      = 'X'
+*             AUTHORITY_CHECK        = 'X'
+*             TEXT_BUFFER_FILL       =
+*             BUFFER_MODE    =
+*           IMPORTING
+*             ACT_PLVAR      =
+            TABLES
+*             RESULT_TAB     =
+              result_objec   = lt_parent_objects
+*             result_struc   = lt_struc
+            EXCEPTIONS
+              no_plvar_found = 1
+              no_entry_found = 2
+              OTHERS         = 3.
+          IF sy-subrc = 0 AND lines( lt_parent_objects ) > 1 .
+            READ TABLE lt_parent_objects INDEX 2 INTO ls_parent_object.
+            es_parent_object-otype = ls_parent_object-otype.
+            es_parent_object-objid = ls_parent_object-objid.
+          ENDIF.
+        ENDIF.
+
+      WHEN OTHERS.
+*       unknown view ID
+        ls_error_message-id = 'HRFIO_ORGCHART'.
+        ls_error_message-number = '002'.
+        ls_error_message-type = 'E'.
+        ls_error_message-message_v1 = iv_view_id.
+        APPEND ls_error_message TO et_error_messages.
+    ENDCASE.
+
+  ENDMETHOD.
+
+
+  METHOD if_hrfio_orgchart~get_node_type.
+
+    DATA lv_vacancy_subrc TYPE sysubrc.
+    DATA lv_unoccupied_begda TYPE begda.
+    DATA lv_vacancy_begda TYPE begda.
+    DATA ls_error_message TYPE bapiret2.
+    DATA lv_objid TYPE hrobjid.
+
+*   set node type for given view and object
+    CASE iv_view_id.
+
+      WHEN 'PAO_EMPLOYEES'.
+        ev_node_type_id = 'PAO_EMPLOYEE'.
+
+      WHEN 'ESS_EMPLOYEES'.
+        ev_node_type_id = 'ESS_EMPLOYEE'.
+
+      WHEN 'MY_TEAM'.
+        ev_node_type_id = 'EMPLOYEE'.
+
+      WHEN 'MY_ORGANIZATION'.
+        ev_node_type_id = 'ORGUNIT_1'.
+
+      WHEN 'MY_ORGUNITS_WITH_PEOPLE'.
+        CASE iv_node_object_type.
+          WHEN 'O'.
+            ev_node_type_id = 'ORGUNIT_2'.
+          WHEN 'S'.
+*           check if position is vacant
+            lv_objid = iv_node_object_id.
+            DATA lv_vacancy_status TYPE vacan_stat.
+            CALL FUNCTION 'RH_GET_VACANCY'
+              EXPORTING
+                vac_begda  = sy-datlo
+                vac_endda  = sy-datlo
+                vac_istat  = '1'
+                vac_objid  = lv_objid
+                vac_otype  = iv_node_object_type
+                vac_plvar  = gv_plvar
+              IMPORTING
+*               free_begda = lv_unoccupied_begda
+*               vacancy_begda = lv_vacancy_begda
+*               vac_subrc  = lv_vacancy_subrc
+                vac_status = lv_vacancy_status.
+            IF lv_vacancy_status = '0'.
+              ev_node_type_id = 'VACANT_POSITION'.
+            ELSE.
+              ev_node_type_id = 'POSITION'.
+            ENDIF.
+        ENDCASE.
+
+      WHEN 'PAO_ORGANIZATION'.
+        CASE iv_node_object_type.
+          WHEN 'O'.
+            ev_node_type_id = 'PAO_ORGUNIT'.
+          WHEN 'S'.
+*           check if position is vacant
+            lv_objid = iv_node_object_id.
+            CALL FUNCTION 'RH_GET_VACANCY'
+              EXPORTING
+                vac_begda     = sy-datlo
+                vac_endda     = sy-datlo
+                vac_istat     = '1'
+                vac_objid     = lv_objid
+                vac_otype     = iv_node_object_type
+                vac_plvar     = gv_plvar
+              IMPORTING
+                free_begda    = lv_unoccupied_begda
+                vacancy_begda = lv_vacancy_begda
+                vac_subrc     = lv_vacancy_subrc.
+            IF lv_vacancy_subrc = 0.
+              ev_node_type_id = 'PAO_VACANT_POSITION'.
+            ELSE.
+              ev_node_type_id = 'PAO_POSITION'.
+            ENDIF.
+        ENDCASE.
+
+      WHEN OTHERS.
+*       unknown view ID
+        ls_error_message-id = 'HRFIO_ORGCHART'.
+        ls_error_message-number = '002'.
+        ls_error_message-type = 'E'.
+        ls_error_message-message_v1 = iv_view_id.
+        APPEND ls_error_message TO et_error_messages.
+    ENDCASE.
+
+  ENDMETHOD.
+
+
+  METHOD if_hrfio_orgchart~get_node_data.
+    DATA ls_error_message TYPE bapiret2.
+
+    CASE iv_node_type_id.
+      WHEN 'EMPLOYEE' OR 'PAO_EMPLOYEE' OR 'ESS_EMPLOYEE'.
+        CALL METHOD me->get_node_data_for_employee
+          EXPORTING
+            iv_employee_assignment = iv_employee_assignment
+            iv_node_object_type    = iv_node_object_type
+            iv_node_object_id      = iv_node_object_id
+            iv_node_type_id        = iv_node_type_id
+          IMPORTING
+            es_node_data           = es_node_data.
+
+      WHEN 'POSITION' OR 'VACANT_POSITION' OR 'PAO_POSITION' OR 'PAO_VACANT_POSITION'.
+        CALL METHOD me->get_node_data_for_position
+          EXPORTING
+            iv_employee_assignment = iv_employee_assignment
+            iv_node_object_type    = iv_node_object_type
+            iv_node_object_id      = iv_node_object_id
+            iv_node_type_id        = iv_node_type_id
+          IMPORTING
+            es_node_data           = es_node_data.
+
+      WHEN 'ORGUNIT_1' OR 'ORGUNIT_2' OR 'PAO_ORGUNIT'.
+        CALL METHOD me->get_node_data_for_orgunit
+          EXPORTING
+            iv_employee_assignment = iv_employee_assignment
+            iv_node_object_type    = iv_node_object_type
+            iv_node_object_id      = iv_node_object_id
+            iv_node_type_id        = iv_node_type_id
+          IMPORTING
+            es_node_data           = es_node_data.
+
+      WHEN OTHERS.
+*       unknown node type ID
+        ls_error_message-id = 'HRFIO_ORGCHART'.
+        ls_error_message-number = '003'.
+        ls_error_message-type = 'E'.
+        ls_error_message-message_v1 = iv_node_type_id.
+        APPEND ls_error_message TO et_error_messages.
+    ENDCASE.
+
+
+  ENDMETHOD.
+
+
+  METHOD if_hrfio_orgchart~get_object_details.
+    DATA ls_error_message TYPE bapiret2.
+
+    CASE iv_detail_config_id.
+      WHEN 'EMPLOYEE_DETAIL' OR 'ORG_EMPLOYEE_DETAIL' OR 'PAO_EMPLOYEE_DETAIL' OR 'ESS_EMPLOYEE_DETAIL'.
+        CALL METHOD me->get_details_for_employee
+          EXPORTING
+            iv_employee_assignment = iv_employee_assignment
+            iv_object_type         = iv_object_type
+            iv_object_id           = iv_object_id
+            iv_detail_config_id    = iv_detail_config_id
+          IMPORTING
+            es_employee_details    = es_object_details
+            et_error_messages      = et_error_messages.
+
+      WHEN 'POSITION_DETAIL' OR 'PAO_POSITION_DETAIL'.
+        CALL METHOD me->get_details_for_position
+          EXPORTING
+            iv_employee_assignment = iv_employee_assignment
+            iv_object_type         = iv_object_type
+            iv_object_id           = iv_object_id
+            iv_detail_config_id    = iv_detail_config_id
+          IMPORTING
+            es_position_details    = es_object_details
+            et_error_messages      = et_error_messages.
+
+      WHEN 'ORGUNIT_DETAIL_1' OR 'ORGUNIT_DETAIL_2' OR 'PAO_ORGUNIT_DETAIL'.
+        CALL METHOD me->get_details_for_orgunit
+          EXPORTING
+            iv_employee_assignment = iv_employee_assignment
+            iv_object_type         = iv_object_type
+            iv_object_id           = iv_object_id
+            iv_detail_config_id    = iv_detail_config_id
+          IMPORTING
+            es_orgunit_details     = es_object_details
+            et_error_messages      = et_error_messages.
+
+      WHEN OTHERS.
+*       unknown detail config ID
+        ls_error_message-id = 'HRFIO_ORGCHART'.
+        ls_error_message-number = '001'.
+        ls_error_message-type = 'E'.
+        ls_error_message-message_v1 = iv_detail_config_id.
+        APPEND ls_error_message TO et_error_messages.
+
+    ENDCASE.
+  ENDMETHOD.
+
+
+
+  METHOD if_hrfio_orgchart~get_actions.
+
+    DATA ls_action TYPE hrfio_s_org_action.
+    DATA ls_parameter TYPE hrfio_s_parameter.
+    DATA ls_hrobject TYPE hrobject.
+    DATA lt_content  TYPE if_fpm_navigation=>t_target.
+    DATA ls_business_param TYPE apb_lpd_s_params.
+
+    FIELD-SYMBOLS <ls_content> TYPE if_fpm_navigation=>s_target.
+
+    IF iv_scenario_id = 'PAO_ORGCHART'.
+
+      ls_hrobject-objid = iv_object_id.
+      ls_hrobject-otype = iv_object_type.
+      cl_hrpao_actionmenu_utility=>get_launchpad_list( EXPORTING is_hrobject = ls_hrobject
+                                                       IMPORTING et_content = lt_content ).
+
+      LOOP AT lt_content ASSIGNING <ls_content>.
+        ls_action-action_id = <ls_content>-key.
+        ls_action-action_name =  <ls_content>-text.
+        IF <ls_content>-application_type = 'FOL'.
+          ls_action-action_type = if_hrfio_orgchart=>gc_action_type-folder.
+          CLEAR ls_action-parent_id.
+        ELSEIF <ls_content>-application_type = 'SEP'.
+          CONTINUE.
+        ELSE.
+          ls_action-action_type = if_hrfio_orgchart=>gc_action_type-action.
+          ls_action-parent_id = <ls_content>-parent.
+        ENDIF.
+
+        LOOP AT <ls_content>-business_params INTO ls_business_param ##INTO_OK.
+          ls_parameter-name = ls_business_param-key.
+          ls_parameter-value = ls_business_param-value.
+          APPEND ls_parameter TO ls_action-action_parameters.
+        ENDLOOP.
+        ls_parameter-name = 'OBJID'.
+        ls_parameter-value = iv_object_id.
+        APPEND ls_parameter TO ls_action-action_parameters.
+        ls_parameter-name = 'OTYPE'.
+        ls_parameter-value = iv_object_type.
+        APPEND ls_parameter TO ls_action-action_parameters.
+
+        ls_action-semantic_object = 'HCMAdministration'.
+        ls_action-semantic_action = 'launchMasterdata'.
+        APPEND ls_action TO et_actions.
+      ENDLOOP.
+
+    ENDIF.
+
+  ENDMETHOD.

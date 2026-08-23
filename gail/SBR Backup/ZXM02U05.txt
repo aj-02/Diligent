@@ -1,0 +1,2073 @@
+*&---------------------------------------------------------------------*
+*&  INCLUDE           ZXM02U05
+*&---------------------------------------------------------------------*
+
+**DATA DECLARATIONS.
+DATA: w_item_amt TYPE string,
+      w_preis    TYPE string,
+      w_menge    TYPE string,
+      lt_item    TYPE TABLE OF eban,                        "#EC NEEDED
+      ls_item    TYPE eban,                                 "#EC NEEDED
+      w_eban     TYPE eban,
+      w_eban1    TYPE eban,
+      w_eban2    TYPE eban,
+*      ARCHANA
+      it_eban    TYPE STANDARD TABLE OF eban,
+      wa_eban    TYPE eban,
+      w_eban3    TYPE eban,
+*    ARCHANA
+*     ADDED BY MAAN
+      it_ekpo    TYPE STANDARD TABLE OF ekpo,
+      wa_ekpo    TYPE ekpo.
+*     ADDED BY MAAN
+*-------------------------------------------------------*
+**ADDED BY SHALINI ON 19.10.2011*****
+*THAT THE PR (WITH ACCOUNT ASSIGNMENT CAT N )
+*TO BE RELEASED IS HAVING THE GL A/C, N/W NO. AND ACTIVITY NO.
+*-------------------------------------------------------*
+
+
+DATA : lv_cnt  TYPE i,                                      "#EC NEEDED
+       lv_cnt1 TYPE i,
+       l_len   TYPE i,
+       lv_cnp,
+       lv_tech.
+
+DATA : lt_pa0001      TYPE TABLE OF pa0001,
+       lt_usr02       TYPE TABLE OF usr02,
+       lt_usr03       TYPE TABLE OF yrma_cpf_name_dg,
+       l_afnam        TYPE c LENGTH 1,
+       l_afnam1       TYPE afnam,
+       lt_agr_define  TYPE STANDARD TABLE OF agr_define,
+       itab_agr_users TYPE STANDARD TABLE OF agr_users.
+"""SKIP ALL VALDATION ..DISCUSSED BY CHANDRESH JI
+DATA : lv_pr TYPE banfn.
+DATA : lv_matnr TYPE c LENGTH 10.
+*****SOC BY ARCHANA MANAS ON 14.10.2019 TO FIX THE BUG FOR DEPT.CODE OF TE USER CREATED PR. CHARM- 4000000911******
+DATA : it_yrma_doctype_gl  TYPE STANDARD TABLE OF yrma_doctype_gl,
+       wa_yrma_doctype_gl  TYPE yrma_doctype_gl,
+       it_yrma_created_by2 TYPE STANDARD TABLE OF yrma_created_by2,
+       it_yrma_cpf_name_dg TYPE STANDARD TABLE OF yrma_cpf_name_dg.
+*****SOC BY ARCHANA/MANAS ON 15.01.2020 TO ESCAPE THE ERROR MESSAGE 960 IF GL IS NOT AVAILABLE FOR CHECKING.CHARM-4000001511.*****
+DATA : it_yrma_doctype_gl1  TYPE STANDARD TABLE OF yrma_doctype_gl.
+*****EOC BY ARCHANA/MANAS ON 15.01.2020 TO ESCAPE THE ERROR MESSAGE 960 IF GL IS NOT AVAILABLE FOR CHECKING.CHARM-4000001511.*****
+
+*****EOC BY ARCHANA MANAS ON 14.10.2019 TO FIX THE BUG FOR DEPT.CODE OF TE USER CREATED PR. CHARM- 4000000911******
+
+DATA : it_yrma_pr TYPE STANDARD TABLE OF yrma_pr_otherdet,
+       wa_yrma_pr TYPE yrma_pr_otherdet.
+
+*BREAK MM100.
+*BREAK XGAIL_AB4.
+DATA : ls_get_itm TYPE mereq_item.
+im_req_item->if_releasable_mm~get_data( ).
+ls_get_itm =  im_req_item->get_data( ).
+*****SOC BY ARCHANA/MANAS ON 09.09.2019 TO CHECK THE SHORT DESCRIPTION OF MATERIAL IS SAME AS MATERIAL MASTER.CHARM-4000000747*****
+if sy-UNAME ne 'TEST_ICMR'.
+DATA: wa_makt  TYPE makt.
+IF sy-tcode =  'ME51N'.
+  IF im_data_new-matnr IS NOT INITIAL.
+    SELECT SINGLE matnr
+      FROM yrma_mat_bypass
+      INTO @DATA(lv_mat1)
+      WHERE matnr = @im_data_new-matnr .
+    IF sy-subrc IS NOT INITIAL.
+      SELECT SINGLE * FROM makt INTO wa_makt
+WHERE matnr = im_data_new-matnr AND spras = sy-langu.
+      IF wa_makt IS NOT INITIAL.
+        IF im_data_new-loekz = ' '.
+*****SOC BY ARCHANA/MANAS ON 04.10.2019 TO CHECK THE SHORT DESCRIPTION OF MATERIAL IS SAME AS MATERIAL MASTER.CHARM-4000000910*****
+          IF im_data_new-txz01 NE wa_makt-maktx AND im_data_new-pstyp NE '9' AND ( im_data_new-matkl BETWEEN '08' AND '99' ).
+*****EOC BY ARCHANA/MANAS ON 04.10.2019 TO CHECK THE SHORT DESCRIPTION OF MATERIAL IS SAME AS MATERIAL MASTER.CHARM-4000000910*****
+******SOC BY DESH/MANAS SIR DT 01.11.2022 CHAM 5573.
+            MESSAGE e530(ym01) WITH im_data_new-matnr .
+* ******EOC BY DESH/MANAS SIR DT 01.11.2022 CHAM 5573.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+*      ENDIF.
+    ENDIF.
+  ENDIF.
+ENDIF.
+
+
+**** SOC ADD BY VIVEK/MANAS ON 27.11.2020   CHARM##4000003169
+*IF IM_DATA_NEW-MATNR IS NOT INITIAL.
+SELECT SINGLE matnr
+  FROM yrma_mat_bypass
+  INTO @lv_mat1
+  WHERE matnr = @im_data_new-matnr .
+IF sy-subrc IS NOT INITIAL.
+
+
+***** SOC BY ARCHANA/MANAS ON 03.12.2019 TO DISABLE NO LIMIT OPTION.CHARM-4000001261*****
+  DATA : it1_doc5   TYPE STANDARD TABLE OF yrma_po_doc5,
+         wa1_doc5   TYPE yrma_po_doc5,
+         it_esuhpr1 TYPE STANDARD TABLE OF esuh,
+         wa_esuhpr1 TYPE esuh.
+  DATA : it_esuc  TYPE STANDARD TABLE OF esuc,
+         it_esuc1 TYPE STANDARD TABLE OF esuc.
+
+  w_eban3 = im_req_item->get_persistent_data( ).
+  IF w_eban3 IS NOT INITIAL.
+    SELECT * FROM yrma_po_doc5 INTO TABLE it1_doc5.
+***SOC BY JAINENDRA GUPTA AND MANAS ON 13.08.2020 CHARM : 4000002529
+*  IF SY-TCODE = 'ME54N'.
+** -> BEGIN OF CHANGES BY OF SARFRAZ ALI ON 21OCT2024 FOR ATC
+    IF sy-tcode = 'ME52N' OR  sy-tcode = 'ME52' OR  sy-tcode = 'ME51' OR  sy-tcode = 'ME51N' OR  sy-tcode = 'ME54N' OR sy-tcode = 'ME53N'. "#EC CI_USAGE_OK[1803189]
+** <- END CHANGES BY OF SARFRAZ ALI ON 21OCT2024 FOR ATC
+***EOC BY JAINENDRA GUPTA AND MANAS ON 13.08.2020 CHARM : 4000002529
+      SELECT * FROM eban INTO TABLE it_eban WHERE banfn = w_eban3-banfn.
+      IF it_eban IS NOT INITIAL.
+      ENDIF.
+      LOOP AT it_eban INTO wa_eban.
+        IF wa_eban-badat > '20191204' AND wa_eban-loekz = ''.
+          READ TABLE it1_doc5 INTO wa1_doc5 WITH KEY doc_type = wa_eban-bsart.
+          IF sy-subrc = 0.
+            CALL FUNCTION 'MS_READ_LIMITS'
+              EXPORTING
+                packno          = wa_eban-packno
+              IMPORTING
+                e_esuh          = wa_esuhpr1
+              TABLES
+                limit_tab       = it_esuc1
+              EXCEPTIONS
+                no_limits_found = 1
+                OTHERS          = 2.
+            IF sy-subrc = 0.
+              IF wa_esuhpr1-sumnolim NE ''.
+****SOC BY JAINENDRA GUPTA AND MANAS ON 13.08.2020 CHARM : 4000002529
+                MESSAGE e967(ym01). " CHANGE MESSAGE TEXT : "NO LIMIT OPTION IS NOT ALLOWED, UNTICK THROUGH T-CODE ME52N"
+****EOC BY JAINENDRA GUPTA AND MANAS ON 13.08.2020 CHARM : 4000002529
+              ENDIF.
+            ENDIF.
+*SOC RANVIJAY/MANAS SIR DT 10.10.2022 CHARM NO. - 4000005483 DESC - DISABLE EXPECTED VALUE IN PR/SR/PO
+*****            IF WA_EBAN-BADAT > '20221009' AND WA_EBAN-LOEKZ = ''.
+*****              IF WA_ESUHPR1-COMMITMENT > 0.
+*****                MESSAGE E968(YM01).
+*****              ENDIF.
+*****            ENDIF.
+*EOC RANVIJAY/MANAS SIR DT 10.10.2022 CHARM NO. - 4000005483 DESC - DISABLE EXPECTED VALUE IN PR/SR/PO
+          ENDIF.
+        ENDIF.
+      ENDLOOP.
+    ENDIF.
+    CLEAR : wa1_doc5, wa_esuhpr1.
+  ENDIF.
+***** EOC BY ARCHANA/MANAS ON 03.12.2019 TO DISABLE NO LIMIT OPTION.CHARM-4000001261*****
+*****EOC BY RICHA/MANAS ON 27.09.2019 TO CHECK THE SHORT DESCRIPTION OF MATERIAL IS SAME AS MATERIAL MASTER.CHARM-4000000858*****
+  w_eban = im_req_item->get_persistent_data( ). "RS
+  IF w_eban IS NOT INITIAL.
+    SELECT SINGLE banfn FROM yrma_pr_bypass INTO lv_pr WHERE banfn = w_eban-banfn. "ADDED BY RS
+    IF sy-subrc IS NOT INITIAL. "ADDED BY RS
+      SELECT banfn,
+             txz01,
+             matnr,
+             pstyp,
+             matkl,
+             loekz
+        INTO TABLE @DATA(lt_eban)
+        FROM eban
+        WHERE banfn = @w_eban-banfn.
+*    IF LS_GET_ITM-MATNR IS NOT INITIAL.
+      LOOP AT lt_eban ASSIGNING FIELD-SYMBOL(<lfs_eban>).
+        SELECT SINGLE * FROM makt INTO wa_makt
+         WHERE matnr = <lfs_eban>-matnr AND spras = sy-langu.
+        IF wa_makt IS NOT INITIAL.
+*****SOC BY ARCHANA/MANAS ON 10.09.2020 TO PASS MESSAGE YM01-530 IF PO IS DELETED.CHARM-4000002704*****
+**********          IF LS_GET_ITM-LOEKZ = ' '.
+          IF <lfs_eban>-loekz = ' '.
+*****EOC BY ARCHANA/MANAS ON 10.09.2020 TO PASS MESSAGE YM01-530 IF PO IS DELETED.CHARM-4000002704*****
+*****SOC BY ARCHANA/MANAS ON 04.10.2019 TO CHECK THE SHORT DESCRIPTION OF MATERIAL IS SAME AS MATERIAL MASTER.CHARM-4000000910*****
+            IF <lfs_eban>-txz01 NE wa_makt-maktx AND <lfs_eban>-pstyp NE '9' AND ( <lfs_eban>-matkl BETWEEN '08' AND '99' ).
+*****EOC BY ARCHANA/MANAS ON 04.10.2019 TO CHECK THE SHORT DESCRIPTION OF MATERIAL IS SAME AS MATERIAL MASTER.CHARM-4000000910*****
+****  SOC DESH/   MANAS SIR DT 01.11.2022 CHAM 5573
+              MESSAGE e530(ym01) WITH <lfs_eban>-matnr.
+****  EOC DESH/   MANAS SIR DT 01.11.2022 CHAM 5573
+            ENDIF.
+          ENDIF.
+        ENDIF.
+      ENDLOOP.
+*    ENDIF.
+    ENDIF.
+  ENDIF.
+  CLEAR lv_pr.
+****EOC BY ARCHANA/MANAS ON 09.09.2019 TO CHECK THE SHORT DESCRIPTION OF MATERIAL IS SAME AS MATERIAL MASTER.CHARM-4000000747*****
+
+  SELECT SINGLE banfn FROM yrma_pr_bypass INTO lv_pr WHERE banfn = w_eban-banfn.
+
+
+  IF sy-subrc NE 0.
+
+    DATA : ls_header TYPE REF TO if_purchase_requisition,   "#EC NEEDED
+           ls_acc    TYPE mmpur_accounting_list,
+           ls_exkn   TYPE exkn.
+
+*--VALIDATION FOR RELEASE BY KUNAL/CHANDRESH ON 02/04/2019
+** -> BEGIN OF CHANGES BY OF SARFRAZ ALI ON 21OCT2024 FOR ATC
+    IF sy-tcode = 'ME54N' OR sy-tcode = 'ME54'. "#EC CI_USAGE_OK[1803189]
+** <- END CHANGES BY OF SARFRAZ ALI ON 21OCT2024 FOR ATC
+
+      SELECT banfn,
+            txz01,
+            matnr,
+            pstyp,
+        matkl,
+        loekz
+       INTO TABLE @DATA(lt_eban1)
+       FROM eban
+       WHERE banfn = @w_eban-banfn.
+*    IF LS_GET_ITM-MATNR IS NOT INITIAL.
+      LOOP AT lt_eban1 ASSIGNING FIELD-SYMBOL(<lfs_eban1>).
+        SELECT SINGLE * FROM makt INTO wa_makt
+         WHERE matnr = <lfs_eban1>-matnr AND spras = sy-langu.
+        IF wa_makt IS NOT INITIAL.
+*****SOC BY ARCHANA/MANAS ON 10.09.2020 TO PASS MESSAGE YM01-530 IF PO IS DELETED.CHARM-4000002704*****
+******          IF LS_GET_ITM-LOEKZ = ' '.
+          IF <lfs_eban1>-loekz = ' '.
+*****EOC BY ARCHANA/MANAS ON 10.09.2020 TO PASS MESSAGE YM01-530 IF PO IS DELETED.CHARM-4000002704*****
+*****SOC BY ARCHANA/MANAS ON 04.10.2019 TO CHECK THE SHORT DESCRIPTION OF MATERIAL IS SAME AS MATERIAL MASTER.CHARM-4000000910*****
+            IF <lfs_eban1>-txz01 NE wa_makt-maktx AND <lfs_eban1>-pstyp NE '9' AND ( <lfs_eban1>-matkl BETWEEN '08' AND '99' ).
+*****EOC BY ARCHANA/MANAS ON 04.10.2019 TO CHECK THE SHORT DESCRIPTION OF MATERIAL IS SAME AS MATERIAL MASTER.CHARM-4000000910*****
+**** SOC DESH/MANAS DT 01.11.2022 CHAM 5573
+              MESSAGE e530(ym01) WITH <lfs_eban1>-matnr.
+**** EOC DESH/MANAS DT 01.11.2022 CHAM 5573
+            ENDIF.
+          ENDIF.
+        ENDIF.
+      ENDLOOP.
+*****SOC BY RICHA/MANAS ON 27.09.2019 TO CHECK THE SHORT DESCRIPTION OF MATERIAL IS SAME AS MATERIAL MASTER.CHARM-4000000858*****
+*****EOC BY ARCHANA/MANAS ON 09.09.2019 TO CHECK THE SHORT DESCRIPTION OF MATERIAL IS SAME AS MATERIAL MASTER.CHARM-4000000747*****
+      IF im_data_new-bsart  EQ 'ZP' OR
+         im_data_new-bsart  EQ 'ZM' OR
+         im_data_new-bsart  EQ 'ZPRJ' OR
+         im_data_new-bsart  EQ 'ZONM' OR
+         im_data_new-bsart  EQ 'ZMRP' OR
+         im_data_new-bsart  EQ 'ZPGG'.
+
+        REFRESH : lt_agr_define.
+
+        SELECT * FROM agr_users INTO CORRESPONDING FIELDS OF TABLE itab_agr_users
+                WHERE uname = sy-uname
+                 AND  ( agr_name LIKE 'YD_MM%'
+                 OR     agr_name LIKE 'YM_MM%'
+                 OR     agr_name LIKE 'ZD_MM%'
+                 OR     agr_name LIKE 'ZM_MM%' ).
+
+        IF sy-subrc = 0.
+          SELECT * FROM agr_define INTO TABLE lt_agr_define FOR ALL ENTRIES IN itab_agr_users WHERE
+                                                                                agr_name = itab_agr_users-agr_name
+                                                                               AND ( parent_agr EQ 'ZM_MM_PUR_PR-RELEASE(C)'
+                                                                                  OR parent_agr EQ 'YM_MM_PUR_PR-RELEASE(C)'
+                                                                                  OR parent_agr EQ 'YM_MM_PUR_PR-RELEASE(C)_7400'
+                                                                                  OR parent_agr EQ 'ZM_MM_PUR_PR-RELEASE(C)_7400'
+                                                                                  OR parent_agr EQ 'YM_MM_PUR_PR-RELEASE(C)_9500'
+                                                                                  OR parent_agr EQ 'ZM_MM_PUR_PR-RELEASE(C)_9500'
+                                                                                  OR parent_agr EQ 'ZM_MM_PUR_PR-RELEASE(C)_9600'
+                                                                                  OR parent_agr EQ 'YM_MM_PUR_PR-RELEASE(C)_9600' ).
+          IF sy-subrc EQ 0.
+            lv_cnp = 'X'.
+          ENDIF.
+          REFRESH :  lt_agr_define.
+          SELECT * FROM agr_define INTO TABLE lt_agr_define FOR ALL ENTRIES IN itab_agr_users WHERE
+                                                                                agr_name = itab_agr_users-agr_name
+                                                                               AND ( parent_agr EQ 'ZM_MM_PUR_PR-RELEASE'
+                                                                                  OR parent_agr EQ 'YM_MM_PUR_PR-RELEASE'
+                                                                                  OR parent_agr EQ 'ZM_MM_PUR_PR-RELEASE_7400'
+                                                                                  OR parent_agr EQ 'YM_MM_PUR_PR-RELEASE_7400'
+                                                                                  OR parent_agr EQ 'ZM_MM_PUR_PR-RELEASE_9500'
+                                                                                  OR parent_agr EQ 'YM_MM_PUR_PR-RELEASE_9500'
+                                                                                  OR parent_agr EQ 'ZM_MM_PUR_PR-RELEASE_9600'
+                                                                                  OR parent_agr EQ 'YM_MM_PUR_PR-RELEASE_9600' ).
+
+          IF sy-subrc EQ 0.
+            lv_tech = 'X'.
+          ENDIF.
+****COMMENTED  BY SUHANI AND MANAS ON 13.03.19 TO BYPASS RESTRICTION OF RELEASE PR
+          IF lv_cnp IS INITIAL AND lv_tech IS INITIAL.
+            MESSAGE e954(ym01).
+          ENDIF.
+
+****EOC BY SUHANI AND MANAS ON 13.03.19 TO BYPASS RESTRICTION OF RELEASE PR
+        ENDIF.
+        IF lv_cnp ='X' AND lv_tech = 'X'.
+        ELSEIF lv_cnp ='X'.
+****COMMENTED  BY SUHANI AND MANAS ON 13.03.19 TO BYPASS RESTRICTION OF RELEASE PR
+          IF im_data_new-frgkz EQ 'X'.
+            MESSAGE e954(ym01).
+          ENDIF.
+****EOC BY SUHANI AND MANAS ON 13.03.19 TO BYPASS RESTRICTION OF RELEASE PR
+        ELSEIF lv_tech ='X'.
+****COMMENTED  BY SUHANI AND MANAS ON 13.03.19 TO BYPASS RESTRICTION OF RELEASE PR
+          IF im_data_new-frgkz EQ '2'.
+            MESSAGE e954(ym01).
+          ENDIF.
+****EOC BY SUHANI AND MANAS ON 13.03.19 TO BYPASS RESTRICTION OF RELEASE PR
+        ENDIF.
+      ENDIF.
+    ENDIF.
+*--EOC BY KUNAL/CHNADRESH ON 02/04/2019
+    IF im_data_new-loekz = ' ' AND  im_data_new-loekz NE 'X' AND im_data_new-loekz NE 'S' AND im_data_new-loekz NE 'L' .
+
+      IF im_data_new-badat >= '20190101'.
+        l_afnam1 = im_data_new-afnam.
+        l_len = strlen( l_afnam1 ).
+        l_afnam = im_data_new-afnam+0(1).
+        IF l_afnam = 'A' OR l_afnam = 'B' OR l_afnam = 'C' OR l_afnam = 'D'
+                      OR l_afnam = 'E' OR l_afnam = 'F' OR l_afnam = 'G' OR l_afnam = 'H' OR l_afnam = 'I' OR l_afnam = 'J' OR l_afnam = 'K'
+                      OR l_afnam = 'L' OR l_afnam = 'M' OR l_afnam = 'N' OR l_afnam = 'O' OR l_afnam = 'P' OR l_afnam = 'Q' OR l_afnam = 'R'
+                      OR l_afnam = 'S' OR l_afnam = 'T' OR l_afnam = 'U' OR l_afnam = 'V' OR l_afnam = 'W' OR l_afnam = 'X' OR l_afnam = 'Y'
+                      OR l_afnam = 'Z'
+                      OR l_afnam = 'a' OR l_afnam = 'b' OR l_afnam = 'c' OR l_afnam = 'd'
+                      OR l_afnam = 'e' OR l_afnam = 'f' OR l_afnam = 'g' OR l_afnam = 'h' OR l_afnam = 'i' OR l_afnam = 'j' OR l_afnam = 'k'
+                      OR l_afnam = 'l' OR l_afnam = 'm' OR l_afnam = 'n' OR l_afnam = 'o' OR l_afnam = 'p' OR l_afnam = 'q' OR l_afnam = 'r'
+                      OR l_afnam = 's' OR l_afnam = 't' OR l_afnam = 'u' OR l_afnam = 'v' OR l_afnam = 'w' OR l_afnam = 'x' OR l_afnam = 'y'
+                      OR l_afnam = 'z'.
+          MESSAGE e551(ym01) WITH im_data_new-afnam im_data_new-bnfpo. "'ENTER VALID CPF NO. OR SAP USER  ID IN THE FIELD REQUISNR'(001) TYPE 'E'.
+        ENDIF.
+*    IF L_LEN GT 8 .
+*      MESSAGE 'ENTER VALID CPF NO.  OR SAP USER  ID IN THE FIELD REQUISNR'(001) TYPE 'E'.
+*    ENDIF.
+** -> BEGIN OF CHANGES BY OF SARFRAZ ALI ON 21OCT2024 FOR ATC
+        IF sy-tcode = 'ME52N' OR  sy-tcode = 'ME52' OR  sy-tcode = 'ME51' OR  sy-tcode = 'ME51N' OR  sy-tcode = 'ME54N' OR sy-tcode = 'ME53N' . "#EC CI_USAGE_OK[1803189]
+** <- END CHANGES BY OF SARFRAZ ALI ON 21OCT2024 FOR ATC
+          lv_cnt = 0 .
+          SELECT * FROM pa0001 INTO TABLE  lt_pa0001 WHERE pernr EQ im_data_new-afnam .
+          IF sy-subrc NE 0.
+            SELECT * FROM usr02 INTO TABLE lt_usr02 WHERE bname = im_data_new-afnam.
+            IF sy-subrc NE 0.
+              SELECT * FROM yrma_cpf_name_dg INTO TABLE lt_usr03 WHERE ypernr_id EQ im_data_new-afnam.
+              IF sy-subrc NE 0.
+                MESSAGE e551(ym01) WITH im_data_new-afnam im_data_new-bnfpo. "'ENTER VALID CPF NO. OR SAP USER  ID IN THE FIELD REQUISNR'(001) TYPE 'E'.
+              ENDIF.
+            ENDIF.
+          ENDIF.
+        ENDIF.
+
+      ENDIF.
+
+
+***SOC BY SANYOGITA & CHANDRESH ON 18.12.2013 FOR TRACKING NO FOR DEPARTMENT
+      DATA: itab_t024 TYPE STANDARD TABLE OF t024 WITH HEADER LINE.
+      DATA: w_ekgrp TYPE ekgrp.
+      DATA: w_len TYPE i.
+
+      IF im_data_new-badat >= '20190101'.   "'20131201'.
+        w_len = strlen( im_data_new-bednr ) .
+
+        IF im_data_new-bednr IS NOT INITIAL AND ( ( im_data_new-bednr BETWEEN '100' AND '200' ) OR
+***SOC BY SANYOGITA & CHANDRESH ON 03.01.2014 FOR PURCHASING GROUP
+           ( im_data_new-bednr BETWEEN '900' AND '999' ) ) AND w_len LE 3.
+***EOC BY SANYOGITA & CHANDRESH ON 03.01.2014 FOR PURCHASING GROUP
+          w_ekgrp = im_data_new-bednr.
+          SELECT * FROM t024 INTO CORRESPONDING FIELDS OF TABLE itab_t024
+                   WHERE ekgrp = w_ekgrp.
+          IF itab_t024[] IS INITIAL.
+            MESSAGE e579(ym01) WITH im_data_new-bnfpo.
+          ENDIF.
+        ELSE.
+          MESSAGE e579(ym01) WITH im_data_new-bnfpo.
+        ENDIF.
+      ENDIF.
+
+*****SOC BY ARCHANA MANAS ON 14.10.2019 TO FIX THE BUG FOR DEPT.CODE OF TE USER CREATED PR. CHARM- 4000000911******
+      IF ( sy-tcode = 'ME52N' OR sy-tcode = 'ME54N' ) AND ( im_data_new-bsart = 'ZP' ) AND im_data_new-loekz = ' '.
+        IF im_data_new-badat >= '20191012'.
+
+          ls_acc = im_req_item->if_acct_container_mm~get_items( ).
+          DATA : lv_acc  LIKE LINE OF ls_acc,
+                 lv_exkn TYPE exkn.
+          LOOP AT ls_acc INTO lv_acc.
+            lv_exkn = lv_acc-model->get_exkn( ).
+*****SOC BY ARCHANA/MANAS ON 15.01.2020 TO ESCAPE THE ERROR MESSAGE 960 IF GL IS NOT AVAILABLE FOR CHECKING.CHARM-4000001511.*****
+            SELECT * FROM yrma_doctype_gl INTO TABLE it_yrma_doctype_gl1 WHERE sakto = lv_exkn-sakto.
+            IF sy-subrc = 0.
+*****EOC BY ARCHANA/MANAS ON 15.01.2020 TO ESCAPE THE ERROR MESSAGE 960 IF GL IS NOT AVAILABLE FOR CHECKING.CHARM-4000001511.*****
+              SELECT * FROM yrma_doctype_gl INTO TABLE it_yrma_doctype_gl
+*******SOC BY ARCHANA/MANAS ON 13.01.2020 TO VALIDATE GL AND ACCOUNT ASSIGNMENT IN THE PR CHARM NO 4000001494 *****
+*            WHERE SAKTO = LV_EXKN-SAKTO AND KNTTP = IM_DATA_NEW-KNTTP.
+                WHERE sakto = lv_exkn-sakto AND knttp = im_data_new-knttp.
+              IF it_yrma_doctype_gl IS INITIAL.
+                MESSAGE e960(ym01) WITH lv_exkn-sakto im_data_new-knttp im_data_new-bnfpo.
+              ENDIF.
+            ENDIF.
+
+
+          ENDLOOP.
+        ENDIF.
+      ENDIF.
+*****EOC BY ARCHANA MANAS ON 14.10.2019 TO FIX THE BUG FOR DEPT.CODE OF TE USER CREATED PR. CHARM- 4000000911******
+
+
+
+***EOC BY SANYOGITA & CHANDRESH ON 18.12.2013 FOR TRACKING NO FOR DEPARTMENT
+
+
+
+    ENDIF.
+
+    """ADDED BY VIRENDAR DISCUSSED WITH MR CHANDRESH JI FOR GJ01
+    IF im_data_new-badat >= '20190101'.
+** -> BEGIN OF CHANGES BY OF SARFRAZ ALI ON 21OCT2024 FOR ATC
+      IF sy-tcode = 'ME52N' OR  sy-tcode = 'ME52' OR  sy-tcode = 'ME51' OR  sy-tcode = 'ME51N' . "#EC CI_USAGE_OK[1803189]
+** <- END CHANGES BY OF SARFRAZ ALI ON 21OCT2024 FOR ATC
+
+        IF im_data_new-werks = 'O029' OR im_data_new-werks = 'O037' OR im_data_new-werks = 'O042' .
+          MESSAGE e575(ym01).
+
+        ENDIF.
+      ENDIF.
+    ENDIF.
+
+*  DATA : LS_GET_ITM TYPE MEREQ_ITEM,
+*         LS_HEADER  TYPE REF TO IF_PURCHASE_REQUISITION,    "#EC NEEDED
+*         LS_ACC     TYPE MMPUR_ACCOUNTING_LIST,
+*         LS_EXKN    TYPE EXKN.
+
+    IF sy-tcode = 'ME54N' AND im_data_new-badat >= '20190101'.
+
+      DATA li_acc LIKE LINE OF ls_acc.
+
+
+      im_req_item->if_releasable_mm~get_data( ).
+      ls_get_itm = im_req_item->get_data( ).
+      ls_header =  im_req_item->get_requisition( ).
+      im_req_item->if_acct_container_mm~get_data( ).
+      ls_acc = im_req_item->if_acct_container_mm~get_items( ).
+
+      IF ls_get_itm-loekz NE 'X'.
+
+        IF ls_get_itm-knttp = 'N' AND ls_get_itm-pstyp = '9'.
+          LOOP AT ls_acc INTO li_acc.
+            ls_exkn = li_acc-model->get_exkn( ).
+*     IF LS_EXKN-PS_PSP_PNR IS INITIAL.
+*       MESSAGE E552(YM01). "MESSAGE 'WBS ELEMENT CANNOT BE LEFT BLANK' TYPE 'W'.
+*     ENDIF.
+            IF ls_exkn-nplnr IS INITIAL.
+              MESSAGE e553(ym01) WITH im_data_new-bnfpo. "'NETWORK/ACC. ASSIGNMENT NO. CANNOT BE LEFT BLANK'(002) TYPE 'W'.
+            ENDIF.
+
+            IF ls_exkn-vornr IS INITIAL.
+              MESSAGE e554(ym01) WITH im_data_new-bnfpo. "'ACTIVITY NO. CANNOT BE LEFT BLANK'(003) TYPE 'W'.
+            ENDIF.
+
+            IF ls_exkn-sakto IS INITIAL.
+              MESSAGE e555(ym01) WITH im_data_new-bnfpo. "' GL ACCOUNT NUMBER CANNOT BE LEFT BLANK'(004) TYPE 'W'.
+            ENDIF.
+          ENDLOOP.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+
+
+
+
+
+
+
+*--------------------------------------------------------*
+**END OF SHALINI 19.10.2011*****
+*--------------------------------------------------------*
+
+
+    CLEAR: w_eban.
+
+    w_eban = im_req_item->get_persistent_data( ).
+
+
+
+    IF sy-tcode = 'ME51N' AND im_data_new-badat >= '20190101'. " DATE CONSTRAINT ADDED ON 30.05.2012
+      DATA: ls_mereq_item TYPE mereq_item.
+*GET VALUES IF PREQ ITEM EXISTS
+      IF NOT im_req_item IS INITIAL.
+        gf_aktyp = im_req_item->get_activity( ).
+      ENDIF.
+      IF NOT im_req_item IS INITIAL AND  gf_aktyp = 'H'.
+*READ ITEM DATA FROM SYSTEM
+        ls_mereq_item = im_req_item->get_data( ).
+*IF CUSTOMER FIELD CHANGED
+* FILL FIELD WITH NEW VALUE
+        ls_mereq_item-ysrm_chkbox = space.
+*SET NEW ITEM DATA TO SYSTEM
+        CALL METHOD im_req_item->set_data( ls_mereq_item ).
+*TELL THE SYSTEM THAT THERE HAS SOMETHING CHANGED ON THE CUSTOMER TAB
+*    EX_CHANGED = 'X'.
+      ENDIF.
+
+    ENDIF.
+
+    IF sy-tcode = 'ME54N' AND im_data_new-badat >= '20190101'. " DATE CONSTRAINT ADDED ON 30.05.2012
+
+      CLEAR lt_item[].
+*
+
+
+      IF im_data_old-frgkz = '1' AND im_data_new-frgkz = '2' AND w_user01 = 'X'.
+        CLEAR w_edflag.
+      ENDIF.
+
+      IF im_data_old-frgkz = '1' AND im_data_new-frgkz = '1'.
+        CLEAR w_edflag.
+      ENDIF.
+
+      IF im_data_old-frgkz = '1' AND im_data_new-frgkz = 'X'.
+        CLEAR w_edflag.
+      ENDIF.
+
+      IF im_data_old-frgkz = 'X' AND im_data_new-frgkz = '1'.
+        CLEAR w_edflag.
+      ENDIF.
+
+      IF im_data_old-frgkz = '2' AND im_data_new-frgkz = '2' AND w_user01 = 'X'.
+        CLEAR w_edflag.
+      ENDIF.
+
+      IF im_data_old-frgkz = '2' AND im_data_new-frgkz = '1' AND w_user01 = 'X'.
+        w_edflag = 'X'.
+      ENDIF.
+
+      IF w_eban-frgkz = 'X' AND im_data_new-frgkz = '2'.
+        MESSAGE e958(ym01).
+      ENDIF.
+
+      IF w_eban-frgkz = '2' AND im_data_new-frgkz = 'X'.
+        MESSAGE e958(ym01).
+      ENDIF.
+    ENDIF.
+
+*--SOC------DIWASKAR TYAGI & MANAS SIR--ON 27.08.2024---CHARM--4000008605--TR--DVRK9A1BFN
+    IF sy-tcode = 'ME54N'.
+      IF sy-ucomm = 'MERELEASE'.
+        IF im_data_old-frgkz = 'X' AND im_data_new-frgkz = '1'.
+          SELECT * FROM yrma_pr_otherdet INTO TABLE it_yrma_pr WHERE yy_pr_no EQ w_eban-banfn.
+          READ TABLE it_yrma_pr INTO wa_yrma_pr INDEX 1.
+          IF wa_yrma_pr-yy_adm_dt IS NOT INITIAL.
+          ELSE.
+            MESSAGE e857(ym01).
+          ENDIF.
+        ENDIF.
+      ENDIF.
+
+      IF sy-ucomm = 'MESAVE'.
+        IF im_data_old-frgkz = '1' AND im_data_new-frgkz = '1'.
+          SELECT * FROM yrma_pr_otherdet INTO TABLE it_yrma_pr WHERE yy_pr_no EQ w_eban-banfn.
+          READ TABLE it_yrma_pr INTO wa_yrma_pr INDEX 1.
+          IF wa_yrma_pr-yy_adm_dt IS NOT INITIAL.
+          ELSE.
+            MESSAGE e857(ym01).
+          ENDIF.
+        ENDIF.
+      ENDIF.
+
+    ENDIF.
+*--EOC------DIWASKAR TYAGI & MANAS SIR--ON 27.08.2024---CHARM--4000008605--TR--DVRK9A1BFN
+
+*****************ADDED BY PANKAJ YADAV ON 15/03/2012******************************************************
+
+    DATA : "LV_EXKN  TYPE EXKN,
+      lv_ebeln TYPE banfn,
+      lv_bsart TYPE yrma_doctype_gl-bsart,
+      lv_sakto TYPE yrma_doctype_gl-sakto,
+      lv_knttp TYPE yrma_doctype_gl-knttp,
+      lv_bednr TYPE yrma_doctype_gl-bednr.
+*           IT_YRMA_DOCTYPE_GL TYPE YRMA_DOCTYPE_GL.
+    DATA : lv_exkn1 TYPE exkn.
+*    DATA : LV_ACC LIKE LINE OF LS_ACC.
+    DATA : wa_prps TYPE prps.
+    DATA : lv_get_itm TYPE mereq_item.
+    DATA : wa_message TYPE bapiret2.
+    DATA : i_prps             TYPE TABLE OF prps,
+           lv_aufnr           TYPE m_aukof-posid,
+           i_proj             TYPE TABLE OF proj,
+           wa_proj            TYPE proj,
+           i_yrma_prof_plant  TYPE TABLE OF yrma_prof_plant,
+           wa_yrma_prof_plant TYPE yrma_prof_plant.
+
+    DATA dobj TYPE banfn .
+    GET PARAMETER ID 'BAN' FIELD dobj .
+
+***************************ADDED BY RS CHARM NUMBER 4000000797***********************
+*SELECT BSART SAKTO KNTTP BEDNR FROM YRMA_DOCTYPE_GL INTO IT_YRMA_DOCTYPE_GL.
+*  IF SY-SUBRC EQ 0.
+*
+*  ENDIF.
+***************************ENDED BY RS CHARM NUMBER 4000000797***********************
+
+    SELECT SINGLE banfn FROM yrma_pr_bypass INTO lv_ebeln WHERE banfn = dobj.
+    IF sy-subrc NE 0.
+      IF  im_data_new-badat >= '20190101'. " DATE CONSTRAINT ADDED ON 30.05.2012
+        IF ( sy-tcode = 'ME51N' OR sy-tcode = 'ME52N' OR sy-tcode = 'ME53N' OR sy-tcode = 'ME54N') AND ( im_data_new-bsart = 'ZMRP' OR im_data_new-bsart = 'ZONM'
+          OR im_data_new-bsart = 'ZPGG' OR im_data_new-bsart = 'ZPRJ' OR im_data_new-bsart = 'ZD' OR im_data_new-bsart = 'ZF'
+          OR im_data_new-bsart = 'ZP' OR im_data_new-bsart = 'ZQ' ).
+
+
+          im_req_item->if_acct_container_mm~get_data( ).
+
+          ls_acc = im_req_item->if_acct_container_mm~get_items( ).
+
+          SELECT pspnr werks FROM prps INTO CORRESPONDING FIELDS OF TABLE i_prps.
+
+          LOOP AT ls_acc INTO lv_acc.
+
+            lv_exkn = lv_acc-model->get_exkn( ).
+
+            READ TABLE i_prps INTO wa_prps WITH KEY pspnr = lv_exkn-ps_psp_pnr.
+
+            IF wa_prps IS NOT INITIAL .
+
+              IF wa_prps-werks NE im_data_new-werks.
+*******SOC BY JAINENDRA GUPTA & MANAS SIR ON 20.10.2020 CHARM-4000002788
+*              WA_MESSAGE-TYPE       = 'E'. "COMMENTED BY JAINENDRA GUPTA & MANAS SIR ON 20.10.2020 CHARM-4000002788
+*              WA_MESSAGE-ID         = 'ZRC1'. "COMMENTED BY JAINENDRA GUPTA & MANAS SIR ON 20.10.2020 CHARM-4000002788
+*              WA_MESSAGE-NUMBER     = '001'. "COMMENTED BY JAINENDRA GUPTA & MANAS SIR ON 20.10.2020 CHARM-4000002788
+
+                MESSAGE e116(ym01) WITH im_data_new-werks wa_prps-werks lv_exkn-ps_psp_pnr.
+
+*              APPEND WA_MESSAGE TO EX_MESSAGES. "COMMENTED BY JAINENDRA GUPTA & MANAS SIR ON 20.10.2020 CHARM-4000002788
+*              RAISE EX_MESSAGES. "COMMENTED BY JAINENDRA GUPTA & MANAS SIR ON 20.10.2020 CHARM-4000002788
+*******EOC BY JAINENDRA GUPTA & MANAS SIR ON 20.10.2020 CHARM-4000002788
+
+              ENDIF.
+            ENDIF.
+            CLEAR : lv_acc.
+
+          ENDLOOP.
+
+*  SELECT SINGLE WERKS FROM PRPS INTO CORRESPONDING FIELDS OF WA_PRPS WHERE WERKS = IM_DATA_NEW-WERKS.
+*
+*  IF SY-SUBRC NE 0.
+*
+*    MESSAGE E001(ZRC1) WITH IM_DATA_NEW-BNFPO.
+*
+*  ENDIF.
+        ENDIF.
+      ENDIF.
+
+**************************************************************************
+
+      """"""""VALIDATION FOR NETWORK
+*DATA : I_AUFK TYPE TABLE OF AUFK,
+*       WA_AUFK TYPE AUFK.
+
+      IF im_data_new-badat >= '20190101'. " DATE CONSTRAINT ADDED ON 30.05.2012
+        IF ( sy-tcode = 'ME51N' OR sy-tcode = 'ME52N' OR sy-tcode = 'ME53N' OR sy-tcode = 'ME54N' ) AND
+           (  im_data_new-bsart = 'ZP'   OR
+              im_data_new-bsart = 'ZM'   OR
+              im_data_new-bsart = 'ZONM' OR
+              im_data_new-bsart = 'ZPRJ' OR
+              im_data_new-bsart = 'ZPGG' OR
+              im_data_new-bsart = 'ZMRP' ).
+          .
+
+          IF  im_data_new-knttp = 'N'.
+*    SELECT AUFNR WERKS FROM AUFK INTO CORRESPONDING FIELDS OF TABLE  I_AUFK.
+            LOOP AT ls_acc INTO lv_acc.
+
+              lv_exkn = lv_acc-model->get_exkn( ).
+
+              IF lv_exkn-nplnr IS NOT INITIAL.
+
+*Begin of changes by of VIPUL on 20241104  for ATC
+                SELECT posid FROM m_aukof INTO lv_aufnr UP TO 1 ROWS
+                WHERE aufnr = lv_exkn-nplnr  ORDER BY aufnr.
+                ENDSELECT.
+* *End of changes by of VIPUL on 20241104  for ATC
+
+                SELECT pspnr werks prctr pgsbr FROM prps INTO CORRESPONDING FIELDS OF TABLE i_prps
+                                     WHERE posid = lv_aufnr.
+*                                              AND   WERKS =   IM_DATA_NEW-WERKS.
+
+
+
+                IF sy-subrc EQ 0.
+**
+**                SELECT PSPNR WERKS PRCTR PGSBR FROM PRPS INTO CORRESPONDING FIELDS OF TABLE I_PRPS
+**                                              WHERE POSID = LV_AUFNR
+**                                              AND   WERKS =   IM_DATA_NEW-WERKS.
+***
+
+*    SELECT AUFNR WERKS FROM AUFK INTO CORRESPONDING FIELDS OF TABLE  I_AUFK WHERE AUFNR = LV_AUFNR "LV_EXKN-NPLNR
+*                                                                     AND WERKS = IM_DATA_NEW-WERKS.
+
+**                IF SY-SUBRC NE 0 .
+                  DATA: werks_t  TYPE werks_d,
+                        wa_prps1 TYPE prps.
+                  LOOP AT i_prps INTO wa_prps1.
+                    werks_t = wa_prps1-werks.
+                    CLEAR: wa_prps1.
+                  ENDLOOP.
+                  IF im_data_new-werks NE werks_t.
+
+*SOC DESH/MANAS SIR CHAM 5251 DATE 12/09/2022
+                    MESSAGE e092(ym01) WITH im_data_new-werks werks_t lv_exkn-nplnr  .
+*CLEAR: WERKS_T.
+*        MESSAGE E092(YM01).
+*EOC DESH/MANAS SIR CHAM 5251 DATE 12/09/2022
+                  ELSE.
+
+*       SELECT * FROM PROJ INTO CORRESPONDING FIELDS OF TABLE I_PROJ
+*                          WHERE PSPID = LV_AUFNR.
+
+                    SELECT * FROM yrma_prof_plant  INTO CORRESPONDING FIELDS OF TABLE i_yrma_prof_plant
+                                             FOR ALL ENTRIES IN i_prps
+                                             WHERE werks = i_prps-werks.
+                    IF sy-subrc = 0.
+                      SELECT * FROM yrma_prof_plant  INTO CORRESPONDING FIELDS OF TABLE i_yrma_prof_plant
+                                                      FOR ALL ENTRIES IN i_prps
+                                                      WHERE werks = i_prps-werks
+                                                      AND    gsber = i_prps-pgsbr
+                                                      AND    prctr = i_prps-prctr  .
+                      IF sy-subrc NE 0.
+
+
+                        DATA: werks_t1 TYPE werks_d,
+                              pgsbr_t1 TYPE gsber,
+                              prctr_t1 TYPE prctr,
+                              wa_prps2 TYPE prps.
+                        LOOP AT i_prps INTO wa_prps2.
+                          werks_t1 = wa_prps2-werks.
+                          pgsbr_t1 = wa_prps2-pgsbr.
+                          prctr_t1 = wa_prps2-prctr.
+
+                          CLEAR: wa_prps2.
+                        ENDLOOP.
+
+*SOC DESH/MANAS SIR CHAM 5251 DATE 12/09/2022
+                        MESSAGE e652(ym01) WITH lv_exkn-nplnr werks_t1  pgsbr_t1 prctr_t1 .
+*EOC DESH/MANAS SIR CHAM 5251 DATE 12/09/2022
+                      ENDIF.
+
+                    ENDIF.
+
+                  ENDIF.
+                ENDIF.  " DB
+              ENDIF.
+*  CHECK FOR GL ACCOUNT MANDATORY FOR A/C ASSIGNEMTN CATEGORY (AAC)N
+              IF lv_exkn-sakto IS INITIAL.
+                MESSAGE e555(ym01) WITH im_data_new-bnfpo. "' GL ACCOUNT NUMBER CANNOT BE LEFT BLANK'(004) TYPE 'W'.
+              ENDIF.
+*  CHECK FOR GL ACCOUNT MANDATORY
+
+            ENDLOOP.
+
+          ENDIF.
+*    ENDLOOP.
+
+****************************ADDED BY RS CHARM NUMBER 4000000797***********************
+*SELECT SINGLE BSART SAKTO KNTTP BEDNR FROM YRMA_DOCTYPE_GL INTO (LV_BSART, LV_SAKTO, LV_KNTTP, LV_BEDNR).
+*  IF SY-SUBRC EQ 0.
+*
+*  ENDIF.
+****************************ENDED BY RS CHARM NUMBER 4000000797***********************
+
+        ENDIF.
+      ENDIF.
+
+
+
+
+
+
+
+      """"""""VALIDATION FOR COSTCENTER
+      DATA : i_csks   TYPE TABLE OF csks,
+             wa_t134g LIKE t134g,
+             wa_tekkn LIKE exkn,
+             wa_csks  TYPE csks.
+      TABLES : csks.
+
+
+
+      IF im_data_new-badat >= '20190101'. " DATE CONSTRAINT ADDED ON 30.05.2012
+        IF ( sy-tcode = 'ME51N' OR sy-tcode = 'ME52N' OR sy-tcode = 'ME53N' OR sy-tcode = 'ME54N' ) AND
+            ( im_data_new-bsart = 'ZP' OR
+            im_data_new-bsart = 'ZM' OR
+            im_data_new-bsart = 'ZONM' OR
+            im_data_new-bsart = 'ZPRJ' OR
+            im_data_new-bsart = 'ZPGG' OR
+            im_data_new-bsart = 'ZMRP' ).
+
+          IF  im_data_new-knttp = 'K'.
+
+*Begin of changes by of VIPUL on 20241104  for ATC
+            SELECT * FROM t134g INTO wa_t134g
+            UP TO 1 ROWS
+            WHERE werks = im_data_new-werks  ORDER BY werks .
+            ENDSELECT.
+* *End of changes by of VIPUL on 20241104  for ATC
+
+            LOOP AT ls_acc INTO lv_acc.
+              lv_exkn = lv_acc-model->get_exkn( ).
+
+              IF sy-subrc = 0 .
+                IF lv_exkn-kostl IS NOT INITIAL.
+*     READ TABLE EXKN INTO WA_TEKKN INDEX 1.
+                  DATA: gs_csks TYPE csks.
+*Begin of changes by of VIPUL on 20241104  for ATC
+                  SELECT * FROM csks INTO gs_csks"INTO CORRESPONDING FIELDS OF TABLE I_CSKS
+                  UP TO 1 ROWS
+                  WHERE "gsber = wa_t134g-gsber AND
+                  kostl = lv_exkn-kostl
+                  AND datab LE sy-datum
+                  AND datbi GE sy-datum  ORDER BY kostl .
+                  ENDSELECT.
+* *End of changes by of VIPUL on 20241104  for ATC
+*                  IF SY-SUBRC <> 0 . "DB
+                  IF sy-subrc EQ 0 .
+*        MESSAGE 'PLEASE PUT CORRECT COST CENTER. FOR THE PLANT' TYPE 'E' .
+*                    IF WA_PRPS-WERKS NE IM_DATA_NEW-WERKS.
+                    IF gs_csks-gsber NE wa_t134g-gsber.
+****
+****                        WA_MESSAGE-TYPE       = 'E'.
+****                        WA_MESSAGE-ID         = 'YM01'.
+****                        WA_MESSAGE-NUMBER     = '093'.
+****                        APPEND WA_MESSAGE TO EX_MESSAGES.
+****                        RAISE EX_MESSAGES.
+*SOC DESH/MANAS SIR CHAM 5251 DATE 12/09/2022
+                      MESSAGE e093(ym01) WITH lv_exkn-kostl gs_csks-gsber im_data_new-werks wa_t134g-gsber .
+*EOC DESH/MANAS SIR CHAM 5251 DATE 12/09/2022
+                    ENDIF.
+                  ENDIF.
+                ENDIF.
+              ENDIF.
+            ENDLOOP.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+
+
+
+      """"""""VALIDATION FOR INTERNAL ORDER
+      DATA : i_aufk              TYPE TABLE OF aufk,
+             wa_aufk             TYPE aufk,
+             i_yrim_order_plant  TYPE TABLE OF yrim_order_plant,
+             wa_yrim_order_plant TYPE yrim_order_plant,
+             l_werks             TYPE werks_d,
+             l_aufnr             TYPE aufnr.
+
+***SOC BY ANKIT & MR. MANAS RANJAN SETHI ON 3.9.2020 CHARM NO # 4000002678: ANS:BUG FX YM01 182 WHILE CHANGING PR/SR
+      IF ls_get_itm-loekz <> 'X'.
+***EOC BY ANKIT & MR. MANAS RANJAN SETHI ON 3.9.2020 CHARM NO # 4000002678: ANS:BUG FX YM01 182 WHILE CHANGING PR/SR
+        IF im_data_new-badat >= '20190101'. " DATE CONSTRAINT ADDED ON 30.05.2012
+
+          IF ( sy-tcode = 'ME51N' OR sy-tcode = 'ME52N' OR sy-tcode = 'ME53N' OR sy-tcode = 'ME54N' ) AND
+              ( im_data_new-bsart = 'ZP'   OR
+                im_data_new-bsart = 'ZM'   OR
+                im_data_new-bsart = 'ZONM' OR
+                im_data_new-bsart = 'ZPRJ' OR
+                im_data_new-bsart = 'ZPGG' OR
+                im_data_new-bsart = 'ZMRP' ).
+            .
+            IF  im_data_new-knttp = 'I' .
+
+              IF lv_exkn-aufnr IS NOT INITIAL.
+
+                SELECT aufnr werks gsber prctr FROM aufk INTO CORRESPONDING FIELDS OF TABLE  i_aufk WHERE aufnr = lv_exkn-aufnr
+                                                                                 AND werks = im_data_new-werks
+                                                                                 AND autyp = '01'.
+
+                IF sy-subrc NE 0 .
+*      MESSAGE 'PLANT IN PR DOES NOT MATCH WITH PLANT IN INTERNAL ORDER' TYPE 'E'.
+****                    WA_MESSAGE-TYPE       = 'E'.
+****                    WA_MESSAGE-ID         = 'YM01'.
+****                    WA_MESSAGE-NUMBER     = '182'.
+****                    APPEND WA_MESSAGE TO EX_MESSAGES.
+****                    RAISE EX_MESSAGES.
+                  READ  TABLE i_aufk INTO wa_aufk INDEX 1.
+                  MESSAGE e182(ym01) WITH wa_aufk-aufnr wa_aufk-werks.
+                ELSE.
+* VALIDATION IN PR FOR PROFIT CENTER
+
+                  SELECT * FROM yrma_prof_plant  INTO CORRESPONDING FIELDS OF TABLE i_yrma_prof_plant
+                                                  FOR ALL ENTRIES IN i_aufk
+                                                  WHERE werks = i_aufk-werks.
+                  IF sy-subrc = 0.
+
+*
+                    READ  TABLE i_aufk INTO wa_aufk INDEX 1.
+                    IF wa_aufk-prctr IS NOT INITIAL.
+
+                      SELECT * FROM yrma_prof_plant  INTO CORRESPONDING FIELDS OF TABLE i_yrma_prof_plant
+                                                FOR ALL ENTRIES IN i_aufk
+                                                WHERE werks = i_aufk-werks
+                                                AND    gsber = i_aufk-gsber
+                                                AND   prctr = i_aufk-prctr  .
+* SOC DESH/MANAS CHAM 6311 DT 04.05.2023
+
+                    ENDIF.
+                    IF wa_aufk-prctr IS INITIAL.
+                      SELECT * FROM yrma_prof_plant  INTO CORRESPONDING FIELDS OF TABLE i_yrma_prof_plant
+                                                      FOR ALL ENTRIES IN i_aufk
+                                                      WHERE werks = i_aufk-werks
+                                                      AND    gsber = i_aufk-gsber .
+                    ENDIF.
+
+* EOC DESH/MANAS CHAM 6311 DT 04.05.2023
+                    IF sy-subrc NE 0 .
+*SOC DESH/MANAS SIR CHAM 5251 DATE 12/09/2022
+                      READ TABLE i_aufk INTO wa_aufk INDEX 1.
+                      MESSAGE e652(ym01) WITH wa_aufk-aufnr wa_aufk-werks wa_aufk-gsber wa_aufk-prctr.
+*EOC DESH/MANAS SIR CHAM 5251 DATE 12/09/2022
+                    ENDIF.
+                  ENDIF.
+                ENDIF.
+              ENDIF.
+            ENDIF.
+            IF  im_data_new-knttp = 'F'.
+              SELECT aufnr werks FROM aufk INTO CORRESPONDING FIELDS OF TABLE  i_aufk WHERE aufnr = lv_exkn-aufnr
+                                                                               AND werks = im_data_new-werks
+                                                                               AND autyp = '30'.
+              IF sy-subrc NE 0 .
+* *SOC DESH/MANAS SIR CHAM 5251 DATE 12/09/2022
+                READ  TABLE i_aufk INTO wa_aufk INDEX 1.
+                MESSAGE e182(ym01) WITH wa_aufk-aufnr wa_aufk-werks.
+*EOC DESH/MANAS SIR CHAM 5251 DATE 12/09/2022
+              ENDIF.
+              IF im_data_new-pstyp = '9'.
+                SELECT * FROM yrim_order_plant
+                  INTO TABLE i_yrim_order_plant
+                  WHERE werks = im_data_new-werks.
+
+                IF i_yrim_order_plant[] IS NOT INITIAL.
+***SOC BY SANYOGITA & CHANDRESH ON 19.08.2016-VALIDATION FOR PLANT & PM ORDER FROM TABLE
+                  CLEAR wa_yrim_order_plant.
+                  READ TABLE i_yrim_order_plant INTO wa_yrim_order_plant WITH KEY werks = im_data_new-werks.
+****          IF WA_YRIM_ORDER_PLANT IS NOT INITIAL.
+****            LV_EXKN-AUFNR = WA_YRIM_ORDER_PLANT-AUFNR.
+****          ENDIF.
+
+                  IF sy-subrc = 0.
+*****SOC BY ARCHANA/MANAS ON 10.01.2020 TO OVERCOME 653 ERROR WHEN USER DELRELEASE THE PO.CHARM-4000001445*****
+                    IF sy-ucomm NE 'MERESET'.
+*****EOC BY ARCHANA/MANAS ON 10.01.2020 TO OVERCOME 653 ERROR WHEN USER DELRELEASE THE PO.CHARM-4000001445*****
+                      IF wa_yrim_order_plant-aufnr NE lv_exkn-aufnr.
+                        MESSAGE e653(ym01) WITH wa_yrim_order_plant-aufnr wa_yrim_order_plant-werks.
+                      ENDIF.
+                    ENDIF.
+                  ENDIF.
+***EOC BY SANYOGITA & CHANDRESH ON 19.08.2016-VALIDATION FOR PLANT & PM ORDER FROM TABLE
+                ENDIF.
+              ENDIF.
+            ENDIF.
+
+          ENDIF.
+        ENDIF.
+***SOC BY ANKIT & MR. MANAS RANJAN SETHI ON 3.9.2020 CHARM NO # 4000002678: ANS:BUG FX YM01 182 WHILE CHANGING PR/SR
+      ENDIF.
+***EOC BY ANKIT & MR. MANAS RANJAN SETHI ON 3.9.2020 CHARM NO # 4000002678: ANS:BUG FX YM01 182 WHILE CHANGING PR/SR
+    ENDIF.
+*******************************************************************************************************************************************
+    DATA: wa_yrma_po TYPE yrma_po,
+          w_bklas(4).
+    DATA: w_mtart TYPE mara-mtart .
+    DATA: x TYPE f.
+    DATA: itab_bypasspo_mt    TYPE STANDARD TABLE OF yrma_pr_bypass,
+          it_mat_bypass       TYPE STANDARD TABLE OF yrma_mat_bypass,
+          wa_mat_bypass       TYPE yrma_mat_bypass,
+          it_yrma_qty_uom_frc TYPE TABLE OF yrma_qty_uom_frc,
+          wa_yrma_qty_uom_frc TYPE yrma_qty_uom_frc,
+*  DATA: LS_MEREQ_TOPLINE TYPE REF TO IF_PURCHASE_REQUISITION.
+*
+
+***SOC BY SANYOGITA & CHANDRESH ON 15.05.2014 TO ACCOUNT ASSIGN. BASED CONTROL FOR PM USER
+***           ITAB_YRMT_BYPASSPO TYPE STANDARD TABLE OF YRMT_BYPASSPO,
+          itab_eban_plant     TYPE STANDARD TABLE OF eban,
+          itab_plnt_pm_ord    TYPE STANDARD TABLE OF yrma_plnt_pm_ord.
+    DATA: wa_eban_plant  TYPE eban,
+          wa_plnt_pm_ord TYPE yrma_plnt_pm_ord.
+    INCLUDE mm_messages_mac. "USEFUL MACROS FOR MESSAGE HANDLING
+    DATA wa_zggl_ent_tab TYPE zggl_ent_tab.
+*---------------------------------------------------------------------*
+* HERE WE CHECK EACH ITEM FOR ACCOUNT ASSIGNMENT KNTTP W.R.T.
+* MATERIAL TYPE MTART / MATERIAL ( LAST DIGIT )
+*---------------------------------------------------------------------*
+*    BREAK MM100.
+*  LS_MEREQ_TOPLINE = IM_ITEM->GET_REQUISITION( ).
+****SOC BY SUHANI ON 1.12.2017 TO BYPASS MATERIAL
+    DATA: itab_bypasspo TYPE STANDARD TABLE OF yrma_pr_bypass,
+          wa_bypasspo   TYPE yrma_pr_bypass.
+
+*  SELECT SINGLE * FROM YRMA_MAT_BYPASS WHERE LS_GET_ITM-MATNR
+
+*****  SELECT * FROM YRMA_PR_BYPASS INTO CORRESPONDING FIELDS OF TABLE ITAB_BYPASSPO
+*****         WHERE EBELN = LS_GET_ITM-EBELN.
+******************** SOC CHANGE OF PR DATE FOR VALIDATION NEW DATE 1.12.2018 FROM ARU SACHDEVA AND CHANDRESH ON DATED 18.12.2018
+    DATA: lv_mat TYPE c.
+** -> BEGIN OF CHANGES BY OF SARFRAZ ALI ON 29.10.2024 15:50:38 FOR ATC
+    SELECT matnr FROM yrma_mat_bypass INTO TABLE it_mat_bypass. "#EC CI_FLDEXT_OK[2215424]
+** <- END CHANGES BY OF SARFRAZ ALI ON 29.10.2024 15:50:38 FOR ATC
+** -> BEGIN OF CHANGES BY OF JATIN ON 25OCT24 FOR ATC
+    SORT it_mat_bypass.
+** <- END CHANGES BY OF JATIN ON 25OCT24 FOR ATC
+    LOOP AT it_mat_bypass INTO wa_mat_bypass.
+      IF wa_mat_bypass-matnr EQ ls_get_itm-matnr.
+        lv_mat = 'X'.
+        EXIT.
+      ENDIF.
+    ENDLOOP.
+********************EOC CHANGE OF PR DATE FOR VALIDATION NEW DATE 1.12.2018 FROM ARU SACHDEVA AND CHANDRESH ON DATED 18.12.2018
+*BREAK-POINT.
+* DATA: LS_MEPOITEM TYPE MEREQ_ITEM .
+    DATA: w_message(100).
+    IF lv_mat NE 'X'.
+
+**
+**
+**    SELECT SINGLE * INTO WA_ZGGL_ENT_TAB FROM ZGGL_ENT_TAB
+**      WHERE
+***    MANDT = SY-MANDT AND
+***       BUKRS NE '9000' AND
+**         PROGRAM_NAME = 'IF_EX_ME_PROCESS_REQ_CUST~PROCESS_ITEM'
+**        AND INCLUDE_NAME = 'ZGGL_IF_EX_ME_PROCESS_REQ_CUST'
+**        AND ACTIVE = 'X'.
+**    IF SY-SUBRC = 0.
+**      INCLUDE ZGGL_IF_EX_ME_PROCESS_REQ_CUST . "COMMENTED ON 19.01.2012.....
+*      ENDIF.
+    ELSE.
+      """ADDED LTR BY VIRENDAR
+
+      SELECT * FROM yrma_pr_bypass INTO CORRESPONDING FIELDS OF TABLE itab_bypasspo_mt
+               WHERE banfn = ls_get_itm-banfn_cs."EBELN.
+      IF sy-subrc NE 0.
+
+
+*  CLEAR : ANSWER.
+*
+** CHECK COMMENTED TILL FURTHER NOTICE 28 APR 2006
+
+*  IF ( LS_GET_ITM-KNTTP <> ' ' ) AND
+*  ( LS_GET_ITM-MATNR+9(1) = 3 OR LS_GET_ITM-MATNR+9(1) = 4 ).
+**   ANSWER = '1'.
+*    MMPUR_MESSAGE_FORCED 'E' 'YM01' '000' TEXT-001 '' '' ''.
+*  ELSE.
+** CHECK COMMENTED TILL FURTHER NOTICE 28 APR 2006
+
+***SOC BY SANYOGITA & CHANDRESH ON 01.11.2013 TO EXCLUDE CHECK ON PR WHICH ARE IN Y TABLE YRMT_BYPASSPO
+***SOC BY SANYOGITA & CHANDRESH ON 15.05.2014 TO ACCOUNT ASSIGN. BASED CONTROL FOR PM USER
+***IF LS_GET_ITM-BADAT >= '20131114'.
+***SOC BY SANYOGITA & CHANDRESH ON 20.06.2014 TO INCLUDE MORE ROLES FOR VALIDATION.
+***IF LS_GET_ITM-BADAT >= '20140519'.
+        IF ls_get_itm-badat >= '20190318'."'20171201'."'20161110'.
+***EOC BY SANYOGITA & CHANDRESH ON 20.06.2014 TO INCLUDE MORE ROLES FOR VALIDATION.
+***EOC BY SANYOGITA & CHANDRESH ON 15.05.2014 TO ACCOUNT ASSIGN. BASED CONTROL FOR PM USER
+***SOC BY SANYOGITA & CHANDRESH ON 20.06.2014 TO INCLUDE MORE ROLES FOR VALIDATION.
+
+
+*        DATA: ITAB_BYPASSPO TYPE STANDARD TABLE OF YRMA_PM_BYPASSPO,
+*              WA_BYPASSPO   TYPE YRMA_PM_BYPASSPO.
+
+
+
+
+
+*SELECT * FROM YRMA_PM_BYPASSPO INTO CORRESPONDING FIELDS OF TABLE ITAB_BYPASSPO
+*         WHERE EBELN = LS_GET_ITM-EBELN.
+*        SELECT SINGLE * FROM YRMA_PM_BYPASSPO INTO WA_BYPASSPO
+*                 WHERE EBELN = LS_GET_ITM-EBELN.
+
+***EOC BY SANYOGITA & CHANDRESH ON 20.06.2014 TO INCLUDE MORE ROLES FOR VALIDATION.
+
+          IF wa_bypasspo-banfn IS NOT INITIAL.
+            """"DO NOTHING
+          ELSE.
+***EOC BY SANYOGITA & CHANDRESH ON 01.11.2013 TO EXCLUDE CHECK ON PR WHICH ARE IN Y TABLE YRMT_BYPASSPO
+            SELECT mtart INTO w_mtart FROM mara WHERE
+             matnr = ls_get_itm-matnr.
+            ENDSELECT.
+            SELECT * INTO wa_yrma_po FROM yrma_po WHERE
+            yy_knttp = ls_get_itm-knttp AND
+            yy_mtart = w_mtart.
+            ENDSELECT.
+            IF sy-subrc = 0.
+*       ANSWER = '1'.
+              mmpur_message_forced 'E' 'YM01' '000' TEXT-002 ls_get_itm-knttp TEXT-003 w_mtart.
+            ENDIF.
+
+* ENDIF. " CHECK COMMENTED TILL FURTHER NOTICE 28 APR 2006
+
+* SOC ADDED BY SACHIN AND CHANDRESH ON 17.05.2010 FOR MATRIAL TYPE & AAC VALIDATION
+            DATA: w_groes TYPE mara-groes.
+            SELECT SINGLE groes INTO w_groes FROM mara WHERE matnr = ls_get_itm-matnr.
+
+            CLEAR: w_message.
+
+            IF w_groes = '1'.
+              SELECT SINGLE mtart INTO (w_mtart) FROM mara WHERE matnr = ls_get_itm-matnr .
+              IF w_mtart IS NOT INITIAL AND ls_get_itm-loekz IS INITIAL.
+
+                IF w_mtart = 'ZADS' AND ( ls_get_itm-knttp NE 'K' AND ls_get_itm-knttp NE 'N' AND
+                                          ls_get_itm-knttp NE 'U' AND ls_get_itm-knttp NE 'S' ).
+***SOC SANYOGITA & CHANDRESH ON 06.12.2013 FOR MAKING MESSAGE CLASS OF MESSAGE TEXTS
+***          CONCATENATE 'PUT AAC K OR N FOR ITEM NO.' LS_GET_ITM-BNFPO INTO W_MESSAGE SEPARATED BY SPACE.
+***          MESSAGE W_MESSAGE TYPE 'E'.
+                  MESSAGE e531(ym01) WITH ls_get_itm-bnfpo.
+***EOC SANYOGITA & CHANDRESH ON 06.12.2013 FOR MAKING MESSAGE CLASS OF MESSAGE TEXTS
+                ENDIF.
+                IF w_mtart = 'ZINS' AND ( ls_get_itm-knttp NE 'I' AND ls_get_itm-knttp NE 'N' AND ls_get_itm-knttp NE 'U').
+***SOC SANYOGITA & CHANDRESH ON 06.12.2013 FOR MAKING MESSAGE CLASS OF MESSAGE TEXTS
+***          CONCATENATE 'PUT AAC I OR N FOR ITEM NO.' LS_ET_ITM-BNFPO INTO W_MESSAGE SEPARATED BY SPACE.
+***          MESSAGE W_MESSAGE TYPE 'E'.
+                  MESSAGE e533(ym01) WITH ls_get_itm-bnfpo.
+***EOC SANYOGITA & CHANDRESH ON 06.12.2013 FOR MAKING MESSAGE CLASS OF MESSAGE TEXTS
+                ENDIF.
+                IF ( w_mtart = 'ZCHM' OR  w_mtart = 'ZSPR' OR w_mtart = 'ZSTR') AND
+                  ( ls_get_itm-knttp NE 'I' AND ls_get_itm-knttp NE 'Q' AND ls_get_itm-knttp NE 'U' AND
+                    ls_get_itm-knttp IS NOT INITIAL AND ls_get_itm-knttp NE 'S').
+
+***SOC SANYOGITA & CHANDRESH ON 06.12.2013 FOR MAKING MESSAGE CLASS OF MESSAGE TEXTS
+***          CONCATENATE 'PUT AAC I OR Q OR BLANK FOR ITEM NO.'  LS_GET_ITM-BNFPO INTO W_MESSAGE SEPARATED BY SPACE.
+***          MESSAGE W_MESSAGE TYPE 'E'.
+                  MESSAGE e534(ym01) WITH ls_get_itm-bnfpo.
+***EOC SANYOGITA & CHANDRESH ON 06.12.2013 FOR MAKING MESSAGE CLASS OF MESSAGE TEXTS
+                ENDIF.
+
+              ENDIF.
+
+            ELSE.
+              SELECT SINGLE mtart INTO (w_mtart) FROM mara WHERE matnr = ls_get_itm-matnr .
+              IF w_mtart IS NOT INITIAL AND ls_get_itm-loekz IS INITIAL.
+
+                IF w_mtart = 'ZADS' AND ( ls_get_itm-knttp NE 'K' AND ls_get_itm-knttp NE 'N' AND
+                                          ls_get_itm-knttp NE 'S').
+***SOC SANYOGITA & CHANDRESH ON 06.12.2013 FOR MAKING MESSAGE CLASS OF MESSAGE TEXTS
+***          CONCATENATE 'PUT AAC K OR N FOR ITEM NO.' LS_GET_ITM-BNFPO INTO W_MESSAGE SEPARATED BY SPACE.
+***          MESSAGE W_MESSAGE TYPE 'E'.
+                  MESSAGE e531(ym01) WITH ls_get_itm-bnfpo.
+***EOC SANYOGITA & CHANDRESH ON 06.12.2013 FOR MAKING MESSAGE CLASS OF MESSAGE TEXTS
+                ENDIF.
+                IF w_mtart = 'ZINS' AND ( ls_get_itm-knttp NE 'I' AND ls_get_itm-knttp NE 'N' ).
+***SOC SANYOGITA & CHANDRESH ON 06.12.2013 FOR MAKING MESSAGE CLASS OF MESSAGE TEXTS
+***          CONCATENATE 'PUT AAC I OR N FOR ITEM NO.' LS_GET_ITM-BNFPO INTO W_MESSAGE SEPARATED BY SPACE.
+***          MESSAGE W_MESSAGE TYPE 'E'.
+                  MESSAGE e533(ym01) WITH ls_get_itm-bnfpo.
+***EOC SANYOGITA & CHANDRESH ON 06.12.2013 FOR MAKING MESSAGE CLASS OF MESSAGE TEXTS
+                ENDIF.
+
+                IF w_mtart = 'ZADS' OR w_mtart = 'ZINS' OR w_mtart = 'ZMSP'  OR w_mtart = 'ZSTR' OR w_mtart = 'ZSPR' OR w_mtart = 'ZCHM'.
+                  IF w_mtart = 'ZCHM'.
+                    IF ( ls_get_itm-matnr+9(1) NE '3' AND ls_get_itm-matnr+9(1) NE '4' ).
+                      MESSAGE e111(ym01) WITH ls_get_itm-matnr.
+                    ENDIF.
+                  ELSE.
+                    IF ( ls_get_itm-matnr+9(1) = '1' OR ls_get_itm-matnr+9(1) = '2' OR ls_get_itm-matnr+9(1) = '0'
+                      OR ls_get_itm-matnr+9(1) = '5' OR ls_get_itm-matnr+9(1) = '6') AND ( ls_get_itm-knttp NE 'I' AND ls_get_itm-knttp NE 'Q'
+                      AND ls_get_itm-knttp NE 'N' AND ls_get_itm-knttp NE 'S') .
+*****SOC BY ARCHANA/MANAS ON 06.12.2019 TO EXCLUDE THE ERROR MESSAGE FOR GAIL GAS. CHARM-4000001163****
+                      IF sy-mandt = '300' OR sy-mandt = '190' OR sy-mandt = '210'.
+                        MESSAGE e108(ym01) WITH ls_get_itm-matnr ls_get_itm-knttp.
+                      ENDIF.
+*****EOC BY ARCHANA/MANAS ON 06.12.2019 TO EXCLUDE THE ERROR MESSAGE FOR GAIL GAS. CHARM-4000001163****
+                    ENDIF.
+*                ENDIF.
+
+
+*        IF ( LS_GET_ITM-MATNR+9(1) = '0' OR LS_GET_ITM-MATNR+9(1) = '5' OR LS_GET_ITM-MATNR+9(1) = '6') AND
+*          ( LS_GET_ITM-KNTTP NE 'I' AND LS_GET_ITM-KNTTP NE 'N' ) .
+*         MESSAGE E108(YM01).
+*        ENDIF.
+
+
+                    IF ( ls_get_itm-matnr+9(1) = '3' OR ls_get_itm-matnr+9(1) = '4' ) AND ( ls_get_itm-knttp NE ' ' AND  ls_get_itm-knttp NE 'Q' AND  ls_get_itm-knttp NE 'S'  ).
+                      MESSAGE e112(ym01) WITH ls_get_itm-matnr ls_get_itm-knttp .
+                    ENDIF.
+****COMMENTED BY SUHANI AND CHANDRESH ON 1.12.2017
+                    "IF ( LS_GET_ITM-MATNR+9(1) = '7' OR LS_GET_ITM-MATNR+9(1) = '8' ).
+                    "         MESSAGE E110(YM01).
+                    "        ENDIF.
+                  ENDIF.
+*********SOC DESH/MANAS CHAM 7089
+                  IF sy-mandt = '300' OR sy-mandt = '190' OR sy-mandt = '210'.
+                    IF ( ls_get_itm-matnr+9(1) = '7' OR ls_get_itm-matnr+9(1) = '8' ).
+                      IF ls_get_itm-pstyp NE '3'.
+
+
+                        MESSAGE e835(ym01) WITH ls_get_itm-matnr.
+                      ENDIF.
+                    ENDIF.
+                  ENDIF.
+*** *********SOC DESH/MANAS CHAM 7089
+                ENDIF.
+
+
+******RMS- 859 DONE BY VS ON 23.03.3018 SOC 5LAKH ABOVE MAND. SPARE
+                DATA : map TYPE bapre.
+** SOC DESH/MANAS SIR CHAM 7036 DT 04.09.2025 AT CONDITION BELOW
+                IF ( sy-mandt = '190' OR sy-mandt = '210' OR sy-mandt = '300' ).
+** EOC DESH/MANAS SIR CHAM 7036 DT 04.09.2025 AT CONDITION BELOW
+                  IF w_mtart = 'ZSTR' OR w_mtart = 'ZSPR' OR w_mtart = 'ZINS'.
+                    IF  ls_get_itm-knttp IS INITIAL AND ls_get_itm-pstyp = '0'  .
+                      map = ls_get_itm-preis / ls_get_itm-peinh.
+******SOC BY JAINENDRA GUPTA & MANAS SIR ON 07.11.2020 CHARM-4000003074, JG:MAJ SPR>5 AND NOR SPR <5 IN PR
+*                  IF MAP GE '640000'. "COMMENTED BY JAINENDRA GUPTA & MANAS SIR ON 11.06.2020 CHARM-4000003074
+***SOC BY ANKIT & MR. MANAS RANJAN SETHI ON 3.9.2020 CHARM NO # 4000003215, ANS:MAJOR SPR VAL MUST 5.9LACS IN PR
+*                      IF MAP GE '500000'.
+                      IF map GE '590000'.
+***EOC BY ANKIT & MR. MANAS RANJAN SETHI ON 3.9.2020 CHARM NO # 4000003215, ANS:MAJOR SPR VAL MUST 5.9LACS IN PR
+******EOC BY JAINENDRA GUPTA & MANAS SIR ON 07.11.2020 CHARM-4000003074, JG:MAJ SPR>5 AND NOR SPR <5 IN PR
+                        MESSAGE e193(ym01) WITH ls_get_itm-matnr map .
+                      ENDIF.
+                    ENDIF.
+                  ENDIF.
+                ENDIF. " DBL
+******SOC BY JAINENDRA GUPTA & MANAS SIR ON 07.11.2020 CHARM-4000003074, JG:MAJ SPR>5 AND NOR SPR <5 IN PR
+*              DATA : MAP TYPE BAPRE.
+                IF ( sy-mandt = '190' OR sy-mandt = '210' OR sy-mandt = '300' ).
+                  IF w_mtart = 'ZMSP'.
+                    IF  ls_get_itm-knttp IS INITIAL OR ls_get_itm-knttp = 'I' OR ls_get_itm-knttp = 'U' .
+                      IF  ls_get_itm-pstyp = '0'  .
+                        IF ls_get_itm-loekz = ' '.  " DESH/MANAS SIR CHAM 754904/1/24
+                          map = ls_get_itm-preis / ls_get_itm-peinh.
+                          IF map LT '500000'.
+**SOC BY DESH/MANAS  MATERIAL NO  AND MAP DISPLAY IN MESSAGE  CHAM NO. 5197 DATE 08.08.2022
+                            MESSAGE e662(ym01) WITH ls_get_itm-matnr map . "MESSAGE- MATL CODE LAST DIGIT 0 MAJOR SPARE(MAT TYPE-ZMSP),PRICE(INCL TAXES) MUST > 5LACS.
+**EOC BY DESH/MANAS  MATERIAL NO  AND MAP DISPLAY IN MESSAGE  CHAM NO. 5197 DATE 08.08.2022
+                          ENDIF.
+                        ENDIF.  " DESH CHAM 7549
+                      ENDIF.
+                    ENDIF.
+
+                  ENDIF.
+                ENDIF.
+******EOC BY JAINENDRA GUPTA & MANAS SIR ON 07.11.2020 CHARM-4000003074, JG:MAJ SPR>5 AND NOR SPR <5 IN PR
+
+******RMS- 859 DONE BY VS ON 23.03.3018 EOC5LAKH ABOVE MAND. SPARE
+
+
+
+
+
+                IF ( w_mtart = 'ZCHM' OR  w_mtart = 'ZSPR' OR w_mtart = 'ZSTR') AND
+                   ( ls_get_itm-knttp NE 'I' AND ls_get_itm-knttp NE 'Q' AND ls_get_itm-knttp IS NOT INITIAL AND
+                     ls_get_itm-knttp NE 'S' ).
+***SOC SANYOGITA & CHANDRESH ON 06.12.2013 FOR MAKING MESSAGE CLASS OF MESSAGE TEXTS
+***          CONCATENATE 'PUT AAC I OR Q OR BLANK FOR ITEM NO.'  LS_GET_ITM-BNFPO INTO W_MESSAGE SEPARATED BY SPACE.
+***          MESSAGE W_MESSAGE TYPE 'E'.
+                  MESSAGE e534(ym01) WITH ls_get_itm-bnfpo.
+***EOC SANYOGITA & CHANDRESH ON 06.12.2013 FOR MAKING MESSAGE CLASS OF MESSAGE TEXTS
+                ENDIF.
+
+              ENDIF.
+            ENDIF.
+
+            IF ls_get_itm-loekz IS INITIAL.
+              IF ls_get_itm-pstyp EQ '9' AND ls_get_itm-knttp NE 'K' AND ls_get_itm-knttp NE 'N'  AND  ls_get_itm-knttp NE 'U'
+***SOC SANYOGITA & CHANDRESH ON 06.12.2013 FOR CSR RELATED VALIDATIONS
+***      AND LS_GET_ITM-KNTTP NE 'I'  AND LS_GET_ITM-KNTTP NE 'F'.
+              AND ls_get_itm-knttp NE 'I'  AND ls_get_itm-knttp NE 'F' AND ls_get_itm-knttp NE 'S'.
+***        CONCATENATE 'PLEASE ENTER CORRECT AAC IN ITEM NUMBER ' LS_GET_ITM-BNFPO INTO W_MESSAGE SEPARATED BY SPACE.
+***        MESSAGE W_MESSAGE TYPE 'E'.
+                MESSAGE e532(ym01) WITH ls_get_itm-bnfpo.
+***EOC SANYOGITA & CHANDRESH ON 06.12.2013 FOR CSR RELATED VALIDATIONS
+              ENDIF.
+
+              IF ls_get_itm-pstyp NE '9' AND ls_get_itm-matnr IS INITIAL AND ls_get_itm-matkl NE '94' AND ls_get_itm-badat GT '20181201'."'20180323'."'20171201'."'20161110'.'20171201'." '20161110'. "'20100610'.
+***SOC SANYOGITA & CHANDRESH ON 06.12.2013 FOR MAKING MESSAGE CLASS OF MESSAGE TEXTS
+***        CONCATENATE 'PLEASE ENTER MATERIAL CODE IN ITEM NUMBER ' LS_GET_ITM-BNFPO INTO W_MESSAGE SEPARATED BY SPACE.
+***        MESSAGE W_MESSAGE TYPE 'E'.
+                MESSAGE e535(ym01) WITH ls_get_itm-bnfpo.
+***EOC SANYOGITA & CHANDRESH ON 06.12.2013 FOR MAKING MESSAGE CLASS OF MESSAGE TEXTS
+              ENDIF.
+* EOC ADDED BY SACHIN AND CHANDRESH ON 17.05.2010 FOR MATRIAL TYPE & AAC VALIDATION
+* SOC ENTER THE QUANTITY TO WHOLE NUMBER IN EA AND SET BY SACHIN & CHANDRESH ON 10.06.2010
+
+*SOC BY KUNAL/CHNADRESH ON 06/04/2018
+              SELECT * FROM yrma_qty_uom_frc INTO TABLE it_yrma_qty_uom_frc.
+              LOOP AT it_yrma_qty_uom_frc INTO wa_yrma_qty_uom_frc.
+                IF ( ls_get_itm-meins EQ wa_yrma_qty_uom_frc-yy_uom )."OR LS_GET_ITM-MEINS EQ 'SET' ) .
+                  x = ls_get_itm-menge MOD 1   .
+                  IF x NE 0 .
+***SOC SANYOGITA & CHANDRESH ON 06.12.2013 FOR MAKING MESSAGE CLASS OF MESSAGE TEXTS
+***          CONCATENATE 'PLEASE ENTER QUANTITY AS WHOLE NUMBER IN ITEM NUMBER ' LS_GET_ITM-BNFPO INTO W_MESSAGE SEPARATED BY SPACE."
+***          MESSAGE W_MESSAGE TYPE 'E'.
+                    MESSAGE e536(ym01) WITH ls_get_itm-bnfpo.
+***EOC SANYOGITA & CHANDRESH ON 06.12.2013 FOR MAKING MESSAGE CLASS OF MESSAGE TEXTS
+                  ENDIF.
+                ENDIF.
+              ENDLOOP.
+*EOC BY KUNAL/CHNADRESH ON 06/04/2018
+*******************************************************************************
+********CHECK FOR STOPPING PR CREATION AGNST RELEASED MAINTENANCE ORDER*****
+***************BY TUSHAR 22/01/2012*****************************************
+*******************************************************************************
+              IF ls_get_itm-knttp = 'F'.
+
+                DATA: l_pname(25) VALUE '(SAPLKACB)COBL',
+                      wa_cobl     TYPE cobl.
+*                      WA_AUFK     TYPE AUFK.
+                FIELD-SYMBOLS: <fs_cobl> TYPE cobl.
+** -> BEGIN OF CHANGES BY  KRITIKA ON 24.10.2024 FOR ATC
+                ASSIGN (l_pname) TO <fs_cobl>. "#EC CI_FLDEXT_OK[2610650]
+** <- END OF CHANGES BY KRITIKA ON 24.10.2024 FOR ATC
+                IF sy-subrc EQ 0.
+                  MOVE <fs_cobl> TO wa_cobl.
+                  SELECT SINGLE COUNT(*)
+                                FROM aufk
+                                WHERE aufk~phas0 EQ 'X'           AND
+                                      aufk~aufnr EQ wa_cobl-aufnr.
+                  IF sy-subrc EQ 0.
+
+                  ELSEIF sy-subrc NE 0.
+                    MESSAGE e528(ym01) WITH wa_cobl-aufnr. "'CAN NOT CREATE PR BECAUSE MAINTENANCE ORDER TO BE ASSIGNED IS RELEASED' TYPE 'E'.
+                  ENDIF.
+                ENDIF.
+              ENDIF.
+
+* SOC ENTER THE QUANTITY TO WHOLE NUMBER IN EA AND SET BY SACHIN & CHANDRESH ON 10.06.2010
+            ENDIF.
+            SELECT * FROM yrma_plnt_pm_ord INTO CORRESPONDING FIELDS OF TABLE itab_plnt_pm_ord.
+
+            IF itab_plnt_pm_ord[] IS NOT INITIAL.
+              CLEAR wa_plnt_pm_ord.
+              READ TABLE itab_plnt_pm_ord INTO wa_plnt_pm_ord WITH KEY werks = ls_get_itm-werks.
+              IF wa_plnt_pm_ord IS NOT INITIAL.
+***EOC BY SANYOGITA & CHANDRESH ON 15.05.2014 TO ACCOUNT ASSIGN. BASED CONTROL FOR PM USER
+                SELECT * FROM agr_users INTO CORRESPONDING FIELDS OF TABLE itab_agr_users
+***SOC BY SANYOGITA & CHANDRESH ON 20.06.2014 TO INCLUDE MORE ROLES FOR VALIDATION
+***                   WHERE UNAME = SY-UNAME AND AGR_NAME LIKE 'ZD_PM_XXX_MAINTEXEC%'
+                        WHERE uname = sy-uname AND ( agr_name LIKE 'ZD_PM_XXX_MAINTEXEC%' OR
+                              agr_name LIKE 'ZM_PM_XXX_MAINTEXEC%' OR agr_name LIKE 'ZD_PM_AAC-F' OR
+                              agr_name LIKE 'ZD_PM_AAC-F%' OR agr_name LIKE 'ZM_PM_AAC-F' OR
+                              agr_name LIKE 'ZM_PM_AAC-F%' ).
+***EOC BY SANYOGITA & CHANDRESH ON 20.06.2014 TO INCLUDE MORE ROLES FOR VALIDATION.
+***                   WHERE ( UNAME = SY-UNAME AND AGR_NAME LIKE 'ZD_PM_XXX_MAINTEXEC%' ) OR
+***                           UNAME = '00015271'.
+                IF ls_get_itm-pstyp = '9' AND ls_get_itm-knttp = 'K'.
+                  IF itab_agr_users[] IS NOT INITIAL.
+***SOC BY SANYOGITA & CHANDRESH ON 15.05.2014 TO ACCOUNT ASSIGN. BASED CONTROL FOR PM USER
+*                    MESSAGE i527(ym01). "'PM user cannot use AAC - K for service procurement' TYPE 'E'.
+*                    MESSAGE e527(ym01). "'PM user cannot use AAC - K for service procurement' TYPE 'E'.
+
+**-----SOC---DIWASKAR TYAGI & MANAS SIR----CHARM-----4000009070----COMMENTED MESSAGE e527(ym01) / ADD MESSAGE CODE FM.
+*                    MESSAGE e527(ym01). "'PM user cannot use AAC - K for service procurement' TYPE 'E'.
+
+                    CALL FUNCTION 'POPUP_DISPLAY_MESSAGE'
+                      EXPORTING
+*                       TITEL =
+                        msgid = 'YM01'
+                        msgty = 'I'
+                        msgno = '527'
+*                       MSGV1 =
+*                       MSGV2 =
+*                       MSGV3 =
+*                       MSGV4 =
+                      .
+**-----SOC---DIWASKAR TYAGI & MANAS SIR----CHARM-----4000009070----------------------------------------------------
+***EOC BY SANYOGITA & CHANDRESH ON 15.05.2014 TO ACCOUNT ASSIGN. BASED CONTROL FOR PM USER
+                  ENDIF.
+                ENDIF.
+***SOC BY SANYOGITA & CHANDRESH ON 15.05.2014 TO ACCOUNT ASSIGN. BASED CONTROL FOR PM USER
+              ENDIF.
+            ENDIF.
+***EOC BY SANYOGITA & CHANDRESH ON 15.05.2014 TO ACCOUNT ASSIGN. BASED CONTROL FOR PM USER
+          ENDIF.
+
+***SOC BY SANYOGITA & CHANDRESH ON 19.09.2013 FOR CORRECTION IN JV ACCOUNTING
+          DATA: itab_esuh TYPE STANDARD TABLE OF esuh,
+                wa_esuh   TYPE esuh,
+                wa_t001k  TYPE t001k.
+          DATA: w_limit TYPE c.
+
+          IF ls_get_itm-badat >= '20190318'."'20180323'."20171201'."'20161110'. "'20130919'.
+            SELECT SINGLE * FROM t001k INTO wa_t001k
+                            WHERE bwkey = ls_get_itm-werks.
+            IF wa_t001k IS NOT INITIAL AND wa_t001k-bukrs = 'GJ01'.
+
+              IF sy-ucomm = 'MECHECKDOC' OR sy-ucomm = 'MESAVE'.
+                IF ls_get_itm-pstyp = '9' AND ls_get_itm-knttp = 'N'.
+                  SELECT * FROM esuh INTO CORRESPONDING FIELDS OF TABLE itab_esuh
+                           WHERE packno = ls_get_itm-packno.
+                  IF itab_esuh[] IS NOT INITIAL.
+                    CLEAR w_limit.
+                    LOOP AT itab_esuh INTO wa_esuh.
+                      IF wa_esuh-sumlimit IS INITIAL AND wa_esuh-sumnolim IS INITIAL.
+                        w_limit = 'X'.
+                      ENDIF.
+                    ENDLOOP.
+
+                    IF w_limit = 'X'.
+                      MESSAGE e529(ym01).
+                    ENDIF.
+                  ELSE.
+                    MESSAGE e529(ym01).
+                  ENDIF.
+                ENDIF.
+              ENDIF.
+            ENDIF.
+          ENDIF.
+***EOC BY SANYOGITA & CHANDRESH ON 19.09.2013 FOR CORRECTION IN JV ACCOUNTING.
+
+***SOC BY SANYOGITA & CHANDRESH ON 19.09.2013 FOR SHORT DESC
+*          DATA: WA_MAKT  TYPE MAKT,
+*                LV_MATNR TYPE C LENGTH 10.
+******          IF LS_GET_ITM-MATNR IS NOT INITIAL.
+***********SOC BY ARCHANA/MANAS ON 10.09.2020 TO PASS MESSAGE YM01-530 IF PO IS DELETED.CHARM-4000002704*****
+******            IF LS_GET_ITM-LOEKZ = ' '.
+***********EOC BY ARCHANA/MANAS ON 10.09.2020 TO PASS MESSAGE YM01-530 IF PO IS DELETED.CHARM-4000002704*****
+******              CLEAR LS_GET_ITM-TXZ01.
+******              SELECT SINGLE * FROM MAKT INTO WA_MAKT
+******                     WHERE MATNR = LS_GET_ITM-MATNR.
+******              IF WA_MAKT IS NOT INITIAL.
+******                IF LS_GET_ITM-TXZ01 <> WA_MAKT-MAKTX AND LS_GET_ITM-PSTYP <> '9' AND
+******                  ( LS_GET_ITM-MATKL BETWEEN '08' AND '99' ) .
+******                  CLEAR LS_GET_ITM-TXZ01.
+******                  LS_GET_ITM-TXZ01 = WA_MAKT-MAKTX.
+******                  LV_MATNR = LS_GET_ITM-MATNR.
+******                  IF SY-SUBRC NE 0.
+*******   SOC DESH/ MANAS SIR DT 01.11.2022 CHAM 5573
+******                    MESSAGE E530(YM01) WITH LS_GET_ITM-MATNR.
+*********   EOC DESH/ MANAS SIR DT 01.11.2022 CHAM 5573
+******                  ENDIF.
+******                ENDIF.
+******              ENDIF.
+******            ENDIF.
+******          ENDIF.
+
+
+        ENDIF.
+***EOC BY SANYOGITA & CHANDRESH ON 19.09.2013 FOR SHORT DESC
+
+***SOC BY SANYOGITA & CHANDRESH ON 01.11.2013 TO EXCLUDE CHECK ON PR WHICH ARE IN Y TABLE YRMT_BYPASSPO
+      ENDIF.
+    ENDIF.
+***EOC BY SANYOGITA & CHANDRESH ON 01.11.2013 TO EXCLUDE CHECK ON PR WHICH ARE IN Y TABLE YRMT_BYPASSPO
+
+
+***SOC BY ANKIT & MR. MANAS RANJAN SETHI ON 16.9.2020 CHARM NO # 4000002711, ANS:BUG FIX YM01 196 CHECK IN ME54N
+    TYPES : BEGIN OF ty_yrma_activity_re,
+              yykey       TYPE yrma_activity_re-yykey,
+              yybanfn     TYPE yrma_activity_re-yybanfn,
+              yyarea      TYPE yrma_activity_re-yyarea,
+              yymain_head TYPE yrma_activity_re-yymain_head,
+              yymean_act  TYPE yrma_activity_re-yymean_act,
+              yysub_act   TYPE yrma_activity_re-yysub_act,
+            END OF ty_yrma_activity_re.
+
+    TYPES : BEGIN OF ty_final,
+              yykey       TYPE yrma_activity_re-yykey,
+              banfn       TYPE eban-banfn,
+              bnfpo       TYPE eban-bnfpo,
+              loekz       TYPE eban-loekz,
+              txz01       TYPE eban-txz01 , "SHORT TEXT
+              matnr       TYPE eban-matnr,
+              preis       TYPE eban-preis , "VALUATION PRICE
+              menge       TYPE eban-menge,
+              meins       TYPE eban-meins,
+              werks       TYPE eban-werks,
+              ekgrp       TYPE eban-ekgrp , "PURCHASE REQ GROUP
+              afnam       TYPE eban-afnam , "REQUISTIONAR
+              bednr       TYPE eban-bednr , "TRACKING
+              preis2      TYPE eban-preis, " TOTAL VALUE
+
+
+
+              packno      TYPE yrma_activity_re-yypackno,
+              introw      TYPE yrma_activity_re-yyintrow,
+              extrow      TYPE esll-extrow, "LINE FOR SERVICE
+              menge_ser   TYPE esll-menge,
+              meins_ser   TYPE esll-meins,
+              tbtwr       TYPE esll-brtwr,   "GROSS VALUE
+              netwr       TYPE esll-netwr,   "NET VALUE
+              ktext1      TYPE esll-ktext1, "SHORT TEXT
+              yyarea      TYPE yrma_activity_pr-yyarea,
+              yymain_head TYPE yrma_activity_pr-yymain_head,
+              yymean_act  TYPE yrma_activity_pr-yymean_act,
+              yysub_act   TYPE yrma_activity_pr-yysub_act,
+              frgkz       TYPE eban-frgkz,
+              frgzu       TYPE eban-frgzu,
+              style       TYPE   lvc_t_styl,
+            END OF ty_final.
+
+    DATA : i_final  TYPE STANDARD TABLE OF ty_final,
+           wa_final TYPE ty_final.
+
+    DATA: i_line_pr           TYPE STANDARD TABLE OF tline WITH HEADER LINE,
+          i_line_pr1          TYPE STANDARD TABLE OF tline WITH HEADER LINE,
+          i_yrma_activity_re  TYPE TABLE OF ty_yrma_activity_re,
+          wa_yrma_activity_re TYPE ty_yrma_activity_re,
+          w_id                TYPE thead-tdname,
+          wa_pass             TYPE yrma_pr_bypass,
+          i_ebandet           LIKE yrms_pr_line OCCURS 0 WITH HEADER LINE..
+
+    IF ls_get_itm-frgzu = 'X' AND ls_get_itm-frgkz = '1' AND sy-tcode = 'ME54N' AND sy-ucomm = 'MERELEASE'.
+      SELECT * FROM yrma_act_bypass INTO TABLE @DATA(it_act) WHERE yy_ind = 'YES'.
+      IF it_act IS NOT INITIAL.
+
+        SELECT SINGLE * FROM yrma_pr_bypass INTO wa_pass WHERE banfn = w_eban-banfn . "0020036756LS_GET_ITM-BANFN_CS.
+        IF sy-subrc NE 0.
+
+**********************************************************************************************************
+*******SOC (ALL) BY JAINENDRA GUPTA & MANAS SIR ON 06.10.2020 CHARM-4000002788, JG:BUG-YM01 103,104,105,203,204-ME54N
+**  IF LS_GET_ITM-FRGZU = 'X' AND LS_GET_ITM-FRGKZ = '1' AND SY-TCODE = 'ME54N' AND SY-UCOMM = 'MERELEASE'.
+*******SOC BY JAINENDRA GUPTA & MANAS SIR ON 12.10.2020 CHARM-4000002788, MESSAGE: YM01 103
+**POPULATE HEADER TABLES
+*        DATA : W_INX       LIKE SY-TABIX,
+*               W_MAKTX2    LIKE MAKT-MAKTX,
+*               W_MTGRP(10) ,
+*               W_MATNR(10) .
+*
+*        DATA : W_TDLINE2 LIKE THEAD-TDNAME.
+*        DATA : W_ID2 LIKE THEAD-TDID.
+*        DATA : W_OBJ2 LIKE THEAD-TDOBJECT.
+*
+*        LOOP AT I_EBANDET.
+*          W_INX = SY-TABIX .
+*          TRANSLATE I_EBANDET-TXZ01 TO UPPER CASE.
+*          TRANSLATE I_EBANDET-AFNAM TO UPPER CASE.
+*          IF NOT I_EBANDET-MATNR IS INITIAL.
+*            CONCATENATE I_EBANDET-MATNR+0(6) '000A' INTO W_MTGRP .
+*            SELECT SINGLE MATNR INTO W_MATNR FROM MARA WHERE MATNR = W_MTGRP.
+*            IF SY-SUBRC = 0.
+*              I_EBANDET-MTGRP = W_MATNR.
+*            ELSE.
+*              I_EBANDET-MTGRP = W_MTGRP.
+*            ENDIF.
+*          ENDIF.
+***************************************************************
+**    PERFORM READ_TEXT.
+*          CLEAR W_MAKTX2.
+*          CLEAR : W_ID2, W_OBJ2.
+*          REFRESH I_LINE_PR1.
+*          W_TDLINE2 = I_EBANDET-MATNR.
+*          W_ID2     = 'BEST'.
+*          W_OBJ2    = 'MATERIAL'.
+*
+*          CALL FUNCTION 'READ_TEXT'
+*            EXPORTING
+*              CLIENT                  = SY-MANDT
+*              ID                      = W_ID2
+*              LANGUAGE                = SY-LANGU
+*              NAME                    = W_TDLINE2
+*              OBJECT                  = W_OBJ2
+**             ARCHIVE_HANDLE          = 0
+**             LOCAL_CAT               = ' '
+** IMPORTING
+**             HEADER                  =
+*            TABLES
+*              LINES                   = I_LINE_PR1
+*            EXCEPTIONS
+*              ID                      = 1
+*              LANGUAGE                = 2
+*              NAME                    = 3
+*              NOT_FOUND               = 4
+*              OBJECT                  = 5
+*              REFERENCE_CHECK         = 6
+*              WRONG_ACCESS_TO_ARCHIVE = 7
+*              OTHERS                  = 8.
+*          IF SY-SUBRC <> 0.
+*          ENDIF.
+*
+*          IF I_LINE_PR1[] IS INITIAL.
+*            MESSAGE E103(YM01).
+*          ENDIF.
+***************************************************************
+**          MOVE-CORRESPONDING I_EBANDET TO I_EBAN.
+**          APPEND I_EBAN. CLEAR I_EBAN.
+**          MODIFY I_EBANDET INDEX W_INX.
+**          CLEAR I_EBANDET.
+*        ENDLOOP.
+**        DELETE ADJACENT DUPLICATES FROM I_EBAN COMPARING BANFN.
+**  ENDIF.
+*
+*******EOC BY JAINENDRA GUPTA & MANAS SIR ON 12.10.2020 CHARM-4000002788, MESSAGE: YM01 103
+***************
+*******SOC BY JAINENDRA GUPTA & MANAS SIR ON 12.10.2020 CHARM-4000002788, MESSAGE: YM01 104
+*        CLEAR : W_ID2, W_OBJ2 .
+**        CLEAR : WA_EBAN .
+*        REFRESH I_LINE_PR1.
+*        READ TABLE I_EBANDET INDEX 1 .
+**READ TABLE IT_EBAN INTO WA_EBAN INDEX 1.
+*        W_TDLINE2 = I_EBANDET-BANFN . "WA_EBAN-BANFN.
+*        W_ID2     = 'B01'.
+*        W_OBJ2    = 'EBANH'.
+*
+*        CALL FUNCTION 'READ_TEXT'
+*          EXPORTING
+*            CLIENT                  = SY-MANDT
+*            ID                      = W_ID2
+*            LANGUAGE                = SY-LANGU
+*            NAME                    = W_TDLINE2
+*            OBJECT                  = W_OBJ2
+**           ARCHIVE_HANDLE          = 0
+**           LOCAL_CAT               = ' '
+** IMPORTING
+**           HEADER                  =
+*          TABLES
+*            LINES                   = I_LINE_PR1
+*          EXCEPTIONS
+*            ID                      = 1
+*            LANGUAGE                = 2
+*            NAME                    = 3
+*            NOT_FOUND               = 4
+*            OBJECT                  = 5
+*            REFERENCE_CHECK         = 6
+*            WRONG_ACCESS_TO_ARCHIVE = 7
+*            OTHERS                  = 8.
+*        IF SY-SUBRC <> 0.
+** MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+**         WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+*        ENDIF.
+*
+*        IF I_LINE_PR1[] IS INITIAL.
+*          MESSAGE E104(YM01).
+*        ENDIF.
+*
+*******EOC BY JAINENDRA GUPTA & MANAS SIR ON 12.10.2020 CHARM-4000002788, MESSAGE: YM01 104
+**********
+*******SOC BY JAINENDRA GUPTA & MANAS SIR ON 13.10.2020 CHARM-4000002788, MESSAGE: YM01 105
+***MESSAGE E105(YM01) NOT FOUND IN ANY REPORT.
+*******EOC BY JAINENDRA GUPTA & MANAS SIR ON 13.10.2020 CHARM-4000002788, MESSAGE: YM01 105
+*
+*******SOC BY JAINENDRA GUPTA & MANAS SIR ON 13.10.2020 CHARM-4000002788, MESSAGE: YM01 203 , 204
+*
+*        DATA : LV_VALUE   TYPE DMBTR,
+*               LV_TOTAL   TYPE DMBTR,
+*               LV_STRING  TYPE STRING,
+*               LV_STRING3 TYPE THEAD-TDNAME,
+*               LV_STRING1 TYPE THEAD-TDNAME,
+*               LV_STRING2 TYPE STRING,
+*               LV_LENGTH  TYPE I.
+*
+*        LOOP AT I_EBANDET.
+*          LV_VALUE = ( I_EBANDET-MENGE * I_EBANDET-PREIS ) / I_EBANDET-PEINH.
+*          LV_TOTAL = LV_TOTAL + LV_VALUE.
+*        ENDLOOP.
+**  BREAK-POINT.
+*        LOOP AT I_EBANDET.
+*          IF SY-MANDT = '190' OR SY-MANDT = '210' OR SY-MANDT = '300'.
+*            ON CHANGE OF I_EBANDET-BANFN.
+*              CLEAR : WA_PASS,LV_STRING,LV_LENGTH,LV_STRING3.
+*              SELECT SINGLE * FROM YRMA_PR_BYPASS INTO WA_PASS WHERE BANFN = I_EBANDET-BANFN.
+*              IF SY-SUBRC NE 0.
+*                IF LV_TOTAL >= 700000.
+*                  CLEAR W_ID.
+*                  REFRESH I_LINE_PR.
+*                  CONCATENATE I_EBANDET-BANFN I_EBANDET-BNFPO INTO W_ID.
+*
+*                  CALL FUNCTION 'READ_TEXT'
+*                    EXPORTING
+*                      CLIENT                  = SY-MANDT
+*                      ID                      = 'B10'
+*                      LANGUAGE                = SY-LANGU
+*                      NAME                    = W_ID
+*                      OBJECT                  = 'EBAN'
+**                     ARCHIVE_HANDLE          = 0
+**                     LOCAL_CAT               = ' '
+**        IMPORTING
+**                     HEADER                  =
+*                    TABLES
+*                      LINES                   = I_LINE_PR
+*                    EXCEPTIONS
+*                      ID                      = 1
+*                      LANGUAGE                = 2
+*                      NAME                    = 3
+*                      NOT_FOUND               = 4
+*                      OBJECT                  = 5
+*                      REFERENCE_CHECK         = 6
+*                      WRONG_ACCESS_TO_ARCHIVE = 7
+*                      OTHERS                  = 8.
+*                  IF I_LINE_PR[] IS NOT INITIAL.
+*                    DELETE I_LINE_PR WHERE TDLINE IS INITIAL.
+*                    CLEAR :I_LINE_PR.
+*                    LOOP AT I_LINE_PR INTO I_LINE_PR.
+*                      CONCATENATE LV_STRING I_LINE_PR-TDLINE INTO LV_STRING SEPARATED BY SPACE.
+*                      LV_LENGTH = STRLEN( LV_STRING ).
+*                    ENDLOOP.
+*
+*                    LV_LENGTH = STRLEN( LV_STRING ).
+*
+*                    IF LV_LENGTH < 100.
+*                      MESSAGE E203(YM01).
+*                    ENDIF.
+*
+*                    CLEAR LV_STRING3.
+*                    CONCATENATE I_EBANDET-BANFN I_EBANDET-BNFPO INTO LV_STRING3.
+*                  ELSE.
+*                    MESSAGE E203(YM01).
+*                  ENDIF.
+*
+*
+*                ENDIF.
+*
+*                CLEAR : W_ID,LV_STRING1.
+*                REFRESH I_LINE_PR.
+*                CONCATENATE I_EBANDET-BANFN I_EBANDET-BNFPO INTO W_ID.
+*
+*                CALL FUNCTION 'READ_TEXT'
+*                  EXPORTING
+*                    CLIENT                  = SY-MANDT
+*                    ID                      = 'B11'
+*                    LANGUAGE                = SY-LANGU
+*                    NAME                    = W_ID
+*                    OBJECT                  = 'EBAN'
+**                   ARCHIVE_HANDLE          = 0
+**                   LOCAL_CAT               = ' '
+**        IMPORTING
+**                   HEADER                  =
+*                  TABLES
+*                    LINES                   = I_LINE_PR
+*                  EXCEPTIONS
+*                    ID                      = 1
+*                    LANGUAGE                = 2
+*                    NAME                    = 3
+*                    NOT_FOUND               = 4
+*                    OBJECT                  = 5
+*                    REFERENCE_CHECK         = 6
+*                    WRONG_ACCESS_TO_ARCHIVE = 7
+*                    OTHERS                  = 8.
+*                IF I_LINE_PR[] IS INITIAL.
+*                  MESSAGE E204(YM01).
+*                ELSE.
+*                  CLEAR LV_STRING1.
+*                  CONCATENATE I_EBANDET-BANFN I_EBANDET-BNFPO INTO LV_STRING1.
+*                ENDIF.
+*
+*              ENDIF.
+*            ENDON.
+*          ENDIF.
+*        ENDLOOP.
+*
+*******EOC BY JAINENDRA GUPTA & MANAS SIR ON 13.10.2020 CHARM-4000002788, MESSAGE: YM01 203 , 204
+
+******SOC BY JAINENDRA GUPTA & MANAS SIR ON 12.10.2020 CHARM-4000002788, MESSAGE: YM01 204
+******EOC BY JAINENDRA GUPTA & MANAS SIR ON 12.10.2020 CHARM-4000002788, MESSAGE: YM01 204
+
+******EOC (ALL) BY JAINENDRA GUPTA & MANAS SIR ON 06.10.2020 CHARM-4000002788, JG:BUG-YM01 103,104,105,203,204-ME54N
+*********************************************************************************************************
+
+**************************************************************************************************************
+******SOC BY JAINENDRA GUPTA & MANAS SIR ON 17.09.2020 CHARM-4000002771, JG:BUG YM01 196 MUST WORK ONLY-ONM PR
+*        SELECT YYKEY YYBANFN YYAREA YYMAIN_HEAD YYMEAN_ACT YYSUB_ACT
+*          FROM YRMA_ACTIVITY_RE INTO TABLE I_YRMA_ACTIVITY_RE WHERE YYBANFN = W_EBAN-BANFN ." I_EBANDET-BANFN.
+*        "FOR ALL ENTRIES IN I_EBANDET WHERE YYBANFN = I_EBANDET-BANFN.
+*        IF SY-SUBRC NE '0'.
+*          MESSAGE E196(YM01).
+*        ELSE.
+*        ENDIF.
+*      ENDIF.
+*    ENDIF.
+*  ENDIF.
+
+*---SOC COMMENTED BY DIWASKAR TYAGI & MANAS SIR ON 09.08.2024-----CHARM-4000008546--TR--DVRK9A1B44
+
+********SOC UNCOMMENTED  BY JAINENDRA GUPTA & MANAS SIR ON 17.09.2020 CHARM-4000002771,
+**          SELECT BANFN BNFPO EKGRP BSART BSTYP TXZ01 MATNR EMATN WERKS
+**           MENGE MEINS LFDAT PREIS PSTYP ERNAM ERDAT KNTTP BEDNR
+**           ESTKZ LFDAT BSART AFNAM WAERS
+**           PEINH FRGKZ BADAT
+**           INTO CORRESPONDING FIELDS OF TABLE I_EBANDET FROM EBAN
+**            WHERE BANFN = W_EBAN-BANFN .
+**
+**          IF SY-SUBRC = '0'.
+**            CLEAR I_EBANDET-BANFN.
+**            LOOP AT I_EBANDET.
+**              ON CHANGE OF I_EBANDET-BANFN.
+**                CLEAR W_ID.
+**                REFRESH I_LINE_PR1.
+**                CONCATENATE I_EBANDET-BANFN I_EBANDET-BNFPO INTO W_ID.
+**                CALL FUNCTION 'READ_TEXT'
+**                  EXPORTING
+**                    CLIENT                  = SY-MANDT
+**                    ID                      = 'B09'
+**                    LANGUAGE                = SY-LANGU
+**                    NAME                    = W_ID
+**                    OBJECT                  = 'EBAN'
+***                   ARCHIVE_HANDLE          = 0
+***                   LOCAL_CAT               = ' '
+***        IMPORTING
+***                   HEADER                  =
+**                  TABLES
+**                    LINES                   = I_LINE_PR1
+**                  EXCEPTIONS
+**                    ID                      = 1
+**                    LANGUAGE                = 2
+**                    NAME                    = 3
+**                    NOT_FOUND               = 4
+**                    OBJECT                  = 5
+**                    REFERENCE_CHECK         = 6
+**                    WRONG_ACCESS_TO_ARCHIVE = 7
+**                    OTHERS                  = 8.
+**                DATA : IT_PLANT_BYPASS TYPE STANDARD TABLE OF YRMA_PLANT_BYPAS.
+**                DATA : WA_PLANT_BYPASS TYPE YRMA_PLANT_BYPAS.
+**                SELECT * FROM YRMA_PLANT_BYPAS INTO TABLE IT_PLANT_BYPASS." WHERE YY_PLANT = I_LINE_PR-TDLINE.
+**                LOOP AT I_LINE_PR1.
+**                  READ TABLE IT_PLANT_BYPASS INTO WA_PLANT_BYPASS WITH KEY YY_PLANT = I_LINE_PR1-TDLINE.
+**                ENDLOOP.
+**                IF WA_PLANT_BYPASS IS INITIAL.
+**                  REFRESH I_LINE_PR.
+**                  CALL FUNCTION 'READ_TEXT'
+**                    EXPORTING
+**                      CLIENT                  = SY-MANDT
+**                      ID                      = 'B12'
+**                      LANGUAGE                = SY-LANGU
+**                      NAME                    = W_ID
+**                      OBJECT                  = 'EBAN'
+***                     ARCHIVE_HANDLE          = 0
+***                     LOCAL_CAT               = ' '
+***        IMPORTING
+***                     HEADER                  =
+**                    TABLES
+**                      LINES                   = I_LINE_PR
+**                    EXCEPTIONS
+**                      ID                      = 1
+**                      LANGUAGE                = 2
+**                      NAME                    = 3
+**                      NOT_FOUND               = 4
+**                      OBJECT                  = 5
+**                      REFERENCE_CHECK         = 6
+**                      WRONG_ACCESS_TO_ARCHIVE = 7
+**                      OTHERS                  = 8.
+**                  IF I_LINE_PR[] IS NOT INITIAL.
+**                    CLEAR I_LINE_PR.
+**                    LOOP AT I_LINE_PR INTO I_LINE_PR.
+**                      CONDENSE I_LINE_PR-TDLINE.
+**                      IF I_LINE_PR-TDLINE = '1'."'O<(>&<)>M' OR I_LINE_PR-TDLINE = 'O<(>&<)>M' OR I_LINE_PR-TDLINE = 'O<(>&<)>M' OR I_LINE_PR-TDLINE = 'O<(>&<)>M'.
+**********EOC UNCOMMENTED  BY JAINENDRA GUPTA & MANAS SIR ON 17.09.2020 CHARM-4000002771,
+*****************************************************************************************
+**                        SELECT YYKEY YYBANFN YYAREA YYMAIN_HEAD YYMEAN_ACT YYSUB_ACT
+**                          FROM YRMA_ACTIVITY_RE INTO TABLE I_YRMA_ACTIVITY_RE WHERE YYBANFN = W_EBAN-BANFN ." I_EBANDET-BANFN.
+**                        "FOR ALL ENTRIES IN I_EBANDET WHERE YYBANFN = I_EBANDET-BANFN.
+**                        IF SY-SUBRC NE '0'.
+**                          MESSAGE E196(YM01).
+**                        ELSE.
+**                        ENDIF.
+**                      ENDIF."ADDED BY JAINENDRA GUPTA ON 17.09.2020 CHARM-4000002771
+**                    ENDLOOP."ADDED BY JAINENDRA GUPTA ON 17.09.2020 CHARM-4000002771
+**                  ENDIF."ADDED BY JAINENDRA GUPTA ON 17.09.2020 CHARM-4000002771
+**                ENDIF."ADDED BY JAINENDRA GUPTA ON 17.09.2020 CHARM-4000002771
+**              ENDON."ADDED BY JAINENDRA GUPTA ON 17.09.2020 CHARM-4000002771
+**            ENDLOOP."ADDED BY JAINENDRA GUPTA ON 17.09.2020 CHARM-4000002771
+**          ENDIF."ADDED BY JAINENDRA GUPTA ON 17.09.2020 CHARM-4000002771
+
+*---EOC COMMENTED BY DIWASKAR TYAGI & MANAS SIR ON 09.08.2024-----CHARM-4000008546--TR--DVRK9A1B44
+
+        ENDIF.
+      ENDIF.
+    ENDIF.
+******EOC BY JAINENDRA GUPTA & MANAS SIR ON 17.09.2020 CHARM-4000002771, JG:BUG YM01 196 MUST WORK ONLY-ONM PR
+***EOC BY ANKIT & MR. MANAS RANJAN SETHI ON 16.9.2020 CHARM NO # 4000002711, ANS:BUG FIX YM01 196 CHECK IN ME54N
+    DATA: lv_num  TYPE bnfpo VALUE 0,
+          lv_flg1 TYPE c.
+
+
+    DATA: itab_yrmt_bypasspo TYPE STANDARD TABLE OF yrmt_bypasspo,
+          itab_resb_plant    TYPE STANDARD TABLE OF resb.
+
+    IF sy-tcode = 'ME51N' OR sy-tcode = 'ME52N'.
+
+      DATA: i_mard  TYPE STANDARD TABLE OF mard,
+            wa_mard TYPE mard.
+      DATA: lv_count TYPE c.
+
+******SOC BY JAINENDRA GUPTA & MANAS SIR ON 21.10.2020 CHARM-4000002987, JG:YM01 192 ALLOW PR, IF CO-CNP APPROVE
+      DATA: lv_mat15 TYPE matnr.
+      CLEAR : lv_mat15 .
+      SELECT SINGLE matnr
+            FROM yrma_mat_bypass
+            INTO lv_mat15
+            WHERE matnr = ls_get_itm-matnr . "@IM_DATA_NEW-MATNR .
+      IF lv_mat15 IS INITIAL.
+******EOC BY JAINENDRA GUPTA & MANAS SIR ON 21.10.2020 CHARM-4000002987, JG:YM01 192 ALLOW PR, IF CO-CNP APPROVE
+
+        SELECT * FROM mard INTO TABLE i_mard WHERE matnr = ls_get_itm-matnr AND werks = ls_get_itm-werks AND ( lgort = 'PROS' OR lgort = 'PROR').
+
+        IF i_mard[] IS NOT INITIAL.
+** -> BEGIN OF CHANGES BY OF JATIN ON 25OCT24 FOR ATC
+          SORT i_mard.
+** <- END CHANGES BY OF JATIN ON 25OCT24 FOR ATC
+          LOOP AT i_mard INTO wa_mard.
+            IF ( wa_mard-insme > 0 OR wa_mard-labst > 0 ).
+              MESSAGE e192(ym01) WITH ls_get_itm-matnr wa_mard-insme wa_mard-labst ls_get_itm-werks.
+            ELSE.
+              lv_count = 'X'.
+              EXIT.
+            ENDIF.
+          ENDLOOP.
+        ENDIF.
+
+*  ENDIF. "ARCHANA
+******SOC BY JAINENDRA GUPTA & MANAS SIR ON 21.10.2020 CHARM-4000002987, JG:YM01 192 ALLOW PR, IF CO-CNP APPROVE
+      ENDIF.
+******EOC BY JAINENDRA GUPTA & MANAS SIR ON 21.10.2020 CHARM-4000002987, JG:YM01 192 ALLOW PR, IF CO-CNP APPROVE
+    ENDIF.
+
+*** SOC BY MAAN/MANAS ON 26TH AUGUST 2020 FOR CHARM :4000002615, MS:BUG-NT ALLOW DELETION PR,IF PO EXIST
+    IF sy-mandt = '190' OR sy-mandt = '210' OR  sy-mandt = '300'.
+** -> BEGIN OF CHANGES BY OF SARFRAZ ALI ON 21OCT2024 FOR ATC
+      IF sy-tcode = 'ME52' OR  sy-tcode = 'ME52N' OR  sy-tcode = 'ME53' OR  sy-tcode = 'ME53N' OR  sy-tcode = 'ME54N'. "#EC CI_USAGE_OK[1803189]
+** <- END CHANGES BY OF SARFRAZ ALI ON 21OCT2024 FOR ATC
+
+        IF ls_get_itm-bnfpo IS NOT INITIAL AND  ls_get_itm-loekz = 'X'.
+          SELECT * FROM ekpo INTO TABLE it_ekpo
+            WHERE ebeln = w_eban3-ebeln AND ebelp = w_eban3-ebelp.
+          IF it_ekpo[] IS NOT INITIAL.
+            READ TABLE it_ekpo INTO wa_ekpo WITH KEY ebeln = w_eban3-ebeln ebelp = w_eban3-ebelp.
+            IF sy-subrc = 0.
+******SOC BY ATCHANA/MANAS ON 27.08.2020 TO ESCAPE ERROR MESSAGE YM01-222 WHILE DELETING PR WHEN PO IS DELETED.CHARM-4000002657*****
+              IF ( wa_ekpo-bstyp = 'F' OR wa_ekpo-bstyp = 'K') .
+                IF wa_ekpo-loekz <> 'L' .
+                  MESSAGE e222(ym01) WITH w_eban3-ebeln w_eban3-ebelp.
+                ENDIF.
+              ENDIF.
+******EOC BY ATCHANA/MANAS ON 27.08.2020 TO ESCAPE ERROR MESSAGE YM01-222 WHILE DELETING PR WHEN PO IS DELETED.CHARM-4000002657*****
+            ENDIF.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+
+*---SOC COMMENTED BY DIWASKAR TYAGI & MANAS SIR ON 09.08.2024-----CHARM-4000008546--TR--DVRK9A1B44
+
+***SOC BY ANKIT & MR. MANAS RANJAN SETHI ON 31.8.2020 CHARM NO # 4000002622, ANS:BUG-RESTRCT ADDTL CHAR ME51N-TXT B12
+
+*    IF SY-MANDT = '190' OR SY-MANDT = '210' OR  SY-MANDT = '300'.
+*      IF SY-TCODE = 'ME52' OR  SY-TCODE = 'ME52N' OR  SY-TCODE = 'ME53' OR  SY-TCODE = 'ME53N' OR  SY-TCODE = 'ME54N' OR  SY-TCODE = 'ME51N'.
+*        DATA : L_LINES  TYPE TABLE OF  TLINE,
+*               WA_LINES TYPE TLINE,
+*               LV_LINE  TYPE I,
+*               N        TYPE I.
+*        IF SY-UCOMM = 'MECHECKDOC'   . "OR SY-UCOMM = 'TABREQDT13'.
+*          CALL FUNCTION 'READ_TEXT'
+*            EXPORTING
+*              CLIENT                  = SY-MANDT
+*              ID                      = 'B12'
+*              LANGUAGE                = 'E'
+*              NAME                    = '#       1 00001'
+*              OBJECT                  = 'EBAN'
+**             ARCHIVE_HANDLE          = 0
+**             LOCAL_CAT               = ' '
+**   IMPORTING
+**             HEADER                  =
+**             OLD_LINE_COUNTER        =
+*            TABLES
+*              LINES                   = L_LINES
+*            EXCEPTIONS
+*              ID                      = 1
+*              LANGUAGE                = 2
+*              NAME                    = 3
+*              NOT_FOUND               = 4
+*              OBJECT                  = 5
+*              REFERENCE_CHECK         = 6
+*              WRONG_ACCESS_TO_ARCHIVE = 7
+*              OTHERS                  = 8.
+*          IF SY-SUBRC = 0.
+*
+*            DESCRIBE TABLE L_LINES LINES N.
+*            IF N NE '1'.
+*              MESSAGE E999(YM01).
+*            ELSE .
+** IMPLEMENT SUITABLE ERROR HANDLING HERE
+*              READ TABLE L_LINES INTO WA_LINES INDEX 1 .
+*              LV_LINE = STRLEN( WA_LINES-TDLINE ).
+*
+*              IF LV_LINE NE '1' .
+**          MESSAGE I999(YM01) DISPLAY LIKE 'E' .
+*
+*                MESSAGE E999(YM01). " DISPLAY LIKE 'I'.
+**          ROLLBACK WORK .
+**          LEAVE TO TRANSACTION SY-TCODE .
+*              ENDIF .
+*            ENDIF .
+*          ENDIF .
+*        ENDIF.
+*      ENDIF.
+*    ENDIF.
+*
+*---EOC COMMENTED BY DIWASKAR TYAGI & MANAS SIR ON 09.08.2024-----CHARM-4000008546--TR--DVRK9A1B44
+
+***SOC DESH/MANAS CHAM7089 DT 13.09.2023
+****    IF SY-MANDT = '190' OR SY-MANDT = '210' OR  SY-MANDT = '300'.
+****      IF SY-TCODE = 'ME52' OR  SY-TCODE = 'ME52N' OR  SY-TCODE = 'ME53' OR  SY-TCODE = 'ME53N' OR  SY-TCODE = 'ME54N' OR  SY-TCODE = 'ME51N'.
+****        CLEAR: L_LINES,
+****               WA_LINES,
+****               LV_LINE,
+****               N.
+****        IF SY-UCOMM = 'MECHECKDOC'   . "OR SY-UCOMM = 'TABREQDT13'.
+****          CALL FUNCTION 'READ_TEXT'
+****            EXPORTING
+****              CLIENT                  = SY-MANDT
+****              ID                      = 'B07'
+****              LANGUAGE                = 'E'
+****              NAME                    = '#       1 00001'
+****              OBJECT                  = 'EBAN'
+*****             ARCHIVE_HANDLE          = 0
+*****             LOCAL_CAT               = ' '
+*****   IMPORTING
+*****             HEADER                  =
+*****             OLD_LINE_COUNTER        =
+****            TABLES
+****              LINES                   = L_LINES
+****            EXCEPTIONS
+****              ID                      = 1
+****              LANGUAGE                = 2
+****              NAME                    = 3
+****              NOT_FOUND               = 4
+****              OBJECT                  = 5
+****              REFERENCE_CHECK         = 6
+****              WRONG_ACCESS_TO_ARCHIVE = 7
+****              OTHERS                  = 8.
+****          IF SY-SUBRC = 0.
+****
+****            DESCRIBE TABLE L_LINES LINES N.
+****            IF N EQ ' '.
+****              MESSAGE E835(YM01).
+****            ELSE .
+***** IMPLEMENT SUITABLE ERROR HANDLING HERE
+****              READ TABLE L_LINES INTO WA_LINES INDEX 1 .
+****              LV_LINE = STRLEN( WA_LINES-TDLINE ).
+****
+****              IF LV_LINE EQ ' ' .
+****                MESSAGE E835(YM01).
+****              ENDIF .
+****            ENDIF .
+****          ENDIF .
+****        ENDIF.
+****      ENDIF.
+****    ENDIF.
+**   ***EOC DESH/MANAS CHAM7089 DT 13.09.2023
+
+***EOC BY ANKIT & MR. MANAS RANJAN SETHI ON 31.8.2020 CHARM NO # 4000002622, ANS:BUG-RESTRCT ADDTL CHAR ME51N-TXT B12
+*** EOC BY MAAN/MANAS ON 26TH AUGUST 2020 FOR CHARM :4000002615, MS:BUG-NT ALLOW DELETION PR,IF PO EXIST
+  ENDIF.
+** -> BEGIN OF CHANGES BY OF SARFRAZ ALI ON 21OCT2024 FOR ATC
+  IF sy-tcode = 'ME51' OR sy-tcode = 'ME52' OR sy-tcode = 'ME51N' OR sy-tcode = 'ME52N'. "#EC CI_USAGE_OK[1803189]
+** <- END CHANGES BY OF SARFRAZ ALI ON 21OCT2024 FOR ATC
+    DATA: lw_t001k TYPE t001k,
+          lw_t001  TYPE t001.
+    IF ls_get_itm-bsart = 'ZP' OR ls_get_itm-bsart = 'ZM' OR ls_get_itm-bsart = 'ZMRP' OR ls_get_itm-bsart = 'ZONM' OR ls_get_itm-bsart = 'ZPGG' OR ls_get_itm-bsart = 'ZPRJ'.
+      IF ls_get_itm-matkl EQ 'SERWO' OR ( ls_get_itm-matkl BETWEEN 0 AND 99 ).
+        IF NOT ls_get_itm-werks IS INITIAL.
+          SELECT SINGLE * FROM t001k
+                          INTO lw_t001k
+                          WHERE bwkey = ls_get_itm-werks.
+          IF NOT lw_t001k-bukrs IS INITIAL.
+            SELECT SINGLE * FROM t001
+                    INTO lw_t001
+                    WHERE bukrs = lw_t001k-bukrs.
+            IF lw_t001-waers = 'INR'.
+              IF NOT ls_get_itm-waers EQ 'INR'.
+                MESSAGE e956(ym01).
+              ENDIF.
+            ENDIF.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+****CHANGES BY TCS:AM RMS 1510 : FUNC CHANDRESH FOR RESTRICTION OF RELEASE OF C&P RELEASE TO ONLY C&P PERSON AND NOT TO TECH TEAM DT 25.2.2019******
+**SOC DESH/MANAS SIR CHAM 7685
+  IF im_data_new-matkl BETWEEN  '08' AND '99'.
+    IF im_data_new-matnr+0(2) BETWEEN  '08' AND '99' .
+      IF im_data_new-loekz = ''.
+        IF im_data_new-matnr CA 'ABCDEFGHIJKLMNOPQRSTUVWXYabcdefghijklmnopqrstuvwxyz!@#$%^&*()_-+<>?/|\{}[];'.
+          MESSAGE e846(ym01) WITH im_data_new-matnr.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+**EOC DESH/MANAS SIR CHAM 7685
+**NOTE :: ALWAYS WRITE ABAP CODE ABOVE THIS LINE
+*****************************************************************
+ENDIF."ADD BY VIVEK/MANAS ON 27.11.2020   CHARM##4000003169
+eNDIF.
+*ENDIF. "ADD BY VIVEK/MANAS ON 27.11.2020   CHARM##4000003169
+***" EOC ADD BY VIVEK/MANAS ON 27.11.2020   CHARM##4000003169

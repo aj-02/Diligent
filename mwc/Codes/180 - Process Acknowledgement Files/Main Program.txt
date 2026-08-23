@@ -1,0 +1,26 @@
+*&---------------------------------------------------------------------*
+*& Report ZAB_R2R_180_PROCESS_PAYMENT
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+************************************************************************
+* Requirement Id: DID_M2C_180                                          *
+* Title: Program to process the payment acknowledgement files          *
+* Date Created: 27.05.2025                                             *
+* Programmer:  TAMBOLIV                                                *
+* Program Objective: This program will process the payment             *
+* acknowledgement files                                                *
+* Orig Request: DS4K900847                                             *
+************************************************************************
+* Modification History                                                 *
+************************************************************************
+* Modified By:                                                         *
+* Date:                                                                *
+* Modification TR:                                                     *
+* Reason:                                                              *
+************************************************************************
+REPORT ZAB_R2R_180_PROCESS_PAYMENT.
+
+INCLUDE ZIN_R2R_PROCESS_PAYMENT_TOP.
+INCLUDE ZIN_R2R_PROCESS_PAYMENT_E01.
+INCLUDE ZIN_R2R_PROCESS_PAYMENT_F01.

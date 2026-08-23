@@ -1,0 +1,56 @@
+*&----------------------------------------------------------------------*
+*& Include          ZIN_M2C_INBOUND_SEL
+*&----------------------------------------------------------------------*
+*& Requirement Id: DID_M2C_138                                          *
+*& Title: Inbound Dunning Activity                                      *
+*& Date Created: 25.03.2025                                             *
+*& Programmer: Vipul Kumar Tamboli (TAMBOLIV)                           *
+*& Program Objective: Upload and Process Dunning Records                *
+*& Orig Request: DS4K901080                                             *
+*&----------------------------------------------------------------------*
+*& Modification History                                                 *
+*&----------------------------------------------------------------------*
+*& Modified By:                                                         *
+*& Date:                                                                *
+*& Modification TR:                                                     *
+*& Reason:                                                              *
+*&----------------------------------------------------------------------*
+*Selection screen  and " Define parameters for user input
+SELECTION-SCREEN BEGIN OF BLOCK block WITH FRAME TITLE TEXT-001.
+
+  PARAMETERS: p_bukrs TYPE zdt_m2c_dunpath-company_code OBLIGATORY,
+              p_scp   TYPE zdt_m2c_dunpath-service_provider,
+              p_date  TYPE sy-datum OBLIGATORY.
+
+  SELECTION-SCREEN COMMENT /1(30) TEXT-002.
+
+  SELECTION-SCREEN BEGIN OF LINE.     " Update/Process File Mode
+    SELECTION-SCREEN POSITION 30.
+    PARAMETERS:rb1 RADIOBUTTON GROUP rad1 USER-COMMAND u1 DEFAULT 'X' .
+    SELECTION-SCREEN COMMENT (20) TEXT-003 FOR FIELD rb1.
+  SELECTION-SCREEN END OF LINE.
+
+  SELECTION-SCREEN BEGIN OF LINE .    " View File Mode
+    SELECTION-SCREEN POSITION 30.
+    PARAMETERS: rb2 RADIOBUTTON GROUP rad1  .
+    SELECTION-SCREEN COMMENT (20) TEXT-004 FOR FIELD rb1.
+  SELECTION-SCREEN END OF LINE.
+
+  SELECTION-SCREEN BEGIN OF LINE.     " Upload File Mode
+    SELECTION-SCREEN POSITION 30.
+    PARAMETERS: rb3 RADIOBUTTON GROUP rad1 .
+    SELECTION-SCREEN COMMENT (20) TEXT-005 FOR FIELD rb1.
+  SELECTION-SCREEN END OF LINE.
+
+  SELECTION-SCREEN BEGIN OF LINE .    " File Path
+    SELECTION-SCREEN POSITION 32.
+    SELECTION-SCREEN COMMENT (12) TEXT-006 FOR FIELD p_file MODIF ID grp.
+    PARAMETERS: p_file TYPE localfile MODIF ID grp .
+  SELECTION-SCREEN END OF LINE .
+
+  SELECTION-SCREEN BEGIN OF LINE .    " Download Tempalte
+    SELECTION-SCREEN POSITION 36.
+    SELECTION-SCREEN PUSHBUTTON 32(20) TEXT-007 USER-COMMAND btn1 MODIF ID grp.
+  SELECTION-SCREEN END OF LINE .
+
+SELECTION-SCREEN END OF BLOCK block.

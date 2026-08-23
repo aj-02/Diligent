@@ -1,0 +1,4372 @@
+*&---------------------------------------------------------------------*
+*& Report  YRHR481_ABSENCE_REPORT_PDF
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+REPORT yrhr481_absence_report_pdf MESSAGE-ID yh01 .
+INCLUDE yrhr481_absence_report_pdf_g.
+INCLUDE yrhr481_absence_report_pdf_s.
+INCLUDE yrhr481_absence_report_pdf_u.
+*** soc by suraj and gaurav for charm: 4000008578
+AT SELECTION-SCREEN.
+  IF rb8 IS NOT INITIAL.
+    DATA: lv_date TYPE tfmatage.
+    CALL FUNCTION 'FIMA_DAYS_AND_MONTHS_AND_YEARS'
+      EXPORTING
+        i_date_from = p_begda
+        i_date_to   = p_endda
+      IMPORTING
+        e_days      = lv_date.
+    IF lv_date GE 92.
+      MESSAGE 'Please enter quaterly date' TYPE 'S' DISPLAY LIKE 'E' .
+    ENDIF.
+  ENDIF.
+
+AT SELECTION-SCREEN OUTPUT.
+
+  LOOP AT SCREEN.
+    IF screen-group1 EQ 'A1'.
+      screen-intensified = 1.
+    ENDIF.
+    MODIFY SCREEN.
+  ENDLOOP.
+*** eoc by suraj and gaurav for charm: 4000008578
+START-OF-SELECTION.
+*** soc by suraj and gaurav for charm: 4000008578
+  IF rb8 IS NOT INITIAL.
+    DATA: lv_date TYPE tfmatage.
+    CALL FUNCTION 'FIMA_DAYS_AND_MONTHS_AND_YEARS'
+      EXPORTING
+        i_date_from = p_begda
+        i_date_to   = p_endda
+      IMPORTING
+        e_days      = lv_date.
+    IF lv_date GE 92.
+      MESSAGE 'Please enter quaterly date' TYPE 'S' DISPLAY LIKE 'E' .
+      CLEAR: p_begda, p_endda, rb8.
+      LEAVE TO SCREEN 0.
+    ENDIF.
+  ENDIF.
+
+  IF ( rb1  = 'X' ) AND (  rb2 = 'X' OR rb3 = 'X' OR rb4 = 'X' OR rb5 = 'X' OR rb6 ='X' OR rb7 = 'X' OR rb8 = 'X' ) OR
+    ( rb2  = 'X' ) AND (  rb1 = 'X' OR rb3 = 'X' OR rb4 = 'X' OR rb5 = 'X' OR rb6 ='X' OR rb7 = 'X' OR rb8 = 'X' ) OR
+    ( rb3  = 'X' ) AND (  rb1 = 'X' OR rb2 = 'X' OR rb4 = 'X' OR rb5 = 'X' OR rb6 ='X' OR rb7 = 'X' OR rb8 = 'X' ) OR
+    ( rb4  = 'X' ) AND (  rb1 = 'X' OR rb3 = 'X' OR rb2 = 'X' OR rb5 = 'X' OR rb6 ='X' OR rb7 = 'X' OR rb8 = 'X' ) OR
+    ( rb5  = 'X' ) AND (  rb1 = 'X' OR rb3 = 'X' OR rb4 = 'X' OR rb2 = 'X' OR rb6 ='X' OR rb7 = 'X' OR rb8 = 'X' ) OR
+    ( rb6  = 'X' ) AND (  rb1 = 'X' OR rb3 = 'X' OR rb4 = 'X' OR rb5 = 'X' OR rb2 ='X' OR rb7 = 'X' OR rb8 = 'X' ) OR
+    ( rb7  = 'X' ) AND (  rb1 = 'X' OR rb3 = 'X' OR rb4 = 'X' OR rb5 = 'X' OR rb6 ='X' OR rb2 = 'X' OR rb8 = 'X' ) OR
+    ( rb8  = 'X' ) AND (  rb1 = 'X' OR rb3 = 'X' OR rb4 = 'X' OR rb5 = 'X' OR rb6 ='X' OR rb7 = 'X' OR rb2 = 'X' ).
+    MESSAGE 'Only One Selection is Allowed.' TYPE 'S' DISPLAY LIKE 'E'.
+    LEAVE LIST-PROCESSING.
+    EXIT.
+  ENDIF.
+*** eoc by suraj and gaurav for charm: 4000008578
+  IF rb1 = 'X' OR rb2 = 'X'.
+    IF p_awart IS NOT INITIAL.
+      MESSAGE 'If Radio Button is selected leave type cannot be selected.' TYPE 'S' DISPLAY LIKE 'E'.
+      LEAVE LIST-PROCESSING.
+      EXIT.
+
+    ENDIF.
+  ENDIF.
+
+  PERFORM p_fetch_valid_pernr.
+
+  IF rb2 = 'X' OR rb3 = 'X' OR rb4 = 'X' OR rb5 = 'X' OR rb6 = 'X' OR rb7 = 'X'.
+*** soc by suraj and gaurav for charm: 4000008578
+  ELSEIF rb8 = 'X'.
+    PERFORM p_fetch_eco.
+  ELSE.
+*** eoc by suraj and gaurav for charm: 4000008578
+    PERFORM p_fetch_leaves.
+  ENDIF.
+
+END-OF-SELECTION.
+
+*** soc by suraj and gaurav for charm: 4000008578
+  IF rb2 = 'X'.
+    PERFORM display_alv_40.
+  ELSEIF rb3 = 'X'.
+    PERFORM p_display_cl_check_alv.
+  ELSEIF rb4 = 'X'.
+    PERFORM p_display_leave_combo.
+  ELSEIF rb5 = 'X'.
+    PERFORM p_display_leave_combo1.
+  ELSEIF rb6 = 'X'.
+    PERFORM p_display_leave_combo2.
+  ELSEIF rb7 = 'X'.
+    PERFORM p_display_leave_combo3.
+  ELSEIF rb8 = 'X'.
+    PERFORM p_display_eco.
+  ELSE.
+    PERFORM p_display_alv.
+  ENDIF.
+*** eoc by suraj and gaurav for charm: 4000008578
+
+*&---------------------------------------------------------------------*
+*&  Include           YRHR481_ABSENCE_REPORT_PDF_G
+*&---------------------------------------------------------------------*
+TABLES: pa2001.
+
+TYPES: BEGIN OF ty_pernr,
+         pernr   TYPE persno,
+         begda   TYPE pa0001-begda,
+         werks   TYPE pa0001-werks,
+         persk   TYPE pa0001-persk,
+         btrtl   TYPE pa0001-btrtl,
+         plans   TYPE pa0001-plans,
+         ename   TYPE pa0001-ename,
+         yy_dept TYPE pa0001-yy_dept,
+       END OF ty_pernr.
+
+TYPES: BEGIN OF ty_final,
+         check             TYPE c,
+         pernr             TYPE persno,
+         grade             TYPE pa0001-persk,
+         ename             TYPE pa0001-ename,
+         location          TYPE t001p-btext,
+         designation       TYPE hrp1000-mc_stext,
+         department        TYPE yrha_department-yy_department,
+         absence_type      TYPE t554t-atext,
+         leave_begda       TYPE begda,
+         leave_endda       TYPE endda,
+         leave_pd(24)      TYPE c,
+         sub_date          TYPE begda,
+         sub_time          TYPE uzeit,
+         app_date          TYPE begda,
+         app_time          TYPE uzeit,
+         app_pernr         TYPE persno,
+         app_name          TYPE pa0001-ename,
+         purpose           TYPE ptreq_notice-notice_text,
+         no_days_leave     TYPE p DECIMALS 1,
+         no_days_appr      TYPE p DECIMALS 1,
+         leave_date        TYPE sy-datum,
+         no_days_leave_sat TYPE p DECIMALS 1,
+         yy_last_months1   TYPE sy-datum,
+         yy_subtyp1        TYPE abwtxt,
+         yy_substi1(10)    TYPE c,
+         yy_last_months2   TYPE sy-datum,
+         yy_subtyp2        TYPE abwtxt,
+         yy_substi2(10)    TYPE c,
+         yy_last_months3   TYPE sy-datum,
+         yy_subtyp3        TYPE abwtxt,
+         yy_substi3(10)    TYPE c,
+         yy_last_months4   TYPE sy-datum,
+         yy_subtyp4        TYPE abwtxt,
+         yy_substi4(10)    TYPE c,
+         yy_last_months5   TYPE sy-datum,
+         yy_subtyp5        TYPE abwtxt,
+         yy_substi5(10)    TYPE c,
+         yy_last_months6   TYPE sy-datum,
+         yy_subtyp6        TYPE abwtxt,
+         yy_substi6(10)    TYPE c,
+         leave_count       TYPE p DECIMALS 1,
+
+       END OF ty_final.
+
+TYPES: BEGIN OF ty_eco_details,
+         pernr       TYPE persno,
+         grade       TYPE pa0001-persk,
+         ename       TYPE pa0001-ename,
+         location    TYPE t001p-btext,
+         designation TYPE hrp1000-mc_stext,
+         department  TYPE yrha_department-yy_department,
+         yyeco_no    TYPE anzhl,
+         work_sat    TYPE i,
+         leave_sat   TYPE i,
+         leave_tot   TYPE i,
+         gen         TYPE i,
+         rest        TYPE i,
+         off         TYPE i,
+         mrng        TYPE i,
+         evng        TYPE i,
+         night       TYPE i,
+       END OF ty_eco_details.
+DATA: i_eco TYPE STANDARD TABLE OF ty_eco_details,
+      w_eco TYPE ty_eco_Details.
+
+TYPES: BEGIN OF ty_dates,
+         yy_date1       TYPE sy-datum,
+         yy_subtyp1     TYPE abwtxt,
+         yy_substi1(10) TYPE c,
+       END OF  ty_dates.
+DATA: lt_dates  TYPE STANDARD TABLE OF ty_dates,
+      lwa_dates TYPE ty_dates.
+
+TYPES: BEGIN OF ty_leaves,
+         request_id  TYPE tim_req_id,
+         pernr       TYPE p0001-pernr,
+         begda       TYPE ptreq_attabsdata-begda,
+         endda       TYPE ptreq_attabsdata-endda,
+         subty       TYPE ptreq_attabsdata-subty,
+         notice_text TYPE ptreq_notice-notice_text,
+       END OF ty_leaves.
+
+TYPES: BEGIN OF ty_purpose,
+         pernr       TYPE p0001-pernr,
+         begda       TYPE ptreq_attabsdata-begda,
+         endda       TYPE ptreq_attabsdata-endda,
+         subty       TYPE ptreq_attabsdata-subty,
+         request_id  TYPE ptreq_notice-request_id,
+         notice_text TYPE ptreq_notice-notice_text,
+       END OF ty_purpose.
+
+
+TYPES: BEGIN OF ty_pa2001,
+         pernr TYPE persno,
+         subty TYPE subty,
+         begda TYPE begda,
+         endda TYPE endda,
+         beguz TYPE pa2001-beguz,
+         enduz TYPE pa2001-enduz,
+       END OF ty_pa2001.
+
+TYPES: BEGIN OF ty_t001p,
+         werks TYPE t001p-werks,
+         btrtl TYPE t001p-btrtl,
+         btext TYPE t001p-btext,
+       END OF ty_t001p.
+
+TYPES: BEGIN OF ty_final_40,                                  "Added By Amit Shukla/Gaurav Ghai on 03/05/2024
+
+         pernr           TYPE persno,
+         grade           TYPE pa0001-persk,
+         ename           TYPE pa0001-ename,
+         location        TYPE t001p-btext,
+         designation     TYPE hrp1000-mc_stext,
+         department      TYPE yrha_department-yy_department,
+         absence_type    TYPE t554t-atext,
+         begin_date      TYPE sy-datum,
+         end_date        TYPE sy-datum,
+         yy_last_months1 TYPE sy-datum,
+         yy_last_months2 TYPE sy-datum,
+         yy_last_months3 TYPE sy-datum,
+         yy_last_months4 TYPE sy-datum,
+         leave_count     TYPE p DECIMALS 1,
+         hindi_name      TYPE yy_emp_hindi_name,
+
+       END OF ty_final_40.
+
+TYPES: BEGIN OF ty_final_40_1,                                  "Added By Amit Shukla/Gaurav Ghai on 03/05/2024
+
+         pernr           TYPE persno,
+         begin_date      TYPE sy-datum,
+         end_date        TYPE sy-datum,
+         yy_last_months1 TYPE sy-datum,
+         yy_last_months2 TYPE sy-datum,
+         yy_last_months3 TYPE sy-datum,
+         yy_last_months4 TYPE sy-datum,
+         leave_count     TYPE p DECIMALS 1,
+         no_days_leave   TYPE p DECIMALS 1,
+
+       END OF ty_final_40_1.
+
+TYPES: BEGIN OF ty_40_final,                                  "Added By Amit Shukla/Gaurav Ghai on 03/05/2024
+
+         pernr           TYPE persno,
+         grade           TYPE pa0001-persk,
+         ename           TYPE pa0001-ename,
+         location        TYPE t001p-btext,
+         designation     TYPE hrp1000-mc_stext,
+         department      TYPE yrha_department-yy_department,
+         absence_type    TYPE t554t-atext,
+         begin_date      TYPE sy-datum,
+         end_date        TYPE sy-datum,
+         yy_last_months1 TYPE sy-datum,
+         yy_last_months2 TYPE sy-datum,
+         yy_last_months3 TYPE sy-datum,
+         yy_last_months4 TYPE sy-datum,
+         leave_count     TYPE p DECIMALS 1,
+         no_days_leave   TYPE p DECIMALS 1,
+         hindi_name      TYPE yy_emp_hindi_name,
+
+       END OF ty_40_final,
+
+       BEGIN OF ty_leave,
+         pernr       TYPE persno,
+         leave_count TYPE p DECIMALS 1,
+       END OF ty_leave.
+
+
+TYPES: BEGIN OF ty_pernr_cl,                                  "Added By Amit Shukla/Gaurav Ghai on 03/05/2024
+
+         pernr          TYPE persno,
+         grade          TYPE pa0001-persk,
+         ename          TYPE pa0001-ename,
+         location       TYPE t001p-btext,
+         designation    TYPE hrp1000-mc_stext,
+         department     TYPE yrha_department-yy_department,
+         begin_date     TYPE sy-datum,
+         end_date       TYPE sy-datum,
+         total_days(10) TYPE c,
+
+       END OF ty_pernr_cl.
+
+
+TYPES: BEGIN OF ty_leave_combo,                                  "Added By Amit Shukla/Gaurav Ghai on 03/05/2024
+
+         pernr          TYPE persno,
+         grade          TYPE pa0001-persk,
+         ename          TYPE pa0001-ename,
+         location       TYPE t001p-btext,
+         designation    TYPE hrp1000-mc_stext,
+         department     TYPE yrha_department-yy_department,
+         begin_date     TYPE sy-datum,
+         end_date       TYPE sy-datum,
+         total_days(10) TYPE c,
+         subty          TYPE pa2001-subty,
+
+       END OF ty_leave_combo.
+
+TYPES: BEGIN OF ty_leave_a,                                  "Added By Amit Shukla/Gaurav Ghai on 03/05/2024
+
+         pernr          TYPE persno,
+         datum          TYPE pdpsp-pernr,
+         awart          TYPE pdpsp-awart,
+         awtyp          TYPE pdpsp-awtyp,
+         begin_date     TYPE sy-datum,
+         end_date       TYPE sy-datum,
+         lv_counter1(2) TYPE c,
+
+       END OF ty_leave_a.
+
+DATA: gi_leave TYPE TABLE OF ty_leave,
+      gs_leave TYPE ty_leave.
+
+
+DATA: i_final_40  TYPE TABLE OF ty_final_40,
+      wa_final_40 TYPE  ty_final_40.
+
+DATA: i_final_40_1  TYPE TABLE OF ty_final_40_1,
+      wa_final_40_1 TYPE  ty_final_40_1.
+
+DATA: i_40_final  TYPE TABLE OF ty_40_final,
+      wa_40_final TYPE  ty_40_final.
+
+DATA: i_pernr_cl  TYPE TABLE OF ty_pernr_cl,
+      wa_pernr_cl TYPE  ty_pernr_cl.
+
+DATA: i_pernr_cl_final  TYPE TABLE OF ty_pernr_cl,
+      wa_pernr_cl_final TYPE  ty_pernr_cl.
+
+DATA: i_leave_combo  TYPE TABLE OF ty_leave_combo,
+      wa_leave_combo TYPE  ty_leave_combo.
+
+DATA: i_leave_combo_final  TYPE TABLE OF ty_leave_combo,
+      wa_leave_combo_final TYPE  ty_leave_combo.
+
+DATA: i_leave_a  TYPE TABLE OF ty_leave_a,
+      wa_leave_a TYPE ty_leave_a.
+
+DATA: i_leave_combo1  TYPE TABLE OF ty_leave_combo,
+      wa_leave_combo1 TYPE  ty_leave_combo.
+
+DATA: i_leave_combo_final1  TYPE TABLE OF ty_leave_combo,
+      wa_leave_combo_final1 TYPE  ty_leave_combo.
+
+DATA: i_leave_a1  TYPE TABLE OF ty_leave_a,
+      wa_leave_a1 TYPE ty_leave_a.
+
+
+DATA: i_leave_combo2  TYPE TABLE OF ty_leave_combo,
+      wa_leave_combo2 TYPE  ty_leave_combo.
+
+DATA: i_leave_combo_final2  TYPE TABLE OF ty_leave_combo,
+      wa_leave_combo_final2 TYPE  ty_leave_combo.
+
+DATA: i_leave_combo_final3  TYPE TABLE OF ty_leave_combo,
+      wa_leave_combo_final3 TYPE  ty_leave_combo.
+
+
+DATA: i_leave_a2  TYPE TABLE OF ty_leave_a,
+      wa_leave_a2 TYPE ty_leave_a.
+
+DATA: i_pernr            TYPE TABLE OF ty_pernr,
+      i_final            TYPE TABLE OF ty_final,
+      i_t001p            TYPE TABLE OF ty_t001p,
+      i_pa2001           TYPE TABLE OF ty_pa2001,
+      i_t554t            TYPE TABLE OF t554t,
+      i_leaves           TYPE TABLE OF ty_leaves,
+      i_purpose          TYPE TABLE OF ty_purpose,
+      iy_yrha_department TYPE TABLE OF yrha_department,
+      wa_pernr           TYPE ty_pernr,
+      wa_final           TYPE ty_final,
+      wa_t001p           TYPE ty_t001p,
+      wa_pa2001          TYPE ty_pa2001,
+      wa_t554t           TYPE t554t,
+      wa_leaves          TYPE ty_leaves,
+      wa_purpose         TYPE ty_purpose,
+      wa_yrha_department TYPE yrha_department.
+
+DATA: i_pa2001_tmp TYPE TABLE OF ty_pa2001,
+      i_hrp1000    TYPE TABLE OF hrp1000,
+      wa_hrp1000   TYPE hrp1000.
+
+DATA: i_fieldcat      TYPE slis_t_fieldcat_alv,
+      wa_fieldcat     TYPE slis_fieldcat_alv,
+      x_layout        TYPE slis_layout_alv,
+      fm_name         TYPE rs38l_fnam,
+      fp_docparams    TYPE sfpdocparams,    " Structure  SFPDOCPARAMS Short Description  Form Parameters for Form Processing
+      fp_outputparams TYPE sfpoutputparams,
+      fp_formoutput   TYPE fpformoutput.
+
+DATA: i_final_tmp TYPE TABLE OF ty_final.
+
+*&---------------------------------------------------------------------*
+*&  Include           YRHR481_ABSENCE_REPORT_PDF_S
+*&---------------------------------------------------------------------*
+
+SELECTION-SCREEN: BEGIN OF BLOCK s1 WITH FRAME TITLE TEXT-t01.
+SELECTION-SCREEN SKIP 1.
+SELECT-OPTIONS: p_pernr FOR pa2001-pernr NO INTERVALS.
+SELECT-OPTIONS: p_awart FOR pa2001-awart NO INTERVALS.
+PARAMETERS: p_begda TYPE begda OBLIGATORY,
+            p_endda TYPE endda OBLIGATORY,
+            p_btrtl TYPE pa0001-btrtl.
+*** soc by suraj and gaurav form charm: 4000008578
+SELECTION-SCREEN BEGIN OF LINE .
+SELECTION-SCREEN COMMENT 1(70) TEXT-c02 MODIF ID A1.
+SELECTION-SCREEN END OF LINE.
+SELECTION-SCREEN BEGIN OF LINE .
+SELECTION-SCREEN COMMENT 1(70) TEXT-c03 MODIF ID A1.
+SELECTION-SCREEN END OF LINE.
+*** eoc by suraj and gaurav form charm: 4000008578
+PARAMETERS: rb1 AS CHECKBOX .
+PARAMETERS: rb2 AS CHECKBOX .
+PARAMETERS: rb3 AS CHECKBOX.
+PARAMETERS: rb4 AS CHECKBOX.
+PARAMETERS: rb5 AS CHECKBOX.
+PARAMETERS: rb6 TYPE xfeld .
+*** soc by suraj and gaurav form charm: 4000008578
+PARAMETERS: rb7 AS CHECKBOX.
+PARAMETERS: rb8 AS CHECKBOX USER-COMMAND uc1.
+
+SELECTION-SCREEN BEGIN OF LINE .
+SELECTION-SCREEN COMMENT 1(70) TEXT-c01 MODIF ID A1.
+SELECTION-SCREEN END OF LINE.
+*** soc by suraj and gaurav form charm: 4000008578
+*PARAMETERS: rb1 RADIOBUTTON GROUP  rg1  .
+*PARAMETERS: rb2 RADIOBUTTON GROUP  rg1.
+SELECTION-SCREEN END OF BLOCK s1.
+
+*&---------------------------------------------------------------------*
+*&  INCLUDE           YRHR481_ABSENCE_REPORT_PDF_U
+*&---------------------------------------------------------------------*
+
+FORM P_FETCH_VALID_PERNR.
+
+
+  IF P_ENDDA LT P_BEGDA.
+    MESSAGE 'ABSENCE END DATE CAN NOT BE GREATER THAN BEGIN DATE.' TYPE 'S' DISPLAY LIKE 'E'.
+    LEAVE LIST-PROCESSING.
+    EXIT.
+  ENDIF.
+
+  CLEAR: I_PERNR.                                     " FETCH VALID EMPLOYEES ON KEY DATE.
+  IF P_BTRTL IS NOT INITIAL.
+    SELECT B~PERNR B~BEGDA B~WERKS B~PERSK B~BTRTL B~PLANS B~ENAME  B~YY_DEPT  INTO TABLE I_PERNR
+                    FROM PA0000 AS A INNER JOIN
+                         PA0001 AS B ON A~PERNR EQ B~PERNR WHERE
+                         B~PERNR IN P_PERNR AND B~BTRTL EQ P_BTRTL AND
+                         B~PLANS NE '99999999' AND A~STAT2 EQ '3' AND
+                         A~BEGDA LE P_ENDDA AND A~ENDDA GE P_ENDDA AND
+                         B~BEGDA LE P_ENDDA AND B~ENDDA GE P_BEGDA.
+  ELSE.
+    SELECT B~PERNR B~BEGDA B~WERKS B~PERSK B~BTRTL B~PLANS B~ENAME  B~YY_DEPT  INTO TABLE I_PERNR
+                    FROM PA0000 AS A INNER JOIN
+                         PA0001 AS B ON A~PERNR EQ B~PERNR WHERE
+                         B~PERNR IN P_PERNR AND
+                         B~PLANS NE '99999999' AND A~STAT2 EQ '3' AND
+                         A~BEGDA LE P_ENDDA AND A~ENDDA GE P_ENDDA AND
+                         B~BEGDA LE P_ENDDA AND B~ENDDA GE P_BEGDA.
+  ENDIF.
+  IF SY-SUBRC EQ 0.
+
+    SORT I_PERNR BY PERNR ASCENDING BEGDA DESCENDING.
+    DELETE ADJACENT DUPLICATES FROM I_PERNR COMPARING PERNR.
+    IF  RB1 IS NOT INITIAL.
+      SELECT PERNR SUBTY BEGDA ENDDA BEGUZ ENDUZ FROM PA2001 INTO TABLE I_PA2001 FOR ALL ENTRIES IN I_PERNR
+                                                             WHERE PERNR EQ I_PERNR-PERNR
+                                                             AND AWART = '39'
+                                                             AND BEGDA LE P_ENDDA
+                                                             AND ENDDA GE P_BEGDA.
+    ELSE.
+      SELECT PERNR SUBTY BEGDA ENDDA BEGUZ ENDUZ FROM PA2001 INTO TABLE I_PA2001 FOR ALL ENTRIES IN I_PERNR
+                                                             WHERE PERNR EQ I_PERNR-PERNR
+                                                             AND AWART IN P_AWART
+                                                             AND BEGDA LE P_ENDDA
+                                                             AND ENDDA GE P_BEGDA.
+    ENDIF.
+    IF SY-SUBRC EQ 0.
+      CLEAR: I_PA2001_TMP.
+      SORT: I_PA2001.
+      I_PA2001_TMP[] = I_PA2001[].
+      SORT I_PA2001_TMP BY PERNR.
+      DELETE ADJACENT DUPLICATES FROM I_PA2001_TMP COMPARING PERNR.
+    ELSE.
+      MESSAGE I004(YH01).
+      LEAVE LIST-PROCESSING.
+      EXIT.
+    ENDIF.
+  ELSE.
+    MESSAGE I004(YH01).
+    LEAVE LIST-PROCESSING.
+    EXIT.
+  ENDIF.
+
+  IF RB2 = 'X'.
+    PERFORM P_FETCH_LEAVE_40.
+  ENDIF.
+
+  IF RB3 = 'X'.
+    PERFORM P_FETCH_LEAVE_CL_CHECK.
+  ENDIF.
+
+  IF RB4 = 'X'.
+    PERFORM P_FETCH_INVALID_LEAVE_COMBO.
+  ENDIF.
+
+  IF RB5 = 'X'.
+    PERFORM P_FETCH_INVALID_LEAVE_COMBO1.
+  ENDIF.
+
+
+  IF RB6 = 'X'.
+    PERFORM P_FETCH_INVALID_LEAVE_COMBO2.
+  ENDIF.
+
+  IF RB7 = 'X'.
+    PERFORM P_FETCH_INVALID_LEAVE_COMBO3.
+  ENDIF.
+
+ENDFORM.
+
+FORM P_FETCH_LEAVES.
+  TYPES: BEGIN OF TY_PTREQ_HEADER,
+           REQUEST_ID    TYPE PTREQ_HEADER-REQUEST_ID,
+           STATUS        TYPE PTREQ_HEADER-STATUS,
+           MOD_USER      TYPE PTREQ_HEADER-MOD_USER,
+           MOD_TIMESTAMP TYPE PTREQ_HEADER-MOD_TIMESTAMP,
+         END OF TY_PTREQ_HEADER.
+
+  DATA: L_BEGDA(10)   TYPE C,
+        L_ENDDA(10)   TYPE C,
+        I_LEAVES_TMP  TYPE TABLE OF TY_LEAVES,
+        I_SENDER      TYPE TABLE OF TY_PTREQ_HEADER,
+        I_APPROVER    TYPE TABLE OF TY_PTREQ_HEADER,
+        WA_SENDER     TYPE TY_PTREQ_HEADER,
+        WA_APPROVER   TYPE TY_PTREQ_HEADER,
+        WA_LEAVES_TMP TYPE TY_LEAVES.
+
+  CLEAR: I_T554T.
+  SELECT * FROM T554T INTO TABLE I_T554T WHERE SPRSL = 'EN'.
+  IF SY-SUBRC EQ 0.
+    SORT I_T554T.
+  ENDIF.
+
+  CLEAR: I_T001P.
+  SELECT WERKS BTRTL BTEXT FROM T001P INTO TABLE I_T001P FOR ALL ENTRIES IN I_PERNR WHERE
+                                      WERKS EQ I_PERNR-WERKS AND BTRTL EQ I_PERNR-BTRTL.
+  IF SY-SUBRC EQ 0.
+    SORT I_T001P.
+  ENDIF.
+
+  CLEAR: IY_YRHA_DEPARTMENT.
+  SELECT * FROM YRHA_DEPARTMENT INTO TABLE IY_YRHA_DEPARTMENT FOR ALL ENTRIES IN I_PERNR WHERE
+                                                                  YY_DEPT EQ I_PERNR-YY_DEPT.
+  IF SY-SUBRC EQ 0.
+    SORT IY_YRHA_DEPARTMENT.
+  ENDIF.
+
+  CLEAR: I_HRP1000.
+  SELECT * FROM HRP1000 INTO TABLE I_HRP1000 FOR ALL ENTRIES IN I_PERNR WHERE
+                                 OBJID EQ I_PERNR-PLANS AND OTYPE EQ 'S' AND
+                                 PLVAR EQ '01' AND BEGDA LE P_ENDDA AND ENDDA GE P_ENDDA.
+  IF SY-SUBRC EQ 0.
+    SORT I_HRP1000.
+  ENDIF.
+
+  CLEAR: I_LEAVES.
+  SELECT A~REQUEST_ID C~PERNR C~SUBTY C~BEGDA C~ENDDA D~NOTICE_TEXT      " FOR LEAVE RESON TEXT.
+     INTO CORRESPONDING FIELDS OF TABLE I_LEAVES FROM
+     PTREQ_NOTICE     AS D INNER JOIN
+     PTREQ_HEADER     AS A ON D~REQUEST_ID EQ A~REQUEST_ID INNER JOIN
+     PTREQ_ITEMS      AS B ON A~ITEM_LIST_ID = B~ITEM_LIST_ID INNER JOIN
+     PTREQ_ATTABSDATA AS C ON B~ITEM_INS = C~ITEM_ID
+     FOR ALL ENTRIES IN I_PA2001_TMP WHERE C~PERNR = I_PA2001_TMP-PERNR AND
+     D~VERSION_NO EQ 1 AND BEGDA LE P_ENDDA AND ENDDA GE P_BEGDA.
+  IF SY-SUBRC EQ 0.
+    SORT I_LEAVES BY REQUEST_ID ASCENDING PERNR ASCENDING.
+  ENDIF.
+
+  CLEAR: I_LEAVES_TMP.
+  SELECT A~REQUEST_ID C~PERNR C~SUBTY C~BEGDA C~ENDDA
+     INTO CORRESPONDING FIELDS OF TABLE I_LEAVES_TMP FROM
+     PTREQ_HEADER     AS A INNER JOIN
+     PTREQ_ITEMS      AS B ON A~ITEM_LIST_ID = B~ITEM_LIST_ID INNER JOIN
+     PTREQ_ATTABSDATA AS C ON B~ITEM_INS = C~ITEM_ID
+     FOR ALL ENTRIES IN I_PA2001_TMP WHERE C~PERNR = I_PA2001_TMP-PERNR AND
+     BEGDA LE P_ENDDA AND ENDDA GE P_BEGDA.
+  IF SY-SUBRC EQ 0.
+    SORT I_LEAVES_TMP BY REQUEST_ID ASCENDING PERNR ASCENDING.
+
+    CLEAR: I_SENDER.
+    SELECT REQUEST_ID STATUS MOD_USER MOD_TIMESTAMP INTO TABLE I_SENDER FROM PTREQ_HEADER
+      FOR ALL ENTRIES IN I_LEAVES_TMP WHERE REQUEST_ID EQ I_LEAVES_TMP-REQUEST_ID AND STATUS EQ 'SENT'.
+    IF SY-SUBRC EQ 0.
+      SORT I_SENDER BY REQUEST_ID ASCENDING.
+    ENDIF.
+
+    CLEAR: I_APPROVER.
+    SELECT REQUEST_ID STATUS MOD_USER MOD_TIMESTAMP INTO TABLE I_APPROVER FROM PTREQ_HEADER
+      FOR ALL ENTRIES IN I_LEAVES_TMP WHERE REQUEST_ID EQ I_LEAVES_TMP-REQUEST_ID AND STATUS EQ 'APPROVED'.
+    IF SY-SUBRC EQ 0.
+      SORT I_APPROVER BY REQUEST_ID ASCENDING.
+    ENDIF.
+
+  ENDIF.
+
+  " FILL FINAL INTERNAL TABLE.
+  CLEAR: WA_FINAL, WA_PA2001.
+  SORT I_PA2001 BY PERNR BEGDA.
+  LOOP AT I_PA2001 INTO WA_PA2001.
+    WA_FINAL-PERNR = WA_PA2001-PERNR.
+
+    CLEAR: WA_PERNR.
+    SORT I_PERNR BY PERNR ASCENDING.
+    READ TABLE I_PERNR INTO WA_PERNR WITH KEY PERNR = WA_PA2001-PERNR BINARY SEARCH.
+    IF SY-SUBRC EQ 0.
+      WA_FINAL-GRADE = WA_PERNR-PERSK.
+      WA_FINAL-ENAME = WA_PERNR-ENAME.
+
+      CLEAR: WA_T001P.
+      READ TABLE I_T001P INTO WA_T001P WITH KEY WERKS = WA_PERNR-WERKS BTRTL = WA_PERNR-BTRTL.
+      IF SY-SUBRC EQ 0.
+        WA_FINAL-LOCATION = WA_T001P-BTEXT.
+      ENDIF.
+
+      CLEAR: WA_HRP1000.
+      READ TABLE I_HRP1000 INTO WA_HRP1000 WITH KEY OBJID = WA_PERNR-PLANS.
+      IF SY-SUBRC EQ 0.
+        WA_FINAL-DESIGNATION = WA_HRP1000-MC_STEXT.
+      ENDIF.
+
+      CLEAR: WA_YRHA_DEPARTMENT.
+      READ TABLE IY_YRHA_DEPARTMENT INTO WA_YRHA_DEPARTMENT WITH KEY YY_DEPT = WA_PERNR-YY_DEPT.
+      IF SY-SUBRC EQ 0.
+        WA_FINAL-DEPARTMENT = WA_YRHA_DEPARTMENT-YY_DEPARTMENT.
+      ENDIF.
+
+    ENDIF.
+
+    CLEAR: WA_T554T.
+    READ TABLE I_T554T INTO WA_T554T WITH KEY AWART = WA_PA2001-SUBTY.
+    IF SY-SUBRC EQ 0.
+      WA_FINAL-ABSENCE_TYPE = WA_T554T-ATEXT.
+    ENDIF.
+
+    "ADDED
+
+    DATA: LV_DATE    TYPE SY-DATUM,
+          LV_DATE2   TYPE SY-DATUM,
+          LV_DATE_N  TYPE CHAR10,
+          LV_YEAR(4) TYPE C,
+          LT_PA2001  TYPE STANDARD TABLE OF PA2001,
+          LWA_PA2001 TYPE PA2001.
+    WA_FINAL-LEAVE_BEGDA         = WA_PA2001-BEGDA.
+    IF WA_FINAL-LEAVE_BEGDA IS NOT INITIAL.
+      IF WA_FINAL-LEAVE_BEGDA+4(2) = '01' OR WA_FINAL-LEAVE_BEGDA+4(2) = '02' OR WA_FINAL-LEAVE_BEGDA+4(2) = '03'
+        OR WA_FINAL-LEAVE_BEGDA+4(2) = '04'  OR WA_FINAL-LEAVE_BEGDA+4(2) = '05'  OR WA_FINAL-LEAVE_BEGDA+4(2) = '06'.
+        LV_YEAR = WA_FINAL-LEAVE_BEGDA+0(4) - 1.
+        CONCATENATE  LV_YEAR  '12' '01' INTO LV_DATE.
+      ELSEIF WA_FINAL-LEAVE_BEGDA+4(2) = '07' OR WA_FINAL-LEAVE_BEGDA+4(2) = '08' OR WA_FINAL-LEAVE_BEGDA+4(2) = '09'
+     OR WA_FINAL-LEAVE_BEGDA+4(2) = '10'  OR WA_FINAL-LEAVE_BEGDA+4(2) = '11'  OR WA_FINAL-LEAVE_BEGDA+4(2) = '12'.
+        CONCATENATE WA_FINAL-LEAVE_BEGDA+0(4) '06' '01' INTO LV_DATE.
+      ENDIF.
+    ENDIF.
+    LV_DATE2 = WA_FINAL-LEAVE_BEGDA - 1.
+    SELECT * FROM PA2001 INTO CORRESPONDING FIELDS OF TABLE LT_PA2001
+                                                WHERE PERNR =  WA_PA2001-PERNR
+                                                AND   BEGDA => LV_DATE
+                                                AND   ENDDA <= LV_DATE2.
+    IF LT_PA2001 IS NOT INITIAL.
+      DATA: LT_PERNR_TAB LIKE PDPNR   OCCURS 0 WITH HEADER LINE,
+            LT_PSP       LIKE PDPSP   OCCURS 0 WITH HEADER LINE,
+            LT_PSP_PREV  LIKE PDPSP   OCCURS 0 WITH HEADER LINE,
+            LT_PSP_NEXT  LIKE PDPSP   OCCURS 0 WITH HEADER LINE,
+            LT_DAY_PSP   LIKE PDSPPSP OCCURS 0 WITH HEADER LINE,
+            LT_DAY_ATTR  LIKE CASDAYATTR OCCURS 0 WITH HEADER LINE.
+      DATA: LV_INDIC TYPE CHAR1.
+      SORT LT_PA2001[] DESCENDING BY BEGDA.
+      LOOP AT LT_PA2001 INTO LWA_PA2001.
+        LT_PERNR_TAB-PERNR = LWA_PA2001-PERNR.
+        APPEND  LT_PERNR_TAB.
+        CALL FUNCTION 'DAY_ATTRIBUTES_GET'
+          EXPORTING
+            DATE_FROM                  = LWA_PA2001-BEGDA
+            DATE_TO                    = LWA_PA2001-ENDDA
+            LANGUAGE                   = SY-LANGU
+          TABLES
+            DAY_ATTRIBUTES             = LT_DAY_ATTR
+          EXCEPTIONS
+            FACTORY_CALENDAR_NOT_FOUND = 1
+            HOLIDAY_CALENDAR_NOT_FOUND = 2
+            DATE_HAS_INVALID_FORMAT    = 3
+            DATE_INCONSISTENCY         = 4
+            OTHERS                     = 5.
+        DELETE LT_DAY_ATTR WHERE WEEKDAY NE '6'.
+        LOOP AT LT_DAY_ATTR.
+          IF  WA_FINAL-YY_LAST_MONTHS1 IS INITIAL OR  WA_FINAL-YY_LAST_MONTHS2 IS INITIAL
+             OR  WA_FINAL-YY_LAST_MONTHS3 IS INITIAL OR  WA_FINAL-YY_LAST_MONTHS4 IS INITIAL
+            OR WA_FINAL-YY_LAST_MONTHS5 IS INITIAL OR WA_FINAL-YY_LAST_MONTHS6 IS INITIAL.
+
+            CALL FUNCTION 'HR_PERSON_READ_WORK_SCHEDULE'
+              EXPORTING
+                BEGIN_DATE         = LT_DAY_ATTR-DATE
+                END_DATE           = LT_DAY_ATTR-DATE
+              TABLES
+                PERNR_TAB          = LT_PERNR_TAB
+                PSP                = LT_PSP
+                DAY_PSP            = LT_DAY_PSP
+*           CHANGING
+*               CH_AUTH_INFTY_TAB  =
+              EXCEPTIONS
+                ERROR_IN_BUILD_PSP = 1
+                OTHERS             = 2.
+            IF LT_PSP IS NOT INITIAL.
+              LOOP AT LT_PSP.
+                IF LT_PSP-TPROG = 'GEN'.
+                  IF WA_FINAL-YY_LAST_MONTHS1 IS INITIAL.
+**                    CALL FUNCTION 'CONVERSION_EXIT_PDATE_OUTPUT'
+**                      EXPORTING
+**                        INPUT  = LT_DAY_ATTR-DATE
+**                      IMPORTING
+**                        OUTPUT = WA_FINAL-YY_LAST_MONTHS1.
+                    WA_FINAL-YY_LAST_MONTHS1 = LT_DAY_ATTR-DATE.
+*                    -> Begin of changes by of VIPUL on 10/25/2024 for ATC
+                    SELECT * FROM PA2003 INTO @DATA(LWA_PA2003) UP TO 1 ROWS  WHERE PERNR = @WA_PA2001-PERNR
+                                                               AND ENDDA  GE @LT_DAY_ATTR-DATE
+                                                               AND BEGDA  LE @LT_DAY_ATTR-DATE order by primary key.
+                      endselect.
+*                      ** -> End of changes by of VIPUL on 10/25/2024 for ATC
+*Begin of changes by of VIPUL on 20241024  for ATC
+SELECT * FROM T554T INTO @DATA(LWA_T554T) UP TO 1 ROWS
+WHERE SPRSL = 'E'
+AND awart = @lwa_pa2001-subty ORDER BY PRIMARY KEY .
+ENDSELECT.
+* *End of changes by of VIPUL on 20241024  for ATC
+                    WA_FINAL-YY_SUBTYP1 = LWA_T554T-ATEXT.
+                    IF LWA_PA2003 IS NOT INITIAL.
+                      WA_FINAL-YY_SUBSTI1 = 'YES'.
+                    ELSE.
+                      WA_FINAL-YY_SUBSTI1 = 'NO'.
+                    ENDIF.
+                    CONTINUE.
+                  ENDIF.
+                  IF WA_FINAL-YY_LAST_MONTHS2 IS INITIAL.
+**                    CALL FUNCTION 'CONVERSION_EXIT_PDATE_OUTPUT'
+**                      EXPORTING
+**                        INPUT  = LT_DAY_ATTR-DATE
+**                      IMPORTING
+**                        OUTPUT = WA_FINAL-YY_LAST_MONTHS2.
+                    WA_FINAL-YY_LAST_MONTHS2 = LT_DAY_ATTR-DATE.
+*                    -> Begin of changes by of VIPUL on 10/25/2024 for ATC
+                    SELECT  * FROM PA2003 INTO LWA_PA2003 up TO 1  ROWS WHERE PERNR = WA_PA2001-PERNR
+                                                               AND ENDDA  GE LT_DAY_ATTR-DATE
+                                                               AND BEGDA  LE LT_DAY_ATTR-DATE ORDER BY PRIMARY KEY.
+                      endselect.
+*                      ** -> End of changes by of VIPUL on 10/25/2024 for ATC
+*Begin of changes by of VIPUL on 20241024  for ATC
+SELECT * FROM T554T INTO LWA_T554T UP TO 1 ROWS
+WHERE SPRSL = 'E'
+AND awart = lwa_pa2001-subty ORDER BY PRIMARY KEY .
+ENDSELECT.
+* *End of changes by of VIPUL on 20241024  for ATC
+                    WA_FINAL-YY_SUBTYP2 = LWA_T554T-ATEXT.
+                    IF LWA_PA2003 IS NOT INITIAL.
+                      WA_FINAL-YY_SUBSTI2 = 'YES'.
+                    ELSE.
+                      WA_FINAL-YY_SUBSTI2 = 'NO'.
+                    ENDIF.
+                    CONTINUE.
+                  ENDIF.
+                  IF WA_FINAL-YY_LAST_MONTHS3 IS INITIAL.
+**                    CALL FUNCTION 'CONVERSION_EXIT_PDATE_OUTPUT'
+**                      EXPORTING
+**                        INPUT  = LT_DAY_ATTR-DATE
+**                      IMPORTING
+**                        OUTPUT = WA_FINAL-YY_LAST_MONTHS3.
+                    WA_FINAL-YY_LAST_MONTHS3 = LT_DAY_ATTR-DATE.
+*                    -> Begin of changes by of VIPUL on 10/25/2024 for ATC
+                    SELECT * FROM PA2003 INTO LWA_PA2003 UP TO 1 ROWS WHERE PERNR = WA_PA2001-PERNR
+                                                               AND ENDDA  GE LT_DAY_ATTR-DATE
+                                                               AND BEGDA  LE LT_DAY_ATTR-DATE ORDER BY PRIMARY KEY.
+                      endselect.
+*                      ** -> End of changes by of VIPUL on 10/25/2024 for ATC
+*Begin of changes by of VIPUL on 20241024  for ATC
+SELECT * FROM T554T INTO LWA_T554T UP TO 1 ROWS
+WHERE SPRSL = 'E'
+AND awart = lwa_pa2001-subty ORDER BY PRIMARY KEY .
+ENDSELECT.
+* *End of changes by of VIPUL on 20241024  for ATC
+                    WA_FINAL-YY_SUBTYP3 = LWA_T554T-ATEXT.
+                    IF LWA_PA2003 IS NOT INITIAL.
+                      WA_FINAL-YY_SUBSTI3 = 'YES'.
+                    ELSE.
+                      WA_FINAL-YY_SUBSTI3 = 'NO'.
+                    ENDIF.
+                    CONTINUE.
+                  ENDIF.
+                  IF WA_FINAL-YY_LAST_MONTHS4 IS INITIAL.
+**                    CALL FUNCTION 'CONVERSION_EXIT_PDATE_OUTPUT'
+**                      EXPORTING
+**                        INPUT  = LT_DAY_ATTR-DATE
+**                      IMPORTING
+**                        OUTPUT = WA_FINAL-YY_LAST_MONTHS4.
+                    WA_FINAL-YY_LAST_MONTHS4 = LT_DAY_ATTR-DATE.
+*                    -> Begin of changes by of VIPUL on 10/25/2024 for ATC
+                    SELECT  * FROM PA2003 INTO LWA_PA2003 UP TO 1 ROWS WHERE PERNR = WA_PA2001-PERNR
+                                                               AND ENDDA  GE LT_DAY_ATTR-DATE
+                                                               AND BEGDA  LE LT_DAY_ATTR-DATE ORDER BY PRIMARY KEY.
+                      ENDSELECT.
+*                      ** -> End of changes by of VIPUL on 10/25/2024 for ATC
+*Begin of changes by of VIPUL on 20241024  for ATC
+SELECT * FROM T554T INTO LWA_T554T UP TO 1 ROWS
+WHERE SPRSL = 'E'
+AND awart = lwa_pa2001-subty ORDER BY PRIMARY KEY .
+ENDSELECT.
+* *End of changes by of VIPUL on 20241024  for ATC
+                    WA_FINAL-YY_SUBTYP4 = LWA_T554T-ATEXT.
+                    IF LWA_PA2003 IS NOT INITIAL.
+                      WA_FINAL-YY_SUBSTI4 = 'YES'.
+                    ELSE.
+                      WA_FINAL-YY_SUBSTI4 = 'NO'.
+                    ENDIF.
+                    CONTINUE.
+                  ENDIF.
+                  IF WA_FINAL-YY_LAST_MONTHS5 IS INITIAL.
+**                    CALL FUNCTION 'CONVERSION_EXIT_PDATE_OUTPUT'
+**                      EXPORTING
+**                        INPUT  = LT_DAY_ATTR-DATE
+**                      IMPORTING
+**                        OUTPUT = WA_FINAL-YY_LAST_MONTHS5.
+                    WA_FINAL-YY_LAST_MONTHS5 = LT_DAY_ATTR-DATE.
+                    SELECT SINGLE * FROM PA2003 INTO LWA_PA2003 WHERE PERNR = WA_PA2001-PERNR
+                                                               AND ENDDA  GE LT_DAY_ATTR-DATE
+                                                               AND BEGDA  LE LT_DAY_ATTR-DATE.
+*Begin of changes by of VIPUL on 20241024  for ATC
+SELECT * FROM T554T INTO LWA_T554T UP TO 1 ROWS
+WHERE SPRSL = 'E'
+AND awart = lwa_pa2001-subty ORDER BY PRIMARY KEY .
+ENDSELECT.
+* *End of changes by of VIPUL on 20241024  for ATC
+                    WA_FINAL-YY_SUBTYP5 = LWA_T554T-ATEXT.
+                    IF LWA_PA2003 IS NOT INITIAL.
+                      WA_FINAL-YY_SUBSTI5 = 'YES'.
+                    ELSE.
+                      WA_FINAL-YY_SUBSTI5 = 'NO'.
+                    ENDIF.
+                    CONTINUE.
+                  ENDIF.
+                  IF WA_FINAL-YY_LAST_MONTHS6 IS INITIAL.
+**                    CALL FUNCTION 'CONVERSION_EXIT_PDATE_OUTPUT'
+**                      EXPORTING
+**                        INPUT  = LT_DAY_ATTR-DATE
+**                      IMPORTING
+**                        OUTPUT = WA_FINAL-YY_LAST_MONTHS6.
+                    WA_FINAL-YY_LAST_MONTHS6 = LT_DAY_ATTR-DATE.
+                    SELECT SINGLE * FROM PA2003 INTO LWA_PA2003 WHERE PERNR = WA_PA2001-PERNR
+                                                               AND ENDDA  GE LT_DAY_ATTR-DATE
+                                                               AND BEGDA  LE LT_DAY_ATTR-DATE.
+*Begin of changes by of VIPUL on 20241024  for ATC
+SELECT * FROM T554T INTO LWA_T554T UP TO 1 ROWS
+WHERE SPRSL = 'E'
+AND awart = lwa_pa2001-subty ORDER BY PRIMARY KEY .
+ENDSELECT.
+* *End of changes by of VIPUL on 20241024  for ATC
+                    WA_FINAL-YY_SUBTYP6 = LWA_T554T-ATEXT.
+                    IF LWA_PA2003 IS NOT INITIAL.
+                      WA_FINAL-YY_SUBSTI6 = 'YES'.
+                    ELSE.
+                      WA_FINAL-YY_SUBSTI6 = 'NO'.
+                    ENDIF.
+                    CONTINUE.
+                  ENDIF.
+                ENDIF.
+                CLEAR: LWA_PA2003, LWA_T554T.
+              ENDLOOP.
+            ENDIF.
+          ENDIF.
+          REFRESH: LT_PSP, LT_DAY_PSP.
+        ENDLOOP.
+        REFRESH: LT_PSP, LT_PERNR_TAB, LT_DAY_PSP, LT_DAY_ATTR.
+        CLEAR: LWA_PA2001, LV_INDIC, LWA_PA2003.
+      ENDLOOP.
+    ENDIF.
+    REFRESH: LT_DATES[].
+    CLEAR: LWA_DATES.
+    LWA_DATES-YY_DATE1   = WA_FINAL-YY_LAST_MONTHS1.
+    LWA_DATES-YY_SUBTYP1 = WA_FINAL-YY_SUBTYP1.
+    LWA_DATES-YY_SUBSTI1 = WA_FINAL-YY_SUBSTI1.
+    APPEND LWA_DATES TO LT_DATES.
+    CLEAR: LWA_DATES.
+    LWA_DATES-YY_DATE1   = WA_FINAL-YY_LAST_MONTHS2.
+    LWA_DATES-YY_SUBTYP1 = WA_FINAL-YY_SUBTYP2.
+    LWA_DATES-YY_SUBSTI1 = WA_FINAL-YY_SUBSTI2.
+    APPEND LWA_DATES TO LT_DATES.
+    CLEAR: LWA_DATES.
+    LWA_DATES-YY_DATE1   = WA_FINAL-YY_LAST_MONTHS3.
+    LWA_DATES-YY_SUBTYP1 = WA_FINAL-YY_SUBTYP3.
+    LWA_DATES-YY_SUBSTI1 = WA_FINAL-YY_SUBSTI3.
+    APPEND LWA_DATES TO LT_DATES.
+    CLEAR: LWA_DATES.
+    LWA_DATES-YY_DATE1   = WA_FINAL-YY_LAST_MONTHS4.
+    LWA_DATES-YY_SUBTYP1 = WA_FINAL-YY_SUBTYP4.
+    LWA_DATES-YY_SUBSTI1 = WA_FINAL-YY_SUBSTI4.
+    APPEND LWA_DATES TO LT_DATES.
+    CLEAR: LWA_DATES.
+    LWA_DATES-YY_DATE1   = WA_FINAL-YY_LAST_MONTHS5.
+    LWA_DATES-YY_SUBTYP1 = WA_FINAL-YY_SUBTYP5.
+    LWA_DATES-YY_SUBSTI1 = WA_FINAL-YY_SUBSTI5.
+    APPEND LWA_DATES TO LT_DATES.
+    CLEAR: LWA_DATES.
+    LWA_DATES-YY_DATE1   = WA_FINAL-YY_LAST_MONTHS6.
+    LWA_DATES-YY_SUBTYP1 = WA_FINAL-YY_SUBTYP6.
+    LWA_DATES-YY_SUBSTI1 = WA_FINAL-YY_SUBSTI6.
+    APPEND LWA_DATES TO LT_DATES.
+    IF LT_DATES[] IS NOT INITIAL.
+      CLEAR: WA_FINAL-YY_LAST_MONTHS1, WA_FINAL-YY_LAST_MONTHS2, WA_FINAL-YY_LAST_MONTHS3, WA_FINAL-YY_LAST_MONTHS4,
+WA_FINAL-YY_LAST_MONTHS5, WA_FINAL-YY_LAST_MONTHS6, WA_FINAL-YY_SUBTYP1, WA_FINAL-YY_SUBTYP2, WA_FINAL-YY_SUBTYP3,
+WA_FINAL-YY_SUBTYP4, WA_FINAL-YY_SUBTYP5, WA_FINAL-YY_SUBTYP6, WA_FINAL-YY_SUBSTI1,  WA_FINAL-YY_SUBSTI2,
+WA_FINAL-YY_SUBSTI3,  WA_FINAL-YY_SUBSTI4,  WA_FINAL-YY_SUBSTI5,  WA_FINAL-YY_SUBSTI6.
+      SORT LT_DATES[] BY YY_DATE1 DESCENDING.
+      DELETE LT_DATES[] WHERE YY_DATE1 IS INITIAL
+                      AND   YY_SUBTYP1 IS INITIAL
+                      AND   YY_SUBSTI1 IS INITIAL.
+      LOOP AT LT_DATES[] INTO LWA_DATES.
+        IF SY-TABIX = 1.
+          WA_FINAL-YY_LAST_MONTHS1 = LWA_DATES-YY_DATE1.
+          WA_FINAL-YY_SUBTYP1      = LWA_DATES-YY_SUBTYP1.
+          WA_FINAL-YY_SUBSTI1      = LWA_DATES-YY_SUBSTI1.
+        ENDIF.
+        IF SY-TABIX = 2.
+          WA_FINAL-YY_LAST_MONTHS2 = LWA_DATES-YY_DATE1.
+          WA_FINAL-YY_SUBTYP2      = LWA_DATES-YY_SUBTYP1.
+          WA_FINAL-YY_SUBSTI2      = LWA_DATES-YY_SUBSTI1.
+        ENDIF.
+        IF SY-TABIX = 3.
+          WA_FINAL-YY_LAST_MONTHS3 = LWA_DATES-YY_DATE1.
+          WA_FINAL-YY_SUBTYP3      = LWA_DATES-YY_SUBTYP1.
+          WA_FINAL-YY_SUBSTI3      = LWA_DATES-YY_SUBSTI1.
+        ENDIF.
+        IF SY-TABIX = 4.
+          WA_FINAL-YY_LAST_MONTHS4 = LWA_DATES-YY_DATE1.
+          WA_FINAL-YY_SUBTYP4      = LWA_DATES-YY_SUBTYP1.
+          WA_FINAL-YY_SUBSTI4      = LWA_DATES-YY_SUBSTI1.
+        ENDIF.
+        IF SY-TABIX = 5.
+          WA_FINAL-YY_LAST_MONTHS5 = LWA_DATES-YY_DATE1.
+          WA_FINAL-YY_SUBTYP5      = LWA_DATES-YY_SUBTYP1.
+          WA_FINAL-YY_SUBSTI5      = LWA_DATES-YY_SUBSTI1.
+        ENDIF.
+        IF SY-TABIX = 6.
+          WA_FINAL-YY_LAST_MONTHS6 = LWA_DATES-YY_DATE1.
+          WA_FINAL-YY_SUBTYP6      = LWA_DATES-YY_SUBTYP1.
+          WA_FINAL-YY_SUBSTI6      = LWA_DATES-YY_SUBSTI1.
+        ENDIF.
+        CLEAR: LWA_DATES.
+      ENDLOOP.
+    ENDIF.
+    "END
+
+    WA_FINAL-LEAVE_ENDDA = WA_PA2001-ENDDA.
+
+    IF RB1 = ABAP_TRUE.
+*      WA_FINAL-LEAVE_DATE          = WA_PA2001-BEGDA.
+      WA_FINAL-NO_DAYS_LEAVE_SAT   =  WA_FINAL-LEAVE_ENDDA -  WA_FINAL-LEAVE_BEGDA + 1.
+    ENDIF.
+
+    CLEAR: L_BEGDA, L_ENDDA.
+    CONCATENATE WA_PA2001-BEGDA+6(2) WA_PA2001-BEGDA+4(2) WA_PA2001-BEGDA(4) INTO L_BEGDA SEPARATED BY '/'.
+    CONCATENATE WA_PA2001-ENDDA+6(2) WA_PA2001-ENDDA+4(2) WA_PA2001-ENDDA(4) INTO L_ENDDA SEPARATED BY '/'.
+    CONCATENATE L_BEGDA 'TO' L_ENDDA INTO WA_FINAL-LEAVE_PD SEPARATED BY SPACE.   " LEAVE PERIOD
+
+    " NO. OF DAYS B/W BEGDA & ENDDA.
+    IF WA_PA2001-BEGDA EQ WA_PA2001-ENDDA AND WA_PA2001-BEGUZ GT 0 AND WA_PA2001-ENDUZ GT 0.
+      WA_FINAL-NO_DAYS_LEAVE = '0.5'.                 " NO OF ANSENCE DAYS.
+    ELSE.
+      WA_FINAL-NO_DAYS_LEAVE = ( WA_PA2001-ENDDA - WA_PA2001-BEGDA ) + 1.
+    ENDIF.
+
+    CLEAR: WA_LEAVES_TMP.
+    SORT I_LEAVES_TMP BY PERNR BEGDA.
+    READ TABLE I_LEAVES_TMP INTO WA_LEAVES_TMP WITH KEY PERNR = WA_PA2001-PERNR SUBTY = WA_PA2001-SUBTY
+                                                        BEGDA = WA_PA2001-BEGDA ENDDA = WA_PA2001-ENDDA.
+    IF SY-SUBRC EQ 0.
+      CLEAR: WA_SENDER.     " SUBMISSION DATE
+      READ TABLE I_SENDER INTO WA_SENDER WITH KEY REQUEST_ID = WA_LEAVES_TMP-REQUEST_ID BINARY SEARCH.
+      IF SY-SUBRC EQ 0.   " BREAK TIME STAMP INTO SUBMISSION TIME & DATE. TZONREF-TSTAMPS
+
+        CALL FUNCTION 'IB_CONVERT_FROM_TIMESTAMP'
+          EXPORTING
+            I_TIMESTAMP = WA_SENDER-MOD_TIMESTAMP
+            I_TZONE     = SY-ZONLO
+          IMPORTING
+            E_DATLO     = WA_FINAL-SUB_DATE       " SUBMISSION DATE
+            E_TIMLO     = WA_FINAL-SUB_TIME.
+      ENDIF.
+
+      CLEAR: WA_APPROVER.
+      READ TABLE I_APPROVER INTO WA_APPROVER WITH KEY REQUEST_ID = WA_LEAVES_TMP-REQUEST_ID BINARY SEARCH.
+      IF SY-SUBRC EQ 0.   " BREAK TIME STAMP INTO APPROVAL TIME & DATE.
+
+        CALL FUNCTION 'IB_CONVERT_FROM_TIMESTAMP'
+          EXPORTING
+            I_TIMESTAMP = WA_APPROVER-MOD_TIMESTAMP
+            I_TZONE     = SY-ZONLO
+          IMPORTING
+            E_DATLO     = WA_FINAL-APP_DATE         " APPROVAL DATE
+            E_TIMLO     = WA_FINAL-APP_TIME.
+
+        WA_FINAL-APP_PERNR = WA_APPROVER-MOD_USER.   " APPROVER CPF NO
+
+*Begin of changes by of VIPUL on 20241024  for ATC
+SELECT ENAME FROM PA0001 INTO WA_FINAL-APP_NAME UP TO 1 ROWS
+WHERE PERNR EQ WA_APPROVER-MOD_USER AND " APPROVER NAME
+begda LE wa_final-app_date AND endda GE wa_final-app_date ORDER BY PRIMARY KEY .
+ENDSELECT.
+* *End of changes by of VIPUL on 20241024  for ATC
+        IF SY-SUBRC NE 0.
+          CLEAR: WA_FINAL-APP_NAME.
+        ENDIF.
+      ENDIF.
+
+      CLEAR: WA_LEAVES.  " ABSENCE REASON
+      SORT I_LEAVES BY REQUEST_ID ASCENDING.
+      READ TABLE I_LEAVES INTO WA_LEAVES WITH KEY REQUEST_ID = WA_APPROVER-REQUEST_ID BINARY SEARCH.
+      IF SY-SUBRC EQ 0.
+        WA_FINAL-PURPOSE = WA_LEAVES-NOTICE_TEXT.
+      ENDIF.
+    ENDIF.
+
+    IF WA_FINAL-SUB_DATE IS NOT INITIAL AND WA_FINAL-APP_DATE IS NOT INITIAL.  " NO OF DAYS TAKEN FOR APPROVAL.
+      WA_FINAL-NO_DAYS_APPR = ( WA_FINAL-APP_DATE - WA_FINAL-SUB_DATE ) + 1.
+    ENDIF.
+
+    APPEND WA_FINAL TO I_FINAL.
+    CLEAR: WA_FINAL.
+  ENDLOOP.
+
+  CLEAR:GS_LEAVE.
+  REFRESH GI_LEAVE.
+
+  LOOP AT I_FINAL INTO WA_FINAL.
+
+    GS_LEAVE-PERNR = WA_FINAL-PERNR.
+    GS_LEAVE-LEAVE_COUNT = GS_LEAVE-LEAVE_COUNT + WA_FINAL-NO_DAYS_LEAVE.
+
+    AT END OF PERNR.
+      APPEND GS_LEAVE TO GI_LEAVE.
+      CLEAR GS_LEAVE.
+    ENDAT.
+
+  ENDLOOP.
+
+  LOOP AT I_FINAL ASSIGNING FIELD-SYMBOL(<LFS_40_FINAL>).
+    READ TABLE GI_LEAVE INTO DATA(LS_LEAVE) WITH KEY PERNR = <LFS_40_FINAL>-PERNR.
+    IF SY-SUBRC EQ 0.
+      <LFS_40_FINAL>-LEAVE_COUNT = LS_LEAVE-LEAVE_COUNT.
+    ENDIF.
+  ENDLOOP.
+
+
+ENDFORM.
+
+FORM P_DISPLAY_ALV.
+  PERFORM P_BUILD_FIELDCAT.
+  PERFORM P_BUILD_LAYOUT.
+*    SORT GT_PTRV_MAIL BY REINR.
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      I_CALLBACK_PROGRAM       = SY-REPID                 " REPORT ID
+      I_CALLBACK_PF_STATUS_SET = 'PF'           " FOR PF-STATUS
+      I_CALLBACK_USER_COMMAND  = 'USER_COMMAND' " FOR USER-COMMAND
+      IS_LAYOUT                = X_LAYOUT                 " FOR LAYOUT
+      IT_FIELDCAT              = I_FIELDCAT     " FIELD CATALOG
+    TABLES
+      T_OUTTAB                 = I_FINAL
+    EXCEPTIONS
+      PROGRAM_ERROR            = 1
+      OTHERS                   = 2.
+ENDFORM.
+
+FORM PF USING RT_EXTAB TYPE SLIS_T_EXTAB.
+  SET PF-STATUS 'ZSTANDARD'.
+ENDFORM.
+
+FORM USER_COMMAND USING LV_OKCODE LIKE SY-UCOMM L_SELFIELD TYPE SLIS_SELFIELD.
+
+  CLEAR: I_FINAL_TMP[], WA_FINAL.
+
+* ASSIGN THE FUNCTION CODE TO VARIABLE V_OKCODE
+  LV_OKCODE = SY-UCOMM.
+
+* HANDLE THE CODE EXECUTION BASED ON THE FUNCTION CODE ENCOUNTERED
+  CASE LV_OKCODE.
+* WHEN THE FUNCTION CODE IS EXECUTE THEN PROCESS THE SELECTED RECORDS
+    WHEN 'PDF'.
+* REFRESH IT_PROCESS WHEN USER PROCESSES SELECTED RECORDS
+      CLEAR: I_FINAL_TMP[].
+
+* TO REFLECT THE DATA CHANGED INTO INTERNAL TABLE
+      DATA : REF_GRID TYPE REF TO CL_GUI_ALV_GRID. "NEW
+
+      IF REF_GRID IS INITIAL.
+        CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
+          IMPORTING
+            E_GRID = REF_GRID.
+      ENDIF.
+
+      IF NOT REF_GRID IS INITIAL.
+        CALL METHOD REF_GRID->CHECK_CHANGED_DATA.
+      ENDIF.
+
+*----------------------------------------------------------------------*
+* SORT THE INTERNAL TABLE BY FLAG DESCENDING SO THAT THE SELECTED
+* RECORDS ARE APPENDED AT THE BEGINNING OF INTERNAL TABLE
+*----------------------------------------------------------------------*
+      SORT I_FINAL BY CHECK DESCENDING.
+
+*----------------------------------------------------------------------*
+* MOVE THE SELECTED RECORDS FROM FINAL INTERNAL TABLE INTO ANOTHER
+* INTERNAL TABLE SO THAT THEY CAN BE PROCESSED
+*----------------------------------------------------------------------*
+      CLEAR: WA_FINAL.
+      LOOP AT I_FINAL INTO WA_FINAL WHERE CHECK = 'X'.
+*        MOVE-CORRESPONDING WA_FINAL TO I_FINAL_TMP.
+        APPEND WA_FINAL TO I_FINAL_TMP.
+      ENDLOOP.
+
+* REFRESH THE ALV GRID OUTPUT FROM INTERNAL TABLE
+      L_SELFIELD-REFRESH = 'X'.
+* NOW ALL THE SELECTED RECORDS BY THE USER AT RUN-TIME ARE APPENDED INTO
+* INTO A NEW INTERNAL TABLE WHICH CAN NOW BE USED TO PROCESSED AS PER THE
+* USER REQUIREMENTS
+      DATA : L_COUNT TYPE I.
+
+      DESCRIBE TABLE I_FINAL_TMP LINES L_COUNT.
+
+      IF L_COUNT GE 1.
+        PERFORM USER_ACTION.
+      ELSEIF L_COUNT LT 1.
+        MESSAGE I378(YH01).                             " NO RECORD IS SELECTED.
+*      ELSE.
+*        MESSAGE I379(YH01).                             " KINDLY SELECT ONLY ONE RECORD TO PROCEED.
+      ENDIF.
+
+  ENDCASE.
+ENDFORM.
+
+FORM USER_ACTION.
+  DATA: LX_FP_API       TYPE REF TO CX_FP_API,
+        L_DATATYPES     TYPE SFPDATATYPES,
+        L_BEGDA(10)     TYPE C,
+        L_ENDDA(10)     TYPE C,
+        L_LEAVE_DAYS(4) TYPE C,
+        L_APP_DAYS(4)   TYPE C,
+        L_SUB_DAYS(15)  TYPE C,
+        L_SUB_TIME(8)   TYPE C,
+        L_APP_TIME(8)   TYPE C.
+*&---- GET THE NAME OF THE GENERATED FUNCTION MODULE
+  TRY.
+      CLEAR: FM_NAME.
+      CALL FUNCTION 'FP_FUNCTION_MODULE_NAME'           "& FORM PROCESSING GENERATION
+        EXPORTING
+          I_NAME     = 'YRH_ABSENCE_REPORT_PDF'
+        IMPORTING
+          E_FUNCNAME = FM_NAME.
+
+    CATCH CX_FP_API INTO LX_FP_API.
+  ENDTRY.
+
+  CLEAR: FP_OUTPUTPARAMS.
+  FP_OUTPUTPARAMS-DEST      = 'PDF1'.
+  FP_OUTPUTPARAMS-REQNEW    = 'X'.
+
+* LANGUAGE AND COUNTRY SETTING (HERE US AS AN EXAMPLE)
+  FP_DOCPARAMS-LANGU   = 'E'.
+  FP_DOCPARAMS-COUNTRY = ''.
+
+  CLEAR: L_DATATYPES.
+*      PREPARE TEST DATA
+  L_DATATYPES-CHAR = '#'.
+  L_DATATYPES-STRING = 'AUF GEHT''S! '.                     "#EC NOTEXT
+  L_DATATYPES-NUMC = '42'.
+  L_DATATYPES-DEC = 0 - ( 12345 / 7 ).
+  L_DATATYPES-FLTP = 0 - ( 12345 / 7 ).
+  L_DATATYPES-INT = 4711.
+  L_DATATYPES-CURR = 0 - ( 12345 / 7 ).
+  L_DATATYPES-CUKY = 'JPY'. " NO DECIMALS
+  L_DATATYPES-QUAN = 12345 / 7.
+  L_DATATYPES-UNIT = 'DEG'. " 1 DECIMAL
+  L_DATATYPES-DATE = SY-DATUM - 365.
+  L_DATATYPES-TIME = SY-UZEIT.
+  L_DATATYPES-LANG = SY-LANGU.
+
+  CALL FUNCTION 'FP_JOB_OPEN'                   "& FORM PROCESSING: CALL FORM
+    CHANGING
+      IE_OUTPUTPARAMS = FP_OUTPUTPARAMS
+    EXCEPTIONS
+      CANCEL          = 1
+      USAGE_ERROR     = 2
+      SYSTEM_ERROR    = 3
+      INTERNAL_ERROR  = 4
+      OTHERS          = 5.
+  IF SY-SUBRC <> 0.
+*            <ERROR HANDLING>
+  ENDIF.
+
+  CLEAR: WA_FINAL.
+  LOOP AT I_FINAL_TMP INTO WA_FINAL.
+*    CHANGE DATE AND TIME FOR EACH PDF SPOOL.
+    L_DATATYPES-DATE = L_DATATYPES-DATE + 1.
+    L_DATATYPES-TIME = L_DATATYPES-TIME + 10.
+
+    CLEAR: L_BEGDA, L_ENDDA, L_LEAVE_DAYS, L_APP_DAYS, L_SUB_TIME, L_APP_TIME..
+    CONCATENATE WA_FINAL-SUB_DATE+6(2) WA_FINAL-SUB_DATE+4(2) WA_FINAL-SUB_DATE(4) INTO L_BEGDA SEPARATED BY '/'.
+    CONCATENATE WA_FINAL-APP_DATE+6(2) WA_FINAL-APP_DATE+4(2) WA_FINAL-APP_DATE(4) INTO L_ENDDA SEPARATED BY '/'.
+
+    L_LEAVE_DAYS = WA_FINAL-NO_DAYS_LEAVE.
+    L_APP_DAYS   = WA_FINAL-NO_DAYS_APPR..
+
+    CONCATENATE '(' L_LEAVE_DAYS 'DAYS' ')' INTO L_SUB_DAYS SEPARATED BY SPACE.
+
+    CONCATENATE WA_FINAL-SUB_TIME+0(2) WA_FINAL-SUB_TIME+2(2) WA_FINAL-SUB_TIME+4(2) INTO L_SUB_TIME SEPARATED BY ':'.
+    CONCATENATE WA_FINAL-APP_TIME+0(2) WA_FINAL-APP_TIME+2(2) WA_FINAL-APP_TIME+4(2) INTO L_APP_TIME SEPARATED BY ':'.
+
+    CALL FUNCTION FM_NAME    " ADDED BY TUSHAR GOYAL & A.K DIXIT ON 12/06/2020 4000002264, TG:PDF FORM OF LEAVE
+      EXPORTING
+        /1BCDWB/DOCPARAMS  = FP_DOCPARAMS
+        PERNR              = WA_FINAL-PERNR
+        GRADE              = WA_FINAL-GRADE
+        ENAME              = WA_FINAL-ENAME
+        LOCATION           = WA_FINAL-LOCATION
+        DESIGNATION        = WA_FINAL-DESIGNATION
+        DEPARTMENT         = WA_FINAL-DEPARTMENT
+        ABSENCE_TYPE       = WA_FINAL-ABSENCE_TYPE
+        LEAVE_PD           = WA_FINAL-LEAVE_PD
+        SUB_DATE           = L_BEGDA
+        APP_DATE           = L_ENDDA
+        APP_PERNR          = WA_FINAL-APP_PERNR
+        PURPOSE            = WA_FINAL-PURPOSE
+        NO_DAYS_LEAVE      = L_LEAVE_DAYS
+        NO_DAYS_APPR       = L_APP_DAYS
+        APP_ENAME          = WA_FINAL-APP_NAME
+        SUB_TIME           = L_SUB_TIME
+        APP_TYPE           = L_APP_TIME
+        LEAVE_DAYS         = L_SUB_DAYS
+      IMPORTING
+        /1BCDWB/FORMOUTPUT = FP_FORMOUTPUT
+      EXCEPTIONS
+        USAGE_ERROR        = 1
+        SYSTEM_ERROR       = 2
+        INTERNAL_ERROR     = 3
+        OTHERS             = 4.
+    IF SY-SUBRC <> 0.
+* IMPLEMENT SUITABLE ERROR HANDLING HERE
+    ENDIF.
+  ENDLOOP.
+
+*&---- CLOSE THE SPOOL JOB
+  CALL FUNCTION 'FP_JOB_CLOSE'
+    EXCEPTIONS
+      USAGE_ERROR    = 1
+      SYSTEM_ERROR   = 2
+      INTERNAL_ERROR = 3
+      OTHERS         = 4.
+
+
+ENDFORM.
+
+FORM P_BUILD_FIELDCAT.
+  CLEAR: I_FIELDCAT[], WA_FIELDCAT.
+  IF RB8 NE 'X'.
+    WA_FIELDCAT-FIELDNAME = 'CHECK'.
+    WA_FIELDCAT-OUTPUTLEN = 2.             " OUTPUT LENGTH ON SCREEN
+    WA_FIELDCAT-CHECKBOX  = 'X'.           " PRINT AS CHECKBOX
+    WA_FIELDCAT-EDIT      = 'X'.           " MAKE FIELD OPEN FOR INPUT
+    WA_FIELDCAT-SELTEXT_L = ' '.           " HEADER INFORMATION
+    WA_FIELDCAT-FIX_COLUMN = 'X'.
+    APPEND WA_FIELDCAT TO I_FIELDCAT.
+    CLEAR WA_FIELDCAT.
+  ENDIF.
+  WA_FIELDCAT-FIELDNAME = 'PERNR'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T02.      " CPF NUMBER.
+  WA_FIELDCAT-LZERO = 'X'.
+  WA_FIELDCAT-FIX_COLUMN = 'X'.
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'ENAME'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T04.      " EMPLOYEE NAME
+  WA_FIELDCAT-FIX_COLUMN = 'X'.
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'GRADE'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T03.      " GRADE
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'DESIGNATION'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T06.      " DESIGNATION
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'LOCATION'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T05.      " POSTING LOCATION
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'DEPARTMENT'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T07.      " DEPARTMENT
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  IF RB8 EQ 'X'.
+    WA_FIELDCAT-FIELDNAME = 'YYECO_NO'.
+    WA_FIELDCAT-SELTEXT_L = TEXT-T42.      " ECO NUMBER
+    APPEND WA_FIELDCAT TO I_FIELDCAT.
+    CLEAR WA_FIELDCAT.
+
+
+    WA_FIELDCAT-FIELDNAME = 'WORK_SAT'.
+    WA_FIELDCAT-SELTEXT_L = TEXT-T43.      " WORKING SATURDAY
+    APPEND WA_FIELDCAT TO I_FIELDCAT.
+    CLEAR WA_FIELDCAT.
+
+    WA_FIELDCAT-FIELDNAME = 'LEAVE_SAT'.
+    WA_FIELDCAT-SELTEXT_L = TEXT-T44.      " LEAVE ON WORKING SATURDAY
+    APPEND WA_FIELDCAT TO I_FIELDCAT.
+    CLEAR WA_FIELDCAT.
+
+    WA_FIELDCAT-FIELDNAME = 'LEAVE_TOT'.
+    WA_FIELDCAT-SELTEXT_L = TEXT-T45.      " LEAVE ON WORKING SATURDAY
+    APPEND WA_FIELDCAT TO I_FIELDCAT.
+    CLEAR WA_FIELDCAT.
+
+    WA_FIELDCAT-FIELDNAME = 'GEN'.
+    WA_FIELDCAT-SELTEXT_L = TEXT-T46.      " GENERAL
+    APPEND WA_FIELDCAT TO I_FIELDCAT.
+    CLEAR WA_FIELDCAT.
+
+    WA_FIELDCAT-FIELDNAME = 'REST'.
+    WA_FIELDCAT-SELTEXT_L = TEXT-T47.      " REST
+    APPEND WA_FIELDCAT TO I_FIELDCAT.
+    CLEAR WA_FIELDCAT.
+
+    WA_FIELDCAT-FIELDNAME = 'OFF'.
+    WA_FIELDCAT-SELTEXT_L = TEXT-T48.      " OFF
+    APPEND WA_FIELDCAT TO I_FIELDCAT.
+    CLEAR WA_FIELDCAT.
+
+    WA_FIELDCAT-FIELDNAME = 'MRNG'.
+    WA_FIELDCAT-SELTEXT_L = TEXT-T49.      " MRNG
+    APPEND WA_FIELDCAT TO I_FIELDCAT.
+    CLEAR WA_FIELDCAT.
+
+    WA_FIELDCAT-FIELDNAME = 'NIGHT'.
+    WA_FIELDCAT-SELTEXT_L = TEXT-T50.      " NIGHT
+    APPEND WA_FIELDCAT TO I_FIELDCAT.
+    CLEAR WA_FIELDCAT.
+
+    WA_FIELDCAT-FIELDNAME = 'EVNG'.
+    WA_FIELDCAT-SELTEXT_L = TEXT-T51.      " EVNG
+    APPEND WA_FIELDCAT TO I_FIELDCAT.
+    CLEAR WA_FIELDCAT.
+  ENDIF.
+
+  IF RB8 NE 'X'.
+    WA_FIELDCAT-FIELDNAME = 'ABSENCE_TYPE'.
+    WA_FIELDCAT-SELTEXT_L = TEXT-T08.      " ANSENCE TYPE.
+    APPEND WA_FIELDCAT TO I_FIELDCAT.
+    CLEAR WA_FIELDCAT.
+
+    WA_FIELDCAT-FIELDNAME = 'LEAVE_BEGDA'.
+    WA_FIELDCAT-SELTEXT_L = TEXT-T17.      " SUBMISSION DATE
+    APPEND WA_FIELDCAT TO I_FIELDCAT.
+    CLEAR WA_FIELDCAT.
+
+    WA_FIELDCAT-FIELDNAME = 'LEAVE_ENDDA'.
+    WA_FIELDCAT-SELTEXT_L = TEXT-T18.      " SUBMISSION DATE
+    APPEND WA_FIELDCAT TO I_FIELDCAT.
+    CLEAR WA_FIELDCAT.
+
+*  WA_FIELDCAT-FIELDNAME = 'LEAVE_PD'.
+*  WA_FIELDCAT-SELTEXT_L = TEXT-T09.      " ABSENCE PERIOD
+*  APPEND WA_FIELDCAT TO I_FIELDCAT.
+*  CLEAR WA_FIELDCAT.
+
+    IF RB1 NE 'X'.
+
+      WA_FIELDCAT-FIELDNAME = 'LEAVE_PD'.
+      WA_FIELDCAT-SELTEXT_L = TEXT-T09.      " ABSENCE PERIOD
+      APPEND WA_FIELDCAT TO I_FIELDCAT.
+      CLEAR WA_FIELDCAT.
+
+    ENDIF.
+
+
+    IF RB1 = 'X'.
+
+**    WA_FIELDCAT-FIELDNAME = 'LEAVE_DATE'.
+**    WA_FIELDCAT-SELTEXT_L = TEXT-T19.      " LEAVE TYPE 39.
+**    APPEND WA_FIELDCAT TO I_FIELDCAT.
+**    CLEAR WA_FIELDCAT.
+
+      WA_FIELDCAT-FIELDNAME = 'LEAVE_COUNT'.
+      WA_FIELDCAT-SELTEXT_L = 'TOTAL LEAVE'.      " DEPARTMENT
+      APPEND WA_FIELDCAT TO I_FIELDCAT.
+      CLEAR WA_FIELDCAT.
+
+      WA_FIELDCAT-FIELDNAME = 'NO_DAYS_LEAVE_SAT'.
+      WA_FIELDCAT-SELTEXT_L = TEXT-T20.      " DAYS NO LEAVE TYPE 39.
+      APPEND WA_FIELDCAT TO I_FIELDCAT.
+      CLEAR WA_FIELDCAT.
+
+      WA_FIELDCAT-FIELDNAME = 'YY_LAST_MONTHS1'.
+      WA_FIELDCAT-SELTEXT_L = TEXT-T21.      " LAST 6 MONTHS DATES OF LEAVE TYPE 39
+      APPEND WA_FIELDCAT TO I_FIELDCAT.
+      CLEAR WA_FIELDCAT.
+
+      WA_FIELDCAT-FIELDNAME = 'YY_SUBTYP1'.
+      WA_FIELDCAT-SELTEXT_L = TEXT-T26.      " SUB TYPE 1
+      APPEND WA_FIELDCAT TO I_FIELDCAT.
+      CLEAR WA_FIELDCAT.
+
+      WA_FIELDCAT-FIELDNAME = 'YY_SUBSTI1'.
+      WA_FIELDCAT-SELTEXT_L = TEXT-T25.      " SUBSTITUTION 1
+      APPEND WA_FIELDCAT TO I_FIELDCAT.
+      CLEAR WA_FIELDCAT.
+
+      WA_FIELDCAT-FIELDNAME = 'YY_LAST_MONTHS2'.
+      WA_FIELDCAT-SELTEXT_L = TEXT-T27.      " LAST 6 MONTHS DATES OF LEAVE TYPE 39
+      APPEND WA_FIELDCAT TO I_FIELDCAT.
+      CLEAR WA_FIELDCAT.
+
+      WA_FIELDCAT-FIELDNAME = 'YY_SUBTYP2'.
+      WA_FIELDCAT-SELTEXT_L = TEXT-T28.      " SUB TYPE 2
+      APPEND WA_FIELDCAT TO I_FIELDCAT.
+      CLEAR WA_FIELDCAT.
+
+      WA_FIELDCAT-FIELDNAME = 'YY_SUBSTI2'.
+      WA_FIELDCAT-SELTEXT_L = TEXT-T29.      " SUBSTITUTION 2
+      APPEND WA_FIELDCAT TO I_FIELDCAT.
+      CLEAR WA_FIELDCAT.
+
+      WA_FIELDCAT-FIELDNAME = 'YY_LAST_MONTHS3'.
+      WA_FIELDCAT-SELTEXT_L = TEXT-T30.      " LAST 6 MONTHS DATES OF LEAVE TYPE 39
+      APPEND WA_FIELDCAT TO I_FIELDCAT.
+      CLEAR WA_FIELDCAT.
+
+      WA_FIELDCAT-FIELDNAME = 'YY_SUBTYP3'.
+      WA_FIELDCAT-SELTEXT_L = TEXT-T31.      " SUB TYPE 3
+      APPEND WA_FIELDCAT TO I_FIELDCAT.
+      CLEAR WA_FIELDCAT.
+
+      WA_FIELDCAT-FIELDNAME = 'YY_SUBSTI3'.
+      WA_FIELDCAT-SELTEXT_L = TEXT-T32.      " SUBSTITUTION 3
+      APPEND WA_FIELDCAT TO I_FIELDCAT.
+      CLEAR WA_FIELDCAT.
+
+      WA_FIELDCAT-FIELDNAME = 'YY_LAST_MONTHS4'.
+      WA_FIELDCAT-SELTEXT_L = TEXT-T33.      " LAST 6 MONTHS DATES OF LEAVE TYPE 39
+      APPEND WA_FIELDCAT TO I_FIELDCAT.
+      CLEAR WA_FIELDCAT.
+
+      WA_FIELDCAT-FIELDNAME = 'YY_SUBTYP4'.
+      WA_FIELDCAT-SELTEXT_L = TEXT-T34.      " SUB TYPE 4
+      APPEND WA_FIELDCAT TO I_FIELDCAT.
+      CLEAR WA_FIELDCAT.
+
+      WA_FIELDCAT-FIELDNAME = 'YY_SUBSTI4'.
+      WA_FIELDCAT-SELTEXT_L = TEXT-T35.      " SUBSTITUTION 4
+      APPEND WA_FIELDCAT TO I_FIELDCAT.
+      CLEAR WA_FIELDCAT.
+
+      WA_FIELDCAT-FIELDNAME = 'YY_LAST_MONTHS5'.
+      WA_FIELDCAT-SELTEXT_L = TEXT-T36.      " LAST 6 MONTHS DATES OF LEAVE TYPE 39
+      APPEND WA_FIELDCAT TO I_FIELDCAT.
+      CLEAR WA_FIELDCAT.
+
+      WA_FIELDCAT-FIELDNAME = 'YY_SUBTYP5'.
+      WA_FIELDCAT-SELTEXT_L = TEXT-T37.      " SUB TYPE 5
+      APPEND WA_FIELDCAT TO I_FIELDCAT.
+      CLEAR WA_FIELDCAT.
+
+      WA_FIELDCAT-FIELDNAME = 'YY_SUBSTI5'.
+      WA_FIELDCAT-SELTEXT_L = TEXT-T38.      " SUBSTITUTION 5
+      APPEND WA_FIELDCAT TO I_FIELDCAT.
+      CLEAR WA_FIELDCAT.
+
+      WA_FIELDCAT-FIELDNAME = 'YY_LAST_MONTHS6'.
+      WA_FIELDCAT-SELTEXT_L = TEXT-T39.      " LAST 6 MONTHS DATES OF LEAVE TYPE 39
+      APPEND WA_FIELDCAT TO I_FIELDCAT.
+      CLEAR WA_FIELDCAT.
+
+      WA_FIELDCAT-FIELDNAME = 'YY_SUBTYP6'.
+      WA_FIELDCAT-SELTEXT_L = TEXT-T40.      " SUB TYPE 6
+      APPEND WA_FIELDCAT TO I_FIELDCAT.
+      CLEAR WA_FIELDCAT.
+
+      WA_FIELDCAT-FIELDNAME = 'YY_SUBSTI6'.
+      WA_FIELDCAT-SELTEXT_L = TEXT-T41.      " SUBSTITUTION 6
+      APPEND WA_FIELDCAT TO I_FIELDCAT.
+      CLEAR WA_FIELDCAT.
+
+    ENDIF.
+
+
+    IF RB1 NE 'X'.
+
+      WA_FIELDCAT-FIELDNAME = 'SUB_DATE'.
+      WA_FIELDCAT-SELTEXT_L = TEXT-T10.      " SUBMISSION DATE
+      APPEND WA_FIELDCAT TO I_FIELDCAT.
+      CLEAR WA_FIELDCAT.
+
+      WA_FIELDCAT-FIELDNAME = 'APP_PERNR'.
+      WA_FIELDCAT-SELTEXT_L = TEXT-T11.      " APPROVER CPF NO.
+      WA_FIELDCAT-LZERO = 'X'.
+      WA_FIELDCAT-JUST = 'C'.
+      APPEND WA_FIELDCAT TO I_FIELDCAT.
+      CLEAR WA_FIELDCAT.
+
+      WA_FIELDCAT-FIELDNAME = 'APP_NAME'.
+      WA_FIELDCAT-SELTEXT_L = TEXT-T12.      " APPROVER NAME.
+      APPEND WA_FIELDCAT TO I_FIELDCAT.
+      CLEAR WA_FIELDCAT.
+
+      WA_FIELDCAT-FIELDNAME = 'APP_DATE'.
+      WA_FIELDCAT-SELTEXT_L = TEXT-T13.      " APPROVAL DATE
+      APPEND WA_FIELDCAT TO I_FIELDCAT.
+      CLEAR WA_FIELDCAT.
+
+      WA_FIELDCAT-FIELDNAME = 'PURPOSE'.
+      WA_FIELDCAT-SELTEXT_L = TEXT-T14.      " PURPOSE.
+      APPEND WA_FIELDCAT TO I_FIELDCAT.
+      CLEAR WA_FIELDCAT.
+
+      WA_FIELDCAT-FIELDNAME = 'NO_DAYS_LEAVE'.
+      WA_FIELDCAT-SELTEXT_L = TEXT-T15.      " ABSENCE DAYS NO.
+      APPEND WA_FIELDCAT TO I_FIELDCAT.
+      CLEAR WA_FIELDCAT.
+
+      WA_FIELDCAT-FIELDNAME = 'NO_DAYS_APPR'.
+      WA_FIELDCAT-SELTEXT_L = TEXT-T16.      " APPROVAL DAYS NO.
+      APPEND WA_FIELDCAT TO I_FIELDCAT.
+      CLEAR WA_FIELDCAT.
+
+    ENDIF.
+  ENDIF.
+ENDFORM.
+
+FORM P_BUILD_LAYOUT.
+  CLEAR X_LAYOUT.
+  X_LAYOUT-NO_INPUT          = 'X'.
+  X_LAYOUT-COLWIDTH_OPTIMIZE = 'X'.
+  X_LAYOUT-ZEBRA             = 'X'.
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+*&      FORM  P_FETCH_LEAVE_40
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM P_FETCH_LEAVE_40 .
+
+  DATA: LT_PERNR_TAB1 LIKE PDPNR   OCCURS 0 WITH HEADER LINE,
+        LT_PSP1       LIKE PDPSP   OCCURS 0 WITH HEADER LINE,
+        LT_PSP_PREV1  LIKE PDPSP   OCCURS 0 WITH HEADER LINE,
+        LT_PSP_NEXT1  LIKE PDPSP   OCCURS 0 WITH HEADER LINE,
+        LT_DAY_PSP1   LIKE PDSPPSP OCCURS 0 WITH HEADER LINE,
+        LT_DAY_ATTR1  LIKE CASDAYATTR OCCURS 0 WITH HEADER LINE.
+
+
+  IF  RB2 IS NOT INITIAL.
+    SELECT PERNR , SUBTY , BEGDA , ENDDA , BEGUZ , ENDUZ
+    FROM PA2001 INTO TABLE @DATA(I_PA2001_40)
+                                WHERE PERNR IN @P_PERNR
+                                AND AWART = '40'
+                                AND BEGDA LE @P_ENDDA
+                                AND ENDDA GE @P_BEGDA.
+
+    IF I_PA2001_40 IS NOT INITIAL.
+      IF P_BTRTL IS NOT INITIAL.
+        SELECT PERNR, BEGDA, WERKS, PERSK, BTRTL ,PLANS, ENAME,  YY_DEPT FROM PA0001
+          INTO TABLE @DATA(I_PERNR_PA0001_1)
+          FOR ALL ENTRIES IN @I_PA2001_40
+          WHERE PERNR = @I_PA2001_40-PERNR
+          AND BTRTL = @P_BTRTL
+          AND BEGDA LE @P_ENDDA AND ENDDA GE @P_ENDDA.
+
+      ELSE.
+
+        SELECT PERNR, BEGDA, WERKS, PERSK, BTRTL ,PLANS, ENAME,  YY_DEPT FROM PA0001
+        INTO TABLE @DATA(I_PERNR_PA0001)
+        FOR ALL ENTRIES IN @I_PA2001_40
+        WHERE PERNR = @I_PA2001_40-PERNR
+        AND BEGDA LE @P_ENDDA AND ENDDA GE @P_ENDDA.
+
+      ENDIF.
+
+    ENDIF.
+
+    IF P_BTRTL IS NOT INITIAL.
+
+      LOOP AT I_PA2001_40 INTO DATA(WA_40_1).
+        READ TABLE I_PERNR_PA0001_1 INTO DATA(WA_BTLR) WITH KEY PERNR = WA_40_1-PERNR.
+        IF SY-SUBRC = 4.
+          DELETE I_PA2001_40 WHERE PERNR = WA_40_1-PERNR.
+        ENDIF.
+
+        CLEAR:WA_BTLR,WA_40_1.
+      ENDLOOP.
+
+    ENDIF.
+
+    IF I_PERNR_PA0001_1 IS NOT INITIAL.
+      I_PERNR_PA0001 = I_PERNR_PA0001_1.
+    ENDIF.
+
+
+    CLEAR: I_T554T.
+    SELECT * FROM T554T INTO TABLE I_T554T WHERE SPRSL = 'EN'.
+    IF SY-SUBRC EQ 0.
+      SORT I_T554T.
+    ENDIF.
+
+    CLEAR: I_T001P.
+    SELECT WERKS BTRTL BTEXT FROM T001P INTO TABLE I_T001P FOR ALL ENTRIES IN I_PERNR_PA0001 WHERE
+                                        WERKS EQ I_PERNR_PA0001-WERKS AND BTRTL EQ I_PERNR_PA0001-BTRTL.
+    IF SY-SUBRC EQ 0.
+      SORT I_T001P.
+    ENDIF.
+
+    CLEAR: IY_YRHA_DEPARTMENT.
+    SELECT * FROM YRHA_DEPARTMENT INTO TABLE IY_YRHA_DEPARTMENT FOR ALL ENTRIES IN I_PERNR_PA0001 WHERE
+                                                                    YY_DEPT EQ I_PERNR_PA0001-YY_DEPT.
+    IF SY-SUBRC EQ 0.
+      SORT IY_YRHA_DEPARTMENT.
+    ENDIF.
+
+    CLEAR: I_HRP1000.
+    SELECT * FROM HRP1000 INTO TABLE I_HRP1000 FOR ALL ENTRIES IN I_PERNR_PA0001 WHERE
+                                   OBJID EQ I_PERNR_PA0001-PLANS AND OTYPE EQ 'S' AND
+                                   PLVAR EQ '01' AND BEGDA LE P_ENDDA AND ENDDA GE P_ENDDA.
+    IF SY-SUBRC EQ 0.
+      SORT I_HRP1000.
+    ENDIF.
+
+    " FILL FINAL INTERNAL TABLE.
+    CLEAR: WA_FINAL, WA_PA2001.
+    SORT I_PA2001_40 BY PERNR BEGDA.
+
+    LOOP AT  I_PA2001_40 INTO DATA(WA_PA2001_40_1).
+
+      WA_FINAL_40-PERNR = WA_PA2001_40_1-PERNR.
+
+      SORT I_PA2001_40 BY PERNR ASCENDING.
+
+      READ TABLE I_PERNR_PA0001 INTO DATA(WA_PERNR_1) WITH KEY PERNR = WA_PA2001_40_1-PERNR.
+      WA_FINAL_40-GRADE = WA_PERNR_1-PERSK.
+      WA_FINAL_40-ENAME = WA_PERNR_1-ENAME.
+
+      CLEAR: WA_T001P.
+      READ TABLE I_T001P INTO WA_T001P WITH KEY WERKS = WA_PERNR_1-WERKS BTRTL = WA_PERNR_1-BTRTL.
+      IF SY-SUBRC EQ 0.
+        WA_FINAL_40-LOCATION = WA_T001P-BTEXT.
+      ENDIF.
+
+      CLEAR: WA_HRP1000.
+      READ TABLE I_HRP1000 INTO WA_HRP1000 WITH KEY OBJID = WA_PERNR_1-PLANS.
+      IF SY-SUBRC EQ 0.
+        WA_FINAL_40-DESIGNATION = WA_HRP1000-MC_STEXT.
+      ENDIF.
+
+      CLEAR: WA_YRHA_DEPARTMENT.
+      READ TABLE IY_YRHA_DEPARTMENT INTO WA_YRHA_DEPARTMENT WITH KEY YY_DEPT = WA_PERNR_1-YY_DEPT.
+      IF SY-SUBRC EQ 0.
+        WA_FINAL_40-DEPARTMENT = WA_YRHA_DEPARTMENT-YY_DEPARTMENT.
+      ENDIF.
+
+      APPEND WA_FINAL_40 TO I_FINAL_40.
+      CLEAR: WA_FINAL_40.
+
+      CLEAR:WA_PERNR_1,WA_FINAL_40.
+
+    ENDLOOP.
+
+    SORT  I_PA2001_40 BY BEGDA DESCENDING.
+
+    LOOP AT I_PA2001_40 INTO DATA(WA_PA2001_40).
+
+      WA_FINAL_40_1-PERNR = WA_PA2001_40-PERNR.
+      WA_FINAL_40_1-BEGIN_DATE = WA_PA2001_40-BEGDA.
+      WA_FINAL_40_1-END_DATE = WA_PA2001_40-ENDDA.
+      WA_FINAL_40_1-NO_DAYS_LEAVE  = ( WA_PA2001_40-ENDDA - WA_PA2001_40-BEGDA ) + 1.
+
+      CLEAR : LT_PERNR_TAB1, LT_PSP1, LT_DAY_PSP1.
+      REFRESH : LT_PERNR_TAB1, LT_PSP1, LT_DAY_PSP1.
+
+      LT_PERNR_TAB1-PERNR = WA_PA2001_40-PERNR.
+      APPEND  LT_PERNR_TAB1.
+
+      DATA: FM_BEGIN_DATE TYPE SY-DATUM,
+            FM_END_DATE   TYPE SY-DATUM.
+
+      DATA(LV_END_DATE) = WA_PA2001_40-ENDDA - 1.
+
+
+      DATA(LV_F1_BEGIN_YEAR) = WA_PA2001_40-BEGDA+0(4).
+      DATA(LV_F1_BEGIN_MONTH) = WA_PA2001_40-BEGDA+4(2).
+
+      DATA(LV_FM_BEGIN_DATE) = |{ '01' }| & |{ '07' }| & |{ LV_F1_BEGIN_YEAR }|.
+      DATA(LV_FM_END_DATE) = |{ '31' }| & |{ '12' }| & |{ LV_F1_BEGIN_YEAR }|.
+      DATA(LV_FM_BEGIN_DATE1) = |{ '01' }| & |{ '01' }| & |{ LV_F1_BEGIN_YEAR }|.
+      DATA(LV_FM_END_DATE1) = |{ '30' }| & |{ '06' }| & |{ LV_F1_BEGIN_YEAR }|.
+
+      DATA(LV_BEGIN_DATE) = |{ '01' }| & |{ LV_F1_BEGIN_MONTH }| & |{ LV_F1_BEGIN_YEAR }|.
+*      DATA(LV_BEGIN_DATE11) = |{ '01' }| & |{ '01' }| & |{ LV_F1_BEGIN_YEAR }|.
+      DATA(LV_BEGIN_DATE11) = |{ LV_F1_BEGIN_YEAR }| & |{ '01' }| & |{ '01' }|.
+
+      DATA(LEAVE_DATE) = |{ LV_F1_BEGIN_YEAR }| & |{ '01' }| & |{ '26' }|.
+      DATA(LEAVE_DATE1) = |{ LV_F1_BEGIN_YEAR }| & |{ '08' }| & |{ '15' }|.
+      DATA(LEAVE_DATE2) = |{ LV_F1_BEGIN_YEAR }| & |{ '10' }| & |{ '02' }|.
+
+
+
+      IF LV_BEGIN_DATE => LV_FM_BEGIN_DATE AND LV_BEGIN_DATE <= LV_FM_END_DATE .
+
+        FM_BEGIN_DATE = LV_BEGIN_DATE11.
+        FM_END_DATE = LV_END_DATE.
+
+      ELSEIF LV_BEGIN_DATE => LV_FM_BEGIN_DATE1 AND LV_BEGIN_DATE <= LV_FM_END_DATE1 .
+
+        LV_F1_BEGIN_YEAR = LV_F1_BEGIN_YEAR - '1'.
+
+        DATA(LV_BEGIN_DATE1) = |{ LV_F1_BEGIN_YEAR }| & |{ '12' }| & |{ '01' }|.
+
+        FM_BEGIN_DATE = LV_BEGIN_DATE1.
+        FM_END_DATE = LV_END_DATE.
+
+      ENDIF.
+
+
+      CALL FUNCTION 'HR_PERSON_READ_WORK_SCHEDULE'
+        EXPORTING
+          BEGIN_DATE         = FM_BEGIN_DATE
+          END_DATE           = FM_END_DATE
+        TABLES
+          PERNR_TAB          = LT_PERNR_TAB1
+          PSP                = LT_PSP1
+          DAY_PSP            = LT_DAY_PSP1
+**    CHANGING
+**         CH_AUTH_INFTY_TAB  = LT_HRSP_TTY_AUTH_INFTY_TAB
+        EXCEPTIONS
+          ERROR_IN_BUILD_PSP = 1
+          OTHERS             = 2.
+      IF SY-SUBRC <> 0.
+* IMPLEMENT SUITABLE ERROR HANDLING HERE
+      ENDIF.
+
+      IF LT_PSP1 IS NOT INITIAL.
+
+        SORT LT_PSP1 BY DATUM DESCENDING.
+
+        LOOP AT LT_PSP1.
+
+
+          IF  LT_PSP1-DATUM EQ LEAVE_DATE  OR LT_PSP1-DATUM EQ LEAVE_DATE1 OR LT_PSP1-DATUM EQ LEAVE_DATE2  .
+            "DO NOTHING.
+          ELSE.
+
+
+*          IF ( ( LT_PSP1-TPROG = 'OFF' OR LT_PSP1-TPROG = 'REST' ) AND LT_PSP1-TAGTY = '1' ).
+            IF ( ( LT_PSP1-TPROG = 'OFF' OR LT_PSP1-TPROG = 'REST' ) AND LT_PSP1-FTKLA = '1' ).
+              IF WA_FINAL_40_1-YY_LAST_MONTHS1 IS INITIAL.
+                WA_FINAL_40_1-YY_LAST_MONTHS1 = LT_PSP1-DATUM.
+                CONTINUE.
+              ENDIF.
+
+              IF WA_FINAL_40_1-YY_LAST_MONTHS2 IS INITIAL.
+                WA_FINAL_40_1-YY_LAST_MONTHS2 = LT_PSP1-DATUM.
+                CONTINUE.
+              ENDIF.
+
+              IF WA_FINAL_40_1-YY_LAST_MONTHS3 IS INITIAL.
+                WA_FINAL_40_1-YY_LAST_MONTHS3 = LT_PSP1-DATUM.
+                CONTINUE.
+              ENDIF.
+
+              IF WA_FINAL_40_1-YY_LAST_MONTHS4 IS INITIAL.
+                WA_FINAL_40_1-YY_LAST_MONTHS4 = LT_PSP1-DATUM.
+                CONTINUE.
+              ENDIF.
+            ENDIF.
+          ENDIF.             "ADDED TO BY-PASS DATE
+        ENDLOOP.
+
+
+        REFRESH: LT_PSP1, LT_PERNR_TAB1, LT_DAY_PSP1, LT_DAY_ATTR1.
+
+      ENDIF.   "LT_PSP1
+
+
+      CLEAR: FM_BEGIN_DATE,FM_END_DATE,LV_END_DATE,LV_F1_BEGIN_YEAR,LV_F1_BEGIN_MONTH,LV_FM_BEGIN_DATE,LV_FM_END_DATE,
+      LV_FM_BEGIN_DATE1,LV_BEGIN_DATE.
+
+      APPEND WA_FINAL_40_1 TO I_FINAL_40_1.
+      CLEAR: WA_FINAL_40_1,WA_PA2001_40.
+
+    ENDLOOP.
+
+    SORT I_FINAL_40_1 BY PERNR.
+
+  ENDIF.
+
+  LOOP AT I_FINAL_40_1 INTO WA_FINAL_40_1.
+
+    WA_40_FINAL-PERNR = WA_FINAL_40_1-PERNR.
+    WA_40_FINAL-BEGIN_DATE = WA_FINAL_40_1-BEGIN_DATE.
+    WA_40_FINAL-END_DATE = WA_FINAL_40_1-END_DATE.
+    WA_40_FINAL-YY_LAST_MONTHS1 = WA_FINAL_40_1-YY_LAST_MONTHS1.
+    WA_40_FINAL-YY_LAST_MONTHS2 = WA_FINAL_40_1-YY_LAST_MONTHS2.
+    WA_40_FINAL-YY_LAST_MONTHS2 = WA_FINAL_40_1-YY_LAST_MONTHS2.
+    WA_40_FINAL-YY_LAST_MONTHS2 = WA_FINAL_40_1-YY_LAST_MONTHS2.
+    WA_40_FINAL-NO_DAYS_LEAVE     = WA_FINAL_40_1-NO_DAYS_LEAVE.
+
+    READ TABLE I_FINAL_40 INTO DATA(WA_FINAL_40) WITH KEY PERNR = WA_FINAL_40_1-PERNR.
+    WA_40_FINAL-GRADE = WA_FINAL_40-GRADE.
+    WA_40_FINAL-ENAME = WA_FINAL_40-ENAME.
+    WA_40_FINAL-LOCATION = WA_FINAL_40-LOCATION.
+    WA_40_FINAL-DESIGNATION = WA_FINAL_40-DESIGNATION.
+    WA_40_FINAL-DEPARTMENT = WA_FINAL_40-DEPARTMENT.
+    WA_40_FINAL-HINDI_NAME =  WA_FINAL_40-HINDI_NAME.
+
+    APPEND WA_40_FINAL TO I_40_FINAL.
+    CLEAR:WA_FINAL_40.
+
+  ENDLOOP.
+
+  CLEAR:GS_LEAVE.
+  REFRESH GI_LEAVE.
+
+  LOOP AT I_40_FINAL INTO WA_40_FINAL   .
+
+    GS_LEAVE-PERNR = WA_40_FINAL-PERNR.
+    GS_LEAVE-LEAVE_COUNT = GS_LEAVE-LEAVE_COUNT + WA_40_FINAL-NO_DAYS_LEAVE.
+
+    AT END OF PERNR.
+      APPEND GS_LEAVE TO GI_LEAVE.
+      CLEAR GS_LEAVE.
+    ENDAT.
+  ENDLOOP.
+
+  LOOP AT I_40_FINAL ASSIGNING FIELD-SYMBOL(<LFS_40_FINAL>).
+    READ TABLE GI_LEAVE INTO DATA(LS_LEAVE) WITH KEY PERNR = <LFS_40_FINAL>-PERNR.
+    IF SY-SUBRC EQ 0.
+      <LFS_40_FINAL>-LEAVE_COUNT = LS_LEAVE-LEAVE_COUNT.
+    ENDIF.
+  ENDLOOP.
+
+  SORT I_40_FINAL BY PERNR BEGIN_DATE DESCENDING.
+
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      FORM  DISPLAY_ALV_40
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM DISPLAY_ALV_40 .
+
+  PERFORM P_BUILD_FIELDCAT_40.
+  PERFORM P_BUILD_LAYOUT_40.
+
+*    SORT GT_PTRV_MAIL BY REINR.
+  IF I_FINAL_40 IS NOT INITIAL.
+    CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+      EXPORTING
+        I_CALLBACK_PROGRAM = SY-REPID                 " REPORT ID
+        IS_LAYOUT          = X_LAYOUT                 " FOR LAYOUT
+        IT_FIELDCAT        = I_FIELDCAT     " FIELD CATALOG
+      TABLES
+        T_OUTTAB           = I_40_FINAL
+      EXCEPTIONS
+        PROGRAM_ERROR      = 1
+        OTHERS             = 2.
+  ENDIF.
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      FORM  P_BUILD_FIELDCAT_40
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM P_BUILD_FIELDCAT_40 .
+
+  WA_FIELDCAT-FIELDNAME = 'PERNR'.
+  WA_FIELDCAT-SELTEXT_L = 'CPF NUMBER'.      " CPF NUMBER.
+  WA_FIELDCAT-LZERO = 'X'.
+  WA_FIELDCAT-FIX_COLUMN = 'X'.
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'ENAME'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T04.      " EMPLOYEE NAME
+  WA_FIELDCAT-FIX_COLUMN = 'X'.
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'GRADE'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T03.      " GRADE
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'DESIGNATION'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T06.      " DESIGNATION
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'LOCATION'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T05.      " POSTING LOCATION
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'DEPARTMENT'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T07.      " DEPARTMENT
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+
+  WA_FIELDCAT-FIELDNAME = 'LEAVE_COUNT'.
+  WA_FIELDCAT-SELTEXT_L = 'TOTAL LEAVE DAYS 40'.       " LEAVE DATE
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'BEGIN_DATE'.
+  WA_FIELDCAT-SELTEXT_L = 'LEAVE BEGIN DATE'.       " LEAVE DATE
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'END_DATE'.
+  WA_FIELDCAT-SELTEXT_L = 'LEAVE END DATE'.       " LEAVE DATE
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'YY_LAST_MONTHS1'.
+  WA_FIELDCAT-SELTEXT_L = 'GH WITH R/O 1'.             " DATE 1
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'YY_LAST_MONTHS2'.
+  WA_FIELDCAT-SELTEXT_L = 'GH WITH R/O 2'.             " DATE 2
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'YY_LAST_MONTHS3'.
+  WA_FIELDCAT-SELTEXT_L =   'GH WITH R/O 3'.            " DATE 3
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'YY_LAST_MONTHS4'.
+  WA_FIELDCAT-SELTEXT_L = 'GH WITH R/O 4'.            " DATE 2
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      FORM  P_BUILD_LAYOUT_40
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM P_BUILD_LAYOUT_40 .
+  CLEAR X_LAYOUT.
+  X_LAYOUT-NO_INPUT          = 'X'.
+  X_LAYOUT-COLWIDTH_OPTIMIZE = 'X'.
+  X_LAYOUT-ZEBRA             = 'X'.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      FORM  P_FETCH_LEAVE_CL_CHECK
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM P_FETCH_LEAVE_CL_CHECK .
+
+  DATA: LT_PERNR_TAB2 LIKE PDPNR   OCCURS 0 WITH HEADER LINE,
+        LT_PSP2       LIKE PDPSP   OCCURS 0 WITH HEADER LINE,
+        LT_PSP_PREV2  LIKE PDPSP   OCCURS 0 WITH HEADER LINE,
+        LT_PSP_NEXT2  LIKE PDPSP   OCCURS 0 WITH HEADER LINE,
+        LT_DAY_PSP2   LIKE PDSPPSP OCCURS 0 WITH HEADER LINE,
+        LT_DAY_ATTR2  LIKE CASDAYATTR OCCURS 0 WITH HEADER LINE.
+
+
+  IF  RB3 IS NOT INITIAL.
+    SELECT PERNR , SUBTY , BEGDA , ENDDA , BEGUZ , ENDUZ
+    FROM PA2001 INTO TABLE @DATA(I_PA2001_CL)
+                                WHERE PERNR IN @P_PERNR
+                                AND AWART = '01'
+                                AND BEGDA LE @P_ENDDA
+                                AND ENDDA GE @P_BEGDA.
+
+  ENDIF.
+** -> Begin of changes by of Jatin on 25Oct24 for ATC
+  SORT I_PA2001_CL BY PERNR.
+** <- End changes by of Jatin on 25Oct24 for ATC
+  DELETE ADJACENT DUPLICATES FROM I_PA2001_CL COMPARING PERNR.
+
+  SELECT PERNR, BEGDA, WERKS, PERSK, BTRTL ,PLANS, ENAME,  YY_DEPT FROM PA0001
+  INTO TABLE @DATA(I_PERNR_CL_CHK)
+  FOR ALL ENTRIES IN @I_PA2001_CL
+  WHERE PERNR = @I_PA2001_CL-PERNR
+  AND BEGDA LE @P_ENDDA AND ENDDA GE @P_ENDDA.
+
+
+  CLEAR: I_T554T.
+  SELECT * FROM T554T INTO TABLE I_T554T WHERE SPRSL = 'EN'.
+  IF SY-SUBRC EQ 0.
+    SORT I_T554T.
+  ENDIF.
+
+  CLEAR: I_T001P.
+  SELECT WERKS BTRTL BTEXT FROM T001P INTO TABLE I_T001P FOR ALL ENTRIES IN I_PERNR_CL_CHK WHERE
+                                      WERKS EQ I_PERNR_CL_CHK-WERKS AND BTRTL EQ I_PERNR_CL_CHK-BTRTL.
+  IF SY-SUBRC EQ 0.
+    SORT I_T001P.
+  ENDIF.
+
+  CLEAR: IY_YRHA_DEPARTMENT.
+  SELECT * FROM YRHA_DEPARTMENT INTO TABLE IY_YRHA_DEPARTMENT FOR ALL ENTRIES IN I_PERNR_CL_CHK WHERE
+                                                                  YY_DEPT EQ I_PERNR_CL_CHK-YY_DEPT.
+  IF SY-SUBRC EQ 0.
+    SORT IY_YRHA_DEPARTMENT.
+  ENDIF.
+
+  CLEAR: I_HRP1000.
+  SELECT * FROM HRP1000 INTO TABLE I_HRP1000 FOR ALL ENTRIES IN I_PERNR_CL_CHK WHERE
+                                 OBJID EQ I_PERNR_CL_CHK-PLANS AND OTYPE EQ 'S' AND
+                                 PLVAR EQ '01' AND BEGDA LE P_ENDDA AND ENDDA GE P_ENDDA.
+  IF SY-SUBRC EQ 0.
+    SORT I_HRP1000.
+  ENDIF.
+
+
+  LOOP AT I_PA2001_CL INTO DATA(WA_PA2001_CL) .
+
+*    LT_PERNR_TAB2-PERNR = WA_PA2001_CL-PERNR.
+*    APPEND  LT_PERNR_TAB2.
+
+    WA_PERNR_CL-PERNR = WA_PA2001_CL-PERNR.
+
+    SORT I_PA2001_CL BY PERNR ASCENDING.
+
+    READ TABLE I_PERNR_CL_CHK INTO DATA(WA_PERNR_1) WITH KEY PERNR = WA_PA2001_CL-PERNR.
+    WA_PERNR_CL-GRADE = WA_PERNR_1-PERSK.
+    WA_PERNR_CL-ENAME = WA_PERNR_1-ENAME.
+
+    CLEAR: WA_T001P.
+    READ TABLE I_T001P INTO WA_T001P WITH KEY WERKS = WA_PERNR_1-WERKS BTRTL = WA_PERNR_1-BTRTL.
+    IF SY-SUBRC EQ 0.
+      WA_PERNR_CL-LOCATION = WA_T001P-BTEXT.
+    ENDIF.
+
+    CLEAR: WA_HRP1000.
+    READ TABLE I_HRP1000 INTO WA_HRP1000 WITH KEY OBJID = WA_PERNR_1-PLANS.
+    IF SY-SUBRC EQ 0.
+      WA_PERNR_CL-DESIGNATION = WA_HRP1000-MC_STEXT.
+    ENDIF.
+
+    CLEAR: WA_YRHA_DEPARTMENT.
+    READ TABLE IY_YRHA_DEPARTMENT INTO WA_YRHA_DEPARTMENT WITH KEY YY_DEPT = WA_PERNR_1-YY_DEPT.
+    IF SY-SUBRC EQ 0.
+      WA_PERNR_CL-DEPARTMENT = WA_YRHA_DEPARTMENT-YY_DEPARTMENT.
+    ENDIF.
+
+    APPEND WA_PERNR_CL TO I_PERNR_CL.
+
+    CLEAR: WA_PERNR_1,WA_PERNR_CL.
+
+  ENDLOOP.
+
+
+  DATA: LV_FM_CHK_BEGIN_DATE TYPE SY-DATUM,
+        LV_FM_CHK_END_DATE   TYPE SY-DATUM.
+
+  DATA : LV_FIRST_LEAVES   TYPE SY-DATUM,
+         LV_LAST_LEAVES    TYPE SY-DATUM,
+         LV_CURRENT_DATE   TYPE SY-DATUM,
+         LV_COUNTER(2)     TYPE C,
+         LV_FLAG(2)        TYPE C,
+         LV_INSERT_FLAG(2) TYPE C,
+         LV_DAYS(10)       TYPE C.
+
+  LV_FM_CHK_BEGIN_DATE = P_BEGDA - 20 .
+  LV_FM_CHK_END_DATE = P_ENDDA + 20.
+
+
+  LV_FLAG = 0.
+  LV_INSERT_FLAG = 0.
+
+  LOOP AT I_PERNR_CL INTO WA_PERNR_CL.
+
+    REFRESH : LT_PERNR_TAB2.
+    LT_PERNR_TAB2-PERNR = WA_PERNR_CL-PERNR.
+    APPEND  LT_PERNR_TAB2.
+
+    CALL FUNCTION 'HR_PERSON_READ_WORK_SCHEDULE'
+      EXPORTING
+        BEGIN_DATE         = LV_FM_CHK_BEGIN_DATE
+        END_DATE           = LV_FM_CHK_END_DATE
+      TABLES
+        PERNR_TAB          = LT_PERNR_TAB2
+        PSP                = LT_PSP2
+        DAY_PSP            = LT_DAY_PSP2
+**    CHANGING
+**         CH_AUTH_INFTY_TAB  = LT_HRSP_TTY_AUTH_INFTY_TAB
+      EXCEPTIONS
+        ERROR_IN_BUILD_PSP = 1
+        OTHERS             = 2.
+    IF SY-SUBRC <> 0.
+* IMPLEMENT SUITABLE ERROR HANDLING HERE
+    ENDIF.
+
+    IF LT_PSP2 IS NOT INITIAL.
+
+      LOOP AT LT_PSP2.
+
+        IF  LT_PSP2-AWTYP = 'A'   AND  LT_PSP2-AWART = '01' .
+          LV_FLAG = 1.
+          IF (  LT_PSP2-AWTYP = 'A' AND  LT_PSP2-AWART = '01'  ).
+            LV_CURRENT_DATE = LT_PSP2-DATUM.
+            IF LV_FIRST_LEAVES IS INITIAL.
+              LV_FIRST_LEAVES = LT_PSP2-DATUM.
+            ENDIF.
+            LV_COUNTER = LV_COUNTER + 1.
+            CONTINUE.
+          ENDIF.
+
+        ELSEIF LV_FLAG = 1.
+          IF SY-SUBRC = 0.
+            "ADDED
+            IF  LT_PSP2-AWTYP = 'A'.
+              DATA(LV_CURRENT_DATE1) = LT_PSP2-DATUM.                   "NOT USED ANYWHERE JUST FOR CHECK THE COMING DATE
+              IF (  LT_PSP2-AWTYP = 'A' AND  LT_PSP2-AWART = '01'  ).
+                LV_CURRENT_DATE = LT_PSP2-DATUM.
+              ENDIF.
+              LV_COUNTER = LV_COUNTER + 1.
+              CONTINUE.
+            ENDIF.
+            "END
+            IF  LT_PSP2-TPKLA = '0' OR LT_PSP2-FTKLA = '1'.
+              LV_CURRENT_DATE1 = LT_PSP2-DATUM.
+              LV_COUNTER = LV_COUNTER + 1.
+              CONTINUE.
+            ELSEIF LT_PSP2-TPKLA = '1'.
+              IF LV_COUNTER < 12.
+                LV_COUNTER = 0.
+                LV_FLAG = 0.
+                CLEAR :LV_FIRST_LEAVES,LV_CURRENT_DATE.
+              ENDIF.
+
+              IF LV_COUNTER => 12.
+
+                DATA(LV_DAYS_DIFF) = LV_CURRENT_DATE - LV_FIRST_LEAVES  + 1.
+
+                IF LV_DAYS_DIFF => 12.
+
+                  LV_LAST_LEAVES = LT_PSP2-DATUM.
+                  LV_INSERT_FLAG = 1.
+                  LV_COUNTER = 0.
+                  LV_FLAG = 0.
+
+                  WA_PERNR_CL_FINAL-PERNR = WA_PERNR_CL-PERNR.
+                  WA_PERNR_CL_FINAL-GRADE = WA_PERNR_CL-GRADE.
+                  WA_PERNR_CL_FINAL-ENAME = WA_PERNR_CL-ENAME.
+                  WA_PERNR_CL_FINAL-LOCATION = WA_PERNR_CL-LOCATION.
+                  WA_PERNR_CL_FINAL-DESIGNATION = WA_PERNR_CL-DESIGNATION.
+                  WA_PERNR_CL_FINAL-DEPARTMENT = WA_PERNR_CL-DEPARTMENT.
+
+                  WA_PERNR_CL_FINAL-BEGIN_DATE = LV_FIRST_LEAVES.
+                  WA_PERNR_CL_FINAL-END_DATE = LV_CURRENT_DATE.
+                  LV_DAYS = LV_CURRENT_DATE - LV_FIRST_LEAVES  + 1.
+                  WA_PERNR_CL_FINAL-TOTAL_DAYS = LV_DAYS.
+                  APPEND WA_PERNR_CL_FINAL TO I_PERNR_CL_FINAL.
+
+                  CLEAR:LV_FIRST_LEAVES,LV_LAST_LEAVES,LV_COUNTER,LV_CURRENT_DATE,LV_DAYS
+                  ,WA_PERNR_CL_FINAL,LV_DAYS_DIFF.
+
+                ENDIF.
+
+                LV_COUNTER = 0.
+                LV_FLAG = 0.
+
+                CLEAR :LV_FIRST_LEAVES,LV_CURRENT_DATE,LV_DAYS_DIFF.
+
+              ENDIF.
+            ENDIF.
+          ENDIF.
+        ENDIF.
+      ENDLOOP.
+
+      CLEAR:WA_PERNR_CL.
+
+    ENDIF.
+
+  ENDLOOP.
+
+  CLEAR:LV_FM_CHK_BEGIN_DATE,LV_FM_CHK_END_DATE.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      FORM  P_DISPLAY_CL_CHECK_ALV
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM P_DISPLAY_CL_CHECK_ALV .
+
+  PERFORM P_BUILD_FIELDCAT_CL.
+  PERFORM P_BUILD_LAYOUT_CL.
+
+*    SORT GT_PTRV_MAIL BY REINR.
+*  IF I_PERNR_CL IS NOT INITIAL.
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      I_CALLBACK_PROGRAM = SY-REPID                 " REPORT ID
+      IS_LAYOUT          = X_LAYOUT                 " FOR LAYOUT
+      IT_FIELDCAT        = I_FIELDCAT     " FIELD CATALOG
+    TABLES
+      T_OUTTAB           = I_PERNR_CL_FINAL
+    EXCEPTIONS
+      PROGRAM_ERROR      = 1
+      OTHERS             = 2.
+*  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      FORM  P_BUILD_FIELDCAT_CL
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM P_BUILD_FIELDCAT_CL .
+
+  WA_FIELDCAT-FIELDNAME = 'PERNR'.
+  WA_FIELDCAT-SELTEXT_L = 'CPF NUMBER'.      " CPF NUMBER.
+  WA_FIELDCAT-LZERO = 'X'.
+  WA_FIELDCAT-FIX_COLUMN = 'X'.
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'ENAME'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T04.      " EMPLOYEE NAME
+  WA_FIELDCAT-FIX_COLUMN = 'X'.
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'GRADE'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T03.      " GRADE
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'DESIGNATION'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T06.      " DESIGNATION
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'LOCATION'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T05.      " POSTING LOCATION
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'DEPARTMENT'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T07.      " DEPARTMENT
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'BEGIN_DATE'.
+  WA_FIELDCAT-SELTEXT_L = 'LEAVE BEGIN DATE'.      " LEAVE BEGIN DATE
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'END_DATE'.
+  WA_FIELDCAT-SELTEXT_L = 'LEAVE END DATE'.      " LEAVE END DATE
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'TOTAL_DAYS'.
+  WA_FIELDCAT-SELTEXT_L = 'TOTAL DAYS LEAVE' .      " TOTAL LEAVE DAYS
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      FORM  P_BUILD_LAYOUT_CL
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM P_BUILD_LAYOUT_CL .
+
+  CLEAR X_LAYOUT.
+  X_LAYOUT-NO_INPUT          = 'X'.
+  X_LAYOUT-COLWIDTH_OPTIMIZE = 'X'.
+  X_LAYOUT-ZEBRA             = 'X'.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      FORM  P_FETCH_INVALID_LEAVE_COMBO
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM P_FETCH_INVALID_LEAVE_COMBO .
+
+  DATA: LT_PERNR_TAB4 LIKE PDPNR   OCCURS 0 WITH HEADER LINE,
+        LT_PSP4       LIKE PDPSP   OCCURS 0 WITH HEADER LINE,
+        LT_PSP_PREV4  LIKE PDPSP   OCCURS 0 WITH HEADER LINE,
+        LT_PSP_NEXT4  LIKE PDPSP   OCCURS 0 WITH HEADER LINE,
+        LT_DAY_PSP4   LIKE PDSPPSP OCCURS 0 WITH HEADER LINE,
+        LT_DAY_ATTR4  LIKE CASDAYATTR OCCURS 0 WITH HEADER LINE.
+
+
+  DATA: LV_YELLOW_LEAVE TYPE RANGE OF PDPSP-AWART.
+  DATA: LV_BLUE_LEAVE TYPE RANGE OF PDPSP-AWART.
+
+
+  LV_YELLOW_LEAVE = VALUE #( LET S = 'I'
+                          O = 'EQ'
+                         IN SIGN = S
+                          OPTION = O
+                           ( LOW = '01' )
+                           ( LOW = '20' )
+                           ( LOW = '09' )
+                           ( LOW = '11' )
+                           ( LOW = '14' )
+                           ( LOW = '10' )
+                           ( LOW = '21' )
+                           ( LOW = '12' )
+                           ( LOW = '13' )
+                           ( LOW = '36' )
+                           ( LOW = '37' ) ).
+
+
+  LV_BLUE_LEAVE = VALUE #( LET S = 'I'
+                        O = 'EQ'
+                       IN SIGN = S
+                        OPTION = O
+                         ( LOW = '02' )
+                         ( LOW = '03' )
+                         ( LOW = '16' )
+                         ( LOW = '27' )
+                         ( LOW = '15' )
+                         ( LOW = '35' )
+                         ( LOW = '04' )
+                         ( LOW = '34' )
+                         ( LOW = '07' )
+                         ( LOW = '25' )
+                         ( LOW = '28' ) ).
+
+
+  IF  RB4 IS NOT INITIAL.
+    SELECT PERNR , SUBTY , BEGDA , ENDDA , BEGUZ , ENDUZ
+    FROM PA2001 INTO TABLE @DATA(I_PA2001_LEAVE_COMBO)
+                                WHERE PERNR IN @P_PERNR
+                                AND BEGDA LE @P_ENDDA
+                                AND ENDDA GE @P_BEGDA.
+
+  ENDIF.
+** -> Begin of changes by of Jatin on 25Oct24 for ATC
+ SORT I_PA2001_LEAVE_COMBO BY PERNR.
+** <- End changes by of Jatin on 25Oct24 for ATC
+  DELETE ADJACENT DUPLICATES FROM I_PA2001_LEAVE_COMBO COMPARING PERNR.
+
+  SELECT PERNR, BEGDA, WERKS, PERSK, BTRTL ,PLANS, ENAME,  YY_DEPT FROM PA0001
+  INTO TABLE @DATA(I_PERNR_LEAVE_COMBO)
+  FOR ALL ENTRIES IN @I_PA2001_LEAVE_COMBO
+  WHERE PERNR = @I_PA2001_LEAVE_COMBO-PERNR
+  AND BEGDA LE @P_ENDDA AND ENDDA GE @P_ENDDA.
+
+
+  CLEAR: I_T554T.
+  SELECT * FROM T554T INTO TABLE I_T554T WHERE SPRSL = 'EN'.
+  IF SY-SUBRC EQ 0.
+    SORT I_T554T.
+  ENDIF.
+
+  CLEAR: I_T001P.
+  SELECT WERKS BTRTL BTEXT FROM T001P INTO TABLE I_T001P FOR ALL ENTRIES IN I_PERNR_LEAVE_COMBO WHERE
+                                      WERKS EQ I_PERNR_LEAVE_COMBO-WERKS AND BTRTL EQ I_PERNR_LEAVE_COMBO-BTRTL.
+  IF SY-SUBRC EQ 0.
+    SORT I_T001P.
+  ENDIF.
+
+
+  CLEAR: IY_YRHA_DEPARTMENT.
+  SELECT * FROM YRHA_DEPARTMENT INTO TABLE IY_YRHA_DEPARTMENT FOR ALL ENTRIES IN I_PERNR_LEAVE_COMBO WHERE
+                                                                  YY_DEPT EQ I_PERNR_LEAVE_COMBO-YY_DEPT.
+  IF SY-SUBRC EQ 0.
+    SORT IY_YRHA_DEPARTMENT.
+  ENDIF.
+
+  CLEAR: I_HRP1000.
+  SELECT * FROM HRP1000 INTO TABLE I_HRP1000 FOR ALL ENTRIES IN I_PERNR_LEAVE_COMBO WHERE
+                                 OBJID EQ I_PERNR_LEAVE_COMBO-PLANS AND OTYPE EQ 'S' AND
+                                 PLVAR EQ '01' AND BEGDA LE P_ENDDA AND ENDDA GE P_ENDDA.
+  IF SY-SUBRC EQ 0.
+    SORT I_HRP1000.
+  ENDIF.
+
+  LOOP AT I_PA2001_LEAVE_COMBO INTO DATA(WA_PA2001_LEAVE_COMBO).
+
+    SORT I_PA2001_LEAVE_COMBO BY PERNR ASCENDING.
+
+    WA_LEAVE_COMBO-PERNR = WA_PA2001_LEAVE_COMBO-PERNR.
+
+    READ TABLE I_PERNR_LEAVE_COMBO INTO DATA(WA_PERNR_1) WITH KEY PERNR = WA_LEAVE_COMBO-PERNR.
+    WA_LEAVE_COMBO-GRADE = WA_PERNR_1-PERSK.
+    WA_LEAVE_COMBO-ENAME = WA_PERNR_1-ENAME.
+
+
+    CLEAR: WA_T001P.
+    READ TABLE I_T001P INTO WA_T001P WITH KEY WERKS = WA_PERNR_1-WERKS BTRTL = WA_PERNR_1-BTRTL.
+    IF SY-SUBRC EQ 0.
+      WA_LEAVE_COMBO-LOCATION = WA_T001P-BTEXT.
+    ENDIF.
+
+    CLEAR: WA_HRP1000.
+    READ TABLE I_HRP1000 INTO WA_HRP1000 WITH KEY OBJID = WA_PERNR_1-PLANS.
+    IF SY-SUBRC EQ 0.
+      WA_LEAVE_COMBO-DESIGNATION = WA_HRP1000-MC_STEXT.
+    ENDIF.
+
+    CLEAR: WA_YRHA_DEPARTMENT.
+    READ TABLE IY_YRHA_DEPARTMENT INTO WA_YRHA_DEPARTMENT WITH KEY YY_DEPT = WA_PERNR_1-YY_DEPT.
+    IF SY-SUBRC EQ 0.
+      WA_LEAVE_COMBO-DEPARTMENT = WA_YRHA_DEPARTMENT-YY_DEPARTMENT.
+    ENDIF.
+
+    APPEND WA_LEAVE_COMBO TO I_LEAVE_COMBO.
+
+    CLEAR: WA_PERNR_1,WA_LEAVE_COMBO.
+
+  ENDLOOP.
+
+
+  DATA: LV_FM_CHK_BEGIN_DATE TYPE SY-DATUM,
+        LV_FM_CHK_END_DATE   TYPE SY-DATUM.
+
+  DATA : LV_FIRST_LEAVES1  TYPE SY-DATUM,
+         LV_LAST_LEAVES1   TYPE SY-DATUM,
+         LV_CURRENT_DATE1  TYPE SY-DATUM,
+         LV_FLAG1(2)       TYPE C,
+         LV_INSERT_FLAG(2) TYPE C,
+         LV_COUNTER1(3)    TYPE C.
+
+  LV_INSERT_FLAG = 0.
+  LV_FM_CHK_BEGIN_DATE = P_BEGDA - 20 .
+  LV_FM_CHK_END_DATE = P_ENDDA + 20.
+
+  LOOP AT I_LEAVE_COMBO INTO WA_LEAVE_COMBO.
+
+
+    CLEAR:LV_COUNTER1.
+    REFRESH : LT_PERNR_TAB4,I_LEAVE_A.
+    LT_PERNR_TAB4-PERNR = WA_LEAVE_COMBO-PERNR.
+    APPEND  LT_PERNR_TAB4.
+
+
+    CALL FUNCTION 'HR_PERSON_READ_WORK_SCHEDULE'
+      EXPORTING
+        BEGIN_DATE         = LV_FM_CHK_BEGIN_DATE
+        END_DATE           = LV_FM_CHK_END_DATE
+      TABLES
+        PERNR_TAB          = LT_PERNR_TAB4
+        PSP                = LT_PSP4
+        DAY_PSP            = LT_DAY_PSP4
+**    CHANGING
+**         CH_AUTH_INFTY_TAB  = LT_HRSP_TTY_AUTH_INFTY_TAB
+      EXCEPTIONS
+        ERROR_IN_BUILD_PSP = 1
+        OTHERS             = 2.
+    IF SY-SUBRC <> 0.
+* IMPLEMENT SUITABLE ERROR HANDLING HERE
+    ENDIF.
+
+    IF LT_PSP4 IS NOT INITIAL.
+
+      LOOP AT LT_PSP4.
+
+        IF LT_PSP4-AWTYP = 'A'.
+          LV_FLAG1 = 1.
+          IF LV_FIRST_LEAVES1 IS INITIAL.
+            LV_FIRST_LEAVES1 = LT_PSP4-DATUM.
+          ENDIF.
+
+          LV_LAST_LEAVES1 = LT_PSP4-DATUM.
+
+          WA_LEAVE_A-PERNR = LT_PSP4-PERNR.
+          WA_LEAVE_A-DATUM = LT_PSP4-DATUM.
+          WA_LEAVE_A-AWART = LT_PSP4-AWART.
+          WA_LEAVE_A-AWTYP = LT_PSP4-AWTYP.
+          LV_CURRENT_DATE1 = LT_PSP4-DATUM.
+
+          APPEND WA_LEAVE_A TO I_LEAVE_A.
+          CLEAR: WA_LEAVE_A.
+          CONTINUE.
+
+        ELSEIF LV_FLAG1 = 1.
+
+          IF SY-SUBRC = 0.
+
+            IF  LT_PSP4-TPKLA = '0' OR LT_PSP4-FTKLA = '1'.
+              DATA(LV_CURRENT_DATE2) = LT_PSP4-DATUM.
+              WA_LEAVE_A-PERNR = LT_PSP4-PERNR.
+              WA_LEAVE_A-DATUM = LT_PSP4-DATUM.
+              WA_LEAVE_A-AWART = LT_PSP4-AWART.
+              WA_LEAVE_A-AWTYP = LT_PSP4-AWTYP.
+              LV_CURRENT_DATE1 = LT_PSP4-DATUM.
+
+              APPEND WA_LEAVE_A TO I_LEAVE_A.
+              CLEAR: WA_LEAVE_A.
+              CONTINUE.
+
+            ELSEIF LT_PSP4-TPKLA = '1' .
+
+              LV_INSERT_FLAG = 1.
+
+              LV_COUNTER1 = 0.
+              LV_FLAG1 = 0.
+
+              IF LV_INSERT_FLAG = 1.
+
+                SORT I_LEAVE_A BY DATUM ASCENDING.
+
+                DATA(LV_YCOUNT) = 0.
+                DATA(LV_BCOUNT) = 0.
+
+                LOOP AT I_LEAVE_A INTO WA_LEAVE_A.
+
+                  IF WA_LEAVE_A-AWART IN LV_YELLOW_LEAVE .
+                    LV_YCOUNT = LV_YCOUNT + 1.
+                  ENDIF.
+
+                  IF WA_LEAVE_A-AWART IN LV_BLUE_LEAVE AND LV_YCOUNT GT 0.
+
+                    READ TABLE I_LEAVE_COMBO INTO DATA(WA_LEAVE_COMBO1) WITH  KEY PERNR =  WA_LEAVE_A-PERNR.
+
+                    WA_LEAVE_COMBO_FINAL-PERNR = WA_LEAVE_COMBO1-PERNR.
+                    WA_LEAVE_COMBO_FINAL-GRADE = WA_LEAVE_COMBO1-GRADE.
+                    WA_LEAVE_COMBO_FINAL-ENAME = WA_LEAVE_COMBO1-ENAME.
+                    WA_LEAVE_COMBO_FINAL-LOCATION = WA_LEAVE_COMBO1-LOCATION.
+                    WA_LEAVE_COMBO_FINAL-DESIGNATION = WA_LEAVE_COMBO1-DESIGNATION.
+                    WA_LEAVE_COMBO_FINAL-DEPARTMENT = WA_LEAVE_COMBO1-DEPARTMENT.
+                    WA_LEAVE_COMBO_FINAL-BEGIN_DATE = LV_FIRST_LEAVES1.
+                    WA_LEAVE_COMBO_FINAL-END_DATE = LV_LAST_LEAVES1."LV_CURRENT_DATE1.
+                    APPEND WA_LEAVE_COMBO_FINAL TO I_LEAVE_COMBO_FINAL.
+
+                    CLEAR:WA_LEAVE_COMBO_FINAL,WA_LEAVE_COMBO1,LV_BCOUNT, LV_YCOUNT,LV_INSERT_FLAG,LV_CURRENT_DATE1,LV_FIRST_LEAVES1.
+                    EXIT.
+                  ENDIF.
+
+                  IF WA_LEAVE_A-AWART IN LV_BLUE_LEAVE.
+                    LV_BCOUNT = LV_BCOUNT + 1.
+                  ENDIF.
+
+                  IF WA_LEAVE_A-AWART IN LV_YELLOW_LEAVE AND LV_BCOUNT GT 0.
+
+                    READ TABLE I_LEAVE_COMBO INTO DATA(WA_LEAVE_COMBO2) WITH  KEY PERNR =  WA_LEAVE_A-PERNR.
+
+                    WA_LEAVE_COMBO_FINAL-PERNR = WA_LEAVE_COMBO2-PERNR.
+                    WA_LEAVE_COMBO_FINAL-GRADE = WA_LEAVE_COMBO2-GRADE.
+                    WA_LEAVE_COMBO_FINAL-ENAME = WA_LEAVE_COMBO2-ENAME.
+                    WA_LEAVE_COMBO_FINAL-LOCATION = WA_LEAVE_COMBO2-LOCATION.
+                    WA_LEAVE_COMBO_FINAL-DESIGNATION = WA_LEAVE_COMBO2-DESIGNATION.
+                    WA_LEAVE_COMBO_FINAL-DEPARTMENT = WA_LEAVE_COMBO2-DEPARTMENT.
+                    WA_LEAVE_COMBO_FINAL-BEGIN_DATE = LV_FIRST_LEAVES1.
+                    WA_LEAVE_COMBO_FINAL-END_DATE = LV_CURRENT_DATE1.
+                    APPEND WA_LEAVE_COMBO_FINAL TO I_LEAVE_COMBO_FINAL.
+
+                    CLEAR:WA_LEAVE_COMBO_FINAL,WA_LEAVE_COMBO2,LV_BCOUNT, LV_YCOUNT,LV_INSERT_FLAG,LV_CURRENT_DATE1,LV_FIRST_LEAVES1.
+
+                  ENDIF.
+
+                ENDLOOP.
+
+                CLEAR:I_LEAVE_A,WA_LEAVE_COMBO_FINAL,WA_LEAVE_COMBO2,LV_BCOUNT, LV_YCOUNT,LV_INSERT_FLAG,LV_CURRENT_DATE1,LV_FIRST_LEAVES1.
+
+              ENDIF.     "INSERT FLAG
+
+            ENDIF.        "COMMENTED
+
+          ENDIF.          "COMMENTED
+
+        ENDIF.            "COMMENTED
+
+      ENDLOOP.
+
+    ENDIF.
+
+    CLEAR:WA_LEAVE_COMBO_FINAL,LV_BCOUNT, LV_YCOUNT,LV_INSERT_FLAG,LV_CURRENT_DATE1,LV_FIRST_LEAVES1.
+    CLEAR :LV_FIRST_LEAVES1,LV_CURRENT_DATE1.
+
+  ENDLOOP.
+
+  CLEAR:WA_LEAVE_COMBO_FINAL,WA_LEAVE_COMBO2,LV_BCOUNT, LV_YCOUNT,LV_INSERT_FLAG,LV_CURRENT_DATE1,LV_FIRST_LEAVES1.
+  CLEAR :LV_FIRST_LEAVES1,LV_CURRENT_DATE1.
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      FORM  P_DISPLAY_LEAVE_COMBO
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM P_DISPLAY_LEAVE_COMBO .
+
+  PERFORM P_BUILD_FIELDCAT_LEAVE_COMBO.
+  PERFORM P_BUILD_LAYOUT_LEAVE_COMBO.
+
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      I_CALLBACK_PROGRAM = SY-REPID                 " REPORT ID
+      IS_LAYOUT          = X_LAYOUT                 " FOR LAYOUT
+      IT_FIELDCAT        = I_FIELDCAT     " FIELD CATALOG
+    TABLES
+      T_OUTTAB           = I_LEAVE_COMBO_FINAL
+    EXCEPTIONS
+      PROGRAM_ERROR      = 1
+      OTHERS             = 2.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      FORM  P_BUILD_FIELDCAT_LEAVE_COMBO
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM P_BUILD_FIELDCAT_LEAVE_COMBO .
+
+
+  WA_FIELDCAT-FIELDNAME = 'PERNR'.
+  WA_FIELDCAT-SELTEXT_L = 'CPF NUMBER'.      " CPF NUMBER.
+  WA_FIELDCAT-LZERO = 'X'.
+  WA_FIELDCAT-FIX_COLUMN = 'X'.
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'ENAME'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T04.      " EMPLOYEE NAME
+  WA_FIELDCAT-FIX_COLUMN = 'X'.
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'GRADE'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T03.      " GRADE
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'DESIGNATION'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T06.      " DESIGNATION
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'LOCATION'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T05.      " POSTING LOCATION
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'DEPARTMENT'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T07.      " DEPARTMENT
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'BEGIN_DATE'.
+  WA_FIELDCAT-SELTEXT_L = 'LEAVE BEGIN DATE'.      " LEAVE BEGIN DATE
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'END_DATE'.
+  WA_FIELDCAT-SELTEXT_L = 'LEAVE END DATE'.      " LEAVE BEGIN DATE
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      FORM  P_BUILD_LAYOUT_LEAVE_COMBO
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM P_BUILD_LAYOUT_LEAVE_COMBO .
+
+  CLEAR X_LAYOUT.
+  X_LAYOUT-NO_INPUT          = 'X'.
+  X_LAYOUT-COLWIDTH_OPTIMIZE = 'X'.
+  X_LAYOUT-ZEBRA             = 'X'.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      FORM  P_FETCH_INVALID_LEAVE_COMBO1
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM P_FETCH_INVALID_LEAVE_COMBO1 .
+
+
+  DATA: LT_PERNR_TAB5 LIKE PDPNR   OCCURS 0 WITH HEADER LINE,
+        LT_PSP5       LIKE PDPSP   OCCURS 0 WITH HEADER LINE,
+        LT_PSP_PREV5  LIKE PDPSP   OCCURS 0 WITH HEADER LINE,
+        LT_PSP_NEXT5  LIKE PDPSP   OCCURS 0 WITH HEADER LINE,
+        LT_DAY_PSP5   LIKE PDSPPSP OCCURS 0 WITH HEADER LINE,
+        LT_DAY_ATTR5  LIKE CASDAYATTR OCCURS 0 WITH HEADER LINE.
+
+
+  DATA: LV_BLUE_LEAVE  TYPE RANGE OF PDPSP-AWART,
+        LV_GREEN_LEAVE TYPE RANGE OF PDPSP-AWART.
+
+
+  LV_BLUE_LEAVE = VALUE #( LET S = 'I'
+                         O = 'EQ'
+                        IN SIGN = S
+                         OPTION = O
+                          ( LOW = '02' )
+                          ( LOW = '03' )
+                          ( LOW = '16' )
+                          ( LOW = '27' )
+                          ( LOW = '15' )
+                          ( LOW = '35' )
+                          ( LOW = '04' )
+                          ( LOW = '34' )
+                          ( LOW = '07' )
+                          ( LOW = '25' )
+                          ( LOW = '28' ) ).
+
+  LV_GREEN_LEAVE = VALUE #( LET S = 'I'
+                         O = 'EQ'
+                        IN SIGN = S
+                         OPTION = O
+                          ( LOW = '39' )
+                          ( LOW = '40' )
+                          ( LOW = '33' )
+                          ( LOW = '08' )
+                          ( LOW = '19' )
+                          ( LOW = '38' )
+                          ( LOW = '06' )
+                          ( LOW = '23' )
+                          ( LOW = '24' )
+                          ( LOW = '26' ) ).
+
+
+  IF  RB5 IS NOT INITIAL.
+
+    SELECT PERNR , SUBTY , BEGDA , ENDDA , BEGUZ , ENDUZ
+FROM PA2001 INTO TABLE @DATA(I_PA2001_LEAVE_COMBO1)
+                            WHERE PERNR IN @P_PERNR
+                            AND BEGDA LE @P_ENDDA
+                            AND ENDDA GE @P_BEGDA.
+
+
+** -> Begin of changes by of Jatin on 25Oct24 for ATC
+   SORT I_PA2001_LEAVE_COMBO1 BY PERNR.
+** <- End changes by of Jatin on 25Oct24 for ATC
+    DELETE ADJACENT DUPLICATES FROM I_PA2001_LEAVE_COMBO1 COMPARING PERNR.
+
+    SELECT PERNR, BEGDA, WERKS, PERSK, BTRTL ,PLANS, ENAME,  YY_DEPT FROM PA0001
+    INTO TABLE @DATA(I_PERNR_LEAVE_COMBO1)
+    FOR ALL ENTRIES IN @I_PA2001_LEAVE_COMBO1
+    WHERE PERNR = @I_PA2001_LEAVE_COMBO1-PERNR
+    AND BEGDA LE @P_ENDDA AND ENDDA GE @P_ENDDA.
+
+  ENDIF.
+
+
+  CLEAR: I_T554T.
+  SELECT * FROM T554T INTO TABLE I_T554T WHERE SPRSL = 'EN'.
+  IF SY-SUBRC EQ 0.
+    SORT I_T554T.
+  ENDIF.
+
+  CLEAR: I_T001P.
+  SELECT WERKS BTRTL BTEXT FROM T001P INTO TABLE I_T001P FOR ALL ENTRIES IN I_PERNR_LEAVE_COMBO1 WHERE
+                                      WERKS EQ I_PERNR_LEAVE_COMBO1-WERKS AND BTRTL EQ I_PERNR_LEAVE_COMBO1-BTRTL.
+  IF SY-SUBRC EQ 0.
+    SORT I_T001P.
+  ENDIF.
+
+
+  CLEAR: IY_YRHA_DEPARTMENT.
+  SELECT * FROM YRHA_DEPARTMENT INTO TABLE IY_YRHA_DEPARTMENT FOR ALL ENTRIES IN I_PERNR_LEAVE_COMBO1 WHERE
+                                                                  YY_DEPT EQ I_PERNR_LEAVE_COMBO1-YY_DEPT.
+  IF SY-SUBRC EQ 0.
+    SORT IY_YRHA_DEPARTMENT.
+  ENDIF.
+
+  CLEAR: I_HRP1000.
+  SELECT * FROM HRP1000 INTO TABLE I_HRP1000 FOR ALL ENTRIES IN I_PERNR_LEAVE_COMBO1 WHERE
+                                 OBJID EQ I_PERNR_LEAVE_COMBO1-PLANS AND OTYPE EQ 'S' AND
+                                 PLVAR EQ '01' AND BEGDA LE P_ENDDA AND ENDDA GE P_ENDDA.
+  IF SY-SUBRC EQ 0.
+    SORT I_HRP1000.
+  ENDIF.
+
+  LOOP AT I_PA2001_LEAVE_COMBO1 INTO DATA(WA_PA2001_LEAVE_COMBO1).
+
+    SORT I_PA2001_LEAVE_COMBO1 BY PERNR ASCENDING.
+
+    WA_LEAVE_COMBO1-PERNR = WA_PA2001_LEAVE_COMBO1-PERNR.
+
+    READ TABLE I_PERNR_LEAVE_COMBO1 INTO DATA(WA_PERNR_1) WITH KEY PERNR = WA_LEAVE_COMBO1-PERNR.
+    WA_LEAVE_COMBO1-GRADE = WA_PERNR_1-PERSK.
+    WA_LEAVE_COMBO1-ENAME = WA_PERNR_1-ENAME.
+
+
+    CLEAR: WA_T001P.
+    READ TABLE I_T001P INTO WA_T001P WITH KEY WERKS = WA_PERNR_1-WERKS BTRTL = WA_PERNR_1-BTRTL.
+    IF SY-SUBRC EQ 0.
+      WA_LEAVE_COMBO1-LOCATION = WA_T001P-BTEXT.
+    ENDIF.
+
+    CLEAR: WA_HRP1000.
+    READ TABLE I_HRP1000 INTO WA_HRP1000 WITH KEY OBJID = WA_PERNR_1-PLANS.
+    IF SY-SUBRC EQ 0.
+      WA_LEAVE_COMBO1-DESIGNATION = WA_HRP1000-MC_STEXT.
+    ENDIF.
+
+    CLEAR: WA_YRHA_DEPARTMENT.
+    READ TABLE IY_YRHA_DEPARTMENT INTO WA_YRHA_DEPARTMENT WITH KEY YY_DEPT = WA_PERNR_1-YY_DEPT.
+    IF SY-SUBRC EQ 0.
+      WA_LEAVE_COMBO1-DEPARTMENT = WA_YRHA_DEPARTMENT-YY_DEPARTMENT.
+    ENDIF.
+
+    APPEND WA_LEAVE_COMBO1 TO I_LEAVE_COMBO1.
+
+    CLEAR: WA_PERNR_1,WA_LEAVE_COMBO1.
+
+  ENDLOOP.
+
+  DATA: LV_FM_CHK_BEGIN_DATE TYPE SY-DATUM,
+        LV_FM_CHK_END_DATE   TYPE SY-DATUM.
+
+  DATA : LV_FIRST_LEAVES2   TYPE SY-DATUM,
+         LV_LAST_LEAVES2    TYPE SY-DATUM,
+         LV_CURRENT_DATE2   TYPE SY-DATUM,
+         LV_FLAG2(2)        TYPE C,
+         LV_INSERT_FLAG2(2) TYPE C,
+         LV_COUNTER2(3)     TYPE C.
+
+  LV_INSERT_FLAG2 = 0.
+  LV_FM_CHK_BEGIN_DATE = P_BEGDA - 20 .
+  LV_FM_CHK_END_DATE = P_ENDDA + 20.
+
+
+  LOOP AT I_LEAVE_COMBO1 INTO WA_LEAVE_COMBO1.
+
+    CLEAR:LV_COUNTER2.
+    REFRESH : LT_PERNR_TAB5,I_LEAVE_A1.
+    LT_PERNR_TAB5-PERNR = WA_LEAVE_COMBO1-PERNR.
+    APPEND  LT_PERNR_TAB5.
+
+    CALL FUNCTION 'HR_PERSON_READ_WORK_SCHEDULE'
+      EXPORTING
+        BEGIN_DATE         = LV_FM_CHK_BEGIN_DATE
+        END_DATE           = LV_FM_CHK_END_DATE
+      TABLES
+        PERNR_TAB          = LT_PERNR_TAB5
+        PSP                = LT_PSP5
+        DAY_PSP            = LT_DAY_PSP5
+**    CHANGING
+**         CH_AUTH_INFTY_TAB  = LT_HRSP_TTY_AUTH_INFTY_TAB
+      EXCEPTIONS
+        ERROR_IN_BUILD_PSP = 1
+        OTHERS             = 2.
+    IF SY-SUBRC <> 0.
+* IMPLEMENT SUITABLE ERROR HANDLING HERE
+    ENDIF.
+
+    IF LT_PSP5 IS NOT INITIAL.
+
+      LOOP AT LT_PSP5.
+
+        IF  LT_PSP5-AWTYP = 'A'.    "LT_PSP5-AWART IN LV_BLUE_LEAVE .
+****   SOC SURAJ AND GAURAV FORM CHARM: 4000008880
+*          " FIST LEAVE CAN NOT BE GREEN LEAVES
+          IF I_LEAVE_A1 IS INITIAL.
+            IF LT_PSP5-AWART  = '39' OR
+               LT_PSP5-AWART  = '40' OR
+               LT_PSP5-AWART  = '33' OR
+               LT_PSP5-AWART = '08' OR
+               LT_PSP5-AWART = '19' OR
+               LT_PSP5-AWART = '38' OR
+               LT_PSP5-AWART = '06' OR
+               LT_PSP5-AWART = '23' OR
+               LT_PSP5-AWART = '24' OR
+               LT_PSP5-AWART = '26'.
+              "DON'T ADD GREEN LEAVE AT START.
+            ELSE.
+***   EOC SURAJ AND GAURAV FORM CHARM:
+              LV_FLAG2 = 1.
+              IF LV_FIRST_LEAVES2 IS INITIAL.
+                LV_FIRST_LEAVES2 = LT_PSP5-DATUM.
+              ENDIF.
+
+              LV_LAST_LEAVES2 = LT_PSP5-DATUM.
+
+              WA_LEAVE_A1-PERNR = LT_PSP5-PERNR.
+              WA_LEAVE_A1-DATUM = LT_PSP5-DATUM.
+              WA_LEAVE_A1-AWART = LT_PSP5-AWART.
+              WA_LEAVE_A1-AWTYP = LT_PSP5-AWTYP.
+              LV_CURRENT_DATE2 = LT_PSP5-DATUM.
+
+              APPEND WA_LEAVE_A1 TO I_LEAVE_A1.
+              CLEAR: WA_LEAVE_A.
+
+              CONTINUE.
+***   SOC SURAJ AND GAURAV FORM CHARM: 4000008880
+            ENDIF.
+          ELSE.
+***   EOC SURAJ AND GAURAV FORM CHARM: 4000008880
+            LV_FLAG2 = 1.
+            IF LV_FIRST_LEAVES2 IS INITIAL.
+              LV_FIRST_LEAVES2 = LT_PSP5-DATUM.
+            ENDIF.
+
+            LV_LAST_LEAVES2 = LT_PSP5-DATUM.
+
+            WA_LEAVE_A1-PERNR = LT_PSP5-PERNR.
+            WA_LEAVE_A1-DATUM = LT_PSP5-DATUM.
+            WA_LEAVE_A1-AWART = LT_PSP5-AWART.
+            WA_LEAVE_A1-AWTYP = LT_PSP5-AWTYP.
+            LV_CURRENT_DATE2 = LT_PSP5-DATUM.
+
+            APPEND WA_LEAVE_A1 TO I_LEAVE_A1.
+            CLEAR: WA_LEAVE_A.
+
+            CONTINUE.
+          ENDIF.
+***   EOC SURAJ AND GAURAV FORM CHARM: 4000008880
+        ELSEIF LV_FLAG2 = 1.
+
+*          IF SY-SUBRC = 0.
+
+          IF  LT_PSP5-TPKLA = '0' OR LT_PSP5-FTKLA = '1' .
+            DATA(LV_CURRENT_DATE3) = LT_PSP5-DATUM.
+            WA_LEAVE_A1-PERNR = LT_PSP5-PERNR.
+            WA_LEAVE_A1-DATUM = LT_PSP5-DATUM.
+            WA_LEAVE_A1-AWART = LT_PSP5-AWART.
+            WA_LEAVE_A1-AWTYP = LT_PSP5-AWTYP.
+            LV_CURRENT_DATE2 = LT_PSP5-DATUM.
+
+            APPEND WA_LEAVE_A1 TO I_LEAVE_A1.
+            CLEAR: WA_LEAVE_A.
+            CONTINUE.
+
+          ELSEIF LT_PSP5-TPKLA = '1' .
+
+
+            LV_INSERT_FLAG2 = 1.
+
+            LV_COUNTER2 = 0.
+            LV_FLAG2 = 0.
+
+
+            IF LV_INSERT_FLAG2 = 1.
+
+              SORT I_LEAVE_A1 BY DATUM ASCENDING.
+
+              DATA(LV_BCOUNT) = 0.
+              DATA(LV_GCOUNT) = 0.
+
+              LOOP AT I_LEAVE_A1 INTO WA_LEAVE_A1 .
+
+                IF SY-TABIX EQ '1' AND WA_LEAVE_A1-AWART IN LV_GREEN_LEAVE.
+                  DATA(LV_FLAG) = 'S1'.
+
+                ELSEIF SY-TABIX EQ '1' AND WA_LEAVE_A1-AWART IN LV_BLUE_LEAVE.
+                  LV_FLAG = 'S2'.
+                ENDIF.
+
+
+                IF LV_FLAG = 'S1'.
+
+                  IF WA_LEAVE_A1-AWART IN LV_GREEN_LEAVE .
+                    LV_GCOUNT = LV_GCOUNT + 1.
+                  ENDIF.
+
+                  IF WA_LEAVE_A1-AWART IN LV_BLUE_LEAVE .
+                    LV_BCOUNT = LV_BCOUNT + 1.
+                  ENDIF.
+
+
+                  IF WA_LEAVE_A1-AWART IN LV_GREEN_LEAVE AND LV_BCOUNT GT 0 AND LV_GCOUNT GT 0.
+
+                    READ TABLE I_LEAVE_COMBO1 INTO DATA(WA_LEAVE_COMBO1) WITH  KEY PERNR =  WA_LEAVE_A1-PERNR.
+
+                    WA_LEAVE_COMBO_FINAL1-PERNR = WA_LEAVE_COMBO1-PERNR.
+                    WA_LEAVE_COMBO_FINAL1-GRADE = WA_LEAVE_COMBO1-GRADE.
+                    WA_LEAVE_COMBO_FINAL1-ENAME = WA_LEAVE_COMBO1-ENAME.
+                    WA_LEAVE_COMBO_FINAL1-LOCATION = WA_LEAVE_COMBO1-LOCATION.
+                    WA_LEAVE_COMBO_FINAL1-DESIGNATION = WA_LEAVE_COMBO1-DESIGNATION.
+                    WA_LEAVE_COMBO_FINAL1-DEPARTMENT = WA_LEAVE_COMBO1-DEPARTMENT.
+                    WA_LEAVE_COMBO_FINAL1-BEGIN_DATE = LV_FIRST_LEAVES2.
+                    WA_LEAVE_COMBO_FINAL1-END_DATE = LV_LAST_LEAVES2. " LV_CURRENT_DATE2.
+                    "APPEND WA_LEAVE_COMBO_FINAL1 TO I_LEAVE_COMBO_FINAL1.
+                    EXIT.
+
+                    CLEAR:I_LEAVE_A1, WA_LEAVE_COMBO_FINAL1,WA_LEAVE_COMBO1,LV_BCOUNT,LV_INSERT_FLAG2,LV_CURRENT_DATE2,
+                    LV_FIRST_LEAVES2,LV_LAST_LEAVES2.
+
+                  ENDIF.
+
+                ELSEIF LV_FLAG = 'S2'.
+
+                  IF WA_LEAVE_A1-AWART IN LV_BLUE_LEAVE .
+                    LV_BCOUNT = LV_BCOUNT + 1.
+                  ENDIF.
+
+                  IF WA_LEAVE_A1-AWART IN LV_GREEN_LEAVE .
+                    LV_GCOUNT = LV_GCOUNT + 1.
+                  ENDIF.
+
+                  IF WA_LEAVE_A1-AWART IN LV_BLUE_LEAVE AND LV_GCOUNT GT 0 AND LV_BCOUNT GT 0.
+
+                    READ TABLE I_LEAVE_COMBO1 INTO DATA(WA_LEAVE_COMBO2) WITH  KEY PERNR =  WA_LEAVE_A1-PERNR.
+
+                    WA_LEAVE_COMBO_FINAL1-PERNR = WA_LEAVE_COMBO2-PERNR.
+                    WA_LEAVE_COMBO_FINAL1-GRADE = WA_LEAVE_COMBO2-GRADE.
+                    WA_LEAVE_COMBO_FINAL1-ENAME = WA_LEAVE_COMBO2-ENAME.
+                    WA_LEAVE_COMBO_FINAL1-LOCATION = WA_LEAVE_COMBO2-LOCATION.
+                    WA_LEAVE_COMBO_FINAL1-DESIGNATION = WA_LEAVE_COMBO2-DESIGNATION.
+                    WA_LEAVE_COMBO_FINAL1-DEPARTMENT = WA_LEAVE_COMBO2-DEPARTMENT.
+                    WA_LEAVE_COMBO_FINAL1-BEGIN_DATE = LV_FIRST_LEAVES2.
+                    WA_LEAVE_COMBO_FINAL1-END_DATE = LV_LAST_LEAVES2. " LV_CURRENT_DATE2.
+                    APPEND WA_LEAVE_COMBO_FINAL1 TO I_LEAVE_COMBO_FINAL1.
+
+                    CLEAR:I_LEAVE_A1, WA_LEAVE_COMBO_FINAL1,WA_LEAVE_COMBO2,LV_BCOUNT,LV_INSERT_FLAG2,LV_CURRENT_DATE2,
+                    LV_FIRST_LEAVES2,LV_LAST_LEAVES2.
+
+                  ENDIF.
+
+                ENDIF.
+
+              ENDLOOP.
+
+              CLEAR: I_LEAVE_A1,WA_LEAVE_COMBO_FINAL1,WA_LEAVE_COMBO1,LV_BCOUNT,LV_INSERT_FLAG2,LV_CURRENT_DATE2,
+              LV_FIRST_LEAVES2,LV_LAST_LEAVES2, LV_FLAG.
+
+            ENDIF.
+
+          ENDIF.
+*          ENDIF.
+        ENDIF.
+
+      ENDLOOP.                      " LT_PSP5
+
+    ENDIF.                          " LT_PSP5
+
+    CLEAR: I_LEAVE_A1,WA_LEAVE_COMBO_FINAL1,WA_LEAVE_COMBO1,LV_BCOUNT,LV_INSERT_FLAG2,LV_CURRENT_DATE2,
+     LV_FIRST_LEAVES2,LV_LAST_LEAVES2, LV_FLAG.
+
+  ENDLOOP.                          "I_LEAVE_COMBO1
+
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      FORM  P_DISPLAY_LEAVE_COMBO1
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM P_DISPLAY_LEAVE_COMBO1 .
+
+  PERFORM P_BUILD_FIELDCAT_LEAVE_COMBO1.
+  PERFORM P_BUILD_LAYOUT_LEAVE_COMBO1.
+
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      I_CALLBACK_PROGRAM = SY-REPID                 " REPORT ID
+      IS_LAYOUT          = X_LAYOUT                 " FOR LAYOUT
+      IT_FIELDCAT        = I_FIELDCAT     " FIELD CATALOG
+    TABLES
+      T_OUTTAB           = I_LEAVE_COMBO_FINAL1
+    EXCEPTIONS
+      PROGRAM_ERROR      = 1
+      OTHERS             = 2.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      FORM  P_BUILD_FIELDCAT_LEAVE_COMBO1
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM P_BUILD_FIELDCAT_LEAVE_COMBO1 .
+
+
+  WA_FIELDCAT-FIELDNAME = 'PERNR'.
+  WA_FIELDCAT-SELTEXT_L = 'CPF NUMBER'.      " CPF NUMBER.
+  WA_FIELDCAT-LZERO = 'X'.
+  WA_FIELDCAT-FIX_COLUMN = 'X'.
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'ENAME'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T04.      " EMPLOYEE NAME
+  WA_FIELDCAT-FIX_COLUMN = 'X'.
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'GRADE'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T03.      " GRADE
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'DESIGNATION'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T06.      " DESIGNATION
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'LOCATION'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T05.      " POSTING LOCATION
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'DEPARTMENT'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T07.      " DEPARTMENT
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'BEGIN_DATE'.
+  WA_FIELDCAT-SELTEXT_L = 'LEAVE BEGIN DATE'.      " LEAVE BEGIN DATE
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'END_DATE'.
+  WA_FIELDCAT-SELTEXT_L = 'LEAVE END DATE'.      " LEAVE BEGIN DATE
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      FORM  P_BUILD_LAYOUT_LEAVE_COMBO1
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM P_BUILD_LAYOUT_LEAVE_COMBO1 .
+
+  CLEAR X_LAYOUT.
+  X_LAYOUT-NO_INPUT          = 'X'.
+  X_LAYOUT-COLWIDTH_OPTIMIZE = 'X'.
+  X_LAYOUT-ZEBRA             = 'X'.
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      FORM  P_FETCH_INVALID_LEAVE_COMBO2
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM P_FETCH_INVALID_LEAVE_COMBO2 .
+
+
+
+  DATA: LT_PERNR_TAB6 LIKE PDPNR   OCCURS 0 WITH HEADER LINE,
+        LT_PSP6       LIKE PDPSP   OCCURS 0 WITH HEADER LINE,
+        LT_PSP_PREV6  LIKE PDPSP   OCCURS 0 WITH HEADER LINE,
+        LT_PSP_NEXT6  LIKE PDPSP   OCCURS 0 WITH HEADER LINE,
+        LT_DAY_PSP6   LIKE PDSPPSP OCCURS 0 WITH HEADER LINE,
+        LT_DAY_ATTR6  LIKE CASDAYATTR OCCURS 0 WITH HEADER LINE.
+
+
+  DATA: LV_BLUE_LEAVE  TYPE RANGE OF PDPSP-AWART,
+        LV_GREEN_LEAVE TYPE RANGE OF PDPSP-AWART.
+
+  P_BEGDA = P_BEGDA - 15.
+  P_ENDDA = P_ENDDA + 15.
+  LV_BLUE_LEAVE = VALUE #( LET S = 'I'
+                         O = 'EQ'
+                        IN SIGN = S
+                         OPTION = O
+                          ( LOW = '02' )
+                          ( LOW = '03' )
+                          ( LOW = '16' )
+                          ( LOW = '27' )
+                          ( LOW = '15' )
+                          ( LOW = '35' )
+                          ( LOW = '04' )
+                          ( LOW = '34' )
+                          ( LOW = '07' )
+                          ( LOW = '25' )
+                          ( LOW = '28' ) ).
+*                          ( LOW = '06' )
+*                          ( LOW = '23' ) ).
+
+
+  SELECT PERNR , SUBTY , BEGDA , ENDDA , BEGUZ , ENDUZ
+FROM PA2001 INTO TABLE @DATA(I_PA2001_LEAVE_COMBO2)
+                        WHERE PERNR IN @P_PERNR
+                        AND BEGDA LE @P_ENDDA
+                        AND ENDDA GE @P_BEGDA
+*** SOC BY SURAJ AND GAURAV
+                        AND SUBTY IN @LV_BLUE_LEAVE.
+
+
+*** SOC BY SURAJ AND GAURAV
+*  DELETE ADJACENT DUPLICATES FROM I_PA2001_LEAVE_COMBO2 COMPARING PERNR.
+  IF I_PA2001_LEAVE_COMBO2 IS NOT INITIAL.
+    SELECT PERNR, BEGDA, WERKS, PERSK, BTRTL ,PLANS, ENAME,  YY_DEPT FROM PA0001
+    INTO TABLE @DATA(I_PERNR_LEAVE_COMBO2)
+    FOR ALL ENTRIES IN @I_PA2001_LEAVE_COMBO2
+    WHERE PERNR = @I_PA2001_LEAVE_COMBO2-PERNR
+    AND BEGDA LE @P_ENDDA AND ENDDA GE @P_ENDDA.
+  ENDIF.
+*** EOC BY SURAJA ND GAURAV
+  CLEAR: I_T554T.
+  SELECT * FROM T554T INTO TABLE I_T554T WHERE SPRSL = 'EN'.
+  IF SY-SUBRC EQ 0.
+    SORT I_T554T.
+  ENDIF.
+
+  CLEAR: I_T001P.
+  SELECT WERKS BTRTL BTEXT FROM T001P INTO TABLE I_T001P FOR ALL ENTRIES IN I_PERNR_LEAVE_COMBO2 WHERE
+                                      WERKS EQ I_PERNR_LEAVE_COMBO2-WERKS AND BTRTL EQ I_PERNR_LEAVE_COMBO2-BTRTL.
+  IF SY-SUBRC EQ 0.
+    SORT I_T001P.
+  ENDIF.
+
+  CLEAR: IY_YRHA_DEPARTMENT.
+  SELECT * FROM YRHA_DEPARTMENT INTO TABLE IY_YRHA_DEPARTMENT FOR ALL ENTRIES IN I_PERNR_LEAVE_COMBO2 WHERE
+                                                                  YY_DEPT EQ I_PERNR_LEAVE_COMBO2-YY_DEPT.
+  IF SY-SUBRC EQ 0.
+    SORT IY_YRHA_DEPARTMENT.
+  ENDIF.
+
+  SELECT * FROM HRP1000 INTO TABLE I_HRP1000 FOR ALL ENTRIES IN I_PERNR_LEAVE_COMBO2 WHERE
+                               OBJID EQ I_PERNR_LEAVE_COMBO2-PLANS AND OTYPE EQ 'S' AND
+                               PLVAR EQ '01' AND BEGDA LE P_ENDDA AND ENDDA GE P_ENDDA.
+  IF SY-SUBRC EQ 0.
+    SORT I_HRP1000.
+  ENDIF.
+
+  SORT I_PA2001_LEAVE_COMBO2 BY PERNR ASCENDING.
+  LOOP AT I_PA2001_LEAVE_COMBO2 INTO DATA(WA_PA2001_LEAVE_COMBO2).
+
+    WA_LEAVE_COMBO2-PERNR = WA_PA2001_LEAVE_COMBO2-PERNR.
+
+    READ TABLE I_PERNR_LEAVE_COMBO2 INTO DATA(WA_PERNR_1) WITH KEY PERNR = WA_LEAVE_COMBO2-PERNR.
+    WA_LEAVE_COMBO2-GRADE = WA_PERNR_1-PERSK.
+    WA_LEAVE_COMBO2-ENAME = WA_PERNR_1-ENAME.
+
+
+    CLEAR: WA_T001P.
+    READ TABLE I_T001P INTO WA_T001P WITH KEY WERKS = WA_PERNR_1-WERKS BTRTL = WA_PERNR_1-BTRTL.
+    IF SY-SUBRC EQ 0.
+      WA_LEAVE_COMBO2-LOCATION = WA_T001P-BTEXT.
+    ENDIF.
+
+    CLEAR: WA_HRP1000.
+    READ TABLE I_HRP1000 INTO WA_HRP1000 WITH KEY OBJID = WA_PERNR_1-PLANS.
+    IF SY-SUBRC EQ 0.
+      WA_LEAVE_COMBO2-DESIGNATION = WA_HRP1000-MC_STEXT.
+    ENDIF.
+
+    CLEAR: WA_YRHA_DEPARTMENT.
+    READ TABLE IY_YRHA_DEPARTMENT INTO WA_YRHA_DEPARTMENT WITH KEY YY_DEPT = WA_PERNR_1-YY_DEPT.
+    IF SY-SUBRC EQ 0.
+      WA_LEAVE_COMBO2-DEPARTMENT = WA_YRHA_DEPARTMENT-YY_DEPARTMENT.
+    ENDIF.
+
+    WA_LEAVE_COMBO2-BEGIN_DATE = WA_PA2001_LEAVE_COMBO2-BEGDA.
+    WA_LEAVE_COMBO2-END_DATE = WA_PA2001_LEAVE_COMBO2-ENDDA.
+    WA_LEAVE_COMBO2-SUBTY   = WA_PA2001_LEAVE_COMBO2-SUBTY.
+
+    APPEND WA_LEAVE_COMBO2 TO I_LEAVE_COMBO2.
+
+    CLEAR: WA_PERNR_1,WA_LEAVE_COMBO2.
+
+  ENDLOOP.
+
+  DATA: LV_FM_CHK_BEGIN_DATE TYPE SY-DATUM,
+        LV_FM_CHK_END_DATE   TYPE SY-DATUM.
+
+  DATA : LV_FIRST_LEAVES3   TYPE SY-DATUM,
+         LV_LAST_LEAVES3    TYPE SY-DATUM,
+         LV_CURRENT_DATE3   TYPE SY-DATUM,
+         LV_FLAG3(2)        TYPE C,
+         LV_INSERT_FLAG3(2) TYPE C,
+         LV_COUNTER3(3)     TYPE C.
+
+  LV_INSERT_FLAG3 = 0.
+*  LV_FM_CHK_BEGIN_DATE = P_BEGDA - 20 .
+*  LV_FM_CHK_END_DATE = P_ENDDA + 20.
+  DATA: LV_CHK1 TYPE DATUM, LV_CHK2 TYPE DATUM.
+  DATA: LV_INT TYPE I.
+  SORT I_LEAVE_COMBO2 BY PERNR BEGIN_DATE END_DATE.
+  DATA(LT_COMBO2_TEMP1) = I_LEAVE_COMBO2[].
+  DATA(LT_COMBO2_ORG)   = I_LEAVE_COMBO2[].
+  DELETE ADJACENT DUPLICATES FROM LT_COMBO2_TEMP1 COMPARING PERNR.
+
+  LOOP AT LT_COMBO2_TEMP1 INTO DATA(LW_COMBO2_TEMP1).
+    I_LEAVE_COMBO2[] = LT_COMBO2_ORG.
+    DELETE I_LEAVE_COMBO2 WHERE PERNR NE LW_COMBO2_TEMP1-PERNR.
+    CLEAR: LV_INT,  LV_CHK1, LV_CHK2.
+    LOOP AT I_LEAVE_COMBO2 INTO WA_LEAVE_COMBO2 .
+      LV_INT = SY-TABIX.
+      IF LV_INT LE LINES( I_LEAVE_COMBO2 ) - 1.
+        CLEAR:LV_COUNTER3, LV_FM_CHK_BEGIN_DATE, LV_FM_CHK_END_DATE.
+        REFRESH : LT_PERNR_TAB6,I_LEAVE_A2.
+        LT_PERNR_TAB6-PERNR = WA_LEAVE_COMBO2-PERNR.
+        APPEND  LT_PERNR_TAB6.
+        LV_FM_CHK_BEGIN_DATE = WA_LEAVE_COMBO2-BEGIN_DATE.
+        LV_CHK1 = WA_LEAVE_COMBO2-END_DATE + 1.
+        LV_INT = LV_INT + 1.
+        READ TABLE I_LEAVE_COMBO2 INTO DATA(LW_TEMP) INDEX LV_INT.
+        IF SY-SUBRC EQ 0.
+          LV_FM_CHK_END_DATE   = LW_TEMP-END_DATE.
+          LV_CHK2 = LW_TEMP-BEGIN_DATE - 1.
+          CALL FUNCTION 'HR_PERSON_READ_WORK_SCHEDULE'
+            EXPORTING
+              BEGIN_DATE         = LV_CHK1
+              END_DATE           = LV_CHK2
+              READ_FROM_DATABASE = 'X'
+            TABLES
+              PERNR_TAB          = LT_PERNR_TAB6
+              PSP                = LT_PSP6
+              DAY_PSP            = LT_DAY_PSP6
+            EXCEPTIONS
+              ERROR_IN_BUILD_PSP = 1
+              OTHERS             = 2.
+          IF SY-SUBRC <> 0.
+* IMPLEMENT SUITABLE ERROR HANDLING HERE
+          ENDIF.
+
+          IF LT_PSP6 IS NOT INITIAL.
+*        CLEAR LV_FLAG.
+            LOOP AT LT_PSP6 INTO DATA(LW_PSP6).
+
+              IF LW_PSP6-DATUM GT WA_LEAVE_COMBO2-END_DATE.
+                IF ( LW_PSP6-TPROG EQ 'OFF' OR LW_PSP6-TPROG EQ 'REST') OR
+                   ( LW_PSP6-FTKLA EQ '1' ).
+                  WA_LEAVE_COMBO_FINAL2-PERNR = WA_LEAVE_COMBO2-PERNR.
+                  WA_LEAVE_COMBO_FINAL2-GRADE = WA_LEAVE_COMBO2-GRADE.
+                  WA_LEAVE_COMBO_FINAL2-ENAME = WA_LEAVE_COMBO2-ENAME.
+                  WA_LEAVE_COMBO_FINAL2-LOCATION = WA_LEAVE_COMBO2-LOCATION.
+                  WA_LEAVE_COMBO_FINAL2-DESIGNATION = WA_LEAVE_COMBO2-DESIGNATION.
+                  WA_LEAVE_COMBO_FINAL2-DEPARTMENT = WA_LEAVE_COMBO2-DEPARTMENT.
+                  WA_LEAVE_COMBO_FINAL2-BEGIN_DATE = LV_FM_CHK_BEGIN_DATE.
+                  WA_LEAVE_COMBO_FINAL2-END_DATE = LV_FM_CHK_END_DATE."LV_CURRENT_DATE3.
+                  LV_FLAG3 = 'X'.
+                ELSE.
+                  CLEAR:  LV_FLAG3.
+                  EXIT.
+                ENDIF.
+              ENDIF.
+            ENDLOOP.
+            IF LV_FLAG3 IS NOT INITIAL.
+              APPEND WA_LEAVE_COMBO_FINAL2 TO I_LEAVE_COMBO_FINAL2.
+            ENDIF.
+            CLEAR:  LV_FLAG3.
+          ENDIF.
+*      LOOP AT LT_PSP6.
+*
+**        IF LT_PSP6-AWTYP = 'A'.
+*
+*        IF LT_PSP6-AWART IN LV_BLUE_LEAVE.
+*
+*          LV_FLAG3 = 1.
+*          IF LV_FIRST_LEAVES3 IS INITIAL.
+*            LV_FIRST_LEAVES3 = LT_PSP6-DATUM.
+*          ENDIF.
+*
+*          LV_LAST_LEAVES3 = LT_PSP6-DATUM.
+*
+*          WA_LEAVE_A2-PERNR = LT_PSP6-PERNR.
+*          WA_LEAVE_A2-DATUM = LT_PSP6-DATUM.
+*          WA_LEAVE_A2-AWART = LT_PSP6-AWART.
+*          WA_LEAVE_A2-AWTYP = LT_PSP6-AWTYP.
+*          LV_CURRENT_DATE3 = LT_PSP6-DATUM.
+*
+*          APPEND WA_LEAVE_A2 TO I_LEAVE_A2.
+*          CLEAR: WA_LEAVE_A2.
+*          CONTINUE.
+*
+*        ELSEIF LV_FLAG3 = 1.
+*
+*          IF SY-SUBRC = 0.
+*
+*            IF  LT_PSP6-TPKLA = '0' OR LT_PSP6-FTKLA = '1'.
+*              DATA(LV_CURRENT_DATE4) = LT_PSP6-DATUM.
+*              WA_LEAVE_A2-PERNR = LT_PSP6-PERNR.
+*              WA_LEAVE_A2-DATUM = LT_PSP6-DATUM.
+*              WA_LEAVE_A2-AWART = LT_PSP6-AWART.
+*              WA_LEAVE_A2-AWTYP = LT_PSP6-AWTYP.
+*              LV_CURRENT_DATE3 = LT_PSP6-DATUM.
+*              LV_LAST_LEAVES3 = LT_PSP6-DATUM.
+*
+*              APPEND WA_LEAVE_A2 TO I_LEAVE_A2.
+*              CLEAR: WA_LEAVE_A2.
+*              CONTINUE.
+*
+*            ELSEIF LT_PSP6-TPKLA = '1' .
+*
+*              LV_COUNTER3 = 0.
+*              LV_FLAG3 = 0.
+*              LV_INSERT_FLAG3 = 1.
+*
+*              SORT I_LEAVE_A2 BY DATUM ASCENDING.
+*
+*              LOOP AT I_LEAVE_A2 INTO WA_LEAVE_A2 WHERE AWTYP NE 'A'.
+*
+*                READ TABLE I_LEAVE_COMBO2 INTO DATA(WA_LEAVE_COMBO3) WITH  KEY PERNR =  WA_LEAVE_A2-PERNR.
+*
+*                WA_LEAVE_COMBO_FINAL2-PERNR = WA_LEAVE_COMBO3-PERNR.
+*                WA_LEAVE_COMBO_FINAL2-GRADE = WA_LEAVE_COMBO3-GRADE.
+*                WA_LEAVE_COMBO_FINAL2-ENAME = WA_LEAVE_COMBO3-ENAME.
+*                WA_LEAVE_COMBO_FINAL2-LOCATION = WA_LEAVE_COMBO3-LOCATION.
+*                WA_LEAVE_COMBO_FINAL2-DESIGNATION = WA_LEAVE_COMBO3-DESIGNATION.
+*                WA_LEAVE_COMBO_FINAL2-DEPARTMENT = WA_LEAVE_COMBO3-DEPARTMENT.
+*                WA_LEAVE_COMBO_FINAL2-BEGIN_DATE = LV_FIRST_LEAVES3.
+*                WA_LEAVE_COMBO_FINAL2-END_DATE = LV_LAST_LEAVES3."LV_CURRENT_DATE3.
+*                APPEND WA_LEAVE_COMBO_FINAL2 TO I_LEAVE_COMBO_FINAL2.
+*                EXIT.
+*
+*                CLEAR:I_LEAVE_A2,WA_LEAVE_COMBO_FINAL2,WA_LEAVE_COMBO2,LV_INSERT_FLAG3,LV_CURRENT_DATE3,LV_FIRST_LEAVES3,
+*                LV_LAST_LEAVES3.
+*
+*              ENDLOOP.
+*
+*              CLEAR:I_LEAVE_A2,WA_LEAVE_COMBO_FINAL2,WA_LEAVE_COMBO2,LV_INSERT_FLAG3,LV_CURRENT_DATE3,LV_FIRST_LEAVES3,
+*               LV_LAST_LEAVES3.
+*
+*            ENDIF.
+*
+*          ENDIF.
+*
+*
+*        ENDIF.
+*
+*      ENDLOOP.                      " LT_PSP5
+
+        ENDIF.                          " LT_PSP5
+      ENDIF.
+    ENDLOOP.                          "I_LEAVE_COMBO1
+  ENDLOOP.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      FORM  P_DISPLAY_LEAVE_COMBO2
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM P_DISPLAY_LEAVE_COMBO2 .
+
+  PERFORM P_BUILD_FIELDCAT_LEAVE_COMBO2.
+  PERFORM P_BUILD_LAYOUT_LEAVE_COMBO2.
+
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      I_CALLBACK_PROGRAM = SY-REPID                 " REPORT ID
+      IS_LAYOUT          = X_LAYOUT                 " FOR LAYOUT
+      IT_FIELDCAT        = I_FIELDCAT     " FIELD CATALOG
+    TABLES
+      T_OUTTAB           = I_LEAVE_COMBO_FINAL2
+    EXCEPTIONS
+      PROGRAM_ERROR      = 1
+      OTHERS             = 2.
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      FORM  P_BUILD_FIELDCAT_LEAVE_COMBO2
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM P_BUILD_FIELDCAT_LEAVE_COMBO2 .
+
+
+  WA_FIELDCAT-FIELDNAME = 'PERNR'.
+  WA_FIELDCAT-SELTEXT_L = 'CPF NUMBER'.      " CPF NUMBER.
+  WA_FIELDCAT-LZERO = 'X'.
+  WA_FIELDCAT-FIX_COLUMN = 'X'.
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'ENAME'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T04.      " EMPLOYEE NAME
+  WA_FIELDCAT-FIX_COLUMN = 'X'.
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'GRADE'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T03.      " GRADE
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'DESIGNATION'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T06.      " DESIGNATION
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'LOCATION'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T05.      " POSTING LOCATION
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'DEPARTMENT'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T07.      " DEPARTMENT
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'BEGIN_DATE'.
+  WA_FIELDCAT-SELTEXT_L = 'LEAVE BEGIN DATE'.      " LEAVE BEGIN DATE
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'END_DATE'.
+  WA_FIELDCAT-SELTEXT_L = 'LEAVE END DATE'.      " LEAVE BEGIN DATE
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      FORM  P_BUILD_LAYOUT_LEAVE_COMBO2
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM P_BUILD_LAYOUT_LEAVE_COMBO2 .
+
+  CLEAR X_LAYOUT.
+  X_LAYOUT-NO_INPUT          = 'X'.
+  X_LAYOUT-COLWIDTH_OPTIMIZE = 'X'.
+  X_LAYOUT-ZEBRA             = 'X'.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      FORM  P_FETCH_INVALID_LEAVE_COMBO3
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM P_FETCH_INVALID_LEAVE_COMBO3 .
+
+  DATA: LT_PERNR_TAB6 LIKE PDPNR   OCCURS 0 WITH HEADER LINE,
+        LT_PSP6       LIKE PDPSP   OCCURS 0 WITH HEADER LINE,
+        LT_PSP_PREV6  LIKE PDPSP   OCCURS 0 WITH HEADER LINE,
+        LT_PSP_NEXT6  LIKE PDPSP   OCCURS 0 WITH HEADER LINE,
+        LT_DAY_PSP6   LIKE PDSPPSP OCCURS 0 WITH HEADER LINE,
+        LT_DAY_ATTR6  LIKE CASDAYATTR OCCURS 0 WITH HEADER LINE.
+
+
+  DATA: LV_BLUE_LEAVE  TYPE RANGE OF PDPSP-AWART,
+        LV_GREEN_LEAVE TYPE RANGE OF PDPSP-AWART.
+
+  P_BEGDA = P_BEGDA - 15.
+  P_ENDDA = P_ENDDA + 15.
+  LV_BLUE_LEAVE = VALUE #( LET S = 'I'
+                         O = 'EQ'
+                        IN SIGN = S
+                         OPTION = O
+                          ( LOW = '06' )
+                          ( LOW = '10' )
+                          ( LOW = '11' )
+                          ( LOW = '12' )
+                          ( LOW = '13' )
+                          ( LOW = '14' )
+                          ( LOW = '26' )
+                          ( LOW = '37' )
+                          ( LOW = '23' ) ).
+
+
+  SELECT PERNR , SUBTY , BEGDA , ENDDA , BEGUZ , ENDUZ
+FROM PA2001 INTO TABLE @DATA(I_PA2001_LEAVE_COMBO2)
+                        WHERE PERNR IN @P_PERNR
+                        AND BEGDA LE @P_ENDDA
+                        AND ENDDA GE @P_BEGDA
+*** SOC BY SURAJ AND GAURAV
+                        AND SUBTY IN @LV_BLUE_LEAVE.
+
+
+*** SOC BY SURAJ AND GAURAV
+*  DELETE ADJACENT DUPLICATES FROM I_PA2001_LEAVE_COMBO2 COMPARING PERNR.
+  IF I_PA2001_LEAVE_COMBO2 IS NOT INITIAL.
+    SELECT PERNR, BEGDA, WERKS, PERSK, BTRTL ,PLANS, ENAME,  YY_DEPT FROM PA0001
+    INTO TABLE @DATA(I_PERNR_LEAVE_COMBO2)
+    FOR ALL ENTRIES IN @I_PA2001_LEAVE_COMBO2
+    WHERE PERNR = @I_PA2001_LEAVE_COMBO2-PERNR
+    AND BEGDA LE @P_ENDDA AND ENDDA GE @P_ENDDA.
+  ENDIF.
+*** EOC BY SURAJA ND GAURAV
+  CLEAR: I_T554T.
+  SELECT * FROM T554T INTO TABLE I_T554T WHERE SPRSL = 'EN'.
+  IF SY-SUBRC EQ 0.
+    SORT I_T554T.
+  ENDIF.
+
+  CLEAR: I_T001P.
+  SELECT WERKS BTRTL BTEXT FROM T001P INTO TABLE I_T001P FOR ALL ENTRIES IN I_PERNR_LEAVE_COMBO2 WHERE
+                                      WERKS EQ I_PERNR_LEAVE_COMBO2-WERKS AND BTRTL EQ I_PERNR_LEAVE_COMBO2-BTRTL.
+  IF SY-SUBRC EQ 0.
+    SORT I_T001P.
+  ENDIF.
+
+  CLEAR: IY_YRHA_DEPARTMENT.
+  SELECT * FROM YRHA_DEPARTMENT INTO TABLE IY_YRHA_DEPARTMENT FOR ALL ENTRIES IN I_PERNR_LEAVE_COMBO2 WHERE
+                                                                  YY_DEPT EQ I_PERNR_LEAVE_COMBO2-YY_DEPT.
+  IF SY-SUBRC EQ 0.
+    SORT IY_YRHA_DEPARTMENT.
+  ENDIF.
+
+  SELECT * FROM HRP1000 INTO TABLE I_HRP1000 FOR ALL ENTRIES IN I_PERNR_LEAVE_COMBO2 WHERE
+                               OBJID EQ I_PERNR_LEAVE_COMBO2-PLANS AND OTYPE EQ 'S' AND
+                               PLVAR EQ '01' AND BEGDA LE P_ENDDA AND ENDDA GE P_ENDDA.
+  IF SY-SUBRC EQ 0.
+    SORT I_HRP1000.
+  ENDIF.
+
+  SORT I_PA2001_LEAVE_COMBO2 BY PERNR ASCENDING.
+  LOOP AT I_PA2001_LEAVE_COMBO2 INTO DATA(WA_PA2001_LEAVE_COMBO2).
+
+    WA_LEAVE_COMBO2-PERNR = WA_PA2001_LEAVE_COMBO2-PERNR.
+
+    READ TABLE I_PERNR_LEAVE_COMBO2 INTO DATA(WA_PERNR_1) WITH KEY PERNR = WA_LEAVE_COMBO2-PERNR.
+    WA_LEAVE_COMBO2-GRADE = WA_PERNR_1-PERSK.
+    WA_LEAVE_COMBO2-ENAME = WA_PERNR_1-ENAME.
+
+
+    CLEAR: WA_T001P.
+    READ TABLE I_T001P INTO WA_T001P WITH KEY WERKS = WA_PERNR_1-WERKS BTRTL = WA_PERNR_1-BTRTL.
+    IF SY-SUBRC EQ 0.
+      WA_LEAVE_COMBO2-LOCATION = WA_T001P-BTEXT.
+    ENDIF.
+
+    CLEAR: WA_HRP1000.
+    READ TABLE I_HRP1000 INTO WA_HRP1000 WITH KEY OBJID = WA_PERNR_1-PLANS.
+    IF SY-SUBRC EQ 0.
+      WA_LEAVE_COMBO2-DESIGNATION = WA_HRP1000-MC_STEXT.
+    ENDIF.
+
+    CLEAR: WA_YRHA_DEPARTMENT.
+    READ TABLE IY_YRHA_DEPARTMENT INTO WA_YRHA_DEPARTMENT WITH KEY YY_DEPT = WA_PERNR_1-YY_DEPT.
+    IF SY-SUBRC EQ 0.
+      WA_LEAVE_COMBO2-DEPARTMENT = WA_YRHA_DEPARTMENT-YY_DEPARTMENT.
+    ENDIF.
+
+    WA_LEAVE_COMBO2-BEGIN_DATE = WA_PA2001_LEAVE_COMBO2-BEGDA.
+    WA_LEAVE_COMBO2-END_DATE = WA_PA2001_LEAVE_COMBO2-ENDDA.
+    WA_LEAVE_COMBO2-SUBTY   = WA_PA2001_LEAVE_COMBO2-SUBTY.
+
+    APPEND WA_LEAVE_COMBO2 TO I_LEAVE_COMBO2.
+
+    CLEAR: WA_PERNR_1,WA_LEAVE_COMBO2.
+
+  ENDLOOP.
+
+  DATA: LV_FM_CHK_BEGIN_DATE TYPE SY-DATUM,
+        LV_FM_CHK_END_DATE   TYPE SY-DATUM.
+
+  DATA : LV_FIRST_LEAVES3   TYPE SY-DATUM,
+         LV_LAST_LEAVES3    TYPE SY-DATUM,
+         LV_CURRENT_DATE3   TYPE SY-DATUM,
+         LV_FLAG3(2)        TYPE C,
+         LV_INSERT_FLAG3(2) TYPE C,
+         LV_COUNTER3(3)     TYPE C.
+
+  LV_INSERT_FLAG3 = 0.
+*  LV_FM_CHK_BEGIN_DATE = P_BEGDA - 20 .
+*  LV_FM_CHK_END_DATE = P_ENDDA + 20.
+
+  SORT I_LEAVE_COMBO2 BY PERNR BEGIN_DATE END_DATE.
+  DATA(I_COMBO2_TEMP) = I_LEAVE_COMBO2[].
+  DATA(I_COBO2_ORG)   = I_LEAVE_COMBO2[].
+  DELETE ADJACENT DUPLICATES FROM I_COMBO2_TEMP COMPARING PERNR.
+  LOOP AT I_COMBO2_TEMP INTO DATA(LW_COMBO2_TEMP).
+    DATA: LV_CHK1 TYPE DATUM, LV_CHK2 TYPE DATUM.
+    I_LEAVE_COMBO2[] = I_COBO2_ORG[].
+    DELETE I_LEAVE_COMBO2 WHERE PERNR NE LW_COMBO2_TEMP-PERNR.
+    LOOP AT I_LEAVE_COMBO2 INTO WA_LEAVE_COMBO2 .
+      IF SY-TABIX LE LINES( I_LEAVE_COMBO2 ) - 1.
+        CLEAR:LV_COUNTER3, LV_FM_CHK_BEGIN_DATE, LV_FM_CHK_END_DATE.
+        REFRESH : LT_PERNR_TAB6,I_LEAVE_A2.
+        LT_PERNR_TAB6-PERNR = WA_LEAVE_COMBO2-PERNR.
+        APPEND  LT_PERNR_TAB6.
+        LV_FM_CHK_BEGIN_DATE = WA_LEAVE_COMBO2-BEGIN_DATE.
+        LV_CHK1 = WA_LEAVE_COMBO2-END_DATE + 1.
+        READ TABLE I_LEAVE_COMBO2 INTO DATA(LW_TEMP) INDEX SY-TABIX + 1.
+        IF SY-SUBRC EQ 0.
+***   CHECK CONTINUITY FOR JOINING LEAVE 06 OR JOINING LEAVE ET 23
+          IF  ( WA_LEAVE_COMBO2-SUBTY EQ '06' AND LW_TEMP-SUBTY EQ '06' ) OR
+              ( WA_LEAVE_COMBO2-SUBTY EQ '10' AND LW_TEMP-SUBTY EQ '10' ) OR
+              ( WA_LEAVE_COMBO2-SUBTY EQ '11' AND LW_TEMP-SUBTY EQ '11' ) OR
+              ( WA_LEAVE_COMBO2-SUBTY EQ '12' AND LW_TEMP-SUBTY EQ '12' ) OR
+              ( WA_LEAVE_COMBO2-SUBTY EQ '13' AND LW_TEMP-SUBTY EQ '13' ) OR
+              ( WA_LEAVE_COMBO2-SUBTY EQ '14' AND LW_TEMP-SUBTY EQ '14' ) OR
+              ( WA_LEAVE_COMBO2-SUBTY EQ '26' AND LW_TEMP-SUBTY EQ '26' ) OR
+              ( WA_LEAVE_COMBO2-SUBTY EQ '37' AND LW_TEMP-SUBTY EQ '37' ) OR
+              ( WA_LEAVE_COMBO2-SUBTY EQ '23' AND LW_TEMP-SUBTY EQ '23' ) .
+            "DO NOTHING.
+          ELSE.
+            EXIT.
+          ENDIF.
+***
+          LV_FM_CHK_END_DATE   = LW_TEMP-END_DATE.
+          LV_CHK2 = LW_TEMP-BEGIN_DATE - 1.
+          CALL FUNCTION 'HR_PERSON_READ_WORK_SCHEDULE'
+            EXPORTING
+              BEGIN_DATE         = LV_CHK1
+              END_DATE           = LV_CHK2
+              READ_FROM_DATABASE = 'X'
+            TABLES
+              PERNR_TAB          = LT_PERNR_TAB6
+              PSP                = LT_PSP6
+              DAY_PSP            = LT_DAY_PSP6
+**    CHANGING
+**         CH_AUTH_INFTY_TAB  = LT_HRSP_TTY_AUTH_INFTY_TAB
+            EXCEPTIONS
+              ERROR_IN_BUILD_PSP = 1
+              OTHERS             = 2.
+          IF SY-SUBRC <> 0.
+* IMPLEMENT SUITABLE ERROR HANDLING HERE
+          ENDIF.
+
+          IF LT_PSP6 IS NOT INITIAL.
+*        CLEAR LV_FLAG.
+            LOOP AT LT_PSP6 INTO DATA(LW_PSP6).
+
+              IF LW_PSP6-DATUM GT WA_LEAVE_COMBO2-END_DATE.
+                IF ( LW_PSP6-TPROG EQ 'OFF' OR LW_PSP6-TPROG EQ 'REST') OR
+                   ( LW_PSP6-FTKLA EQ '1' ).
+                  WA_LEAVE_COMBO_FINAL2-PERNR = WA_LEAVE_COMBO2-PERNR.
+                  WA_LEAVE_COMBO_FINAL2-GRADE = WA_LEAVE_COMBO2-GRADE.
+                  WA_LEAVE_COMBO_FINAL2-ENAME = WA_LEAVE_COMBO2-ENAME.
+                  WA_LEAVE_COMBO_FINAL2-LOCATION = WA_LEAVE_COMBO2-LOCATION.
+                  WA_LEAVE_COMBO_FINAL2-DESIGNATION = WA_LEAVE_COMBO2-DESIGNATION.
+                  WA_LEAVE_COMBO_FINAL2-DEPARTMENT = WA_LEAVE_COMBO2-DEPARTMENT.
+                  WA_LEAVE_COMBO_FINAL2-BEGIN_DATE = LV_FM_CHK_BEGIN_DATE.
+                  WA_LEAVE_COMBO_FINAL2-END_DATE = LV_FM_CHK_END_DATE."LV_CURRENT_DATE3.
+                  LV_FLAG3 = 'X'.
+                ELSE.
+                  CLEAR:  LV_FLAG3.
+                  EXIT.
+                ENDIF.
+              ENDIF.
+            ENDLOOP.
+            IF LV_FLAG3 IS NOT INITIAL.
+              APPEND WA_LEAVE_COMBO_FINAL2 TO I_LEAVE_COMBO_FINAL3.
+            ENDIF.
+            CLEAR:  LV_FLAG3.
+          ENDIF.
+*      LOOP AT LT_PSP6.
+*
+**        IF LT_PSP6-AWTYP = 'A'.
+*
+*        IF LT_PSP6-AWART IN LV_BLUE_LEAVE.
+*
+*          LV_FLAG3 = 1.
+*          IF LV_FIRST_LEAVES3 IS INITIAL.
+*            LV_FIRST_LEAVES3 = LT_PSP6-DATUM.
+*          ENDIF.
+*
+*          LV_LAST_LEAVES3 = LT_PSP6-DATUM.
+*
+*          WA_LEAVE_A2-PERNR = LT_PSP6-PERNR.
+*          WA_LEAVE_A2-DATUM = LT_PSP6-DATUM.
+*          WA_LEAVE_A2-AWART = LT_PSP6-AWART.
+*          WA_LEAVE_A2-AWTYP = LT_PSP6-AWTYP.
+*          LV_CURRENT_DATE3 = LT_PSP6-DATUM.
+*
+*          APPEND WA_LEAVE_A2 TO I_LEAVE_A2.
+*          CLEAR: WA_LEAVE_A2.
+*          CONTINUE.
+*
+*        ELSEIF LV_FLAG3 = 1.
+*
+*          IF SY-SUBRC = 0.
+*
+*            IF  LT_PSP6-TPKLA = '0' OR LT_PSP6-FTKLA = '1'.
+*              DATA(LV_CURRENT_DATE4) = LT_PSP6-DATUM.
+*              WA_LEAVE_A2-PERNR = LT_PSP6-PERNR.
+*              WA_LEAVE_A2-DATUM = LT_PSP6-DATUM.
+*              WA_LEAVE_A2-AWART = LT_PSP6-AWART.
+*              WA_LEAVE_A2-AWTYP = LT_PSP6-AWTYP.
+*              LV_CURRENT_DATE3 = LT_PSP6-DATUM.
+*              LV_LAST_LEAVES3 = LT_PSP6-DATUM.
+*
+*              APPEND WA_LEAVE_A2 TO I_LEAVE_A2.
+*              CLEAR: WA_LEAVE_A2.
+*              CONTINUE.
+*
+*            ELSEIF LT_PSP6-TPKLA = '1' .
+*
+*              LV_COUNTER3 = 0.
+*              LV_FLAG3 = 0.
+*              LV_INSERT_FLAG3 = 1.
+*
+*              SORT I_LEAVE_A2 BY DATUM ASCENDING.
+*
+*              LOOP AT I_LEAVE_A2 INTO WA_LEAVE_A2 WHERE AWTYP NE 'A'.
+*
+*                READ TABLE I_LEAVE_COMBO2 INTO DATA(WA_LEAVE_COMBO3) WITH  KEY PERNR =  WA_LEAVE_A2-PERNR.
+*
+*                WA_LEAVE_COMBO_FINAL2-PERNR = WA_LEAVE_COMBO3-PERNR.
+*                WA_LEAVE_COMBO_FINAL2-GRADE = WA_LEAVE_COMBO3-GRADE.
+*                WA_LEAVE_COMBO_FINAL2-ENAME = WA_LEAVE_COMBO3-ENAME.
+*                WA_LEAVE_COMBO_FINAL2-LOCATION = WA_LEAVE_COMBO3-LOCATION.
+*                WA_LEAVE_COMBO_FINAL2-DESIGNATION = WA_LEAVE_COMBO3-DESIGNATION.
+*                WA_LEAVE_COMBO_FINAL2-DEPARTMENT = WA_LEAVE_COMBO3-DEPARTMENT.
+*                WA_LEAVE_COMBO_FINAL2-BEGIN_DATE = LV_FIRST_LEAVES3.
+*                WA_LEAVE_COMBO_FINAL2-END_DATE = LV_LAST_LEAVES3."LV_CURRENT_DATE3.
+*                APPEND WA_LEAVE_COMBO_FINAL2 TO I_LEAVE_COMBO_FINAL2.
+*                EXIT.
+*
+*                CLEAR:I_LEAVE_A2,WA_LEAVE_COMBO_FINAL2,WA_LEAVE_COMBO2,LV_INSERT_FLAG3,LV_CURRENT_DATE3,LV_FIRST_LEAVES3,
+*                LV_LAST_LEAVES3.
+*
+*              ENDLOOP.
+*
+*              CLEAR:I_LEAVE_A2,WA_LEAVE_COMBO_FINAL2,WA_LEAVE_COMBO2,LV_INSERT_FLAG3,LV_CURRENT_DATE3,LV_FIRST_LEAVES3,
+*               LV_LAST_LEAVES3.
+*
+*            ENDIF.
+*
+*          ENDIF.
+*
+*
+*        ENDIF.
+*
+*      ENDLOOP.                      " LT_PSP5
+
+        ENDIF.                          " LT_PSP5
+      ENDIF.
+    ENDLOOP.                          "I_LEAVE_COMBO1
+  ENDLOOP.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      FORM  P_DISPLAY_LEAVE_COMBO3
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM P_DISPLAY_LEAVE_COMBO3 .
+  PERFORM P_BUILD_FIELDCAT_LEAVE_COMBO3.
+  PERFORM P_BUILD_LAYOUT_LEAVE_COMBO3.
+
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      I_CALLBACK_PROGRAM = SY-REPID                 " REPORT ID
+      IS_LAYOUT          = X_LAYOUT                 " FOR LAYOUT
+      IT_FIELDCAT        = I_FIELDCAT     " FIELD CATALOG
+    TABLES
+      T_OUTTAB           = I_LEAVE_COMBO_FINAL3
+    EXCEPTIONS
+      PROGRAM_ERROR      = 1
+      OTHERS             = 2.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      FORM  P_BUILD_FIELDCAT_LEAVE_COMBO3
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM P_BUILD_FIELDCAT_LEAVE_COMBO3 .
+  WA_FIELDCAT-FIELDNAME = 'PERNR'.
+  WA_FIELDCAT-SELTEXT_L = 'CPF NUMBER'.      " CPF NUMBER.
+  WA_FIELDCAT-LZERO = 'X'.
+  WA_FIELDCAT-FIX_COLUMN = 'X'.
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'ENAME'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T04.      " EMPLOYEE NAME
+  WA_FIELDCAT-FIX_COLUMN = 'X'.
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'GRADE'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T03.      " GRADE
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'DESIGNATION'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T06.      " DESIGNATION
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'LOCATION'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T05.      " POSTING LOCATION
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'DEPARTMENT'.
+  WA_FIELDCAT-SELTEXT_L = TEXT-T07.      " DEPARTMENT
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'BEGIN_DATE'.
+  WA_FIELDCAT-SELTEXT_L = 'LEAVE BEGIN DATE'.      " LEAVE BEGIN DATE
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+
+  WA_FIELDCAT-FIELDNAME = 'END_DATE'.
+  WA_FIELDCAT-SELTEXT_L = 'LEAVE END DATE'.      " LEAVE BEGIN DATE
+  APPEND WA_FIELDCAT TO I_FIELDCAT.
+  CLEAR WA_FIELDCAT.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      FORM  P_BUILD_LAYOUT_LEAVE_COMBO3
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM P_BUILD_LAYOUT_LEAVE_COMBO3 .
+  CLEAR X_LAYOUT.
+  X_LAYOUT-NO_INPUT          = 'X'.
+  X_LAYOUT-COLWIDTH_OPTIMIZE = 'X'.
+  X_LAYOUT-ZEBRA             = 'X'.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      FORM  P_FETCH_ECO
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM P_FETCH_ECO .
+*** SOC BY SURAJ AND GAURAV FOR CHARM: 4000008578
+  DATA: LT_PERNR_TAB TYPE STANDARD TABLE OF PDPNR,
+        LT_PSP       TYPE STANDARD TABLE OF PDPSP,
+        LT_DAY_PSP   TYPE STANDARD TABLE OF PDSPPSP,
+        LW_PERNR_TAB TYPE PDPNR,
+        LW_PSP       TYPE PDPSP,
+        LW_DAY_PSP   TYPE PDSPPSP,
+        LT_DAY_ATTR  TYPE  STANDARD TABLE OF CASDAYATTR..
+  TYPES: BEGIN OF TY_WRKNG_SAT,
+           PERNR TYPE PA0001-PERNR,
+           WRKNG TYPE I,
+         END OF TY_WRKNG_SAT.
+  DATA: LT_WRKNG TYPE STANDARD TABLE OF TY_WRKNG_SAT,
+        LT_LEAVE TYPE STANDARD TABLE OF TY_WRKNG_SAT,
+        IT_LEAVE TYPE STANDARD TABLE OF TY_WRKNG_SAT,
+        WA_LEAVE TYPE TY_WRKNG_SAT,
+        LW_WRKNG TYPE TY_WRKNG_SAT.
+  TYPES: BEGIN OF TY_SHIFT,
+           PERNR TYPE PA0001-PERNR,
+           GEN   TYPE I,
+           REST  TYPE I,
+           OFF   TYPE I,
+           MRNG  TYPE I,
+           EVNG  TYPE I,
+           NIGHT TYPE I,
+         END OF TY_SHIFT.
+  DATA: LT_SHIFT TYPE STANDARD TABLE OF TY_SHIFT,
+        WA_SHIFT TYPE TY_SHIFT.
+
+  CLEAR: I_T554T.
+  SELECT * FROM T554T INTO TABLE I_T554T WHERE SPRSL = 'EN'.
+  IF SY-SUBRC EQ 0.
+    SORT I_T554T.
+  ENDIF.
+
+  CLEAR: I_T001P.
+  SELECT WERKS BTRTL BTEXT FROM T001P INTO TABLE I_T001P FOR ALL ENTRIES IN I_PERNR WHERE
+                                      WERKS EQ I_PERNR-WERKS AND BTRTL EQ I_PERNR-BTRTL.
+  IF SY-SUBRC EQ 0.
+    SORT I_T001P.
+  ENDIF.
+
+  CLEAR: IY_YRHA_DEPARTMENT.
+  SELECT * FROM YRHA_DEPARTMENT INTO TABLE IY_YRHA_DEPARTMENT FOR ALL ENTRIES IN I_PERNR WHERE
+                                                                  YY_DEPT EQ I_PERNR-YY_DEPT.
+  IF SY-SUBRC EQ 0.
+    SORT IY_YRHA_DEPARTMENT.
+  ENDIF.
+
+  CLEAR: I_HRP1000.
+  SELECT * FROM HRP1000 INTO TABLE I_HRP1000 FOR ALL ENTRIES IN I_PERNR WHERE
+                                 OBJID EQ I_PERNR-PLANS AND OTYPE EQ 'S' AND
+                                 PLVAR EQ '01' AND BEGDA LE P_ENDDA AND ENDDA GE P_ENDDA.
+  IF SY-SUBRC EQ 0.
+    SORT I_HRP1000.
+  ENDIF.
+
+  SELECT * FROM PA0015 INTO TABLE @DATA(I_PA0015)
+                                  FOR ALL ENTRIES IN @I_PERNR
+                                    WHERE PERNR = @I_PERNR-PERNR
+                                      AND SUBTY = '1205'
+                                      AND BEGDA GE @P_BEGDA
+                                      AND ENDDA LE @P_ENDDA.
+  IF I_PA0015 IS NOT INITIAL.
+    DATA: LV_SUM TYPE ANZHL.
+    DATA(LT_TEMP15) = I_PA0015[].
+    SORT: LT_TEMP15 BY PERNR ASCENDING,
+          I_PA0015 BY PERNR ASCENDING.
+    DELETE ADJACENT DUPLICATES FROM LT_TEMP15 COMPARING PERNR.
+    LOOP AT LT_TEMP15 ASSIGNING FIELD-SYMBOL(<FS_TEMP15>).
+      CLEAR: LV_SUM.
+      LOOP AT I_PA0015 INTO DATA(W_PA0015) WHERE PERNR = <FS_TEMP15>-PERNR.
+        LV_SUM = LV_SUM + W_PA0015-ANZHL.
+      ENDLOOP.
+      <FS_TEMP15>-ANZHL = LV_SUM.
+    ENDLOOP.
+    CLEAR: I_PA0015.
+    I_PA0015 = LT_TEMP15.
+  ENDIF.
+
+
+  CLEAR: LT_PSP, LT_DAY_PSP, LT_PERNR_TAB.
+  LOOP AT I_PERNR INTO WA_PERNR.
+    LW_PERNR_TAB-PERNR = WA_PERNR-PERNR.
+    APPEND LW_PERNR_TAB TO LT_PERNR_TAB.
+    CLEAR: LW_PERNR_TAB.
+  ENDLOOP.
+  CALL FUNCTION 'HR_PERSON_READ_WORK_SCHEDULE'
+    EXPORTING
+      BEGIN_DATE         = P_BEGDA
+      END_DATE           = P_ENDDA
+      READ_FROM_DATABASE = 'X'
+    TABLES
+      PERNR_TAB          = LT_PERNR_TAB
+      PSP                = LT_PSP
+      DAY_PSP            = LT_DAY_PSP.
+
+  SORT LT_PSP BY PERNR DATUM ASCENDING.
+
+  DATA(LT_PSP_TEMP) = LT_PSP[].
+  DELETE LT_PSP WHERE TPROG  = 'GEN' AND FTKLA = '0'.
+
+  LOOP AT LT_PSP_TEMP INTO LW_PSP.
+    READ TABLE LT_PSP TRANSPORTING NO FIELDS WITH KEY DATUM = LW_PSP-DATUM PERNR = LW_PSP-PERNR.
+    IF SY-SUBRC EQ 0.
+      DELETE LT_PSP_TEMP WHERE DATUM =  LW_PSP-DATUM AND PERNR = LW_PSP-PERNR.
+    ENDIF.
+  ENDLOOP.
+
+  LT_PSP = LT_PSP_TEMP.
+
+  LOOP AT LT_PSP INTO LW_PSP.
+
+    CALL FUNCTION 'DAY_ATTRIBUTES_GET'
+      EXPORTING
+        DATE_FROM                  = LW_PSP-DATUM
+        DATE_TO                    = LW_PSP-DATUM
+        LANGUAGE                   = SY-LANGU
+      TABLES
+        DAY_ATTRIBUTES             = LT_DAY_ATTR
+      EXCEPTIONS
+        FACTORY_CALENDAR_NOT_FOUND = 1
+        HOLIDAY_CALENDAR_NOT_FOUND = 2
+        DATE_HAS_INVALID_FORMAT    = 3
+        DATE_INCONSISTENCY         = 4
+        OTHERS                     = 5.
+
+    READ TABLE LT_DAY_ATTR INTO DATA(LW_DAY_ATTR) INDEX 1.
+    IF LW_DAY_ATTR-WEEKDAY NE '6'.
+      DELETE LT_PSP WHERE DATUM = LW_PSP-DATUM.
+    ENDIF.
+    CLEAR: LT_DAY_ATTR, LW_DAY_ATTR .
+  ENDLOOP.
+
+  SORT LT_PSP BY PERNR.
+  DATA(LT_PSP1) = LT_PSP[].
+  DELETE ADJACENT DUPLICATES FROM LT_PSP1 COMPARING PERNR.
+  LOOP AT LT_PSP1 INTO DATA(LW_PSP1).
+    CLEAR: LW_WRKNG.
+    LW_WRKNG-PERNR = LW_PSP1-PERNR.
+    LOOP AT LT_PSP INTO LW_PSP WHERE PERNR = LW_PSP1-PERNR.
+      LW_WRKNG-WRKNG = LW_WRKNG-WRKNG + 1.
+    ENDLOOP.
+    APPEND LW_WRKNG TO LT_WRKNG.
+    CLEAR: LW_WRKNG.
+  ENDLOOP.
+
+  SELECT * FROM PA2001 INTO TABLE @DATA(LT_PA2001)
+                                 WHERE PERNR IN @P_PERNR
+*                                   AND BEGDA GE @P_BEGDA
+                                   AND SUBTY NE '24'
+                                   AND ENDDA GE @P_BEGDA
+                                   AND BEGDA LE @P_ENDDA.
+
+  SELECT * FROM PA2001 INTO TABLE @DATA(IT_PA2001)
+                               WHERE PERNR IN @P_PERNR
+                                 AND SUBTY IN ( '01', '02', '03', '04', '05', '07', '09',
+                                                '10', '11', '12', '13', '14', '15', '16', '17', '18',
+                                                '20', '21', '25', '26', '27', '28', '29', '30', '32',
+                                                '33', '34', '35', '36', '37'  )
+*                                 AND BEGDA GE @P_BEGDA
+                                   AND ENDDA GE @P_BEGDA
+                                   AND BEGDA LE @P_ENDDA.
+
+  SELECT * FROM PA2003 INTO TABLE @DATA(IT_SHIFT)
+                               WHERE PERNR IN @P_PERNR
+*                                 AND BEGDA GE @P_BEGDA
+                                   AND ENDDA BETWEEN @P_BEGDA AND @P_ENDDA.
+
+  LOOP AT I_PERNR INTO WA_PERNR.
+    READ TABLE IT_SHIFT INTO DATA(LW_SHIFT) WITH KEY PERNR = WA_PERNR-PERNR.
+    IF SY-SUBRC <> 0.
+      WA_SHIFT-PERNR =  WA_PERNR-PERNR.
+      WA_SHIFT-GEN   =  P_ENDDA - P_BEGDA + 1.
+      WA_SHIFT-REST  = 0.
+      WA_SHIFT-OFF   = 0.
+      WA_SHIFT-NIGHT = 0.
+      WA_SHIFT-MRNG  = 0.
+      WA_SHIFT-EVNG  = 0.
+    ELSE.
+      LOOP AT IT_SHIFT INTO LW_SHIFT WHERE PERNR = WA_PERNR-PERNR.
+        WA_SHIFT-PERNR =  WA_PERNR-PERNR.
+        IF LW_SHIFT-TPROG = 'REST'.
+          WA_SHIFT-REST = WA_SHIFT-REST + LW_SHIFT-ENDDA - LW_SHIFT-BEGDA + 1.
+        ELSEIF LW_SHIFT-TPROG = 'OFF'.
+          WA_SHIFT-OFF = WA_SHIFT-OFF + LW_SHIFT-ENDDA - LW_SHIFT-BEGDA + 1.
+        ELSEIF LW_SHIFT-TPROG = 'NGHT'.
+          WA_SHIFT-NIGHT = WA_SHIFT-NIGHT + LW_SHIFT-ENDDA - LW_SHIFT-BEGDA + 1.
+        ELSEIF LW_SHIFT-TPROG = 'EVNG'.
+          WA_SHIFT-EVNG = WA_SHIFT-EVNG + LW_SHIFT-ENDDA - LW_SHIFT-BEGDA + 1.
+        ELSEIF LW_SHIFT-TPROG = 'MRNG'.
+          WA_SHIFT-MRNG = WA_SHIFT-MRNG + LW_SHIFT-ENDDA - LW_SHIFT-BEGDA + 1.
+        ENDIF.
+      ENDLOOP.
+      WA_SHIFT-GEN = P_ENDDA - P_BEGDA + 1  -  WA_SHIFT-REST -  WA_SHIFT-OFF -  WA_SHIFT-NIGHT -  WA_SHIFT-MRNG -  WA_SHIFT-EVNG.
+    ENDIF.
+    APPEND WA_SHIFT TO LT_SHIFT.
+    CLEAR: WA_SHIFT.
+  ENDLOOP.
+
+
+  DATA: LV_COUNTER TYPE I.
+  SORT: LT_PA2001 BY PERNR,
+        IT_PA2001 BY PERNR.
+  CLEAR: LT_LEAVE, LV_COUNTER.
+  DATA(LT_TEMP2001) = IT_PA2001[].
+  DELETE ADJACENT DUPLICATES FROM LT_TEMP2001 COMPARING PERNR.
+  LOOP AT LT_TEMP2001 INTO DATA(LW_TWMP2001).
+    LOOP AT IT_PA2001 INTO DATA(WA_PA2001) WHERE PERNR = LW_TWMP2001-PERNR.
+      IF WA_PA2001-BEGDA < P_BEGDA.
+        WA_PA2001-BEGDA = P_BEGDA.
+      ELSE.
+        "DO NOTHING
+      ENDIF.
+      IF WA_PA2001-ENDDA > P_ENDDA.
+        WA_PA2001-ENDDA = P_ENDDA.
+      ELSE.
+        " DO NOTHING
+      ENDIF.
+      LV_COUNTER = LV_COUNTER + WA_PA2001-ENDDA - WA_PA2001-BEGDA + 1.
+    ENDLOOP.
+    WA_LEAVE-PERNR = LW_TWMP2001-PERNR.
+    WA_LEAVE-WRKNG = LV_COUNTER.
+    APPEND WA_LEAVE TO IT_LEAVE.
+    CLEAR: WA_LEAVE , LV_COUNTER.
+  ENDLOOP.
+
+  SORT: LT_PA2001 BY PERNR BEGDA ENDDA.
+  DATA(LT_TEM2001) = LT_PA2001[].
+  DATA(LT_COPY2001) = LT_PA2001[].
+  CLEAR: LT_PA2001.
+  DATA: LV_COUNTERX TYPE I.
+  DELETE ADJACENT DUPLICATES FROM LT_TEM2001 COMPARING PERNR.
+  LOOP AT LT_TEM2001 INTO DATA(LW_TEM2001).
+    LOOP AT LT_COPY2001 INTO DATA(LW_COPY) WHERE PERNR = LW_TEM2001-PERNR.
+      CLEAR: LV_COUNTERX.
+      IF LW_COPY-BEGDA < P_BEGDA.
+        LW_COPY-BEGDA = P_BEGDA.
+      ELSE.
+        "DO NOTHING
+      ENDIF.
+      IF LW_COPY-ENDDA > P_ENDDA.
+        LW_COPY-ENDDA = P_ENDDA.
+      ELSE.
+        " DO NOTHING
+      ENDIF.
+
+      LV_COUNTERX = LW_COPY-ENDDA - LW_COPY-BEGDA + 1.
+      DO LV_COUNTERX TIMES.
+        LW_COPY-BEGDA = LW_COPY-BEGDA.
+        LW_COPY-ENDDA = LW_COPY-BEGDA.
+        APPEND LW_COPY TO LT_PA2001.
+        LW_COPY-BEGDA = LW_COPY-BEGDA + 1.
+      ENDDO.
+    ENDLOOP.
+  ENDLOOP.
+
+  LOOP AT LT_PSP1 INTO LW_PSP1.
+    CLEAR: LW_WRKNG.
+    LW_WRKNG-PERNR = LW_PSP1-PERNR.
+    LOOP AT LT_PSP INTO LW_PSP WHERE PERNR = LW_PSP1-PERNR.
+      READ TABLE LT_PA2001 INTO DATA(LW_PA2001) WITH KEY PERNR = LW_PSP-PERNR BEGDA =  LW_PSP-DATUM.
+      IF SY-SUBRC EQ 0.
+*        IF LW_PSP-DATUM GE LW_PA2001-BEGDA AND LW_PSP-DATUM LE LW_PA2001-ENDDA.
+        LW_WRKNG-WRKNG = LW_WRKNG-WRKNG + 1.
+*        ENDIF.
+      ENDIF.
+    ENDLOOP.
+    APPEND LW_WRKNG TO LT_LEAVE.
+    CLEAR: LW_WRKNG.
+  ENDLOOP.
+
+  LOOP AT I_PERNR INTO WA_PERNR.
+    W_ECO-PERNR = WA_PERNR-PERNR.
+    W_ECO-GRADE = WA_PERNR-PERSK.
+    W_ECO-ENAME = WA_PERNR-ENAME.
+
+    CLEAR: WA_T001P.
+    READ TABLE I_T001P INTO WA_T001P WITH KEY WERKS = WA_PERNR-WERKS BTRTL = WA_PERNR-BTRTL.
+    IF SY-SUBRC EQ 0.
+      W_ECO-LOCATION = WA_T001P-BTEXT.
+    ENDIF.
+
+    CLEAR: WA_HRP1000.
+    READ TABLE I_HRP1000 INTO WA_HRP1000 WITH KEY OBJID = WA_PERNR-PLANS.
+    IF SY-SUBRC EQ 0.
+      W_ECO-DESIGNATION = WA_HRP1000-MC_STEXT.
+    ENDIF.
+
+    CLEAR: WA_YRHA_DEPARTMENT.
+    READ TABLE IY_YRHA_DEPARTMENT INTO WA_YRHA_DEPARTMENT WITH KEY YY_DEPT = WA_PERNR-YY_DEPT.
+    IF SY-SUBRC EQ 0.
+      W_ECO-DEPARTMENT = WA_YRHA_DEPARTMENT-YY_DEPARTMENT.
+    ENDIF.
+
+    READ TABLE I_PA0015 INTO W_PA0015 WITH KEY PERNR = WA_PERNR-PERNR.
+    IF SY-SUBRC EQ 0.
+      W_ECO-YYECO_NO = W_PA0015-ANZHL.
+    ENDIF.
+
+    READ TABLE LT_WRKNG INTO LW_WRKNG WITH KEY PERNR = WA_PERNR-PERNR.
+    IF SY-SUBRC EQ 0.
+      W_ECO-WORK_SAT = LW_WRKNG-WRKNG.
+    ENDIF.
+
+    READ TABLE LT_LEAVE INTO DATA(LW_LEAVE) WITH KEY PERNR = WA_PERNR-PERNR.
+    IF SY-SUBRC EQ 0.
+      W_ECO-LEAVE_SAT = LW_LEAVE-WRKNG.
+    ENDIF.
+
+    READ TABLE IT_LEAVE INTO WA_LEAVE WITH KEY PERNR = WA_PERNR-PERNR.
+    IF SY-SUBRC EQ 0.
+      W_ECO-LEAVE_TOT = WA_LEAVE-WRKNG.
+    ENDIF.
+
+    READ TABLE LT_SHIFT INTO WA_SHIFT WITH KEY PERNR = WA_PERNR-PERNR.
+    IF SY-SUBRC EQ 0.
+      W_ECO-GEN = WA_SHIFT-GEN.
+      W_ECO-REST = WA_SHIFT-REST.
+      W_ECO-OFF = WA_SHIFT-OFF.
+      W_ECO-MRNG = WA_SHIFT-MRNG.
+      W_ECO-EVNG = WA_SHIFT-EVNG.
+      W_ECO-NIGHT = WA_SHIFT-NIGHT.
+    ENDIF.
+
+    APPEND W_ECO TO I_ECO.
+    CLEAR: W_ECO.
+  ENDLOOP.
+*** SOC BY SURAJ AND GAURAV FOR CHARM: 4000008578
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      FORM  P_DISPLAY_ECO
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM P_DISPLAY_ECO .
+
+  PERFORM P_BUILD_FIELDCAT.
+  PERFORM P_BUILD_LAYOUT.
+*    SORT GT_PTRV_MAIL BY REINR.
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      I_CALLBACK_PROGRAM       = SY-REPID                 " REPORT ID
+      I_CALLBACK_PF_STATUS_SET = 'PF'           " FOR PF-STATUS
+      I_CALLBACK_USER_COMMAND  = 'USER_COMMAND' " FOR USER-COMMAND
+      IS_LAYOUT                = X_LAYOUT                 " FOR LAYOUT
+      IT_FIELDCAT              = I_FIELDCAT     " FIELD CATALOG
+    TABLES
+      T_OUTTAB                 = I_ECO
+    EXCEPTIONS
+      PROGRAM_ERROR            = 1
+      OTHERS                   = 2.
+
+ENDFORM.

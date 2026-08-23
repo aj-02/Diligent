@@ -1,0 +1,1689 @@
+*&---------------------------------------------------------------------*
+*& Include          ZIN_R2R_PROCESS_PAYMENT_F01
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*& Form get_data
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+************************************************************************
+* Requirement Id: DID_M2C_180                                          *
+* Title: Program to process the payment acknowledgement files          *
+* Date Created: 27.05.2025                                             *
+* Programmer:  TAMBOLIV                                                *
+* Program Objective: This program will process the payment             *
+* acknowledgement files                                                *
+* Orig Request: DS4K900847                                             *
+************************************************************************
+* Modification History                                                 *
+************************************************************************
+* Modified By:                                                         *
+* Date:                                                                *
+* Modification TR:                                                     *
+* Reason:                                                              *
+************************************************************************
+FORM get_data.
+  DATA lv_filetype TYPE char10.
+  data : lt_table_1 type table of EPS2FILI.
+ data: lv_path_1 type zde_filename.
+        lv_path_1 = p_path.
+
+data: lv_path_test type char200.
+     lv_path_test = p_path.
+CALL FUNCTION 'EPS2_GET_DIRECTORY_LISTING'
+  EXPORTING
+    iv_dir_name                  =  lv_path_test
+*   FILE_MASK                    = ' '
+* IMPORTING
+*   DIR_NAME                     =
+*   FILE_COUNTER                 =
+*   ERROR_COUNTER                =
+  tables
+    dir_list                     = lt_table_1
+* EXCEPTIONS
+*   INVALID_EPS_SUBDIR           = 1
+*   SAPGPARAM_FAILED             = 2
+*   BUILD_DIRECTORY_FAILED       = 3
+*   NO_AUTHORIZATION             = 4
+*   READ_DIRECTORY_FAILED        = 5
+*   TOO_MANY_READ_ERRORS         = 6
+*   EMPTY_DIRECTORY_LIST         = 7
+*   OTHERS                       = 8
+          .
+IF sy-subrc <> 0.
+* Implement suitable error handling here
+ENDIF.
+
+LOOP AT lt_table_1  INTO data(ls_table_1).
+  CONCATENATE lv_path_1 '/' ls_table_1-name into p_path.
+*p_path = ls_table_1-name.
+
+
+  IF p_path IS NOT INITIAL.
+    gv_fullpath = p_path.
+
+    OPEN DATASET gv_fullpath FOR INPUT IN TEXT MODE ENCODING DEFAULT.
+    DO.
+      TRY.
+         READ DATASET gv_fullpath INTO l_fileline.
+      CATCH CX_SY_FILE_OPEN_MODE.
+
+      ENDTRY.
+
+      IF NOT l_fileline IS INITIAL.
+        gv_string = l_fileline.
+        CONDENSE gv_string.
+        REPLACE ALL OCCURRENCES OF cl_abap_char_utilities=>horizontal_tab IN gv_string WITH TEXT-005.
+        APPEND gv_string TO gt_data.
+      ELSE.
+        EXIT.
+      ENDIF.
+      CLEAR : gv_string.
+    ENDDO.
+    CLOSE DATASET gv_fullpath.
+    IF rb1 = 'X'.
+      PERFORM populate_data.
+      CONCATENATE gv_fullpath 'BANSTA' 'SCB' INTO gv_fullpath.
+    ELSEIF rb2 = 'X'.
+      PERFORM populate_data.
+      CONCATENATE gv_fullpath 'BANSTA' 'RCBC' INTO gv_fullpath.
+    ELSEIF rb3 = 'X'.
+      PERFORM populate_data_ack.
+      CONCATENATE gv_fullpath 'ACK' 'SCB' INTO gv_fullpath.
+    ELSE.
+      PERFORM populate_data_ack.
+      CONCATENATE gv_fullpath 'ACK' 'RCBC' INTO gv_fullpath.
+    ENDIF.
+
+
+  ELSE.
+    gv_fullpath = p_file.
+    lv_filetype = TEXT-010.
+    CALL FUNCTION 'GUI_UPLOAD'
+      EXPORTING
+        filename        = gv_fullpath
+        filetype        = lv_filetype
+      TABLES
+        data_tab        = gt_data
+      EXCEPTIONS
+        file_open_error = 1
+        file_read_error = 2
+        OTHERS          = 3.
+    IF sy-subrc <> 0.
+*          MESSAGE 'File could not be uploaded' TYPE 'E'.
+      MESSAGE: e004(zmc_180_process_pay).
+      RETURN.
+    ENDIF.
+    IF rb1 = 'X' OR rb2 = 'X'.
+
+      PERFORM populate_data.
+      IF rb1 = 'X'.
+        CONCATENATE gv_fullpath 'BANSTA' 'SCB' INTO gv_fullpath.
+      ELSE.
+        CONCATENATE gv_fullpath 'BANSTA' 'RCBC' INTO gv_fullpath.
+      ENDIF.
+
+    ELSEIF rb3 = 'X' OR rb4 = 'X'.
+
+      PERFORM populate_data_ack.
+      IF rb3 = 'X'.
+        CONCATENATE gv_fullpath 'ACK' 'SCB' INTO gv_fullpath.
+      ELSE.
+        CONCATENATE gv_fullpath 'ACK' 'RCBC' INTO gv_fullpath.
+      ENDIF.
+
+    ENDIF.
+  ENDIF.
+
+
+*  IF p_path IS not INITIAL.
+*    gv_fullpath = p_path.
+*    IF rb1 = 'X'.
+*
+*    OPEN DATASET gv_fullpath FOR INPUT IN TEXT MODE ENCODING DEFAULT.
+*    DO.
+*      READ DATASET gv_fullpath INTO l_fileline.
+*      IF NOT l_fileline IS INITIAL.
+*        gv_string = l_fileline.
+*        CONDENSE gv_string.
+*        REPLACE ALL OCCURRENCES OF cl_abap_char_utilities=>horizontal_tab IN gv_string WITH TEXT-005.
+*        APPEND gv_string TO gt_data.
+*      ELSE.
+*        EXIT.
+*      ENDIF.
+*      CLEAR : gv_string.
+*    ENDDO.
+*    CLOSE DATASET gv_fullpath.
+*    IF gt_data IS NOT INITIAL.
+*      PERFORM populate_data.
+*    ELSE.
+*      PERFORM save_error_file.
+*    ENDIF.
+*    ELSE.
+*      OPEN DATASET gv_fullpath FOR INPUT IN TEXT MODE ENCODING DEFAULT.
+*        DO.
+*          READ DATASET gv_fullpath INTO l_fileline.
+*          IF NOT l_fileline IS INITIAL.
+*            gv_string = l_fileline.
+*            CONDENSE gv_string.
+*            REPLACE ALL OCCURRENCES OF cl_abap_char_utilities=>horizontal_tab IN gv_string WITH TEXT-005.
+*            APPEND gv_string TO gt_data.
+*          ELSE.
+*            EXIT.
+*          ENDIF.
+*          CLEAR : gv_string.
+*        ENDDO.
+*        CLOSE DATASET p_path.
+*
+*        IF gt_ack IS NOT INITIAL.
+*          PERFORM populate_data_ack.
+*        ELSE.
+*          PERFORM save_error_file.
+*        ENDIF.
+*
+*
+*    ENDIF.
+*  ELSE.
+*    gv_fullpath = p_file.
+*    lv_filetype = TEXT-010.
+*    IF rb1 = 'X'.
+*      IF gv_fullpath CS '.txt'.
+*        CALL FUNCTION 'GUI_UPLOAD'
+*          EXPORTING
+*            filename        = gv_fullpath
+*            filetype        = lv_filetype
+*          TABLES
+*            data_tab        = gt_data
+*          EXCEPTIONS
+*            file_open_error = 1
+*            file_read_error = 2
+*            OTHERS          = 3.
+*        IF sy-subrc <> 0.
+**          MESSAGE 'File could not be uploaded' TYPE 'E'.
+*          MESSAGE: e004(zmc_180_process_pay).
+*          RETURN.
+*        ENDIF.
+*
+*        perform populate_data.
+*
+*      ELSEIF gv_fullpath CS '.xls'.
+*
+*        CALL FUNCTION 'ALSM_EXCEL_TO_INTERNAL_TABLE'
+*          EXPORTING
+*            filename                = gv_filename
+*            i_begin_col             = 1
+*            i_begin_row             = 1
+*            i_end_col               = 100
+*            i_end_row               = 1000
+*          TABLES
+*            intern                  = gt_values
+*          EXCEPTIONS
+*            inconsistent_parameters = 1
+*            upload_ole              = 2
+*            OTHERS                  = 3.
+*        IF sy-subrc <> 0.
+**          MESSAGE: 'Could not fetch data from excel file' TYPE 'E'.
+*          MESSAGE: e005(zmc_180_process_pay).
+*        ENDIF.
+*        IF gt_values IS NOT INITIAL.
+*          LOOP AT gt_values INTO DATA(gs_values) ##INTO_OK.
+*            IF gs_values-row = gc_num1.
+*              ASSIGN COMPONENT gs_values-col OF STRUCTURE gs_bansta_HDR TO <fs_field>.
+*              IF sy-subrc = 0.
+*                <fs_field> = gs_values-value.
+*              ENDIF.
+*
+*            ELSEIF gs_values-row > gc_num1.
+*              ASSIGN COMPONENT gs_values-col OF STRUCTURE gs_bansta TO <fs_field>.
+*              IF sy-subrc = 0.
+*                IF gs_values-col = 2.
+*                  <fs_field> = gs_values-value+4.
+*                  gs_bansta-bukrs = gs_values-value+0(4).
+*                ELSE.
+*                  <fs_field> = gs_values-value.
+*                ENDIF.
+*
+*              ENDIF.
+*            ENDIF.
+*            AT END OF row.
+*              IF gs_values-row = gc_num1.
+*                APPEND gs_bansta_hdr TO gt_bansta_hdr.
+**              CLEAR: gs_bansta_hdr.
+*              ELSE.
+*                APPEND gs_bansta TO gt_bansta.
+*                CLEAR: gs_bansta.
+*              ENDIF.
+*            ENDAT.
+*
+*          ENDLOOP.
+*        ENDIF.
+*        DELETE gt_bansta INDEX lines( gt_bansta ).
+*
+*        ENDIF.
+*
+*       IF gt_bansta is not INITIAL.
+*         READ TABLE gt_bansta INTO DATA(GS_BANSTA1) index 1.
+*         "write type fetching logic
+*
+*
+*
+**         IF ls_bnka-name = 'SCB'.
+**           CONCATENATE GV_FULLPATH 'SCB' INTO GV_FULLPATH.
+**         ELSEIF ls_bnka-name = 'RCBC'.
+**           CONCATENATE GV_FULLPATH 'RCBC' INTO GV_FULLPATH.
+**         ENDIF.
+*       ENDIF.
+*
+*      ELSE.
+*
+*        lv_filetype = TEXT-010.
+*        CALL FUNCTION 'GUI_UPLOAD'
+*          EXPORTING
+*            filename        = gv_fullpath
+*            filetype        = lv_filetype
+*          TABLES
+*            data_tab        = gt_data
+*          EXCEPTIONS
+*            file_open_error = 1
+*            file_read_error = 2
+*            OTHERS          = 3.
+*        IF sy-subrc <> 0.
+*          MESSAGE TEXT-014 TYPE gc_error.
+*          RETURN.
+*        ENDIF.
+*
+*        IF gt_data IS NOT INITIAL.
+*          PERFORM populate_data_ack.
+*        ELSE.
+*          MESSAGE: TEXT-015 TYPE gc_error.
+*        ENDIF.
+*        CONCATENATE GV_FULLPATH 'ACK' into gv_fullpath.
+*
+*
+*      ENDIF.
+*
+*  ENDIF.
+*
+
+*  "Check if the file is enetred from the local or the application server
+*  IF p_path IS NOT INITIAL.
+*
+*    gv_fullpath = p_path.
+*    "if the file is a bansta file
+*    IF gv_fullpath CS TEXT-002.
+*      "if the file is a text file
+*      IF gv_fullpath CS TEXT-003.
+*
+*        OPEN DATASET gv_fullpath FOR INPUT IN TEXT MODE ENCODING DEFAULT.
+*        DO.
+*          READ DATASET gv_fullpath INTO l_fileline.
+*          IF NOT l_fileline IS INITIAL.
+*            gv_string = l_fileline.
+*            CONDENSE gv_string.
+*            REPLACE ALL OCCURRENCES OF cl_abap_char_utilities=>horizontal_tab IN gv_string WITH TEXT-005.
+*            APPEND gv_string TO gt_data.
+*          ELSE.
+*            EXIT.
+*          ENDIF.
+*          CLEAR : gv_string.
+*        ENDDO.
+*        CLOSE DATASET gv_fullpath.
+*
+*        IF gt_data IS NOT INITIAL.
+*          PERFORM populate_data.
+*        ELSE.
+*          PERFORM save_error_file.
+*        ENDIF.
+*      "if the file is a csv file
+*      ELSEIF gv_fullpath CS TEXT-004.
+*
+*        OPEN DATASET gv_fullpath FOR INPUT IN TEXT MODE ENCODING DEFAULT.
+*        DO.
+*          READ DATASET gv_fullpath INTO l_fileline.
+*          IF NOT l_fileline IS INITIAL.
+*            gv_string = l_fileline.
+*            CONDENSE gv_string.
+*            REPLACE ALL OCCURRENCES OF cl_abap_char_utilities=>horizontal_tab IN gv_string WITH TEXT-005.
+*            APPEND gv_string TO gt_data.
+*          ELSE.
+*            EXIT.
+*          ENDIF.
+*          CLEAR gv_string.
+*        ENDDO.
+*        CLOSE DATASET gv_fullpath.
+*        IF gt_data IS NOT INITIAL.
+*          PERFORM populate_data.
+*        ELSE.
+*          PERFORM save_error_file.
+*        ENDIF.
+*      ELSE.
+*        MESSAGE: e000(zmc_180_process_pay).
+*      ENDIF.
+*     "if the file is a acknowledgement file
+*    ELSEIF gv_fullpath CS TEXT-006.
+*
+*      IF gv_fullpath CS TEXT-007.
+*        OPEN DATASET gv_fullpath FOR INPUT IN TEXT MODE ENCODING DEFAULT.
+*        DO.
+*          READ DATASET gv_fullpath INTO l_fileline.
+*          IF NOT l_fileline IS INITIAL.
+*            gv_string = l_fileline.
+*            CONDENSE gv_string.
+*            REPLACE ALL OCCURRENCES OF cl_abap_char_utilities=>horizontal_tab IN gv_string WITH TEXT-005.
+*            APPEND gv_string TO gt_data.
+*          ELSE.
+*            EXIT.
+*          ENDIF.
+*          CLEAR : gv_string.
+*        ENDDO.
+*        CLOSE DATASET p_path.
+*
+*        IF gt_ack IS NOT INITIAL.
+*          PERFORM populate_data_ack.
+*        ELSE.
+*          PERFORM save_error_file.
+*        ENDIF.
+*
+*      ELSE.
+**        MESSAGE 'Please enter a TEXT (.txt) format file' TYPE 'E'.
+*        MESSAGE: e001(zmc_180_process_pay).
+*      ENDIF.
+*
+*    ELSEIF gv_fullpath CS TEXT-008.
+*
+*      IF gv_fullpath CS TEXT-009.
+*
+*        OPEN DATASET gv_fullpath FOR INPUT IN BINARY MODE.
+*        IF sy-subrc = 0.
+*          READ DATASET gv_fullpath INTO l_fileline.
+*          IF sy-subrc <> 0.
+**            MESSAGE 'Error reading Excel file' TYPE 'I'.
+*            MESSAGE: e002(zmc_180_process_pay).
+*            RETURN.
+*          ENDIF.
+*        ELSE.
+**          MESSAGE 'Error opening Excel file' TYPE 'I'.
+*          MESSAGE: e003(zmc_180_process_pay).
+*          RETURN.
+*        ENDIF.
+*        CLOSE DATASET gv_fullpath.
+*
+*        PERFORM populate_data_scb.
+*
+*      ENDIF.
+*    ENDIF.
+*  " if the file is a stale check file
+*  ELSE.
+*
+*    gv_fullpath = p_file.
+*
+*    IF gv_fullpath CS TEXT-002.
+*      IF gv_fullpath CS TEXT-003.
+*        CLEAR: gt_data.
+*        DATA lv_filetype TYPE char10.
+*        lv_filetype = TEXT-010.
+*        CALL FUNCTION 'GUI_UPLOAD'
+*          EXPORTING
+*            filename        = gv_fullpath
+*            filetype        = lv_filetype
+*          TABLES
+*            data_tab        = gt_data
+*          EXCEPTIONS
+*            file_open_error = 1
+*            file_read_error = 2
+*            OTHERS          = 3.
+*        IF sy-subrc <> 0.
+**          MESSAGE 'File could not be uploaded' TYPE 'E'.
+*          MESSAGE: e004(zmc_180_process_pay).
+*          RETURN.
+*        ENDIF.
+*        IF gt_data IS NOT INITIAL.
+*          PERFORM populate_data.
+*        ELSE.
+**          MESSAGE: 'Cannot fetch data from the text file' TYPE 'E'.
+*          MESSAGE: e005(zmc_180_process_pay).
+*        ENDIF.
+*
+*      ELSEIF gv_fullpath CS TEXT-004.
+*
+*        gv_filename = gv_fullpath.
+*        CALL FUNCTION 'ALSM_EXCEL_TO_INTERNAL_TABLE'
+*          EXPORTING
+*            filename                = gv_filename
+*            i_begin_col             = 1
+*            i_begin_row             = 1
+*            i_end_col               = 100
+*            i_end_row               = 1000
+*          TABLES
+*            intern                  = gt_values
+*          EXCEPTIONS
+*            inconsistent_parameters = 1
+*            upload_ole              = 2
+*            OTHERS                  = 3.
+*        IF sy-subrc <> 0.
+**          MESSAGE: 'Could not fetch data from excel file' TYPE 'E'.
+*          MESSAGE: e005(zmc_180_process_pay).
+*        ENDIF.
+*
+*        IF gt_values IS NOT INITIAL.
+*          LOOP AT gt_values INTO DATA(gs_values) ##INTO_OK.
+*            IF gs_values-row = gc_num1.
+*              ASSIGN COMPONENT gs_values-col OF STRUCTURE gs_bansta_HDR TO <fs_field>.
+*              IF sy-subrc = 0.
+*                <fs_field> = gs_values-value.
+*              ENDIF.
+*
+*            ELSEIF gs_values-row > gc_num1.
+*              ASSIGN COMPONENT gs_values-col OF STRUCTURE gs_bansta TO <fs_field>.
+*              IF sy-subrc = 0.
+*                IF gs_values-col = 2.
+*                  <fs_field> = gs_values-value+4.
+*                  gs_bansta-bukrs = gs_values-value+0(4).
+*                ELSE.
+*                  <fs_field> = gs_values-value.
+*                ENDIF.
+*
+*              ENDIF.
+*            ENDIF.
+*            AT END OF row.
+*              IF gs_values-row = gc_num1.
+*                APPEND gs_bansta_hdr TO gt_bansta_hdr.
+**              CLEAR: gs_bansta_hdr.
+*              ELSE.
+*                APPEND gs_bansta TO gt_bansta.
+*                CLEAR: gs_bansta.
+*              ENDIF.
+*            ENDAT.
+*
+*          ENDLOOP.
+*        ENDIF.
+*        DELETE gt_bansta INDEX lines( gt_bansta ).
+*      ELSE.
+*        MESSAGE: TEXT-011 TYPE gc_error.
+*      ENDIF.
+*
+*    ELSEIF  gv_fullpath CS TEXT-012.
+*
+*      IF gv_fullpath CS TEXT-013.
+*        CLEAR: gt_data.
+*        lv_filetype = TEXT-010.
+*        CALL FUNCTION 'GUI_UPLOAD'
+*          EXPORTING
+*            filename        = gv_fullpath
+*            filetype        = lv_filetype
+*          TABLES
+*            data_tab        = gt_data
+*          EXCEPTIONS
+*            file_open_error = 1
+*            file_read_error = 2
+*            OTHERS          = 3.
+*        IF sy-subrc <> 0.
+*          MESSAGE TEXT-014 TYPE gc_error.
+*          RETURN.
+*        ENDIF.
+*
+*        IF gt_data IS NOT INITIAL.
+*          PERFORM populate_data_ack.
+*        ELSE.
+*          MESSAGE: TEXT-015 TYPE gc_error.
+*        ENDIF.
+*      ELSE.
+*        MESSAGE TEXT-016 TYPE gc_error.
+*      ENDIF.
+*
+*    ELSEIF gv_fullpath CS TEXT-017.
+*
+*      IF gv_fullpath CS TEXT-009.
+*        gv_filename = gv_fullpath.
+*        CALL FUNCTION 'ALSM_EXCEL_TO_INTERNAL_TABLE'
+*          EXPORTING
+*            filename                = gv_filename
+*            i_begin_col             = 1
+*            i_begin_row             = 1
+*            i_end_col               = 100
+*            i_end_row               = 1000
+*          TABLES
+*            intern                  = gt_values
+*          EXCEPTIONS
+*            inconsistent_parameters = 1
+*            upload_ole              = 2
+*            OTHERS                  = 3.
+*        IF sy-subrc <> 0.
+*          MESSAGE: TEXT-018 TYPE gc_error.
+*        ENDIF.
+*        IF gt_values IS NOT INITIAL.
+*          DATA: lv_rowno TYPE i VALUE 0.
+*          DATA: lv_colno TYPE i VALUE 0.
+*          LOOP AT gt_values INTO gs_values.
+*            IF gs_values-value CS TEXT-019.
+*              SPLIT gs_values-value AT ': ' INTO DATA(dummy) gv_bankn ##NEEDED.
+*            ENDIF.
+*            IF gs_values-value CO TEXT-020.
+*              lv_rowno = gs_values-row.
+*              lv_colno = gs_values-col.
+*            ENDIF.
+*            IF lv_rowno <> 0 AND gs_values-row > lv_rowno.
+*              ASSIGN COMPONENT ( gs_values-col - lv_colno + 1 ) OF STRUCTURE gs_scb TO <fs_field>. "#EC CI_FLDEXT_OK[2610650]
+*              IF gs_values-col = gc_num2.
+*                REPLACE ALL OCCURRENCES OF ',' IN gs_values-value WITH ''.
+*                CONDENSE gs_values-value.
+*              ENDIF.
+*              <fs_field> = gs_values-value.
+*              AT END OF row.
+*                APPEND gs_scb TO gt_scb.
+**              CLEAR: gs_bansta.
+*              ENDAT.
+*            ENDIF.
+*          ENDLOOP.
+*        ENDIF.
+*      ENDIF.
+*    ELSE.
+*      MESSAGE: TEXT-021 TYPE gc_error.
+*    ENDIF.
+*  ENDIF.
+  PERFORM process_data.
+
+ENDLOOP.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form process_data
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM process_data .
+*  REPLACE all OCCURRENCES OF 'BANSTARCBC' IN GV_FULLPATH WITH ''.
+*  REPLACE all OCCURRENCES OF 'BANSTASCB' IN GV_FULLPATH WITH ''.
+*  REPLACE all OCCURRENCES OF 'ACKRCBC' IN GV_FULLPATH WITH ''.
+*  REPLACE all OCCURRENCES OF 'ACKRCBC' IN GV_FULLPATH WITH ''.
+  IF p_path is not INITIAL.
+
+      FIND REGEX '/[^/]*$' IN gv_fullpath MATCH OFFSET gv_pos    ##REGEX_POSIX.
+*'\\[^\\]*$' TEXT-120
+  IF sy-subrc = 0.
+    gv_offset = gv_pos + 1.
+    gv_file_path = gv_fullpath+gv_offset.
+    IF SY-SYSID = 'QS4'.
+     gv_archive_path =  '/BANKUPW12R2/H2H/QS4/REPORTING/Check_Payment_Posting/'.
+    ENDIF.
+    CONCATENATE gv_archive_path gv_file_path INTO gv_archive_path SEPARATED BY '/'.
+  ENDIF.
+
+  else.
+    FIND REGEX '\\[^\\]*$' IN gv_fullpath MATCH OFFSET gv_pos    ##REGEX_POSIX.
+*'\\[^\\]*$' TEXT-120
+  IF sy-subrc = 0.
+    gv_offset = gv_pos + 1.
+    IF SY-sysid = 'QS4'.
+    gv_archive_path = '/BANKUPW12R2/H2H/QS4/REPORTING/Check_Payment_Posting/'.
+    ENDIF.
+    gv_file_path = gv_fullpath+gv_offset.
+    CONCATENATE gv_archive_path gv_file_path INTO gv_archive_path SEPARATED BY '/'.
+  ENDIF.
+  ENDIF.
+*  FIND REGEX '\\[^\\]*$' IN gv_fullpath MATCH OFFSET gv_pos    ##REGEX_POSIX.
+**'\\[^\\]*$' TEXT-120
+*  IF sy-subrc = 0.
+*    gv_offset = gv_pos + 1.
+*    gv_file_path = gv_fullpath+gv_offset.
+*    CONCATENATE gv_archive_path gv_file_path INTO gv_archive_path SEPARATED BY '/'.
+*  ENDIF.
+  REPLACE all OCCURRENCES OF 'BANSTARCBC' IN gv_archive_path WITH ''.
+  REPLACE all OCCURRENCES OF 'BANSTASCB' IN gv_archive_path WITH ''.
+  REPLACE all OCCURRENCES OF 'ACKRCBC' IN gv_archive_path WITH ''.
+  REPLACE all OCCURRENCES OF 'ACKRCBC' IN gv_archive_path WITH ''.
+  OPEN DATASET gv_archive_path FOR OUTPUT IN TEXT MODE ENCODING DEFAULT.
+
+  IF gv_fullpath CS TEXT-002.
+    "select data from acdoca table for hbkid and hktid
+    IF gv_fullpath CS TEXT-003.
+      IF gt_bansta IS NOT INITIAL.
+        SELECT rbukrs, belnr, gjahr,hbkid, hktid,rwcur,wsl
+        FROM acdoca
+        INTO TABLE @DATA(lt_acdoca)
+        FOR ALL ENTRIES IN @gt_bansta
+        WHERE rbukrs = @gt_bansta-bukrs
+        AND belnr = @gt_bansta-field1+0(10)
+        AND gjahr = @gt_bansta-field4+0(4)
+        AND rldnr = @gc_rldnr
+        AND koart = @gc_koart
+        AND hsl <> 0  .
+      ENDIF.
+
+
+
+    ELSEIF gv_fullpath CS TEXT-004.
+      IF gt_bansta IS NOT INITIAL.
+        "select data from acdoca table for hbkid and hktid
+        SELECT rbukrs, belnr, gjahr,hbkid, hktid,rwcur,wsl
+        FROM acdoca
+        INTO TABLE @lt_acdoca
+        FOR ALL ENTRIES IN @gt_bansta
+        WHERE rbukrs = @gt_bansta-bukrs
+        AND belnr = @gt_bansta-field1+0(10)
+        AND gjahr = @gt_bansta-field6+0(4)
+        AND rldnr = @gc_rldnr
+        AND koart = @gc_koart
+        AND  hsl  <> 0        .
+      ENDIF.
+
+    ENDIF.
+
+    SORT lt_acdoca BY rbukrs belnr gjahr.
+    "adding hbkid and hktid to the final table
+    LOOP AT gt_bansta ASSIGNING <ls_bansta>.
+      READ TABLE lt_acdoca INTO DATA(ls_acdoca) WITH KEY rbukrs = <ls_bansta>-bukrs
+                                                         belnr = <ls_bansta>-field1+0(10)
+                                                         gjahr = <ls_bansta>-field4+0(4) BINARY SEARCH.
+      IF sy-subrc = 0.
+        <ls_bansta>-hbkid = ls_acdoca-hbkid.
+        <ls_bansta>-hktid = ls_acdoca-hktid.
+      ENDIF.
+    ENDLOOP.
+    UNASSIGN <ls_bansta>.
+
+    IF gt_bansta IS NOT INITIAL.
+      "fetchinf data from payr table for bdc
+      SELECT vblnr, zbukr, hbkid, gjahr, hktid, chect, rwbtr, zaldt, waers, zanre, znme1, zstra, zort1, zpstl, zland
+        FROM payr
+        INTO TABLE @DATA(lt_bdc)
+        FOR ALL ENTRIES IN @gt_bansta
+        WHERE zbukr = @gt_bansta-bukrs
+        AND hbkid = @gt_bansta-hbkid
+      AND hktid = @gt_bansta-hktid
+      AND chect = @gt_bansta-field36
+        AND gjahr = @gt_bansta-field4+0(4) ##NEEDED.
+    ENDIF.
+
+
+
+    IF gv_fullpath CS TEXT-003.
+      IF gt_bansta IS NOT INITIAL.
+        "fetching data from reguh table for reversal reason
+        SELECT zbukr, zaldt, rzawe, vblnr
+              FROM reguh
+              INTO TABLE @DATA(lt_reguh)
+              FOR ALL ENTRIES IN @gt_bansta
+              WHERE zbukr = @gt_bansta-bukrs
+              AND zaldt = @gt_bansta-field4
+              AND vblnr = @gt_bansta-field1+0(10).
+      ENDIF.
+
+    ELSEIF gv_fullpath CS TEXT-004.
+      IF gt_bansta IS NOT INITIAL.
+        "fetching data from reguh table for reversal reason
+        SELECT zbukr, zaldt, rzawe, vblnr
+          FROM reguh
+          INTO TABLE @lt_reguh
+          FOR ALL ENTRIES IN @gt_bansta
+          WHERE zbukr = @gt_bansta-bukrs
+          AND zaldt = @gt_bansta-field6
+          AND vblnr = @gt_bansta-field1+0(10).
+      ENDIF.
+    ENDIF.
+
+
+
+*      ENDIF.
+
+
+*    ENDIF.
+
+    CLEAR: gs_bansta.
+*    DATA: payment_doc TYPE string.
+    DATA lv_year TYPE gjahr.
+    DATA lv_setname TYPE char24.
+    lv_setname = TEXT-022.
+    SELECT * FROM setleaf INTO TABLE @DATA(it_setleaf) WHERE setname  = @lv_setname. "#EC CI_ALL_FIELDS_NEEDED
+    lv_setname = TEXT-023.
+    "select query to fetch all the valid reversal reasons
+    SELECT valfrom FROM setleaf INTO TABLE @DATA(lt_setleaf) WHERE setname = @lv_setname.
+
+    SORT it_setleaf BY valfrom.
+    LOOP AT gt_bansta ASSIGNING <fs_bansta>.
+      SELECT SINGLE BUKRS FROM T001 INTO @DATA(LV_BUKRS_FIELD) WHERE BUKRS = @<FS_BANSTA>-bukrs.
+        IF SY-SUBRC IS INITIAL.
+*        ENDIF.
+      <fs_bansta>-field3 = to_upper( <fs_bansta>-field3 ).
+*      payment_doc = <fs_bansta>-field1+
+      READ TABLE it_setleaf INTO DATA(ls_setleaf) WITH KEY valfrom =  <fs_bansta>-field3 BINARY SEARCH ##NEEDED.
+*      IF sy-subrc IS NOT INITIAL.
+      IF sy-subrc IS  INITIAL.
+
+*      IF <fs_bansta>-field3 <> 'PROCESSED'.
+        IF <fs_bansta>-field1 NA 'ABCDEFGHIJKLMNOPQRSTUVWXYZ_-/?'.
+          IF gv_fullpath CS TEXT-003.
+            lv_year = <fs_bansta>-field4+0(4).
+          ELSEIF gv_fullpath CS TEXT-004.
+            lv_year = <fs_bansta>-field6+0(4).
+          ENDIF.
+
+
+          CALL FUNCTION 'J_1B_FBRA_POSTING_AUFRUFEN'
+            EXPORTING
+              i_augbl           = <fs_bansta>-field1+0(10)
+              i_bukrs           = <fs_bansta>-bukrs
+              i_gjahr           = lv_year
+              i_stgrd           = gc_stgrd
+            EXCEPTIONS
+              not_possible_fbra = 1
+              not_possible_fb08 = 2
+              OTHERS            = 3.
+          IF sy-subrc <> 0.
+            DATA: l_extnumber TYPE balnrext.
+            CALL FUNCTION 'BNK_UI_LOG_MSG_ADD'
+              EXPORTING
+                i_msgid     = sy-msgid
+                i_msgno     = sy-msgno
+                i_msgty     = sy-msgty
+                i_msgv1     = sy-msgv1
+                i_msgv2     = sy-msgv2
+                i_msgv3     = sy-msgv3
+                i_msgv4     = sy-msgv4
+                i_extnumber = l_extnumber.
+
+            IF lv_first_error_shown = abap_false.
+              ls_first_error_msg-msgid = sy-msgid.
+              ls_first_error_msg-msgno = sy-msgno.
+              ls_first_error_msg-msgty = sy-msgty.
+              ls_first_error_msg-msgv1 = sy-msgv1.
+              ls_first_error_msg-msgv2 = sy-msgv2.
+              ls_first_error_msg-msgv3 = sy-msgv3.
+              ls_first_error_msg-msgv4 = sy-msgv4.
+              lv_first_error_shown = abap_true.
+            ENDIF.
+
+            CALL FUNCTION 'BNK_UI_LOG_SAVE'.
+            <fs_bansta>-status = TEXT-116.
+          ELSE.
+            <fs_bansta>-status = TEXT-117.
+            COMMIT WORK.
+          ENDIF.
+        ELSE.
+          <fs_bansta>-status = TEXT-118.
+        ENDIF.
+
+*      ELSEIF <fs_bansta>-field3 = 'PROCESSED' .
+      ELSE. "sy-subrc IS INITIAL.
+        SORT lt_reguh BY zbukr zaldt vblnr.
+        IF  gv_fullpath CS TEXT-003.
+          READ TABLE lt_reguh INTO DATA(ls_reguh) WITH KEY zbukr = <fs_bansta>-bukrs
+                                                            zaldt = <fs_bansta>-field4
+                                                            vblnr = <fs_bansta>-field1+0(10) BINARY SEARCH.
+        ELSEIF gv_fullpath CS TEXT-004.
+          READ TABLE lt_reguh INTO ls_reguh WITH KEY zbukr = <fs_bansta>-bukrs
+                                                     zaldt = <fs_bansta>-field6
+                                                     vblnr = <fs_bansta>-field1+0(10) BINARY SEARCH.
+        ENDIF.
+
+*        READ TABLE it_setleaf INTO DATA(LS_SETLEAF) WITH KEY setname = 'ZTRM_CHEQUE_PM'.
+        SORT : lt_setleaf BY valfrom,lt_acdoca BY rbukrs belnr gjahr.
+        READ TABLE lt_setleaf WITH KEY valfrom = ls_reguh-rzawe TRANSPORTING NO FIELDS BINARY SEARCH.
+        IF <fs_bansta>-field16 IS NOT INITIAL AND gv_fullpath CS TEXT-003 AND sy-subrc = 0.
+          IF <fs_bansta>-field1 NA 'ABCDEFGHIJKLMNOPQRSTUVWXYZ_-/?'.
+
+            READ TABLE lt_acdoca INTO DATA(ls_bdc_doca) WITH KEY rbukrs = <fs_bansta>-bukrs
+                                                                 belnr = <fs_bansta>-field1+0(10)
+                                                                 gjahr = <fs_bansta>-field4+0(4) BINARY SEARCH.
+
+            PERFORM bdc_dynpro      USING 'SAPMFCHK' '0500'.
+            PERFORM bdc_field       USING 'BDC_CURSOR'
+                                          'PAYR-CHECT'.
+            PERFORM bdc_field       USING 'BDC_OKCODE'
+                                          '=UPDA'.
+            PERFORM bdc_field       USING 'PAYR-VBLNR'
+                                          ls_bdc_doca-belnr.
+            PERFORM bdc_field       USING 'PAYR-ZBUKR'
+                                          ls_bdc_doca-rbukrs.
+            PERFORM bdc_field       USING 'PAYR-GJAHR'
+                                          ls_bdc_doca-gjahr.
+            PERFORM bdc_field       USING 'PAYR-HBKID'
+                                          ls_bdc_doca-hbkid.
+            PERFORM bdc_field       USING 'PAYR-HKTID'
+                                          ls_bdc_doca-hktid.
+            PERFORM bdc_field       USING 'PAYR-CHECT'
+                                          <fs_bansta>-field16.
+            PERFORM bdc_dynpro      USING 'SAPMFCHK' '0501'.
+            PERFORM bdc_field       USING 'BDC_CURSOR'
+                                          'PAYR-RWBTR'.
+            PERFORM bdc_field       USING 'BDC_OKCODE'
+                                          '=UPDA'.
+*            PERFORM bdc_field       USING 'PAYR-ZALDT'
+*                                          <fs_bansta>-field5.
+*            PERFORM bdc_field       USING 'PAYR-WAERS'
+*                                          ls_bdc_doca-rwcur.
+*            PERFORM bdc_field       USING 'PAYR-RWBTR'
+*                                          ls_bdc_doca-wsl.
+*              PERFORM bdc_field       USING 'PAYR-ZANRE'
+*                                            ls_bdc-zanre.
+*              PERFORM bdc_field       USING 'PAYR-ZNME1'
+*                                            ls_bdc-znme1.
+*              PERFORM bdc_field       USING 'PAYR-ZSTRA'
+*                                            ls_bdc-zstra.
+*              PERFORM bdc_field       USING 'PAYR-ZORT1'
+*                                            ls_bdc-zort1.
+*              PERFORM bdc_field       USING 'PAYR-ZPSTL'
+*                                            ls_bdc-zpstl.
+*              PERFORM bdc_field       USING 'PAYR-ZLAND'
+*                                            ls_bdc-zland.
+
+            CALL TRANSACTION 'FCH5' USING gt_bdcdata MODE 'N' UPDATE 'A' MESSAGES INTO gt_messtab. "#EC CI_CALLTA
+            IF sy-subrc = 0.
+
+              <fs_bansta>-status = TEXT-117.
+              COMMIT WORK.
+            ELSE.
+              <fs_bansta>-status = TEXT-116.
+            ENDIF.
+
+          ELSE.
+
+            <fs_bansta>-status = TEXT-118.
+          ENDIF.
+          """"""""""""""""""""""""""""""""""""""
+        ELSEIF  <fs_bansta>-field32 IS NOT INITIAL AND gv_fullpath CS 'SCB' AND sy-subrc = 0.
+          IF <fs_bansta>-field1 NA 'ABCDEFGHIJKLMNOPQRSTUVWXYZ_-/?'.
+
+            READ TABLE lt_acdoca INTO ls_bdc_doca WITH KEY rbukrs = <fs_bansta>-bukrs
+                                                           belnr = <fs_bansta>-field1+0(10)
+                                                           gjahr = <fs_bansta>-field6+0(4) BINARY SEARCH.
+
+            PERFORM bdc_dynpro      USING 'SAPMFCHK' '0500'.
+            PERFORM bdc_field       USING 'BDC_CURSOR'
+                                          'PAYR-CHECT'.
+            PERFORM bdc_field       USING 'BDC_OKCODE'
+                                          '=UPDA'.
+            PERFORM bdc_field       USING 'PAYR-VBLNR'
+                                          ls_bdc_doca-belnr.
+            PERFORM bdc_field       USING 'PAYR-ZBUKR'
+                                          ls_bdc_doca-rbukrs.
+            PERFORM bdc_field       USING 'PAYR-GJAHR'
+                                          ls_bdc_doca-gjahr.
+            PERFORM bdc_field       USING 'PAYR-HBKID'
+                                          ls_bdc_doca-hbkid.
+            PERFORM bdc_field       USING 'PAYR-HKTID'
+                                          ls_bdc_doca-hktid.
+            PERFORM bdc_field       USING 'PAYR-CHECT'
+                                          <fs_bansta>-field32.
+            PERFORM bdc_dynpro      USING 'SAPMFCHK' '0501'.
+            PERFORM bdc_field       USING 'BDC_CURSOR'
+                                          'PAYR-RWBTR'.
+            PERFORM bdc_field       USING 'BDC_OKCODE'
+                                          '=UPDA'.
+*            PERFORM bdc_field       USING 'PAYR-ZALDT'
+*                                          <fs_bansta>-field6.
+*            PERFORM bdc_field       USING 'PAYR-WAERS'
+*                                          ls_bdc_doca-rwcur.
+*            PERFORM bdc_field       USING 'PAYR-RWBTR'
+*                                          ls_bdc_doca-wsl.
+*              PERFORM bdc_field       USING 'PAYR-ZANRE'
+*                                            ls_bdc-zanre.
+*              PERFORM bdc_field       USING 'PAYR-ZNME1'
+*                                            ls_bdc-znme1.
+*              PERFORM bdc_field       USING 'PAYR-ZSTRA'
+*                                            ls_bdc-zstra.
+*              PERFORM bdc_field       USING 'PAYR-ZORT1'
+*                                            ls_bdc-zort1.
+*              PERFORM bdc_field       USING 'PAYR-ZPSTL'
+*                                            ls_bdc-zpstl.
+*              PERFORM bdc_field       USING 'PAYR-ZLAND'
+*                                            ls_bdc-zland.
+
+            CALL TRANSACTION 'FCH5' USING gt_bdcdata MODE 'N' UPDATE 'A' MESSAGES INTO gt_messtab. "#EC CI_CALLTA
+            IF sy-subrc = 0.
+
+              <fs_bansta>-status = TEXT-117.
+              COMMIT WORK.
+            ELSE.
+              <fs_bansta>-status = TEXT-116.
+            ENDIF.
+
+          ELSE.
+
+            <fs_bansta>-status = TEXT-118.
+
+          ENDIF.
+        ELSE.
+          <fs_bansta>-status = TEXT-118.
+        ENDIF.
+
+      ENDIF.
+      IF p_path IS NOT INITIAL .
+        PERFORM save_archive_file.
+      ENDIF.
+
+      CLEAR: gt_bdcdata,gt_messtab.
+      else.
+        <fs_bansta>-status = TEXT-117.
+ENDIF.
+    ENDLOOP.
+    UNASSIGN <fs_bansta>.
+    CLOSE DATASET gv_archive_path.
+
+    IF p_file IS NOT INITIAL.
+      PERFORM display_alv_bansta.
+    ENDIF.
+
+  ELSEIF gv_fullpath CS TEXT-006.
+
+
+    DATA: lv_length TYPE i,
+          lc_17     TYPE i VALUE zcl_abap_utility=>zif_r2r_constant~gc_r2r_180-lc_17,
+          lc_8      TYPE i VALUE zcl_abap_utility=>zif_r2r_constant~gc_r2r_180-lc_8.
+
+
+    LOOP AT gt_ack ASSIGNING FIELD-SYMBOL(<fs_ack>).
+      IF <fs_ack>-field3 CS TEXT-007.
+
+        lv_length = strlen( <fs_ack>-field3 ).
+        lv_length = lv_length - lc_17.
+        DATA(lv_rundate) = <fs_ack>-field3+lv_length(8).
+        lv_length = lv_length + lc_8.
+        DATA(lv_runid) = <fs_ack>-field3+lv_length(5).
+
+        <fs_ack>-rundate = lv_rundate.
+        <fs_ack>-runid = lv_runid.
+      ELSE.
+        MESSAGE TEXT-026 TYPE gc_error.
+      ENDIF.
+    ENDLOOP.
+    UNASSIGN <fs_ack>.
+
+    DATA lv_value TYPE string.
+
+    LOOP AT gt_ack ASSIGNING FIELD-SYMBOL(<fs_ack1>).
+      gs_ack-field1 = to_upper( <fs_ack1>-field1 ).
+      IF gs_ack-field1 = gc_rej3.
+*        SUBMIT zab_r2r_rff110s_reverse                   "#EC CI_SUBMIT
+*        WITH run_date = <fs_ack1>-rundate
+*        WITH run_id = <fs_ack1>-runid
+*        WITH test_run = ''
+*        WITH reason = gc_reason
+*        EXPORTING LIST TO MEMORY AND RETURN.\
+
+        <fs_ack1>-field8 = to_upper( <fs_ack1>-field8 ).
+
+        IF <fs_ack1>-field8 CS 'DUPLICATE' or <fs_ack1>-field8 cs 'already processed'.
+          <fs_ack1>-status = TEXT-117.
+          ELSE.
+        SELECT  absbu, vblnr,zaldt FROM reguh INTO TABLE @DATA(ltt_ack) WHERE laufd = @<fs_ack1>-rundate AND laufi = @<fs_ack1>-runid AND xvorl = ''.
+        IF sy-subrc IS INITIAL.
+          LOOP AT ltt_ack ASSIGNING FIELD-SYMBOL(<ls_ack1>).
+
+            CALL FUNCTION 'J_1B_FBRA_POSTING_AUFRUFEN'
+              EXPORTING
+                i_augbl           = <ls_ack1>-vblnr
+                i_bukrs           = <ls_ack1>-absbu
+                i_gjahr           = <ls_ack1>-zaldt+0(4)
+                i_stgrd           = 'Z2'
+              EXCEPTIONS
+                not_possible_fbra = 1
+                not_possible_fb08 = 2
+                OTHERS            = 3.
+            IF sy-subrc <> 0.
+*            DATA: l_extnumber TYPE balnrext.
+              CALL FUNCTION 'BNK_UI_LOG_MSG_ADD'
+                EXPORTING
+                  i_msgid     = sy-msgid
+                  i_msgno     = sy-msgno
+                  i_msgty     = sy-msgty
+                  i_msgv1     = sy-msgv1
+                  i_msgv2     = sy-msgv2
+                  i_msgv3     = sy-msgv3
+                  i_msgv4     = sy-msgv4
+                  i_extnumber = l_extnumber.
+
+              IF lv_first_error_shown = abap_false.
+                ls_first_error_msg-msgid = sy-msgid.
+                ls_first_error_msg-msgno = sy-msgno.
+                ls_first_error_msg-msgty = sy-msgty.
+                ls_first_error_msg-msgv1 = sy-msgv1.
+                ls_first_error_msg-msgv2 = sy-msgv2.
+                ls_first_error_msg-msgv3 = sy-msgv3.
+                ls_first_error_msg-msgv4 = sy-msgv4.
+                lv_first_error_shown = abap_true.
+              ENDIF.
+            ELSE.
+              COMMIT WORK.
+            ENDIF .
+          ENDLOOP.
+        ENDIF.
+
+        IF sy-subrc IS INITIAL.
+          <fs_ack1>-status = TEXT-117.
+        ELSE.
+          <fs_ack1>-status = TEXT-116.
+        ENDIF.
+        IF p_path IS NOT INITIAL.
+          CLEAR: gv_data.
+          DO.
+            ASSIGN COMPONENT sy-index OF STRUCTURE gs_ack TO <fs_value>.
+            IF sy-subrc <> 0.
+              EXIT.
+            ENDIF.
+            lv_value = <fs_value>.
+            CONCATENATE gv_data lv_value INTO gv_data SEPARATED BY ','.
+          ENDDO.
+          TRANSFER gv_data TO gv_archive_path.
+        ENDIF.
+        ENDIF.
+      ELSE.
+        <fs_ack1>-status = TEXT-116.
+        MESSAGE: TEXT-027 TYPE gc_success DISPLAY LIKE gc_error.
+
+      ENDIF.
+    ENDLOOP.
+    UNASSIGN <fs_ack1>.
+
+    CLOSE DATASET gv_archive_path.
+    IF p_file IS NOT INITIAL.
+      PERFORM display_alv_ack.
+    ENDIF.
+
+  ELSEIF gv_fullpath CS TEXT-008.
+
+    SELECT bankn, bukrs, hbkid, hktid
+     FROM t012k
+     INTO @DATA(ls_bukrs) UP TO 1 ROWS
+     WHERE bankn = @gv_bankn ORDER BY PRIMARY KEY.
+    ENDSELECT.
+    IF sy-subrc <> 0.
+      MESSAGE: TEXT-028 TYPE gc_error.
+    ENDIF.
+
+    LOOP AT gt_scb ASSIGNING FIELD-SYMBOL(<fs_scb>).
+      <fs_scb>-house_bank = ls_bukrs-hbkid.
+      <fs_scb>-account_id = ls_bukrs-hktid.
+      <fs_scb>-comp_code = ls_bukrs-bukrs.
+    ENDLOOP.
+    UNASSIGN <fs_scb>.
+
+    IF gt_scb IS NOT INITIAL.
+      SELECT zbukr, hbkid, hktid, chect, vblnr
+        FROM payr
+        INTO TABLE @DATA(lt_payr)
+        FOR ALL ENTRIES IN @gt_scb
+        WHERE zbukr = @gt_scb-comp_code
+        AND hbkid = @gt_scb-house_bank
+        AND hktid = @gt_scb-account_id
+        AND chect = @gt_scb-check_no.
+      IF sy-subrc = 0.
+        SORT lt_payr BY zbukr hbkid hktid chect.
+        LOOP AT gt_scb ASSIGNING <fs_scb>.
+          READ TABLE lt_payr INTO DATA(ls_payr) WITH KEY zbukr = gs_scb-comp_code
+                                                         hbkid = gs_scb-house_bank
+                                                         hktid = gs_scb-account_id
+                                                         chect = gs_scb-check_no BINARY SEARCH.
+          IF sy-subrc = 0.
+            <fs_scb>-vblnr = ls_payr-vblnr.
+
+            CALL FUNCTION 'EXECUTE_VOID_CHECK'
+              EXPORTING
+                i_belnr = <fs_scb>-vblnr
+                i_bukrs = <fs_scb>-comp_code
+                i_gjahr = <fs_scb>-processing_date+0(4)
+                i_voidr = '00'.
+          ENDIF.
+          CLEAR: gv_data.
+          IF p_path IS NOT INITIAL.
+            PERFORM save_archive_file.
+          ENDIF.
+
+        ENDLOOP.
+        UNASSIGN <fs_scb>.
+        CLOSE DATASET gv_archive_path.
+      ELSE.
+        MESSAGE: TEXT-029 TYPE gc_error.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form populate_data
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM populate_data .
+  CLEAR: gt_bansta, gt_ACK.
+
+  LOOP AT gt_data INTO gs_data ##INTO_OK.
+    SPLIT gs_data AT ',' INTO TABLE gt_fields.
+    READ TABLE gt_fields INTO gs_fields INDEX 1.
+    IF gs_fields = gc_h.
+      LOOP AT gt_fields INTO gs_fields.
+        REPLACE ALL OCCURRENCES OF '"' IN gs_fields WITH ''.
+        gv_index = sy-tabix.
+        ASSIGN COMPONENT gv_index OF STRUCTURE gs_bansta_hdr TO <fs_field>.
+        IF sy-subrc = 0.
+          <fs_field> = gs_fields.
+        ENDIF.
+      ENDLOOP.
+      APPEND gs_bansta_hdr TO gt_bansta_hdr.
+    ELSEIF gs_fields = gc_d ##BOOL_OK.
+      LOOP AT gt_fields INTO gs_fields.
+        REPLACE ALL OCCURRENCES OF '"' IN gs_fields WITH ''.
+        gv_index = sy-tabix.
+        ASSIGN COMPONENT gv_index OF STRUCTURE gs_bansta TO <fs_field>.
+        IF sy-subrc = 0.
+          IF gv_index = 2.
+            <fs_field> = gs_fields+4.
+            gs_bansta-bukrs = gs_fields+0(4).
+          ELSE.
+            <fs_field> = gs_fields.
+          ENDIF.
+        ENDIF.
+      ENDLOOP.
+      APPEND gs_bansta TO gt_bansta.
+    ENDIF.
+    CLEAR: gs_bansta, gs_bansta_hdr.
+  ENDLOOP.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form POPULATE_DATA_ACK
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM populate_data_ack .
+  LOOP AT gt_data INTO gs_data ##INTO_OK.
+    SPLIT gs_data AT '|' INTO TABLE gt_fields.
+    LOOP AT gt_fields INTO gs_fields ##INTO_OK.
+      gv_index = sy-tabix.
+      ASSIGN COMPONENT gv_index OF STRUCTURE gs_ACK TO <fs_field>.
+      IF sy-subrc = 0.
+        <fs_field> = gs_fields.
+      ENDIF.
+    ENDLOOP.
+    APPEND gs_ACK TO gt_ACK.
+  ENDLOOP.
+ENDFORM.
+
+FORM bdc_dynpro USING program TYPE bdc_prog dynpro TYPE bdc_dynr.
+  CLEAR gs_bdcdata.
+  gs_bdcdata-program  = program.
+  gs_bdcdata-dynpro   = dynpro.
+  gs_bdcdata-dynbegin = abap_true.
+  APPEND gs_bdcdata TO gt_bdcdata.
+ENDFORM.
+
+FORM bdc_field USING fnam TYPE fnam_____4 fval TYPE any.
+  IF fval IS NOT INITIAL.
+    CLEAR gs_bdcdata.
+    gs_bdcdata-fnam = fnam.
+    gs_bdcdata-fval = fval.
+    APPEND gs_bdcdata TO gt_bdcdata.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form POPULATE_DATA_SCB
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM populate_data_scb .
+  DATA: lt_sheets TYPE TABLE OF string.
+  DATA: lo_xls      TYPE REF TO cl_fdt_xl_spreadsheet.
+  DATA: lv_xls_xstr TYPE xstring.
+  DATA: ir_data_ref TYPE REF TO data.
+
+  lo_xls = NEW cl_fdt_xl_spreadsheet( document_name = gv_fullpath
+                                      xdocument     = lv_xls_xstr ).
+  lo_xls->if_fdt_doc_spreadsheet~get_worksheet_names(
+    IMPORTING
+      worksheet_names = lt_sheets
+  ).
+  SORT lt_sheets.
+  READ TABLE lt_sheets INTO DATA(ls_last_sheet) INDEX lines( lt_sheets ).
+  IF sy-subrc = 0.
+    ir_data_ref = lo_xls->if_fdt_doc_spreadsheet~get_itab_from_worksheet( ls_last_sheet ).
+    ASSIGN ir_data_ref->* TO FIELD-SYMBOL(<lfs_data_tab>).
+
+    IF sy-subrc = 0.
+      gt_data[] = <lfs_data_tab>.
+    ENDIF.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form SAVE_ERRO_FILE
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM save_error_file .
+  DATA: lv_sourcepath TYPE sapb-sappfad.
+  DATA: lv_targetpath TYPE sapb-sappfad.
+  DATA: lv_length TYPE sapb-length ##NEEDED.
+  lv_sourcepath = gv_fullpath.
+
+  FIND REGEX gc_split2 IN gv_fullpath MATCH OFFSET gv_pos  ##REGEX_POSIX.
+
+  IF sy-subrc = 0.
+    gv_offset = gv_pos + 1.
+    gv_file_path = gv_fullpath+gv_offset.
+    CONCATENATE gv_archive_path gv_file_path INTO gv_archive_path SEPARATED BY '/'.
+  ENDIF.
+
+  lv_targetpath = gv_archive_path.
+
+  CALL FUNCTION 'ARCHIVFILE_SERVER_TO_SERVER'
+    EXPORTING
+      sourcepath       = lv_sourcepath
+      targetpath       = lv_targetpath
+    IMPORTING
+      length           = lv_length
+    EXCEPTIONS
+      error_file       = 1
+      no_authorization = 2
+      OTHERS           = 3.
+
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+               WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form SAVE_ARCHIVE_FILE
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM save_archive_file .
+  DATA: lv_value TYPE string.
+  CLEAR: gv_data.
+  DO.
+    ASSIGN COMPONENT sy-index OF STRUCTURE <fs_bansta> TO <fs_value>.
+    IF sy-subrc <> 0.
+      EXIT.
+    ENDIF.
+
+    lv_value = <fs_value>.
+    CONCATENATE gv_data lv_value INTO gv_data SEPARATED BY ','.
+  ENDDO.
+  TRANSFER gv_data TO gv_archive_path.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form display_alv_bansta
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM display_alv_bansta .
+  DATA:lt_fieldcat TYPE slis_t_fieldcat_alv,
+       ls_fieldcat TYPE slis_fieldcat_alv.
+
+
+  " Field 1
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-030.
+  ls_fieldcat-seltext_m  = TEXT-031.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Field 2
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-032.
+  ls_fieldcat-seltext_m  = TEXT-033.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Field 3
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-034.
+  ls_fieldcat-seltext_m  = TEXT-035.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Field 4
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-036.
+  ls_fieldcat-seltext_m  = TEXT-037.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Field 5
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-038.
+  ls_fieldcat-seltext_m  = TEXT-039.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Field 6
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-040.
+  ls_fieldcat-seltext_m  = TEXT-041.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Field 7
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-042.
+  ls_fieldcat-seltext_m  = TEXT-043.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Field 8
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-044.
+  ls_fieldcat-seltext_m  = TEXT-045.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Field 9
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-046.
+  ls_fieldcat-seltext_m  = TEXT-047.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Field 10
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-048.
+  ls_fieldcat-seltext_m  = TEXT-049.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Field 11
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-050.
+  ls_fieldcat-seltext_m  = TEXT-051.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Field 12
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-052.
+  ls_fieldcat-seltext_m  = TEXT-053.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Field 13
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-054.
+  ls_fieldcat-seltext_m  = TEXT-055.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Field 14
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-056.
+  ls_fieldcat-seltext_m  = TEXT-057.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Field 15
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-058.
+  ls_fieldcat-seltext_m  = TEXT-059.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Number Field
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-060.
+  ls_fieldcat-seltext_m  = TEXT-061.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Field 17
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-062.
+  ls_fieldcat-seltext_m  = TEXT-063.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Field 18
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-064.
+  ls_fieldcat-seltext_m  = TEXT-065.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Field 19
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-066.
+  ls_fieldcat-seltext_m  = TEXT-067.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Text Field
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-068.
+  ls_fieldcat-seltext_m  = TEXT-069.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Field 21
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-070.
+  ls_fieldcat-seltext_m  = TEXT-071.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Field 22
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-072.
+  ls_fieldcat-seltext_m  = TEXT-073.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Field 23
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-074.
+  ls_fieldcat-seltext_m  = TEXT-075.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Field 24
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-076.
+  ls_fieldcat-seltext_m  = TEXT-077.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Field 25
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-078.
+  ls_fieldcat-seltext_m  = TEXT-079.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Field 26
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-080.
+  ls_fieldcat-seltext_m  = TEXT-081.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Field 27
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-082.
+  ls_fieldcat-seltext_m  = TEXT-083.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Field 28
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-084.
+  ls_fieldcat-seltext_m  = TEXT-085.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Bank Number 1
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-086.
+  ls_fieldcat-seltext_m  = TEXT-087.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Field 30
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-088.
+  ls_fieldcat-seltext_m  = TEXT-089.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Field 31
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-090.
+  ls_fieldcat-seltext_m  = TEXT-091.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Field 32
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-092.
+  ls_fieldcat-seltext_m  = TEXT-093.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Bank Number 2
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-094.
+  ls_fieldcat-seltext_m  = TEXT-095.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Field 34
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-096.
+  ls_fieldcat-seltext_m  = TEXT-097.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Field 35
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-098.
+  ls_fieldcat-seltext_m  = TEXT-099.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Field 36
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-100.
+  ls_fieldcat-seltext_m  = TEXT-101.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Field 37
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-102.
+  ls_fieldcat-seltext_m  = TEXT-103.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Field 38
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-104.
+  ls_fieldcat-seltext_m  = TEXT-105.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Company Code
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-106.
+  ls_fieldcat-seltext_m  = TEXT-107.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " House Bank
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-108.
+  ls_fieldcat-seltext_m  = TEXT-109.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Account ID
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-110.
+  ls_fieldcat-seltext_m  = TEXT-111.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Status
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname  = TEXT-112.
+  ls_fieldcat-seltext_m  = TEXT-113.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      i_callback_program = sy-repid
+      it_fieldcat        = lt_fieldcat
+    TABLES
+      t_outtab           = gt_bansta
+    EXCEPTIONS
+      program_error      = 1
+      OTHERS             = 2.
+
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+               WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form display_alv_ack
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM display_alv_ack .
+  DATA: lt_fieldcat TYPE slis_t_fieldcat_alv,   " Classic field catalog table type
+        ls_fieldcat TYPE slis_fieldcat_alv.     " Classic field catalog structure type
+
+  " Prepare the field catalog (lt_fieldcat) for each field
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = TEXT-030.
+  ls_fieldcat-seltext_m = TEXT-031.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = TEXT-032.
+  ls_fieldcat-seltext_m = TEXT-033.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = TEXT-034.
+  ls_fieldcat-seltext_m = TEXT-035.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = TEXT-036.
+  ls_fieldcat-seltext_m = TEXT-037.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = TEXT-038.
+  ls_fieldcat-seltext_m = TEXT-039.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = TEXT-040.
+  ls_fieldcat-seltext_m = TEXT-041.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = TEXT-042.
+  ls_fieldcat-seltext_m = TEXT-043.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = TEXT-044.
+  ls_fieldcat-seltext_m = TEXT-045.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = TEXT-046.
+  ls_fieldcat-seltext_m = TEXT-047.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = TEXT-048.
+  ls_fieldcat-seltext_m = TEXT-049.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = TEXT-114.
+  ls_fieldcat-seltext_m = TEXT-115.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = TEXT-112.
+  ls_fieldcat-seltext_m = TEXT-113.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Call the function module to display the ALV grid
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      i_callback_program = sy-repid
+      it_fieldcat        = lt_fieldcat
+    TABLES
+      t_outtab           = gt_ack
+    EXCEPTIONS
+      program_error      = 1
+      OTHERS             = 2.
+
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+               WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+
+ENDFORM.

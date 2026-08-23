@@ -1,0 +1,13 @@
+PROCESS BEFORE OUTPUT.
+  MODULE status_9002.
+*
+PROCESS AFTER INPUT.
+  MODULE call_screen1 AT EXIT-COMMAND.
+  MODULE validate_record.
+  MODULE insert_record.
+
+PROCESS ON VALUE-REQUEST.
+  FIELD p_csdate MODULE f4_sdate.
+  FIELD p_cedate MODULE f4_edate.
+  FIELD p_cplant MODULE f4_plant.
+  FIELD p_cwtype MODULE f4_wtype.

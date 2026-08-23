@@ -1,0 +1,229 @@
+  METHOD UPDATE_CLEAR_DETAILS.
+*&---------------------------------------------------------------------*
+*& Class: YCL_PORTAL_CUST_CLEARING                                     *
+*& Method: UPDATE_CLEAR_DETAILS                                        *
+*&---------------------------------------------------------------------*
+*& Module: Finance(FI)                                                 *
+*& Developer: Rohtash                                                  *
+*& Functional: Manoj Narendra Rane                                     *
+*& Creation Date: 17/10/2024                                           *
+*&---------------------------------------------------------------------*
+*------------------------Technical Changes-----------------------------*
+*----------------------------------------------------------------------*
+* Date               Changed By          Charm No.          Transport  *
+*----------------------------------------------------------------------*
+* 17/10/2024         Rohtash             2000000859          DVRK9A1AP8 *
+*----------------------------------------------------------------------*
+    DATA: LV_TIMESTAMP TYPE Y_UPD_TIME,
+          LV_CLEAR_DOC TYPE YY_CLEAR_DOC.
+
+    DATA: LV_BELNR TYPE BKPF-BELNR,
+          LV_GJAHR TYPE BKPF-GJAHR,
+          LV_BUZEI TYPE BSEG-BUZEI.
+
+    DATA: LI_ACCCHG TYPE TABLE OF ACCCHG.
+
+
+    DATA(LV_CLEAR_FLG) = ABAP_FALSE.
+
+    CLEAR: LV_TIMESTAMP.
+
+    CALL FUNCTION 'ENQUEUE_E_TABLE'  "Lock Table
+      EXPORTING
+        TABNAME        = 'YRFA_CUST_CLEAR'
+      EXCEPTIONS
+        FOREIGN_LOCK   = 1
+        SYSTEM_FAILURE = 2
+        OTHERS         = 3.
+
+    IF SY-SUBRC EQ 0.
+      LOOP AT GI_FTPOST INTO DATA(LS_FTPOST).
+
+        IF LS_FTPOST-TYPE = 'SHORT_PAY'.
+
+          UPDATE YRFA_CUST_CLEAR SET SHORT_CC          = LS_FTPOST-DOC_CC
+                                     SHORT_DOC         = LS_FTPOST-DOC_NO
+                                     MESSAGE           = CHS_UPD_DATA-MESSAGE
+                               WHERE PAY_DATE = CHS_UPD_DATA-PAY_DATE
+                                 AND REQ_NO   = LS_FTPOST-REQ_NO.
+
+          COMMIT WORK AND WAIT.
+
+          "Update internal table also
+          READ TABLE GI_CUST_CLR ASSIGNING FIELD-SYMBOL(<LFS1>) WITH KEY REQ_NO = LS_FTPOST-REQ_NO.
+          IF SY-SUBRC EQ 0.
+            <LFS1>-SHORT_CC  = LS_FTPOST-DOC_CC.
+            <LFS1>-SHORT_DOC = LS_FTPOST-DOC_NO.
+          ENDIF.
+
+          LV_CLEAR_FLG = ABAP_TRUE.
+          LV_TIMESTAMP = CHS_UPD_DATA-LAST_UPD_TIME.
+
+        ELSEIF LS_FTPOST-TYPE = 'INV_BAL' .
+          "If all the documents have 0 balance then don't update filed INV_BAL_DOC & INV_BAL_CC, only update CLEAR_DOC
+          IF GV_AMOUNT_ZERO_FLAG EQ ABAP_FALSE.
+            UPDATE YRFA_CUST_CLEAR SET INV_BAL_CC          = LS_FTPOST-DOC_CC
+                                       INV_BAL_DOC         = LS_FTPOST-DOC_NO
+                                       MESSAGE             = CHS_UPD_DATA-MESSAGE
+                                 WHERE PAY_DATE = CHS_UPD_DATA-PAY_DATE
+                                   AND REQ_NO   = LS_FTPOST-REQ_NO.
+
+            COMMIT WORK AND WAIT.
+
+            READ TABLE GI_CUST_CLR ASSIGNING FIELD-SYMBOL(<LFS2>) WITH KEY REQ_NO = LS_FTPOST-REQ_NO.
+            IF SY-SUBRC EQ 0.
+              <LFS2>-INV_BAL_CC  = LS_FTPOST-DOC_CC.
+              <LFS2>-INV_BAL_DOC = LS_FTPOST-DOC_NO.
+            ENDIF.
+          ENDIF.
+
+          LV_CLEAR_FLG = ABAP_TRUE.
+          LV_TIMESTAMP = CHS_UPD_DATA-LAST_UPD_TIME.
+
+        ELSEIF LS_FTPOST-TYPE = 'PAY_BAL'.
+
+          UPDATE YRFA_CUST_CLEAR SET PAY_BAL_CC          = LS_FTPOST-DOC_CC
+                                     PAY_BAL_DOC         = LS_FTPOST-DOC_NO
+                                     MESSAGE             = CHS_UPD_DATA-MESSAGE
+                               WHERE PAY_DATE = CHS_UPD_DATA-PAY_DATE
+                                 AND REQ_NO   = LS_FTPOST-REQ_NO.
+
+          COMMIT WORK AND WAIT.
+
+          READ TABLE GI_CUST_CLR ASSIGNING FIELD-SYMBOL(<LFS3>) WITH KEY REQ_NO = LS_FTPOST-REQ_NO.
+          IF SY-SUBRC EQ 0.
+            <LFS3>-PAY_BAL_CC  = LS_FTPOST-DOC_CC.
+            <LFS3>-PAY_BAL_DOC = LS_FTPOST-DOC_NO.
+          ENDIF.
+
+          LV_CLEAR_FLG = ABAP_TRUE.
+          LV_TIMESTAMP = CHS_UPD_DATA-LAST_UPD_TIME.
+
+        ELSEIF LS_FTPOST-TYPE = 'RESERVE'.
+
+          UPDATE YRFA_CUST_CLEAR SET RESERVE_CC          = LS_FTPOST-DOC_CC
+                                     RESERVE_DOC         = LS_FTPOST-DOC_NO
+                                     MESSAGE             = CHS_UPD_DATA-MESSAGE
+                               WHERE PAY_DATE = CHS_UPD_DATA-PAY_DATE
+                                 AND REQ_NO   = LS_FTPOST-REQ_NO.
+
+          COMMIT WORK AND WAIT.
+
+          READ TABLE GI_CUST_CLR ASSIGNING FIELD-SYMBOL(<LFS6>) WITH KEY REQ_NO = LS_FTPOST-REQ_NO.
+          IF SY-SUBRC EQ 0.
+            <LFS6>-RESERVE_CC  = LS_FTPOST-DOC_CC.
+            <LFS6>-RESERVE_DOC = LS_FTPOST-DOC_NO.
+          ENDIF.
+
+*          LV_BELNR = LS_FTPOST-DOC_NO+0(10).
+*          LV_GJAHR = LS_FTPOST-DOC_NO+10(4).
+*          LV_BUZEI = LS_FTPOST-DOC_NO+14(3).
+
+*          LV_BELNR = LS_FTPOST-REF_DOC.
+*          LV_GJAHR = LS_FTPOST-REF_YEAR.
+*          LV_BUZEI = LS_FTPOST-REF_ITEM.
+
+          LI_ACCCHG = VALUE #( ( FDNAME = 'LZBKZ' NEWVAL = 'E' ) ).
+
+          "Change Reserve document
+          CALL FUNCTION 'FI_DOCUMENT_CHANGE'
+            EXPORTING
+              I_OBZEI              = '000'
+              I_BUZEI              = LS_FTPOST-REF_ITEM
+              X_LOCK               = 'X'
+              I_BUKRS              = LS_FTPOST-REF_CC
+              I_BELNR              = LS_FTPOST-REF_DOC
+              I_GJAHR              = LS_FTPOST-REF_YEAR
+            TABLES
+              T_ACCCHG             = LI_ACCCHG
+            EXCEPTIONS
+              NO_REFERENCE         = 1
+              NO_DOCUMENT          = 2
+              MANY_DOCUMENTS       = 3
+              WRONG_INPUT          = 4
+              OVERWRITE_CREDITCARD = 5
+              ERROR_MESSAGE        = 6
+              OTHERS               = 7.
+
+          IF SY-SUBRC EQ 0.
+
+            CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'.
+
+          ENDIF.
+
+          LV_CLEAR_FLG = ABAP_TRUE.
+          LV_TIMESTAMP = CHS_UPD_DATA-LAST_UPD_TIME.
+
+        ELSEIF LS_FTPOST-TYPE = 'ROUND_OFF'.
+          LV_CLEAR_FLG = ABAP_TRUE.
+          LV_TIMESTAMP = CHS_UPD_DATA-LAST_UPD_TIME.
+
+        ENDIF.
+
+        CLEAR: LV_BELNR, LV_GJAHR, LV_BUZEI, LI_ACCCHG.
+
+      ENDLOOP.
+
+      LV_CLEAR_DOC = |{ LS_FTPOST-DOC_NO+0(14) }{ LS_FTPOST-DOC_CC }|. "Document_number + Year + comapny_code
+
+      IF LV_CLEAR_FLG EQ ABAP_TRUE AND CHS_UPD_DATA-MESSAGE IS INITIAL.
+
+        "Make block indicator 'R' after clearing if doc_type is 'INV'
+        CHS_UPD_DATA-BLK_RLS_IND = COND #( WHEN CHS_UPD_DATA-DOC_TYPE EQ 'INV' THEN 'R' ).
+
+        UPDATE YRFA_CUST_CLEAR SET CLEAR_DOC        = LV_CLEAR_DOC
+                                   POST_CLR_STATUS  = 'CLEARED'
+                                   LAST_UPD_TIME    = LV_TIMESTAMP
+                                   BLK_RLS_IND      = CHS_UPD_DATA-BLK_RLS_IND
+                                   NEW_CLR_DATE      = CHS_UPD_DATA-NEW_CLR_DATE
+                             WHERE PAY_DATE = CHS_UPD_DATA-PAY_DATE
+                               AND REQ_NO   IN IR_REQ_NO.
+
+        COMMIT WORK AND WAIT.
+
+      ELSEIF CHS_UPD_DATA-MESSAGE IS NOT INITIAL.
+
+        UPDATE YRFA_CUST_CLEAR SET MESSAGE  = CHS_UPD_DATA-MESSAGE
+                             WHERE PAY_DATE = CHS_UPD_DATA-PAY_DATE
+                               AND REQ_NO   IN IR_REQ_NO.
+
+        COMMIT WORK AND WAIT.
+
+      ENDIF.
+
+    ENDIF.
+
+
+
+
+    CALL FUNCTION 'DEQUEUE_E_TABLE'  "UNLOCK TABLE
+      EXPORTING
+        TABNAME = 'YRFA_CUST_CLEAR'.
+
+    CLEAR: LV_CLEAR_DOC.
+*SOC Kartik / Manoj Rane Charm 4000009573 date 28/04/2025
+    DATA:it_cust_email TYPE  yy_cust_email_tt.
+    DATA:it_cust_clear TYPE  YY_CUST_CLEAR_TT.
+    DATA: r_comp TYPE RANGE OF bukrs.
+    SELECT pay_grp_no,req_no,inv_cust,inv_no,inv_cc,inv_doc,inv_year,inv_item,inv_spl_gl,inv_date,pay_cust,
+      utr_no,pay_cc,pay_doc,pay_year,pay_item,pay_spl_gl,pay_date,clear_amount,short_pay,tds_amount,round_off,
+      inv_bal,pay_bal,tds_cc,tds_doc,post_clr_status,down_time,pan_no,email,message FROM yrfa_cust_clear
+      INTO CORRESPONDING FIELDS OF TABLE @it_cust_clear WHERE pay_grp_no = @chs_upd_data-pay_grp_no." AND message NE @space .
+    IF it_cust_clear IS NOT INITIAL AND  ( chs_upd_data-message IS NOT INITIAL  or chs_upd_data-RESERVE_DOC is not INITIAL ). ""added by mobin/anshul 24.07.2025
+*    IF it_cust_clear IS NOT INITIAL AND chs_upd_data-message IS NOT INITIAL  .
+      r_comp = VALUE #( FOR wa IN  it_cust_clear ( sign = 'I' option =  'EQ' low = wa-inv_cc ) ).
+
+      SELECT kunnr, vkbur FROM knvv INTO TABLE @DATA(it_knvv) FOR ALL ENTRIES IN @it_cust_clear
+        WHERE kunnr = @it_cust_clear-inv_cust.
+      IF sy-subrc = 0.
+        SELECT * FROM  yrfa_cust_email INTO TABLE @it_cust_email FOR ALL ENTRIES IN @it_knvv
+           WHERE comp_code IN @r_comp AND sales_off = @it_knvv-vkbur.
+      ENDIF.
+
+
+    me->email_error( EXPORTING it_cust_email = it_cust_email
+                               it_cust_clear = it_cust_clear          ).
+
+ ENDIF.
+*EOC Kartik / Manoj Rane Charm 4000009573 date 28/04/2025
+  ENDMETHOD.  "METHOD update_clear_details.

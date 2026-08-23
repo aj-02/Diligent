@@ -1,0 +1,10 @@
+ENHANCEMENT 1  ZES_ACC_EKPO_WHERE_COND.    "active version
+*IF et_ekpo_where IS NOT INITIAL.
+*  LOOP AT et_ekpo_where ASSIGNING FIELD-SYMBOL(<fs_ekpo_where>).
+*    IF <fs_ekpo_where> CS `AND KNTTP NE 'U'`.
+*      REPLACE ALL OCCURRENCES OF `AND KNTTP NE 'U'` IN <fs_ekpo_where> WITH ''.
+*    ENDIF.
+*  ENDLOOP.
+*
+*ENDIF.
+ENDENHANCEMENT.

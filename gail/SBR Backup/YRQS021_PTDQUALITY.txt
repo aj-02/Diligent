@@ -1,0 +1,1184 @@
+*&---------------------------------------------------------------------*
+*& Report  YRQS021_PTDQUALITY
+*&
+*&---------------------------------------------------------------------*
+*& Development By: Sachin Kaul
+*&
+*&---------------------------------------------------------------------*
+
+REPORT  YRQS021_PTDQUALITY.
+
+INCLUDE YRQS021_PTDQUALITY_TOP.
+INCLUDE YRQS021_PTDQUALITY_PRO.
+INCLUDE YRQS021_PTDQUALITY_FORM.
+
+*SOC BY MANMOHAN/SHREYOSI CHARM: 4000008817 DATE: 25/09/2024
+AT SELECTION-SCREEN.
+  IF S_MAT IS INITIAL AND S_DATE IS INITIAL AND S_INS IS INITIAL.
+    MESSAGE 'Please provide at least one input' TYPE 'E'.
+  ENDIF.
+  IF S_MAT IS NOT INITIAL.
+    IF ( S_DATE-LOW IS INITIAL OR S_DATE-HIGH IS INITIAL ) AND S_INS IS INITIAL.
+      MESSAGE 'Date input is mandatory with material' TYPE 'E'.
+    ENDIF.
+  ENDIF.
+*EOC BY MANMOHAN/SHREYOSI CHARM: 4000008817 DATE: 25/09/2024
+* START OF SELECTION---------------------------------------------------*
+START-OF-SELECTION.
+  OPT = 3.
+
+  SELECT * FROM QALS INTO TABLE I_QALS
+*    FOR ALL ENTRIES IN I_MAIN
+    WHERE PRUEFLOS IN S_INS
+    AND   SELMATNR IN S_MAT
+    AND   ENSTEHDAT IN S_DATE
+    AND   PLNAL = '01'.
+
+** SOC BY SHWETA SONI TCS - RMS 1534
+  DATA : LT_SYSTEM TYPE STANDARD TABLE OF BAPI2045SS,
+         LT_USER   TYPE STANDARD TABLE OF BAPI2045US,
+         LS_LANG   TYPE BAPI2045LA.
+
+  LS_LANG-LANGU = 'E'.
+  LS_LANG-LANGU_ISO = 'EN'.
+
+  LOOP AT I_QALS.
+    CLEAR : LT_USER, LT_SYSTEM.
+    CALL FUNCTION 'BAPI_INSPLOT_GETSTATUS'
+      EXPORTING
+        NUMBER        = I_QALS-PRUEFLOS
+        LANGUAGE      = LS_LANG
+*   IMPORTING
+*       RETURN        =
+      TABLES
+        SYSTEM_STATUS = LT_SYSTEM
+        USER_STATUS   = LT_USER.
+
+    READ TABLE LT_SYSTEM TRANSPORTING NO FIELDS WITH KEY SYS_STATUS = 'I0224'.
+
+    IF SY-SUBRC EQ 0.
+
+      DELETE I_QALS WHERE PRUEFLOS EQ I_QALS-PRUEFLOS.
+
+    ENDIF.
+
+  ENDLOOP.
+
+** EOC BY SHWETA SONI TCS - RMS 1534
+
+  IF I_QALS[] IS INITIAL.
+    MESSAGE 'No Data Available' TYPE 'E'.
+  ELSE.
+    CLEAR: S_INS,S_INS[] .
+    LOOP AT I_QALS.
+      S_INS-SIGN    = 'I'.
+      S_INS-OPTION  = 'EQ'.
+      S_INS-LOW    = I_QALS-PRUEFLOS.
+      APPEND S_INS.
+    ENDLOOP.
+  ENDIF.
+
+  CALL FUNCTION 'YRQ_GET_DATA_INSPECTION'
+    EXPORTING
+      PLANT  = P_PLANT
+      SEL    = OPT
+    TABLES
+      S_INS  = S_INS
+      S_DATE = S_DATE
+      S_MAT  = S_MAT
+      I_MAIN = I_MAIN
+      I_QAMV = I_QAMV.
+
+**     S_BATCH       = S_BATCH
+**     S_MAT         = S_MAT
+
+  IF I_MAIN[] IS NOT INITIAL.
+
+*  CLEAR: I_MAIN[].
+*  LOOP AT I_QALS.
+*    MOVE-CORRESPONDING I_QALS TO I_MAIN.
+*    APPEND I_MAIN.
+*  ENDLOOP.
+*SOCOMMENT BY MANMOHAN/SHREYOSI CHARM: 4000008817 DATE: 25/09/2024
+
+
+*  SELECT PLNTY PLNNR VORNR ARBID ZAEHL LTXA1 FROM PLPO
+*    INTO TABLE I_PLPO
+*    FOR ALL ENTRIES IN I_QALS
+*    WHERE PLNTY = 'Q'
+*    AND   PLNNR = I_QALS-PLNNR
+*    AND   ZAEHL = '1'. "I_QALS-ZAEHL1.
+*
+*  IF I_PLPO[] IS NOT INITIAL.
+*   SELECT OBJTY OBJID BEGDA ARBPL WERKS FROM CRHD
+*    INTO TABLE I_CRHD
+*    FOR ALL ENTRIES IN I_PLPO
+*    WHERE OBJTY = 'A'
+*    AND   OBJID = I_PLPO-ARBID
+*    AND   ARBPL = 'PC PTD'.
+*  ENDIF.
+*EOCOMMENT BY MANMOHAN/SHREYOSI CHARM: 4000008817 DATE: 25/09/2024
+*SOC BY MANMOHAN/SHREYOSI CHARM: 4000008817 DATE: 25/09/2024
+    IF I_QALS IS NOT INITIAL.
+      SELECT PLNTY, PLNNR, PLNAL, ZAEHL, VERWE
+        FROM PLKO
+        INTO TABLE @DATA(IT_PLKO)
+        FOR ALL ENTRIES IN @I_QALS
+        WHERE PLNNR EQ @I_QALS-PLNNR
+        AND   ZAEHL EQ @I_QALS-ZAEHL.
+
+      IF SY-SUBRC EQ 0 AND IT_PLKO IS NOT INITIAL.
+        SELECT PLNTY, PLNNR, PLNAL, PLNKN
+          FROM PLAS
+          INTO TABLE @DATA(IT_PLAS)
+          FOR ALL ENTRIES IN @IT_PLKO
+          WHERE PLNTY EQ @IT_PLKO-PLNTY
+          AND   PLNNR EQ @IT_PLKO-PLNNR
+          AND   PLNAL EQ @IT_PLKO-PLNAL.
+
+        IF SY-SUBRC EQ 0 AND IT_PLAS IS NOT INITIAL.
+          SELECT PLNTY PLNKN PLNNR VORNR ARBID ZAEHL LTXA1
+            FROM PLPO
+            INTO TABLE I_PLPO
+            FOR ALL ENTRIES IN IT_PLAS
+            WHERE PLNTY EQ IT_PLAS-PLNTY
+            AND   PLNNR EQ IT_PLAS-PLNNR
+            AND   PLNKN EQ IT_PLAS-PLNKN.
+
+          IF SY-SUBRC EQ 0 AND I_PLPO[] IS NOT INITIAL.
+            SELECT OBJTY OBJID BEGDA ARBPL WERKS FROM CRHD
+              INTO TABLE I_CRHD
+              FOR ALL ENTRIES IN I_PLPO
+              WHERE OBJTY = 'A'
+              AND   OBJID = I_PLPO-ARBID
+              AND   ARBPL = 'PC PTD'.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+
+    ENDIF.
+*EOC BY MANMOHAN/SHREYOSI CHARM: 4000008817 DATE: 25/09/2024
+
+    LOOP AT I_MAIN.
+      READ TABLE I_QALS WITH KEY PRUEFLOS = I_MAIN-PRUEFLOS.
+      IF SY-SUBRC EQ 0.
+*SOCOMMENT BY MANMOHAN/SHREYOSI CHARM: 4000008817 DATE: 25/09/2024
+*      READ TABLE I_PLPO WITH KEY PLNNR = I_MAIN-PLNNR ZAEHL = I_QALS-PLNAL.
+*      IF sy-subrc EQ 0.
+*        READ TABLE I_CRHD WITH KEY OBJID = I_PLPO-ARBID.
+*        IF sy-subrc NE 0.
+*          DELETE I_MAIN.
+*        ENDIF.
+*      ELSE.
+*       DELETE I_MAIN.
+*      ENDIF.
+*EOCOMMENT BY MANMOHAN/SHREYOSI CHARM: 4000008817 DATE: 25/09/2024
+*SOC BY MANMOHAN/SHREYOSI CHARM: 4000008817 DATE: 25/09/2024
+        READ TABLE IT_PLKO INTO DATA(WA_PLKO) WITH KEY PLNNR = I_MAIN-PLNNR PLNAL = I_QALS-PLNAL verwe = 'Z5A'.
+        IF SY-SUBRC EQ 0.
+          READ TABLE IT_PLAS INTO DATA(WA_PLAS) WITH KEY PLNTY = WA_PLKO-PLNTY PLNNR = WA_PLKO-PLNNR PLNAL = WA_PLKO-PLNAL.
+          IF SY-SUBRC EQ 0.
+            READ TABLE I_PLPO WITH KEY PLNNR = WA_PLAS-PLNNR PLNTY = WA_PLAS-PLNTY PLNKN = WA_PLAS-PLNKN.
+            IF SY-SUBRC EQ 0.
+              READ TABLE I_CRHD WITH KEY OBJID = I_PLPO-ARBID.
+              IF SY-SUBRC NE 0.
+                DELETE I_MAIN WHERE prueflos = I_QALS-prueflos.
+              ENDIF.
+            ENDIF.
+          ENDIF.
+        ELSE.
+          DELETE I_MAIN WHERE prueflos = I_QALS-prueflos.
+        ENDIF.
+
+*EOC BY MANMOHAN/SHREYOSI CHARM: 4000008817 DATE: 25/09/2024
+      ENDIF.
+
+**    READ TABLE I_PLPO WITH KEY PLNNR = I_MAIN-PLNNR.
+**    IF sy-subrc = 0.
+**      READ TABLE I_CRHD WITH KEY OBJID = I_PLPO-ARBID.
+**      IF sy-subrc = 0.
+**        IF I_CRHD-ARBPL CS 'PC PTD'.
+***          CONTINUE.
+**        ELSE.
+**          DELETE I_MAIN.
+**        ENDIF.
+**      ELSE.
+**       DELETE I_MAIN.
+**      ENDIF.
+**    ELSE.
+**     DELETE I_MAIN.
+**    ENDIF.
+    ENDLOOP.
+
+    IF I_MAIN[] IS INITIAL.
+      MESSAGE 'No Data to Display' TYPE 'E'.
+    ENDIF.
+
+
+    IF I_QALS[] IS NOT INITIAL.
+      SELECT * FROM QAMR INTO CORRESPONDING FIELDS OF TABLE I_QAMR
+        FOR ALL ENTRIES IN I_QALS
+        WHERE PRUEFLOS = I_QALS-PRUEFLOS.
+    ENDIF.
+
+    LOOP AT I_MAIN.
+      READ TABLE I_QALS WITH KEY PRUEFLOS = I_MAIN-PRUEFLOS.
+      IF SY-SUBRC = 0.
+        I_MAIN-LMENGEIST = I_QALS-LMENGEIST.
+        MODIFY I_MAIN TRANSPORTING LMENGEIST.
+      ENDIF.
+    ENDLOOP.
+
+    IF S_INS IS NOT INITIAL AND S_DATE IS NOT INITIAL.
+      SORT I_MAIN BY PRUEFLOS ASCENDING.
+    ENDIF.
+
+*  IF P_PDFTM IS NOT INITIAL.
+    PERFORM GET_CONS.
+*  ELSE.
+*    PERFORM DISPLAY.
+*  ENDIF.
+  ELSE.
+    MESSAGE 'No Data To Display' TYPE 'E'.
+  ENDIF.
+
+
+*&---------------------------------------------------------------------*
+*&  Include           YRQS021_PTDQUALITY_TOP
+*&---------------------------------------------------------------------*
+
+*TABLES - CUSTOM TABLES-----------------------------------------------*
+  TABLES: qals,           "Inspection lot record
+          qamv,           "Characteristic specifications
+          qamr,           "Characteristic results
+          mch1,           "Batches (if Batch Management Cross-Plant)
+          t001l,          "Storage Locations
+          yrps_ptdmain,
+          crtx.
+*INTERNAL TABLES------------------------------------------------------*
+
+  DATA:i_main LIKE yrqs_inspection_report OCCURS 0 WITH HEADER LINE.
+  DATA:i_qamv LIKE yrqs_inspection_report_items OCCURS 0 WITH HEADER LINE.
+  DATA:i_qamv2 LIKE yrqs_inspection_report_items OCCURS 0 WITH HEADER LINE.
+  DATA: i_qals TYPE TABLE OF qals WITH HEADER LINE.
+
+  DATA: BEGIN OF i_qamr OCCURS 0,
+          prueflos   TYPE qals-prueflos,
+          mittelwert TYPE qamr-mittelwert,
+          merknr     TYPE qamr-merknr,
+          vorglfnr   TYPE qamr-vorglfnr,
+          pruefdatuv TYPE qamr-pruefdatuv,
+          katalgart1 TYPE qpct-katalogart,
+          gruppe1    TYPE qpct-codegruppe,
+          code1      TYPE qpct-code,
+          pruefbemkt TYPE qamr-pruefbemkt,
+          maschine   TYPE qamr-maschine,
+        END OF i_qamr.
+
+  DATA: BEGIN OF i_mch1 OCCURS 0,
+          charg TYPE mch1-charg,
+        END OF i_mch1.
+
+  DATA: BEGIN OF i_t001l OCCURS 0,
+          lgobe TYPE t001l-lgobe,
+          lgort TYPE t001l-lgort,
+        END OF i_t001l.
+
+  DATA: BEGIN OF i_mchb OCCURS 0,
+          lgort TYPE mchb-lgort,
+        END OF i_mchb.
+
+  DATA: BEGIN OF i_plpo OCCURS 0,
+          plnty TYPE plpo-plnty,
+*SOC BY MANMOHAN/SHREYOSI CHARM: 4000008817 DATE: 25/09/2024
+          plnkn TYPE plpo-plnkn,
+*EOC BY MANMOHAN/SHREYOSI CHARM: 4000008817 DATE: 25/09/2024
+          plnnr TYPE plpo-plnnr,
+          vornr TYPE plpo-vornr,
+          arbid TYPE plpo-arbid,
+          zaehl TYPE plpo-zaehl,
+          ltxa1 TYPE plpo-ltxa1,
+        END OF i_plpo.
+
+  DATA: BEGIN OF i_crhd OCCURS 0,
+          objty TYPE crhd-objty,
+          objid TYPE crhd-objid,
+          begda TYPE crhd-begda,
+          arbpl TYPE crhd-arbpl,
+          werks TYPE crhd-werks,
+        END OF i_crhd.
+
+  DATA: BEGIN OF i_t001w OCCURS 0,
+          name1 TYPE t001w-name1,
+          werks TYPE t001w-werks,
+        END OF i_t001w .
+
+  DATA: BEGIN OF i_qave OCCURS 0,
+          prueflos TYPE qave-prueflos,
+          vcode    TYPE qave-vcode,
+        END OF i_qave.
+
+  DATA: BEGIN OF i_qmtt OCCURS 0,
+          pmtnr    TYPE qmtt-pmtnr,
+          version  TYPE qmtt-version,
+          kurztext TYPE qmtt-kurztext,
+        END OF i_qmtt.
+
+  DATA: BEGIN OF i_qpct OCCURS 0,
+          kurztext   TYPE qpct-kurztext,
+          katalogart TYPE qpct-katalogart,
+          codegruppe TYPE qpct-codegruppe,
+          code       TYPE qpct-code,
+          sprache    TYPE qpct-sprache,
+        END OF i_qpct.
+
+  DATA: BEGIN OF i_t006a OCCURS 0,
+          mseh3 TYPE t006a-mseh3,
+          mseh6 TYPE t006a-mseh6,
+          mseht TYPE t006a-mseht,
+        END OF i_t006a.
+
+  DATA: BEGIN OF i_main2 OCCURS 0.
+          INCLUDE STRUCTURE tline.
+        DATA: END   OF i_main2.
+
+  DATA opt(1).
+  DATA: w_fm_name TYPE rs38l_fnam.    "Name of function module
+
+*********************Consolidated Report Data*********************
+  DATA: i_final TYPE TABLE OF yrps_ptdmain,
+        w_final TYPE yrps_ptdmain.
+******************************************************************
+***SELECTION SCREEN--------------------------------------------------*
+***RADIO BUTTON
+**  SELECTION-SCREEN BEGIN OF BLOCK B1 WITH FRAME TITLE TEXT-001.
+**  SELECTION-SCREEN SKIP.
+****  PARAMETERS:  P_DM   RADIOBUTTON GROUP RAD,  "DOMESTIC.
+****               P_EXP RADIOBUTTON GROUP RAD,   "EXPORT
+****               P_EM RADIOBUTTON GROUP RAD,    "EMPTY
+****               P_NOTES RADIOBUTTON GROUP RAD1,
+****               P_X RADIOBUTTON GROUP RAD1 .
+**
+**  PARAMETERS : P_NABL RADIOBUTTON GROUP sel, " WITH NABL LOGO
+**               P_WONA RADIOBUTTON GROUP sel. "WITHOUT NABL LOGO
+***  PARAMETERS: P_TESTM AS CHECKBOX DEFAULT ' '.
+***  PARAMETERS: P_PDFTM AS CHECKBOX DEFAULT ' '.
+**  SELECTION-SCREEN SKIP.
+**  SELECTION-SCREEN END OF BLOCK B1.
+
+  DATA: p_plant TYPE t001w-werks VALUE '5010'.
+
+  SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-001.
+  SELECTION-SCREEN SKIP.
+  SELECT-OPTIONS: s_ins   FOR qals-prueflos ,                           "Lot No.
+                  s_mat FOR qals-selmatnr NO INTERVALS NO-EXTENSION,  "MATERIAL NO
+                  s_date  FOR qals-enstehdat NO-EXTENSION.                          "DATE
+*                  s_ktext FOR crtx-ktext NO INTERVALS NO-EXTENSION, "OBLIGATORY,             "Input Work Center
+*                  S_BATCH FOR QALS-CHARG NO INTERVALS NO-EXTENSION ,  "BATCH NO
+
+*  PARAMETERS:  P_PLANT TYPE T001W-WERKS OBLIGATORY .                  "authority name
+  SELECTION-SCREEN SKIP.
+  SELECTION-SCREEN END OF BLOCK b2.
+
+*&---------------------------------------------------------------------*
+*&  Include           YRQS021_PTDQUALITY_PRO
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Form  GET_CONS
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM get_cons.
+
+  DATA: l_c1       TYPE p DECIMALS 1,
+        l_c2       TYPE p DECIMALS 2,
+        l_c3       TYPE p DECIMALS 3,
+        l_c4       TYPE p DECIMALS 4,
+        l_c5       TYPE p DECIMALS 5,
+        l_c6       TYPE p DECIMALS 6,
+        l_c7       TYPE p DECIMALS 7,
+        l_c8       TYPE p DECIMALS 8,
+        l_c9       TYPE p DECIMALS 9,
+        l_c10      TYPE p DECIMALS 10,
+        l_c0       TYPE p DECIMALS 0,
+        lv_cnt1    TYPE i,
+        lv_cnt2(3) TYPE c.
+
+*DATA CLIENT           TYPE SY-MANDT.
+*DATA ID               TYPE THEAD-TDID.
+*DATA LANGUAGE         TYPE THEAD-TDSPRAS.
+  DATA name             TYPE thead-tdname.
+*DATA OBJECT           TYPE THEAD-TDOBJECT.
+*DATA ARCHIVE_HANDLE   TYPE SY-TABIX.
+*DATA HEADER           TYPE THEAD.
+  DATA old_line_counter TYPE thead-tdtxtlines.
+  DATA : lines   TYPE STANDARD TABLE OF tline,
+         lw_line TYPE tline.
+
+
+  LOOP AT i_qamv. "INTO W_QAMV.
+    CLEAR: l_c0, l_c1, l_c2, l_c3, l_c4, l_c5, l_c6, l_c7,
+           l_c8, l_c9, l_c10.
+
+    CASE i_qamv-stellen.
+      WHEN '0'.
+        l_c0 = i_qamv-mittelwert.
+        i_qamv-original_input = l_c0.
+      WHEN '1'.
+        l_c1 = i_qamv-mittelwert.
+        i_qamv-original_input = l_c1.
+      WHEN '2'.
+        l_c2 = i_qamv-mittelwert.
+        i_qamv-original_input = l_c2.
+      WHEN '3'.
+        l_c3 = i_qamv-mittelwert.
+        i_qamv-original_input = l_c3.
+      WHEN '4'.
+        l_c4 = i_qamv-mittelwert.
+        i_qamv-original_input = l_c4.
+      WHEN '5'.
+        l_c5 = i_qamv-mittelwert.
+        i_qamv-original_input = l_c5.
+      WHEN '6'.
+        l_c6 = i_qamv-mittelwert.
+        i_qamv-original_input = l_c6.
+      WHEN '7'.
+        l_c7 = i_qamv-mittelwert.
+        i_qamv-original_input = l_c7.
+      WHEN '8'.
+        l_c8 = i_qamv-mittelwert.
+        i_qamv-original_input = l_c8.
+      WHEN '9'.
+        l_c9 = i_qamv-mittelwert.
+        i_qamv-original_input = l_c9.
+      WHEN '10'.
+        l_c10 = i_qamv-mittelwert.
+        i_qamv-original_input = l_c10.
+      WHEN OTHERS.
+        l_c2 = i_qamv-mittelwert.
+        i_qamv-original_input = l_c2.
+    ENDCASE.
+    CONDENSE i_qamv-original_input.
+    MODIFY i_qamv TRANSPORTING original_input.
+  ENDLOOP.
+
+  DATA: lv_ktxt1 TYPE i,
+        lv_flt1  TYPE c.
+  CLEAR: lv_cnt1, lv_cnt2.
+
+  LOOP AT i_qamv WHERE vorglfnr = '00000002'.
+    IF i_qamv-kurztext CS 'Grade'.
+    ELSE.
+      IF i_qamv-kurztext <> 'DEGCODE'.
+        DELETE i_qamv.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+
+  LOOP AT i_main.
+    CLEAR: lv_ktxt1, lv_flt1.
+    REFRESH: i_qamv2.
+    LOOP AT i_qamv WHERE prueflos = i_main-prueflos.
+      w_final-entstezeit  = i_main-entstezeit.
+      w_final-enstehdat   = i_main-enstehdat.
+      w_final-ktextmat    = i_main-ktextmat.
+      w_final-prueflos    = i_main-prueflos.
+      w_final-ktextlos    = i_main-ktextlos.
+      w_final-charg1      = i_main-charg1.
+*&------------------------> Changed By Harsh Mishra Charm- "4000007320"  / Shreyosi
+*      w_final-selmatnr    = i_main-selmatnr.
+*&------------------------> Changed By Harsh Mishra Charm- "4000007320"  / Shreyosi
+      w_final-lmengeist   = i_main-lmengeist.
+
+      i_qamv2[] = i_qamv[].
+      DELETE i_qamv2 WHERE prueflos NE i_main-prueflos.
+
+
+      IF lv_flt1 IS INITIAL.
+        LOOP AT i_qamv2 WHERE prueflos = i_main-prueflos.
+          IF i_qamv2-kurztext CS '5.0'.
+            lv_flt1 = 'Y'.
+            EXIT.
+          ENDIF.
+        ENDLOOP.
+      ENDIF.
+
+*** SOC BY SHWETA SONI TCS - RMS 1534
+      IF i_qamv-vorglfnr = '00000001'.
+
+        CASE  lv_flt1 .
+
+          WHEN 'Y'.
+
+            IF i_qamv-kurztext CS '2.16'.
+
+              IF i_qamv-original_input LT 0.
+                w_final-col1 = i_qamv-original_input.
+                REPLACE ALL OCCURRENCES OF '-' IN w_final-col1 WITH ''.
+                CONCATENATE '-' w_final-col1 INTO w_final-col1.
+              ELSE.
+                w_final-col1 = i_qamv-original_input.
+              ENDIF.
+            ENDIF.
+
+
+            IF i_qamv-kurztext CS '23'.
+
+              IF i_qamv-original_input LT 0.
+                w_final-col2 = i_qamv-original_input.
+                REPLACE ALL OCCURRENCES OF '-' IN w_final-col2 WITH ''.
+                CONCATENATE '-' w_final-col2 INTO w_final-col2.
+              ELSE.
+                w_final-col2 = i_qamv-original_input.
+              ENDIF.
+            ENDIF.
+
+
+            IF i_qamv-kurztext CS '5.0'.
+
+              IF i_qamv-original_input LT 0.
+                w_final-col3 = i_qamv-original_input.
+                REPLACE ALL OCCURRENCES OF '-' IN w_final-col3 WITH ''.
+                CONCATENATE '-' w_final-col3 INTO w_final-col3.
+              ELSE.
+                w_final-col3 = i_qamv-original_input.
+              ENDIF.
+            ENDIF.
+
+
+            IF i_qamv-kurztext CS 'Col'.
+
+              IF i_qamv-original_input LT 0.
+                w_final-col5 = i_qamv-original_input.
+                REPLACE ALL OCCURRENCES OF '-' IN w_final-col5 WITH ''.
+                CONCATENATE '-' w_final-col5 INTO w_final-col5.
+              ELSE.
+                w_final-col5 = i_qamv-original_input.
+              ENDIF.
+            ENDIF.
+
+
+            IF i_qamv-kurztext CS 'Contam'.
+              READ TABLE i_qamr WITH KEY prueflos = i_qamv-prueflos merknr = i_qamv-merknr vorglfnr = i_qamv-vorglfnr.
+              IF sy-subrc = 0.
+                w_final-col6 = i_qamr-pruefbemkt.
+              ELSE.
+                w_final-col6 = '-'.
+              ENDIF.
+            ENDIF.
+
+            IF i_qamv-kurztext CS 'Fines'.
+
+              IF i_qamv-original_input LT 0.
+                w_final-col7 = i_qamv-original_input.
+                REPLACE ALL OCCURRENCES OF '-' IN w_final-col7 WITH ''.
+                CONCATENATE '-' w_final-col7 INTO w_final-col7.
+              ELSE.
+                w_final-col7 = i_qamv-original_input.
+              ENDIF.
+            ENDIF.
+
+          WHEN ''.
+
+            IF i_qamv-kurztext CS '2.16'.
+
+              IF i_qamv-original_input LT 0.
+                w_final-col1 = i_qamv-original_input.
+                REPLACE ALL OCCURRENCES OF '-' IN w_final-col1 WITH ''.
+                CONCATENATE '-' w_final-col1 INTO w_final-col1.
+              ELSE.
+                w_final-col1 = i_qamv-original_input.
+              ENDIF.
+            ENDIF.
+
+
+            IF i_qamv-kurztext CS '23'.
+
+              IF i_qamv-original_input LT 0.
+                w_final-col2 = i_qamv-original_input.
+                REPLACE ALL OCCURRENCES OF '-' IN w_final-col2 WITH ''.
+                CONCATENATE '-' w_final-col2 INTO w_final-col2.
+              ELSE.
+                w_final-col2 = i_qamv-original_input.
+              ENDIF.
+            ENDIF.
+
+
+            IF i_qamv-kurztext CS 'Col'.
+
+              IF i_qamv-original_input LT 0.
+                w_final-col5 = i_qamv-original_input.
+                REPLACE ALL OCCURRENCES OF '-' IN w_final-col5 WITH ''.
+                CONCATENATE '-' w_final-col5 INTO w_final-col5.
+              ELSE.
+                w_final-col5 = i_qamv-original_input.
+              ENDIF.
+            ENDIF.
+
+
+            IF i_qamv-kurztext CS 'Contam'.
+
+              READ TABLE i_qamr WITH KEY prueflos = i_qamv-prueflos merknr = i_qamv-merknr vorglfnr = i_qamv-vorglfnr.
+              IF sy-subrc = 0.
+                w_final-col6 = i_qamr-pruefbemkt.
+              ELSE.
+                w_final-col6 = '-'.
+              ENDIF.
+            ENDIF.
+
+
+            IF i_qamv-kurztext CS 'Fines'.
+
+              IF i_qamv-original_input LT 0.
+                w_final-col7 = i_qamv-original_input.
+                REPLACE ALL OCCURRENCES OF '-' IN w_final-col7 WITH ''.
+                CONCATENATE '-' w_final-col7 INTO w_final-col7.
+              ELSE.
+                w_final-col7 = i_qamv-original_input.
+              ENDIF.
+            ENDIF.
+
+
+
+          WHEN OTHERS.
+
+        ENDCASE.
+
+      ENDIF.
+**EOC BY SHWETA SONI TCS - RMS 1534
+
+
+*      IF i_qamv-vorglfnr = '00000001'.
+**        lv_ktxt1 = lv_ktxt1 + 1.
+*        IF lv_flt1 = 'Y'.
+*          CASE lv_ktxt1.
+*            WHEN '1'.
+*              IF i_qamv-original_input LT 0.
+*                w_final-col1 = i_qamv-original_input.
+*                REPLACE ALL OCCURRENCES OF '-' IN w_final-col1 WITH ''.
+*                CONCATENATE '-' w_final-col1 INTO w_final-col1.
+*              ELSE.
+*                w_final-col1 = i_qamv-original_input.
+*              ENDIF.
+*
+*            WHEN '2'.
+*              IF i_qamv-original_input LT 0.
+*                w_final-col2 = i_qamv-original_input.
+*                REPLACE ALL OCCURRENCES OF '-' IN w_final-col2 WITH ''.
+*                CONCATENATE '-' w_final-col2 INTO w_final-col2.
+*              ELSE.
+*                w_final-col2 = i_qamv-original_input.
+*              ENDIF.
+*
+*            WHEN '3'.
+*              IF i_qamv-original_input LT 0.
+*                w_final-col3 = i_qamv-original_input.
+*                REPLACE ALL OCCURRENCES OF '-' IN w_final-col3 WITH ''.
+*                CONCATENATE '-' w_final-col3 INTO w_final-col3.
+*              ELSE.
+*                w_final-col3 = i_qamv-original_input.
+*              ENDIF.
+*
+*            WHEN '4'.
+*              IF i_qamv-original_input LT 0.
+*                w_final-col5 = i_qamv-original_input.
+*                REPLACE ALL OCCURRENCES OF '-' IN w_final-col5 WITH ''.
+*                CONCATENATE '-' w_final-col5 INTO w_final-col5.
+*              ELSE.
+*                w_final-col5 = i_qamv-original_input.
+*              ENDIF.
+*
+*            WHEN '5'.
+*              READ TABLE i_qamr WITH KEY prueflos = i_qamv-prueflos merknr = i_qamv-merknr.
+*              IF sy-subrc = 0.
+*                w_final-col6 = i_qamr-pruefbemkt.
+*              ELSE.
+*                w_final-col6 = '-'.
+*              ENDIF.
+*
+*            WHEN '6'.
+*              IF i_qamv-original_input LT 0.
+*                w_final-col7 = i_qamv-original_input.
+*                REPLACE ALL OCCURRENCES OF '-' IN w_final-col7 WITH ''.
+*                CONCATENATE '-' w_final-col7 INTO w_final-col7.
+*              ELSE.
+*                w_final-col7 = i_qamv-original_input.
+*              ENDIF.
+*
+*            WHEN '7'.
+*            WHEN OTHERS.
+*          ENDCASE.
+*        ELSE.
+*          CASE lv_ktxt1.
+*            WHEN '1'.
+*              IF i_qamv-original_input LT 0.
+*                w_final-col1 = i_qamv-original_input.
+*                REPLACE ALL OCCURRENCES OF '-' IN w_final-col1 WITH ''.
+*                CONCATENATE '-' w_final-col1 INTO w_final-col1.
+*              ELSE.
+*                w_final-col1 = i_qamv-original_input.
+*              ENDIF.
+*
+*            WHEN '2'.
+*              IF i_qamv-original_input LT 0.
+*                w_final-col2 = i_qamv-original_input.
+*                REPLACE ALL OCCURRENCES OF '-' IN w_final-col2 WITH ''.
+*                CONCATENATE '-' w_final-col2 INTO w_final-col2.
+*              ELSE.
+*                w_final-col2 = i_qamv-original_input.
+*              ENDIF.
+*
+*            WHEN '3'.
+*              IF i_qamv-original_input LT 0.
+*                w_final-col5 = i_qamv-original_input.
+*                REPLACE ALL OCCURRENCES OF '-' IN w_final-col5 WITH ''.
+*                CONCATENATE '-' w_final-col5 INTO w_final-col5.
+*              ELSE.
+*                w_final-col5 = i_qamv-original_input.
+*              ENDIF.
+*
+*            WHEN '4'.
+*              READ TABLE i_qamr WITH KEY prueflos = i_qamv-prueflos merknr = i_qamv-merknr.
+*              IF sy-subrc = 0.
+*                w_final-col6 = i_qamr-pruefbemkt.
+*              ELSE.
+*                w_final-col6 = '-'.
+*              ENDIF.
+*
+*            WHEN '5'.
+*              IF i_qamv-original_input LT 0.
+*                w_final-col7 = i_qamv-original_input.
+*                REPLACE ALL OCCURRENCES OF '-' IN w_final-col7 WITH ''.
+*                CONCATENATE '-' w_final-col7 INTO w_final-col7.
+*              ELSE.
+*                w_final-col7 = i_qamv-original_input.
+*              ENDIF.
+*
+*            WHEN '6'.
+*            WHEN OTHERS.
+*          ENDCASE.
+*        ENDIF.
+*      ENDIF.
+
+
+      IF i_qamv-vorglfnr = '00000002'.
+        IF i_qamv-kurztext CS 'Grade'.
+          CLEAR: w_final-col8.
+          w_final-col8 = i_qamv-rekurztext.
+        ENDIF.
+
+*&------------------------> Changed By Harsh Mishra Charm- "4000007320" / Shreyosi
+        READ TABLE i_qamr WITH KEY prueflos = i_qamv-prueflos
+                           vorglfnr = i_qamv-vorglfnr
+                           merknr   = i_qamv-merknr.
+        IF sy-subrc = 0.
+          CLEAR w_final-kurztext.
+          w_final-kurztext = i_qamr-pruefbemkt.
+          IF w_final-kurztext IS INITIAL.
+            READ TABLE i_qamr WITH KEY prueflos = i_qamv-prueflos
+                                   vorglfnr = i_qamv-vorglfnr
+                                   merknr   = i_qamv-merknr.
+            IF sy-subrc = 0.
+              w_final-kurztext = i_qamr-maschine.
+            ENDIF.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+*&------------------------> Changed By Harsh Mishra Charm- "4000007320"  / Shreyosi
+
+**      IF W_FINAL-Col8 IS INITIAL.
+**       IF I_QAMV-KURZTEXT CS 'Grade'.
+**         CLEAR: W_FINAL-COL8.
+**         W_FINAL-Col8 = I_QAMV-REKURZTEXT.
+**       ENDIF.
+**      ENDIF.
+
+*      W_FINAL-CHARG      = I_MAIN-CHARG.
+**      CASE I_QAMV-KURZTEXT.
+**        WHEN 'Melt Flow Index @2.16 Kg'.
+**          CLEAR: W_FINAL-COL1.
+**          IF I_QAMV-ORIGINAL_INPUT LT 0.
+**           W_FINAL-Col1 = I_QAMV-ORIGINAL_INPUT.
+**           REPLACE ALL OCCURRENCES OF '-' IN W_FINAL-Col1 WITH ''.
+**           CONCATENATE '-' W_FINAL-Col1 INTO W_FINAL-Col1.
+**          ELSE.
+**           W_FINAL-Col1 = I_QAMV-ORIGINAL_INPUT.
+**          ENDIF.
+**        WHEN 'Density @ 23 Deg C'.
+**          CLEAR: W_FINAL-COL2.
+**          IF I_QAMV-ORIGINAL_INPUT LT 0.
+**           W_FINAL-Col2 = I_QAMV-ORIGINAL_INPUT.
+**           REPLACE ALL OCCURRENCES OF '-' IN W_FINAL-Col2 WITH ''.
+**           CONCATENATE '-' W_FINAL-Col2 INTO W_FINAL-Col2.
+**          ELSE.
+**           W_FINAL-Col2 = I_QAMV-ORIGINAL_INPUT.
+**          ENDIF.
+**        WHEN 'MFI@5.0Kg (g/10min)'.     "'MFI @6.48Kg'.
+**          CLEAR: W_FINAL-COL3.
+**          IF I_QAMV-ORIGINAL_INPUT LT 0.
+**           W_FINAL-Col3 = I_QAMV-ORIGINAL_INPUT.
+**           REPLACE ALL OCCURRENCES OF '-' IN W_FINAL-Col3 WITH ''.
+**           CONCATENATE '-' W_FINAL-Col3 INTO W_FINAL-Col3.
+**          ELSE.
+**           W_FINAL-Col3 = I_QAMV-ORIGINAL_INPUT.
+**          ENDIF.
+**        WHEN 'Stress Exponent'.
+**          CLEAR: W_FINAL-COL4.
+**          IF I_QAMV-ORIGINAL_INPUT LT 0.
+**           W_FINAL-Col4 = I_QAMV-ORIGINAL_INPUT.
+**           REPLACE ALL OCCURRENCES OF '-' IN W_FINAL-Col4 WITH ''.
+**           CONCATENATE '-' W_FINAL-Col4 INTO W_FINAL-Col4.
+**          ELSE.
+**           W_FINAL-Col4 = I_QAMV-ORIGINAL_INPUT.
+**          ENDIF.
+**        WHEN 'Colour'.
+**          CLEAR: W_FINAL-COL5.
+**          IF I_QAMV-ORIGINAL_INPUT LT 0.
+**           W_FINAL-Col5 = I_QAMV-ORIGINAL_INPUT.
+**           REPLACE ALL OCCURRENCES OF '-' IN W_FINAL-Col5 WITH ''.
+**           CONCATENATE '-' W_FINAL-Col5 INTO W_FINAL-Col5.
+**          ELSE.
+**           W_FINAL-Col5 = I_QAMV-ORIGINAL_INPUT.
+**          ENDIF.
+**        WHEN 'Contamination'.
+**          CLEAR: W_FINAL-COL6.
+**          READ TABLE I_QAMR WITH KEY PRUEFLOS = I_QAMV-PRUEFLOS MERKNR = I_QAMV-MERKNR.
+**          IF sy-subrc = 0.
+**            W_FINAL-Col6 = I_QAMR-PRUEFBEMKT.
+**          ENDIF.
+**
+****          IF I_QAMV-ORIGINAL_INPUT LT 0.
+****           W_FINAL-Col6 = I_QAMV-ORIGINAL_INPUT.
+****           REPLACE ALL OCCURRENCES OF '-' IN W_FINAL-Col6 WITH ''.
+****           CONCATENATE '-' W_FINAL-Col6 INTO W_FINAL-Col6.
+****          ELSE.
+****           W_FINAL-Col6 = I_QAMV-ORIGINAL_INPUT.
+****          ENDIF.
+**
+**        WHEN 'Fines'.
+**          CLEAR: W_FINAL-COL7.
+**          IF I_QAMV-ORIGINAL_INPUT LT 0.
+**           W_FINAL-Col7 = I_QAMV-ORIGINAL_INPUT.
+**           REPLACE ALL OCCURRENCES OF '-' IN W_FINAL-Col7 WITH ''.
+**           CONCATENATE '-' W_FINAL-Col7 INTO W_FINAL-Col7.
+**          ELSE.
+**            W_FINAL-Col7 = I_QAMV-ORIGINAL_INPUT.
+**          ENDIF.
+**        WHEN 'Quality Grade'.
+**            CLEAR: W_FINAL-COL8.
+**            W_FINAL-Col8 = I_QAMV-REKURZTEXT.
+**        WHEN OTHERS.
+**      ENDCASE.
+    ENDLOOP.
+    CLEAR: lv_cnt2.
+*****Change by TCS:AM Dated Sep 14, 2018.
+*   READ TABLE I_QALS WITH KEY PRUEFLOS = I_MAIN-PRUEFLOS.
+*   IF sy-subrc = 0.
+*      LV_CNT1 = LV_CNT1 + 1.
+*      LV_CNT2 = LV_CNT1.
+*      CONDENSE LV_CNT2.
+*      CONCATENATE ' ' I_QALS-KTEXTLOS INTO W_FINAL-REMARKS SEPARATED BY ' '. " LV_CNT2 '.' I_QALS-PRUEFLOS '-'
+*      CONDENSE W_FINAL-REMARKS.
+*   ENDIF.
+
+    IF i_main-yy_text IS INITIAL.
+      READ TABLE i_qals WITH KEY prueflos = i_main-prueflos.
+      IF sy-subrc = 0.
+        lv_cnt1 = lv_cnt1 + 1.
+        lv_cnt2 = lv_cnt1.
+        CONDENSE lv_cnt2.
+        CONCATENATE ' ' i_qals-ktextlos INTO w_final-remarks SEPARATED BY ' '. " LV_CNT2 '.' I_QALS-PRUEFLOS '-'
+        CONDENSE w_final-remarks.
+      ENDIF.
+    ELSE.
+
+      name = i_main-yy_text.
+      CALL FUNCTION 'READ_TEXT'
+        EXPORTING
+          client                  = sy-mandt
+          id                      = 'QALS'
+          language                = sy-langu
+          name                    = name
+          object                  = 'QPRUEFLOS'
+*         ARCHIVE_HANDLE          = 0
+*         LOCAL_CAT               = ' '
+        IMPORTING
+*         HEADER                  = HEADER
+          old_line_counter        = old_line_counter
+        TABLES
+          lines                   = lines
+        EXCEPTIONS
+          id                      = 1
+          language                = 2
+          name                    = 3
+          not_found               = 4
+          object                  = 5
+          reference_check         = 6
+          wrong_access_to_archive = 7.
+      IF sy-subrc = 0.
+        CLEAR: w_final-remarks.
+        LOOP AT lines INTO lw_line.
+          CONDENSE : lw_line.
+          CONCATENATE w_final-remarks lw_line-tdline INTO w_final-remarks SEPARATED BY ' '. " LV_CNT2 '.' I_QALS-PRUEFLOS '-'
+
+        ENDLOOP.
+      ENDIF.
+    ENDIF.
+*****Change by TCS:AM Dated Sep 14, 2018.
+
+    CONDENSE w_final-remarks.
+    CONDENSE: w_final-col1, w_final-col2, w_final-col3, w_final-col4, w_final-col5, w_final-col6,
+              w_final-col7, w_final-col8.
+    APPEND w_final TO i_final.
+    CLEAR w_final.
+  ENDLOOP.
+
+  IF s_date-low IS NOT INITIAL OR s_date-high IS NOT INITIAL.
+    SORT i_final ASCENDING BY enstehdat prueflos .
+    DELETE i_final WHERE prueflos IS INITIAL.
+  ENDIF.
+
+  LOOP AT i_final INTO w_final.
+    IF w_final-col1 IS INITIAL.
+      w_final-col1 = '-'.
+    ENDIF.
+
+    IF w_final-col2 IS INITIAL.
+      w_final-col2 = '-'.
+    ENDIF.
+
+    IF w_final-col3 IS INITIAL.
+      w_final-col3 = '-'.
+    ENDIF.
+
+    IF w_final-col4 IS INITIAL.
+      w_final-col4 = '-'.
+    ENDIF.
+
+    IF w_final-col5 IS INITIAL.
+      w_final-col5 = '-'.
+    ENDIF.
+
+    IF w_final-col6 IS INITIAL.
+      w_final-col6 = '-'.
+    ENDIF.
+
+    IF w_final-col7 IS INITIAL.
+      w_final-col7 = '-'.
+    ENDIF.
+
+    IF w_final-col8 IS INITIAL.
+      w_final-col8 = '-'.
+    ENDIF.
+
+    IF w_final-remarks IS INITIAL.
+      w_final-remarks = '-'.
+    ENDIF.
+
+    MODIFY i_final FROM w_final.
+  ENDLOOP.
+
+  DATA: l_outputparams TYPE   sfpoutputparams,
+        l_docparams    TYPE   sfpdocparams,
+        l_form_name    TYPE   fpname,
+        l_funcname     TYPE   funcname,
+        l_date(40)     TYPE   c,
+        l_dt1(10)      TYPE   c,
+        l_dt2(10)      TYPE   c.
+
+  l_form_name = 'YRQF_PTD_CONS'.
+
+  CALL FUNCTION 'FP_JOB_OPEN'
+    CHANGING
+      ie_outputparams = l_outputparams
+    EXCEPTIONS
+      cancel          = 1
+      usage_error     = 2
+      system_error    = 3
+      internal_error  = 4
+      OTHERS          = 5.
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+
+  IF s_date-high IS INITIAL.
+    IF s_date-low IS INITIAL.
+      CLEAR: l_dt1, l_date.
+      CONCATENATE sy-datum+6(2) sy-datum+4(2) sy-datum+0(4) INTO l_dt1 SEPARATED BY ':'.
+      CONDENSE l_dt1.
+
+      CONCATENATE 'Date:' l_dt1 INTO l_date SEPARATED BY ' '.
+      CONDENSE l_date.
+    ELSE.
+      CLEAR: l_dt1, l_date.
+      CONCATENATE s_date-low+6(2) s_date-low+4(2) s_date-low+0(4) INTO l_dt1 SEPARATED BY ':'.
+      CONDENSE l_dt1.
+
+      CONCATENATE 'Date:' l_dt1 INTO l_date SEPARATED BY ' '.
+      CONDENSE l_date.
+    ENDIF.
+  ELSE.
+    CLEAR: l_dt1, l_dt2, l_date.
+    CONCATENATE s_date-low+6(2) s_date-low+4(2)  s_date-low+0(4) INTO l_dt1 SEPARATED BY ':'.
+    CONDENSE: l_dt1.
+
+    CONCATENATE s_date-high+6(2) s_date-high+4(2)  s_date-high+0(4) INTO l_dt2 SEPARATED BY ':'.
+    CONDENSE: l_dt2.
+
+    CONCATENATE 'Date: ' l_dt1 'TO' l_dt2 INTO l_date SEPARATED BY ' '.
+    CONDENSE l_date.
+  ENDIF.
+*TRY.
+  CALL FUNCTION 'FP_FUNCTION_MODULE_NAME'
+    EXPORTING
+      i_name     = l_form_name
+    IMPORTING
+      e_funcname = l_funcname.
+
+* Call the adobe form
+  CALL FUNCTION l_funcname
+    EXPORTING
+      /1bcdwb/docparams = l_docparams
+      i_final           = i_final
+      w_date            = l_date
+      i_main            = i_main
+*     APPRAISE_HEAD_DET =
+*     KRA_KPI           =
+*     BCOMP             =
+*     FCOMP             =
+*     T_UNQ_KBF         =
+* IMPORTING
+*     /1BCDWB/FORMOUTPUT       =
+    EXCEPTIONS
+      usage_error       = 1
+      system_error      = 2
+      internal_error    = 3
+      OTHERS            = 4.
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+
+
+* Close the form processing
+  CALL FUNCTION 'FP_JOB_CLOSE'
+    EXCEPTIONS
+      usage_error    = 1
+      system_error   = 2
+      internal_error = 3
+      OTHERS         = 4.
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&  Include           YRQS021_PTDQUALITY_FORM
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Form  DISPLAY
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM DISPLAY .
+**DATA: ty_PRUEFLOS TYPE QAMV-PRUEFLOS.
+**data : lv_count type i.
+**DATA: I_TMPQAMV LIKE YRQS_INSPECTION_REPORT_ITEMS OCCURS 0 WITH HEADER LINE.
+**
+****  LOOP AT I_MAIN .
+****    on CHANGE OF I_MAIN-PRUEFLOS.
+****    READ TABLE I_QAMV with key PRUEFLOS = I_MAIN-PRUEFLOS.
+****      lv_count = sy-tabix.
+****      DO 3 TIMES.
+****           READ TABLE i_qamv INDEX lv_count.
+****          MOVE-CORRESPONDING I_QAMV TO I_TMPQAMV.
+****          APPEND I_TMPQAMV .
+****           lv_count = lv_count + 1.
+****      ENDDO.
+****    endon.
+****  ENDLOOP.
+****
+**** CLEAR: I_QAMV[].
+**** I_QAMV[] = I_TMPQAMV[].
+**
+**  CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
+**    EXPORTING
+**      FORMNAME           = 'YRQS021_PTDQUALITY'
+**    IMPORTING
+**      FM_NAME            = W_FM_NAME
+**    EXCEPTIONS
+**      NO_FORM            = 1
+**      NO_FUNCTION_MODULE = 2
+**      OTHERS             = 3.
+**  IF SY-SUBRC <> 0.
+**    MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+**            WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+**  ENDIF.
+**
+**"Data Declaration For converting to PDF Format....
+**  DATA: st_job_output_info   TYPE ssfcrescl,
+**        wa_control_param     TYPE ssfctrlop,
+**        wa_composer_param    TYPE ssfcompop.
+**
+****DATA: lv_chk type c.
+****IF P_TESTM = 'X'.
+****  LV_CHK = 'X'.
+****ELSE.
+****  CLEAR LV_CHK.
+****ENDIF.
+**
+**  wa_composer_param-tdnoprev  = 'X'.
+**  wa_control_param-no_dialog  = 'X'.
+**  wa_control_param-preview    = 'X'.
+**  wa_control_param-getotf     = 'X'.
+**
+**  CALL FUNCTION W_FM_NAME
+**    EXPORTING
+**      control_parameters = wa_control_param "
+**      output_options     = wa_composer_param "
+***      W_NOTE           = P_NOTES
+***      W_NOTE1          = P_X
+**      W_PLANT          = P_PLANT
+**      W_NABL           = P_WONA
+**      W_CHKTESTM       = P_TESTM
+**       IMPORTING
+**      job_output_info    = st_job_output_info "
+**    TABLES
+**      I_MAIN           = I_MAIN
+**      I_QAMV           = I_QAMV
+**    EXCEPTIONS
+**      FORMATTING_ERROR = 1
+**      INTERNAL_ERROR   = 2
+**      SEND_ERROR       = 3
+**      USER_CANCELED    = 4
+**      OTHERS           = 5.
+**  IF SY-SUBRC <> 0.
+**    MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+**            WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+**  ENDIF.
+**
+************************************************************************
+**"Calling PDF form....
+**    CALL FUNCTION 'YRM_PDF_CONVERT'
+**      EXPORTING
+**        i_otf                    = st_job_output_info-otfdata[]
+**      EXCEPTIONS
+**        convert_otf_to_pdf_error = 1
+**        cntl_error               = 2
+**        OTHERS                   = 3.
+**    IF sy-subrc <> 0.
+*** MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+***         WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+**    ENDIF.
+ENDFORM.                    " DISPLAY
+

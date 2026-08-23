@@ -1,0 +1,524 @@
+FUNCTION yrfi_customer_openitems.
+*"----------------------------------------------------------------------
+*"*"Local Interface:
+*"  IMPORTING
+*"     REFERENCE(IT_BUS_CODE) TYPE  YY_BUS_CODE_TT OPTIONAL
+*"     REFERENCE(IM_BUKRS) TYPE  YFI_COMP_CODE_TT
+*"     REFERENCE(IM_KUNNR) TYPE  YFI_CUSTOMER_TT
+*"     REFERENCE(IM_KEY_DATE) TYPE  ALLGSTID
+*"  EXPORTING
+*"     REFERENCE(ET_CUST_OPEN_ITEMS) TYPE  YFI_CUST_OPEN_ITEMS_TT
+*"     REFERENCE(ET_BLOCK_KUNNR) TYPE  YRFS_KUNNR_TT
+*"     REFERENCE(ET_CUST_OPEN_EXCL_ITEMS) TYPE  YFI_CUST_OPEN_ITEMS_TT
+*"----------------------------------------------------------------------
+
+  TYPES: BEGIN OF ty_final,
+           kschl         TYPE kschl, "Condition Type
+           lland         TYPE lland, "Destination Country
+           bukrs         TYPE bukrs, "Company Code
+           kunnr         TYPE kunnr, "Customer
+           j_1ig_idcheck TYPE j_1ig_idcheck, "Maintained ID
+           steuc         TYPE steuc, "Control Code
+           kbetr         TYPE kbetr, "
+           konwa         TYPE konwa,
+           datab         TYPE datab, "Valid From
+           datbi         TYPE datbi, "Valid TO
+           mwsk1         TYPE mwskz, "Tax Code
+         END OF ty_final.
+  DATA: ls_final TYPE ty_final,
+        li_final TYPE TABLE OF ty_final.
+
+  DATA: lr_bukrs       TYPE RANGE OF bukrs,
+        lr_kunnr       TYPE RANGE OF kunnr,
+        lr_kunnr1      TYPE RANGE OF kunnr,
+        lr_kunnr_block TYPE RANGE OF kunnr,
+        li_lineitems   TYPE TABLE OF bapi3007_2,
+        ls_open_items  TYPE yfi_cust_open_items,
+        ls_fbl5n       TYPE rfposxext,
+        lr_kunnr2      TYPE RANGE OF kunnr,
+        lr_kunnr3      TYPE RANGE OF kunnr.
+
+  DATA: lr_blart TYPE RANGE OF blart.
+  DATA: lr_bus_code  TYPE RANGE OF yy_bus_code.
+
+  DATA: lr_rep_data TYPE REF TO data.
+  FIELD-SYMBOLS: <lt_rep_data> TYPE STANDARD TABLE,
+                 <lwa_data>    TYPE any.
+
+  DATA: lr_yrvr271_data TYPE REF TO data.
+  FIELD-SYMBOLS: <lt_yrvr271_data> TYPE STANDARD TABLE,
+                 <lwa_data1>       TYPE any.
+
+
+   data lv_int TYPE i . """""""""add by mobin/anshul
+
+  lr_bus_code = VALUE #( FOR ls_bus_code IN it_bus_code
+                            LET s = 'I'
+                                o = 'EQ'
+                           IN sign = s
+                            option = o
+                             ( low = ls_bus_code ) ).
+
+  IF it_bus_code IS NOT INITIAL AND im_bukrs IS NOT INITIAL.
+    MESSAGE 'Enter either of business segment or company code at a time' TYPE 'E'.
+  ELSEIF im_key_date IS NOT INITIAL AND im_kunnr IS NOT INITIAL.
+    IF it_bus_code IS NOT INITIAL AND im_bukrs IS INITIAL.
+      READ TABLE lr_bus_code WITH KEY low = 'AL' TRANSPORTING NO FIELDS.
+      IF sy-subrc EQ 0.
+        lr_bukrs = VALUE #( LET s = 'I'
+                                o = 'EQ'
+                          IN sign = s
+                           option = o
+                            ( low = '1000' )
+                            ( low = '2000' )
+                            ( low = '3000' )
+                            ( low = '4000' )
+                            ( low = '5000' )
+                            ( low = '6000' )
+                            ( low = '7000' )
+                            ( low = '7300' )
+                            ( low = '8000' )
+                            ( low = '9000' )
+                            ( low = '9100' ) ).
+      ELSE.
+        SELECT * FROM yrfa_cust_sgcode INTO TABLE @DATA(li_bs_cc) WHERE bus_code IN @lr_bus_code.
+        IF sy-subrc EQ 0 AND li_bs_cc IS NOT INITIAL.
+          lr_bukrs = VALUE #( FOR ls_bukrs1 IN li_bs_cc
+                            LET s = 'I'
+                                o = 'EQ'
+                           IN sign = s
+                            option = o
+                             ( low = ls_bukrs1-bukrs ) ).
+        ENDIF.
+      ENDIF.
+
+    ELSEIF it_bus_code IS INITIAL AND im_bukrs IS NOT INITIAL AND lr_bukrs IS INITIAL.
+      lr_bukrs = VALUE #( FOR ls_bukrs2 IN im_bukrs
+                            LET s = 'I'
+                            o = 'EQ'
+                             IN sign = s
+                              option = o
+                            ( low = ls_bukrs2 ) ).
+    ENDIF.
+
+    lr_blart = VALUE #( LET s = 'I'
+                            o = 'EQ'
+                       IN sign = s
+                          option = o
+                          ( low = 'DR' )
+                          ( low = 'DV' )
+                          ( low = 'DG' )
+                          ( low = 'RV' )
+                          ( low = 'AR' )
+                          ( low = 'DD' )
+                          ( low = 'DC' ) ).
+
+
+    IF im_kunnr IS NOT INITIAL.
+      lr_kunnr = VALUE #( FOR ls_kunnr IN im_kunnr
+                            LET s = 'I'
+                            o = 'EQ'
+                             IN sign = s
+                              option = o
+                            ( low = ls_kunnr ) ).
+
+    ENDIF.
+
+    SORT lr_bukrs BY low.
+    DELETE ADJACENT DUPLICATES FROM lr_bukrs COMPARING low.
+
+    IF lr_kunnr IS NOT INITIAL.
+      SELECT inv_cust,
+             pay_cust,
+             blk_rls_ind
+        FROM yrfa_cust_clear
+        INTO TABLE @DATA(li_block_cust)
+        WHERE blk_rls_ind EQ 'B'.
+      IF sy-subrc EQ 0.
+
+        lr_kunnr1 = lr_kunnr.
+
+        LOOP AT li_block_cust INTO DATA(ls_block_cust).
+
+          IF ls_block_cust-inv_cust IN lr_kunnr1 AND lr_kunnr1 IS NOT INITIAL.
+            DELETE lr_kunnr1 WHERE low EQ ls_block_cust-inv_cust.
+            et_block_kunnr = VALUE #( BASE et_block_kunnr ( kunnr = ls_block_cust-inv_cust ) ).
+          ENDIF.
+
+          IF ls_block_cust-pay_cust IN lr_kunnr1 AND lr_kunnr1 IS NOT INITIAL.
+            DELETE lr_kunnr1 WHERE low EQ ls_block_cust-pay_cust.
+            et_block_kunnr = VALUE #( BASE et_block_kunnr ( kunnr = ls_block_cust-pay_cust ) ).
+          ENDIF.
+
+        ENDLOOP.
+
+        IF et_block_kunnr IS NOT INITIAL.
+          SORT et_block_kunnr BY kunnr.
+          DELETE ADJACENT DUPLICATES FROM et_block_kunnr COMPARING kunnr.
+        ENDIF.
+
+**  BEGIN OF CHANGES BY OF Vipul ON 23 May 25 FOR ATC
+        SELECT low FROM tvarvc INTO @DATA(lv_block) UP TO 1 ROWS WHERE name EQ 'YFI_BLOCK_OP_ITEMS' ORDER BY PRIMARY KEY.ENDSELECT.
+*          * END CHANGES BY OF Vipul ON 23 May 25 FOR ATC
+        IF lv_block NE 'X'.
+          CLEAR lr_kunnr.
+          lr_kunnr = lr_kunnr1.
+        ENDIF.
+
+      ENDIF.
+
+      IF et_block_kunnr IS NOT INITIAL.
+        lr_kunnr_block = VALUE #( FOR ls_block_kunnr IN et_block_kunnr
+                                      LET s = 'I'
+                                          o = 'EQ'
+                                       IN sign = s
+                                        option = o
+                                         ( low = ls_block_kunnr-kunnr ) ).
+      ENDIF.
+
+    ENDIF.
+
+    IF lr_kunnr IS NOT INITIAL.
+
+      cl_salv_bs_runtime_info=>set(
+      EXPORTING display  = abap_false
+                metadata = abap_false
+                data     = abap_true ).
+
+      SUBMIT rfitemar
+           WITH dd_bukrs IN lr_bukrs
+           WITH dd_kunnr IN lr_kunnr
+           WITH x_opsel  = 'X'
+           WITH pa_stida = im_key_date
+           WITH x_clsel  = ''
+           WITH x_aisel  = ''
+           WITH x_norm   = 'X'
+           WITH x_shbv   = 'X'
+           WITH x_merk   = ''
+           WITH x_park   = ''
+           WITH x_apar   = ''
+         EXPORTING LIST TO MEMORY
+         AND RETURN.
+
+*Get ALV data
+      TRY.
+          cl_salv_bs_runtime_info=>get_data_ref( IMPORTING r_data = lr_rep_data ).
+          ASSIGN lr_rep_data->* TO <lt_rep_data>.
+          IF <lt_rep_data> IS ASSIGNED AND <lt_rep_data> IS NOT INITIAL.
+
+            LOOP AT <lt_rep_data> ASSIGNING <lwa_data> .
+** -> Begin of changes by of Aditi on 11.03.2025 15:15:39 for ATC
+              MOVE-CORRESPONDING <lwa_data> TO ls_fbl5n.   "#EC CI_FLDEXT_OK[2610650]
+** <- End changes by of Aditi on 11.03.2025 15:15:47 for ATC
+              ls_open_items-customer     = ls_fbl5n-konto.
+              IF ls_fbl5n-filkd IS NOT INITIAL.
+                ls_open_items-portal_cust_code = ls_fbl5n-filkd.
+              ELSE.
+                ls_open_items-portal_cust_code = ls_fbl5n-konto.
+              ENDIF.
+              ls_open_items-comp_code     = ls_fbl5n-bukrs.
+              ls_open_items-doc_no        = ls_fbl5n-belnr.
+              ls_open_items-fisc_year     = ls_fbl5n-gjahr.
+              ls_open_items-item_num      = ls_fbl5n-buzei.
+              ls_open_items-pstng_date    = ls_fbl5n-budat.
+              ls_open_items-doc_date      = ls_fbl5n-bldat.
+              ls_open_items-sp_gl_ind     = ls_fbl5n-umskz.
+              ls_open_items-bill_doc      = ls_fbl5n-vbeln.
+              ls_open_items-alloc_nmbr    = ls_fbl5n-zuonr.
+              ls_open_items-ref_doc_no    = ls_fbl5n-xblnr.
+              ls_open_items-doc_type      = ls_fbl5n-blart.
+              ls_open_items-currency      = ls_fbl5n-waers.
+              ls_open_items-db_cr_ind     = ls_fbl5n-shkzg.
+              ls_open_items-lc_amount     = ls_fbl5n-dmshb.
+              ls_open_items-amt_doccur    = ls_fbl5n-bwwrt.
+              ls_open_items-item_text     = ls_fbl5n-sgtxt.
+              ls_open_items-bus_area      = ls_fbl5n-gsber.
+              ls_open_items-branch        = ls_fbl5n-filkd.
+              ls_open_items-bline_date    = ls_fbl5n-zfbdt.
+              ls_open_items-dsct_days1    = ls_fbl5n-zbd1t.
+              ls_open_items-dsct_days2    = ls_fbl5n-zbd2t.
+              ls_open_items-net_due_date  = ls_fbl5n-zaldt.
+              ls_open_items-scb_indicator = ls_fbl5n-u_lzbkz.
+              ls_open_items-tcode         = ls_fbl5n-u_tcode.
+               LS_OPEN_ITEMS-RSTGR         = LS_FBL5N-RSTGR.
+
+              ls_open_items-ind_pref_excl = COND #( WHEN ls_open_items-customer IN lr_kunnr_block AND lr_kunnr_block IS NOT INITIAL
+                                                    THEN 'Y' ELSE ls_open_items-scb_indicator ).
+
+
+              IF LS_FBL5N-BLART IN LR_BLART OR ( ( LS_FBL5N-BLART EQ 'SA' OR LS_FBL5N-BLART EQ 'DA' )
+                                                    AND ( LS_FBL5N-U_TCODE EQ 'FINT' OR LS_FBL5N-U_TCODE EQ 'VF01' ) ).
+                ls_open_items-indicator_inv = 'X'.
+              ENDIF.
+
+              IF ls_open_items-portal_cust_code IS NOT INITIAL.
+                lr_kunnr2 = VALUE #( BASE lr_kunnr2 ( sign = 'I' option = 'EQ' low = ls_open_items-portal_cust_code ) ).
+              ENDIF.
+* -> BEGIN OF CHANGES BY OF Vipul ON 11Mar25 FOR ATC
+              SELECT @abap_true
+                FROM bsad
+                INTO @DATA(exist) UP TO 1 rows
+                WHERE kunnr EQ @ls_fbl5n-konto
+                  AND bukrs EQ @ls_fbl5n-bukrs
+                  AND augbl EQ @ls_fbl5n-belnr
+                  AND gjahr EQ @ls_fbl5n-gjahr ORDER BY PRIMARY KEY. ENDSELECT.
+
+              IF sy-subrc EQ 0 AND exist EQ 'X'.
+                ls_open_items-ind_residual = 'X'.
+              ENDIF.
+
+              SELECT tds_rate
+                FROM yrfa_cust_tds_rt
+                INTO @DATA(lv_tds_rate) up to 1 rows
+                WHERE bukrs EQ @ls_fbl5n-bukrs
+                  AND doc_type EQ @ls_fbl5n-blart
+                  AND valid_from LE @ls_fbl5n-budat ORDER BY PRIMARY KEY. ENDSELECT.
+* -> END CHANGES BY OF Vipul ON 11Mar25 FOR ATC
+              IF sy-subrc EQ 0 AND lv_tds_rate IS NOT INITIAL.
+                ls_open_items-tds_amt_max =  ( ls_fbl5n-dmshb * lv_tds_rate ) / 100.
+
+
+                  """"""""""""SOC MOBIN / ANSHUL DATE 15.07.2025""""""""""""""""""
+***                   COFORGE DEVLOPER = MOBIN
+***                   GAIL FUNCTIONAL =  ANSHUL
+***                   DATE            =  16.07.2025
+
+
+                  clear lv_int.
+                  lv_int = trunc( ls_open_items-tds_amt_max ).
+                  if ls_open_items-tds_amt_max > lv_int .
+                    ls_open_items-tds_amt_max = lv_int + 1.
+                  endif.
+
+                """"""""""""EOC MOBIN / ANSHUL DATE 15.07.2025""""""""""""""""""
+
+
+
+
+              ENDIF.
+*SOC Kartik / Manoj Rane Charm 4000009501 date 10/04/2025
+              IF ls_fbl5n-bukrs = '2000' OR ls_fbl5n-bukrs = '3000' .
+                SELECT SINGLE * FROM yrfa_cust_invtds INTO @DATA(it_yrfa_invtds)
+                                WHERE kunnr = @ls_open_items-customer AND DEL_FLAG ne @abap_true.
+                IF sy-subrc = 0.
+                  ls_open_items-tds_amt_max = ( ls_fbl5n-dmshb * lv_tds_rate ) / 100 .
+
+             """"""""""""SOC MOBIN / ANSHUL DATE 15.07.2025""""""""""""""""""
+***                          COFORGE DEVLOPER = MOBIN
+***                          GAIL FUNCTIONAL =  ANSHUL
+***                          DATE            =  16.07.2025
+
+*                         data lv_int TYPE i .
+                         clear lv_int.
+                         lv_int = trunc( ls_open_items-tds_amt_max ).
+                         if ls_open_items-tds_amt_max > lv_int .
+                           ls_open_items-tds_amt_max = lv_int + 1.
+                         endif.
+
+                """"""""""""EOC MOBIN / ANSHUL DATE 15.07.2025""""""""""""""""""
+
+
+
+
+                ELSE.
+                  SELECT SINGLE vbeln , netwr  FROM vbrk INTO @DATA(wa_vbrk)
+                    WHERE vbeln = @ls_open_items-bill_doc .
+                  IF sy-subrc = 0.
+
+                    ls_open_items-tds_amt_max = ( wa_vbrk-netwr * lv_tds_rate ) / 100.
+
+
+
+                   """"""""""""SOC MOBIN / ANSHUL DATE 15.07.2025""""""""""""""""""
+***                          COFORGE DEVLOPER = MOBIN
+***                          GAIL FUNCTIONAL =  ANSHUL
+***                          DATE            =  16.07.2025
+
+*                         data lv_int TYPE i .
+                         clear lv_int.
+                         lv_int = trunc( ls_open_items-tds_amt_max ).
+                         if ls_open_items-tds_amt_max > lv_int .
+                           ls_open_items-tds_amt_max = lv_int + 1.
+                         endif.
+
+                """"""""""""EOC MOBIN / ANSHUL DATE 15.07.2025""""""""""""""""""
+
+                  ELSE.
+*                    *  BEGIN OF CHANGES BY OF Vipul ON 23 May 25 FOR ATC
+                    SELECT  belnr,bukrs ,gjahr , hwste FROM bset INTO TABLE @DATA(it_bset)
+                       WHERE bukrs =  @ls_open_items-comp_code AND  belnr = @ls_open_items-doc_no AND
+                       gjahr = @ls_open_items-fisc_year  ORDER BY PRIMARY KEY.
+*                      * END CHANGES BY OF Vipul ON 23 May 25 FOR ATC
+                    IF sy-subrc = 0.
+                      DATA(lv_hwste) = REDUCE hwste( INIT x TYPE hwste FOR wa IN it_bset
+                                         WHERE (  bukrs =  ls_open_items-comp_code AND  belnr = ls_open_items-doc_no AND
+                                           gjahr = ls_open_items-fisc_year ) NEXT x = x + wa-hwste  ).
+
+                      ls_open_items-tds_amt_max = ( ls_fbl5n-dmshb - lv_hwste ) * lv_tds_rate / 100.
+
+
+              """"""""""""SOC MOBIN / ANSHUL DATE 15.07.2025""""""""""""""""""
+***                          COFORGE DEVLOPER = MOBIN
+***                          GAIL FUNCTIONAL =  ANSHUL
+***                          DATE            =  16.07.2025
+
+*                         data lv_int TYPE i .
+                         clear lv_int.
+                         lv_int = trunc( ls_open_items-tds_amt_max ).
+                         if ls_open_items-tds_amt_max > lv_int .
+                           ls_open_items-tds_amt_max = lv_int + 1.
+                         endif.
+
+                """"""""""""EOC MOBIN / ANSHUL DATE 15.07.2025""""""""""""""""""
+
+
+
+                    ENDIF.
+                  ENDIF.
+                ENDIF.
+
+              ENDIF.
+
+*EOC Kartik / Manoj Rane Charm 4000009501 date 10/04/2025
+              IF ls_open_items-doc_type EQ 'DA'.
+                ls_open_items-ref_doc_no = ls_open_items-alloc_nmbr.
+              ENDIF.
+
+              APPEND ls_open_items TO et_cust_open_items.
+              CLEAR: ls_open_items, exist, ls_fbl5n. "LV_KNVI_EXIST.
+
+            ENDLOOP.
+
+          ENDIF.
+
+          IF et_cust_open_items IS NOT INITIAL.
+
+            IF lr_kunnr2 IS NOT INITIAL.
+              SORT lr_kunnr2 BY low.
+              DELETE ADJACENT DUPLICATES FROM lr_kunnr2 COMPARING low.
+
+              SUBMIT yrvr271_jct1_cond_report
+                WITH s_kunnr IN lr_kunnr2
+                WITH rd1 EQ 'X'
+                WITH rd2 EQ ''
+              EXPORTING LIST TO MEMORY
+              AND RETURN.
+
+              cl_salv_bs_runtime_info=>get_data_ref( IMPORTING r_data = lr_yrvr271_data ).
+              ASSIGN lr_yrvr271_data->* TO <lt_yrvr271_data>.
+              IF <lt_yrvr271_data> IS ASSIGNED AND <lt_yrvr271_data> IS NOT INITIAL.
+                LOOP AT <lt_yrvr271_data> ASSIGNING <lwa_data1> .
+                  MOVE-CORRESPONDING <lwa_data1> TO ls_final.
+                  APPEND ls_final TO li_final.
+                ENDLOOP.
+              ENDIF.
+
+              IF li_final IS NOT INITIAL .
+                SORT li_final BY kunnr datab datbi.
+                DELETE ADJACENT DUPLICATES FROM li_final COMPARING kunnr datab datbi.
+
+
+                LOOP AT et_cust_open_items ASSIGNING FIELD-SYMBOL(<lfs_items>).
+
+                  LOOP AT li_final INTO DATA(wa_final) WHERE kunnr EQ <lfs_items>-portal_cust_code.
+                    IF <lfs_items>-doc_date BETWEEN wa_final-datab AND wa_final-datbi.
+                      DATA(lv_tds_flag) = abap_true.
+                      EXIT.
+                    ENDIF.
+                  ENDLOOP.
+
+                  IF <lfs_items>-doc_type IN lr_blart OR ( <lfs_items>-doc_type EQ 'SA' AND <lfs_items>-tcode EQ 'FINT' ).
+
+                    <lfs_items>-indicator_tds = COND #( WHEN <lfs_items>-db_cr_ind EQ 'S' AND
+                                                           lv_tds_flag EQ abap_false THEN 'X').
+
+                  ENDIF.
+
+                  IF <lfs_items>-indicator_tds NE 'X'.
+                    CLEAR <lfs_items>-tds_amt_max.
+                  ENDIF.
+
+                  CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+                    EXPORTING
+                      input  = <lfs_items>-portal_cust_code
+                    IMPORTING
+                      output = <lfs_items>-portal_cust_code.
+
+
+                  CLEAR lv_tds_flag.
+
+                ENDLOOP.
+
+              ENDIF.
+
+            ENDIF.
+
+            READ TABLE lr_bus_code WITH KEY low = 'LT' TRANSPORTING NO FIELDS.
+            IF sy-subrc EQ 0.
+              DELETE et_cust_open_items WHERE bus_area NOT BETWEEN 3800 AND 3899.
+            ELSE.
+              DELETE et_cust_open_items WHERE bus_area BETWEEN 3800 AND 3899.
+            ENDIF.
+
+            DELETE et_cust_open_items WHERE sp_gl_ind EQ '9'.
+          ENDIF.
+            IF ET_CUST_OPEN_ITEMS IS NOT INITIAL.
+
+            DATA(LI_OPEN_ITEMS) = ET_CUST_OPEN_ITEMS.
+
+            SELECT * FROM YRFA_CUST_REASON INTO TABLE @DATA(LI_REASON).
+            SELECT * FROM YRFA_CUST_SPL_GL INTO TABLE @DATA(LI_SPL_GL).
+            SELECT * FROM YRFA_CUST_BLOCK INTO TABLE @DATA(LT_CUST_BLOCK).
+
+            LOOP AT LI_OPEN_ITEMS INTO DATA(LS1_OPEN_ITEMS).
+
+              IF LINE_EXISTS( LI_REASON[ BUKRS = LS1_OPEN_ITEMS-COMP_CODE RSTGR = LS1_OPEN_ITEMS-RSTGR ] ).
+
+                DELETE ET_CUST_OPEN_ITEMS WHERE COMP_CODE = LS1_OPEN_ITEMS-COMP_CODE
+                                            AND DOC_NO    = LS1_OPEN_ITEMS-DOC_NO
+                                            AND FISC_YEAR = LS1_OPEN_ITEMS-FISC_YEAR
+                                            AND ITEM_NUM  = LS1_OPEN_ITEMS-ITEM_NUM.
+
+                APPEND LS1_OPEN_ITEMS TO ET_CUST_OPEN_EXCL_ITEMS.
+
+              ELSEIF LINE_EXISTS( LI_SPL_GL[ BUKRS = LS1_OPEN_ITEMS-COMP_CODE UMSKZ = LS1_OPEN_ITEMS-SP_GL_IND ] ).
+
+                DELETE ET_CUST_OPEN_ITEMS WHERE COMP_CODE = LS1_OPEN_ITEMS-COMP_CODE
+                                            AND DOC_NO    = LS1_OPEN_ITEMS-DOC_NO
+                                            AND FISC_YEAR = LS1_OPEN_ITEMS-FISC_YEAR
+                                            AND ITEM_NUM  = LS1_OPEN_ITEMS-ITEM_NUM.
+
+                APPEND LS1_OPEN_ITEMS TO ET_CUST_OPEN_EXCL_ITEMS.
+
+              ELSEIF LS1_OPEN_ITEMS-SCB_INDICATOR EQ 'E'.
+
+                DELETE ET_CUST_OPEN_ITEMS WHERE COMP_CODE = LS1_OPEN_ITEMS-COMP_CODE
+                                            AND DOC_NO    = LS1_OPEN_ITEMS-DOC_NO
+                                            AND FISC_YEAR = LS1_OPEN_ITEMS-FISC_YEAR
+                                            AND ITEM_NUM  = LS1_OPEN_ITEMS-ITEM_NUM.
+
+                APPEND LS1_OPEN_ITEMS TO ET_CUST_OPEN_EXCL_ITEMS.
+
+              ELSEIF LINE_EXISTS( LT_CUST_BLOCK[ CUST_CODE = LS1_OPEN_ITEMS-CUSTOMER ] ).
+
+                DELETE ET_CUST_OPEN_ITEMS WHERE COMP_CODE = LS1_OPEN_ITEMS-COMP_CODE
+                                          AND DOC_NO    = LS1_OPEN_ITEMS-DOC_NO
+                                          AND FISC_YEAR = LS1_OPEN_ITEMS-FISC_YEAR
+                                          AND ITEM_NUM  = LS1_OPEN_ITEMS-ITEM_NUM.
+
+                APPEND LS1_OPEN_ITEMS TO ET_CUST_OPEN_EXCL_ITEMS.
+
+              ENDIF.
+
+
+            ENDLOOP.
+
+          ENDIF.
+
+        CATCH cx_salv_bs_sc_runtime_info .
+          MESSAGE `Unable to retrieve ALV data` TYPE 'E'.
+      ENDTRY.
+    ENDIF.
+  ENDIF.  "IF im_bus_code IS NOT INITIAL AND im_bukrs IS NOT INITIAL.
+
+ENDFUNCTION.

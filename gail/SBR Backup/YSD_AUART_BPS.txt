@@ -1,0 +1,58 @@
+{
+
+
+  "formatVersion": "1",
+
+
+  "header": {
+
+
+    "description": "Maintain Auart for Credit check",
+
+
+    "originalLanguage": "en"
+
+
+  },
+
+
+  "clientDependent": true,
+
+
+  "languageDependent": "noLanguageKey",
+
+
+  "category": "application",
+
+
+  "transportRecording": "notSupported",
+
+
+  "adaptableInProduction": false,
+
+
+  "bcSetAdjustment": "automatic",
+
+
+  "tableItems": [
+
+
+    {
+
+
+      "tableName": "YSD_AUART_BP",
+
+
+      "systemControlled": true,
+
+
+      "isPrimaryTable": true
+
+
+    }
+
+
+  ]
+
+
+}

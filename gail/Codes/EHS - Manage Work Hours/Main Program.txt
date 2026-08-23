@@ -1,0 +1,10 @@
+*&---------------------------------------------------------------------*
+*& Modulpool YEHS_MANAGE_WORK_HOURS
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+PROGRAM YEHS_MANAGE_WORK_HOURS.
+
+include YEHS_MANAGE_WORK_HOURS_TOP.
+include YEHS_MANAGE_WORK_HOURS_PBO.
+include YEHS_MANAGE_WORK_HOURS_PAI.

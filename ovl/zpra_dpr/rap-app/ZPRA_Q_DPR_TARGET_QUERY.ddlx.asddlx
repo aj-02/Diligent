@@ -1,0 +1,106 @@
+@Metadata.layer: #CORE
+
+@UI.headerInfo: {
+  typeName:       'Target Record',
+  typeNamePlural: 'Target Records',
+  title:          { type: #STANDARD, value: 'ProductDescription' },
+  description:    { type: #STANDARD, value: 'AssetDescription'   }
+}
+
+@UI.chart: [
+  {
+    qualifier:  'ActualVsTarget',
+    title:      'Actual vs Target by Product',
+    chartType:  #BAR,
+    dimensions: ['ProductDescription'],
+    measures:   ['ActualQty', 'TargetQty'],
+    measureAttributes: [
+      { measure: 'ActualQty', role: #AXIS_1 },
+      { measure: 'TargetQty', role: #AXIS_1 }
+    ],
+    dimensionAttributes: [
+      { dimension: 'ProductDescription', role: #CATEGORY }
+    ]
+  },
+  {
+    qualifier:  'AchievementByAsset',
+    title:      'Achievement % by Asset',
+    chartType:  #COLUMN,
+    dimensions: ['AssetDescription'],
+    measures:   ['AchievementPct'],
+    measureAttributes: [
+      { measure: 'AchievementPct', role: #AXIS_1, asDataPoint: true }
+    ],
+    dimensionAttributes: [
+      { dimension: 'AssetDescription', role: #CATEGORY }
+    ]
+  },
+  {
+    qualifier:  'VarianceByPeriod',
+    title:      'Variance by Period',
+    chartType:  #COLUMN,
+    dimensions: ['FiscalPeriod', 'ProductDescription'],
+    measures:   ['VarianceQty'],
+    measureAttributes: [
+      { measure: 'VarianceQty', role: #AXIS_1, asDataPoint: true }
+    ],
+    dimensionAttributes: [
+      { dimension: 'FiscalPeriod',       role: #CATEGORY },
+      { dimension: 'ProductDescription', role: #SERIES   }
+    ]
+  }
+]
+
+@UI.presentationVariant: [{
+  qualifier:      'Default',
+  visualizations: [
+    { type: #AS_CHART,    qualifier: 'ActualVsTarget' },
+    { type: #AS_LINEITEM }
+  ],
+  sortOrder:      [{ by: 'FiscalPeriod', direction: #ASC }]
+}]
+
+annotate view ZPRA_Q_DPR_TARGET_QUERY with
+{
+  @UI.selectionField: [{ position: 10 }]
+  @UI.lineItem:       [{ position: 10, importance: #HIGH, label: 'Fiscal Year' }]
+  FiscalYear;
+
+  @UI.selectionField: [{ position: 20 }]
+  @UI.lineItem:       [{ position: 20, importance: #HIGH, label: 'Period' }]
+  FiscalPeriod;
+
+  @UI.selectionField: [{ position: 30 }]
+  Product;
+
+  @UI.selectionField: [{ position: 40 }]
+  Asset;
+
+  @UI.selectionField: [{ position: 50 }]
+  TargetCode;
+
+  @UI.lineItem: [{ position: 30, importance: #HIGH, label: 'Product' }]
+  ProductDescription;
+
+  @UI.lineItem: [{ position: 40, importance: #HIGH, label: 'Asset' }]
+  AssetDescription;
+
+  @UI.lineItem: [{ position: 50, importance: #MEDIUM, label: 'Block' }]
+  Block;
+
+  @UI.lineItem: [{ position: 60, importance: #MEDIUM, label: 'Target Type' }]
+  TargetTypeDescription;
+
+  @UI.lineItem: [{ position: 70, importance: #HIGH, label: 'Actual Qty' }]
+  ActualQty;
+
+  @UI.lineItem: [{ position: 80, importance: #HIGH, label: 'Target Qty' }]
+  TargetQty;
+
+  @UI.lineItem: [{ position: 90, importance: #HIGH, label: 'Variance' }]
+  VarianceQty;
+
+  @UI.lineItem:  [{ position: 100, importance: #HIGH, label: 'Achievement %' }]
+  @UI.dataPoint: { title: 'Achievement %' }
+  AchievementPct;
+}

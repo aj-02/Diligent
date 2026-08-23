@@ -1,0 +1,54 @@
+@Metadata.layer: #CORE
+
+@UI.headerInfo: {
+  typeName:       'BOEPD Trend',
+  typeNamePlural: 'BOEPD Trend',
+  title:          { type: #STANDARD, value: 'ProductionDate' }
+}
+
+@UI.chart: [{
+  qualifier:  'BoepdVsTarget',
+  title:      'Actual Production vs BE Target (BOEPD)',
+  chartType:  #LINE,
+  dimensions: ['ProductionDate'],
+  measures:   ['ActualBoepdOvl', 'TargetBoepd'],
+  measureAttributes: [
+    { measure: 'ActualBoepdOvl', role: #AXIS_1, asDataPoint: true },
+    { measure: 'TargetBoepd',    role: #AXIS_1, asDataPoint: true }
+  ],
+  dimensionAttributes: [
+    { dimension: 'ProductionDate', role: #CATEGORY }
+  ]
+}]
+
+@UI.presentationVariant: [{
+  qualifier:      'Default',
+  visualizations: [
+    { type: #AS_CHART, qualifier: 'BoepdVsTarget' },
+    { type: #AS_LINEITEM }
+  ],
+  sortOrder:      [{ by: 'ProductionDate', direction: #ASC }]
+}]
+
+annotate view ZPRA_Q_DPR_BOEPD_TREND with
+{
+  @UI.selectionField: [{ position: 10 }]
+  ProductionDate;
+
+  @UI.selectionField: [{ position: 20 }]
+  Asset;
+
+  @UI.selectionField: [{ position: 30 }]
+  ProductGroup;
+
+  @UI.lineItem:  [{ position: 20, importance: #HIGH, label: 'Actual Production (BOEPD)' }]
+  @UI.dataPoint: { title: 'Actual Production (BOEPD)' }
+  ActualBoepdOvl;
+
+  @UI.lineItem:  [{ position: 30, importance: #HIGH, label: 'BE Target (BOEPD)' }]
+  @UI.dataPoint: { title: 'BE Target (BOEPD)' }
+  TargetBoepd;
+
+  @UI.lineItem: [{ position: 40, importance: #MEDIUM, label: 'Actual BOEPD (JV)' }]
+  ActualBoepdJv;
+}

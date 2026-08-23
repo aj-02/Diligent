@@ -1,0 +1,9 @@
+CLASS zbp_zpra_dpr_excel_dl DEFINITION
+  PUBLIC ABSTRACT FINAL
+  FOR BEHAVIOR OF zpra_i_dpr_excel_dl.
+
+  PUBLIC SECTION.
+ENDCLASS.
+
+CLASS zbp_zpra_dpr_excel_dl IMPLEMENTATION.
+ENDCLASS.

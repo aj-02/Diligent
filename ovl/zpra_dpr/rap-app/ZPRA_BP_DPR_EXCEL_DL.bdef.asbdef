@@ -1,0 +1,24 @@
+unmanaged implementation in class zbp_zpra_dpr_excel_dl unique;
+
+define behavior for ZPRA_I_DPR_EXCEL_DL alias DPRExcelDownload
+{
+  static action downloadProduction
+    parameter ZPRA_A_DPR_PROD_PARAM
+    result [1] ZPRA_A_DPR_EXCEL_RESULT;
+
+  static action downloadTargets
+    parameter ZPRA_A_DPR_TAR_PARAM
+    result [1] ZPRA_A_DPR_EXCEL_RESULT;
+
+  static action downloadDprSummary
+    parameter ZPRA_A_DPR_PROD_PARAM
+    result [1] ZPRA_A_DPR_EXCEL_RESULT;
+
+  static action downloadPdfProduction
+    parameter ZPRA_A_DPR_PROD_PARAM
+    result [1] ZPRA_A_DPR_PDF_RESULT;
+
+  static action downloadPdfTargets
+    parameter ZPRA_A_DPR_TAR_PARAM
+    result [1] ZPRA_A_DPR_PDF_RESULT;
+}

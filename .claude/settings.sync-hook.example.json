@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && ./scripts/sync.sh >> \"$CLAUDE_PROJECT_DIR/.git/sync-hook.log\" 2>&1 || true",
+            "timeout": 180,
+            "async": true,
+            "statusMessage": "Syncing to GitHub..."
+          }
+        ]
+      }
+    ]
+  }
+}

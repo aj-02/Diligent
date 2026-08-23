@@ -35,6 +35,12 @@ It is safe to run when there is nothing to do, and it never force-pushes: if the
 changed here and on GitHub it stops and tells you, leaving your commit intact. `/sync` runs
 it from inside Claude Code.
 
+To have it fire by itself every time Claude finishes a reply, copy
+`.claude/settings.sync-hook.example.json` to `.claude/settings.json` (merge the `hooks` block
+in if that file already exists) and reopen Claude Code. Everything Claude writes is then
+committed and pushed with an auto message, verified or not — turn it off by deleting the
+`Stop` block. Its output goes to `.git/sync-hook.log`, not the chat.
+
 `incoming/` is the drop folder for fresh SE80 downloads awaiting triage.
 `COPILOT_CONTEXT_HANDOFF.md` is the deeper cross-project reference behind `CLAUDE.md`.
 

@@ -729,6 +729,7 @@ FORM do_business USING pv_mode TYPE char1.
         lv_qtr   TYPE zde_quarter,
         lv_poper TYPE poper,
         lv_qty   TYPE zde_fcst_qty,
+        lv_total TYPE zde_fcst_qty,
         lv_ex    TYPE abap_bool,
         lv_err   TYPE string,
         lv_txt   TYPE string,
@@ -807,7 +808,8 @@ FORM do_business USING pv_mode TYPE char1.
         ENDIF.
       ENDIF.
 
-      lv_txt = |Business forecast { lv_qty }, final quantity now { ls_qt-final_qty }|.
+      lv_total = ls_qt-final_qty + ls_qt-bus_fcst_add.
+      lv_txt = |Business forecast { lv_qty }, final quantity now { lv_total }|.
 
     ELSE.
 
@@ -842,7 +844,8 @@ FORM do_business USING pv_mode TYPE char1.
         ENDIF.
       ENDIF.
 
-      lv_txt = |Business forecast { lv_qty }, final quantity now { ls_mn-final_qty }|.
+      lv_total = ls_mn-final_qty + ls_mn-bus_fcst_add.
+      lv_txt = |Business forecast { lv_qty }, final quantity now { lv_total }|.
 
     ENDIF.
 
@@ -870,6 +873,7 @@ FORM do_change USING pv_mode TYPE char1.
         lv_qtr   TYPE zde_quarter,
         lv_poper TYPE poper,
         lv_qty   TYPE zde_fcst_qty,
+        lv_total TYPE zde_fcst_qty,
         lv_rsn   TYPE zde_fcst_reason,
         lv_err   TYPE string,
         lv_txt   TYPE string,
@@ -944,7 +948,10 @@ FORM do_change USING pv_mode TYPE char1.
       PERFORM final_qty CHANGING ls_qt-fcst_qty ls_qt-bus_fcst
                                  ls_qt-bus_fcst_add ls_qt-final_qty.
 
-      IF ls_qt-final_qty < 0.
+*     FINAL_QTY no longer carries the change, so the guard tests the
+*     total the change actually moves
+      lv_total = ls_qt-final_qty + ls_qt-bus_fcst_add.
+      IF lv_total < 0.
         lv_err = 'The reduction is larger than the forecast, the final quantity would be negative'.
         PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
         CONTINUE.
@@ -962,7 +969,7 @@ FORM do_change USING pv_mode TYPE char1.
         ENDIF.
       ENDIF.
 
-      lv_txt = |Change { lv_qty }, final quantity now { ls_qt-final_qty }, reason { lv_rsn }|.
+      lv_txt = |Change { lv_qty }, final quantity now { lv_total }, reason { lv_rsn }|.
 
     ELSE.
 
@@ -983,7 +990,8 @@ FORM do_change USING pv_mode TYPE char1.
       PERFORM final_qty CHANGING ls_mn-fcst_qty ls_mn-bus_fcst
                                  ls_mn-bus_fcst_add ls_mn-final_qty.
 
-      IF ls_mn-final_qty < 0.
+      lv_total = ls_mn-final_qty + ls_mn-bus_fcst_add.
+      IF lv_total < 0.
         lv_err = 'The reduction is larger than the forecast, the final quantity would be negative'.
         PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
         CONTINUE.
@@ -1001,7 +1009,7 @@ FORM do_change USING pv_mode TYPE char1.
         ENDIF.
       ENDIF.
 
-      lv_txt = |Change { lv_qty }, final quantity now { ls_mn-final_qty }, reason { lv_rsn }|.
+      lv_txt = |Change { lv_qty }, final quantity now { lv_total }, reason { lv_rsn }|.
 
     ENDIF.
 
@@ -1014,15 +1022,24 @@ ENDFORM.
 
 
 *&---------------------------------------------------------------------*
-*& The final quantity is kept consistent with the report, which shows
-*& generated + business forecast + change
+*& FINAL_QTY must be worked out exactly as the report works it out, or
+*& an uploaded row and a generated row would disagree.
+*&
+*& The FS compares the generated forecast with the business forecast and
+*& takes the higher of the two - "Compare forecast and business
+*& forecast", sheet 3 row 57, confirmed by the worked example where
+*& 1200 against 4000 gives 4000. The additional plan quantity is NOT
+*& part of it; it is added afterwards to give the second final column.
+*&
+*& This previously added all three together, which inflated every
+*& uploaded row.
 *&---------------------------------------------------------------------*
 FORM final_qty CHANGING cv_gen TYPE zde_fcst_qty
                         cv_bus TYPE zde_fcst_qty
                         cv_add TYPE zde_fcst_qty
                         cv_fin TYPE zde_fcst_qty.
 
-  cv_fin = cv_gen + cv_bus + cv_add.
+  cv_fin = nmax( val1 = cv_gen val2 = cv_bus ).
 
 ENDFORM.
 
@@ -1330,6 +1347,13 @@ FORM display_log.
       PERFORM txt USING lo_cols 'ACTION'  'Result'.
       PERFORM txt USING lo_cols 'MESSAGE' 'Detail'.
 
+*     The detail column carries a whole sentence, so it is given room
+*     up front instead of the user dragging it wider on every run
+      TRY.
+          lo_cols->get_column( 'MESSAGE' )->set_output_length( 60 ).
+        CATCH cx_salv_not_found.
+      ENDTRY.
+
       lv_ttl = lv_head.
       lo_alv->get_display_settings( )->set_list_header( lv_ttl ).
 
@@ -1349,20 +1373,37 @@ FORM txt USING po_cols TYPE REF TO cl_salv_columns_table
 
   DATA: lo_col TYPE REF TO cl_salv_column,
         lv_nam TYPE lvc_fname,
+        lv_txt TYPE string,
+        lv_len TYPE lvc_outlen,
         lv_s   TYPE scrtext_s,
         lv_m   TYPE scrtext_m,
         lv_l   TYPE scrtext_l.
 
   lv_nam = pv_name.
-  lv_s   = pv_text.
-  lv_m   = pv_text.
-  lv_l   = pv_text.
+  lv_txt = pv_text.
+  lv_s   = lv_txt.
+  lv_m   = lv_txt.
+  lv_l   = lv_txt.
+
+* ALV picks WHICH of the three heading texts to draw from the column
+* output length - the short one below 10 characters, the medium one
+* below 20, the long one above that. A long heading on a narrow numeric
+* column was therefore drawn from the short text and cut off. The width
+* is set from the heading so the long text is chosen, and set_optimize
+* then widens further where the data needs it.
+  lv_len = strlen( lv_txt ).
+  IF lv_len < 10.
+    lv_len = 10.
+  ELSEIF lv_len > 40.
+    lv_len = 40.
+  ENDIF.
 
   TRY.
       lo_col = po_cols->get_column( lv_nam ).
       lo_col->set_short_text( lv_s ).
       lo_col->set_medium_text( lv_m ).
       lo_col->set_long_text( lv_l ).
+      lo_col->set_output_length( lv_len ).
     CATCH cx_salv_not_found.
   ENDTRY.
 

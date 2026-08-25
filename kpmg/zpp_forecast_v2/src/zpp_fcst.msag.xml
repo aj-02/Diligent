@@ -125,6 +125,12 @@
     <T100>
      <SPRSL>E</SPRSL>
      <ARBGB>ZPP_FCST</ARBGB>
+     <MSGNR>021</MSGNR>
+     <TEXT>Number range ZPPFCST has no interval for financial year &amp;1</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_FCST</ARBGB>
      <MSGNR>020</MSGNR>
      <TEXT>Material &amp;1 is excluded from forecasting</TEXT>
     </T100>

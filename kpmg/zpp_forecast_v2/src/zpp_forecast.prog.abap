@@ -16,28 +16,41 @@
 *&---------------------------------------------------------------------*
 REPORT zpp_forecast MESSAGE-ID zpp_fcst.
 
-TABLES marc.
+TABLES: marc, sscrfields.
 
 * LVC_T_FNAME is not available in every release, so the column name
 * list is typed locally over LVC_FNAME
 TYPES tt_fname TYPE STANDARD TABLE OF lvc_fname WITH DEFAULT KEY.
 
-DATA: gt_alv  TYPE zcl_pp_fcst=>tt_alv,
+* Columns the FS does not draw - MTS/MTO, unit, forecast number, the
+* status light and its message. OFF, so the list holds exactly the
+* columns of the FS sheet and nothing else. Set to abap_true to bring
+* them back, which also restores the traffic light column.
+CONSTANTS gc_show_extras TYPE abap_bool VALUE abap_false.
+
+DATA: gt_msg  TYPE bapiret2_t,
+      gt_alv  TYPE zcl_pp_fcst=>tt_alv,
       go_fcst TYPE REF TO zcl_pp_fcst,
       go_alv  TYPE REF TO cl_salv_table,
       g_mode  TYPE char1.
 
 *&---------------------------------------------------------------------*
 SELECTION-SCREEN BEGIN OF BLOCK b0 WITH FRAME TITLE TEXT-b00.
-PARAMETERS: p_ann RADIOBUTTON GROUP mod DEFAULT 'X' USER-COMMAND md,
+PARAMETERS: p_ann RADIOBUTTON GROUP mod USER-COMMAND md DEFAULT 'X',
             p_qtr RADIOBUTTON GROUP mod,
             p_mth RADIOBUTTON GROUP mod.
 SELECTION-SCREEN END OF BLOCK b0.
 
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-b01.
-SELECT-OPTIONS: s_werks FOR marc-werks OBLIGATORY,
+* Plant and financial year are NOT declared OBLIGATORY. The screen
+* checks a mandatory field on every PAI, including the click on a mode
+* radio button, so an empty plant produced "fill out all required entry
+* fields" before the user had even chosen the mode - which looks exactly
+* like the screen refusing to change. They are checked by hand on
+* Execute instead, further down.
+SELECT-OPTIONS: s_werks FOR marc-werks,
                 s_matnr FOR marc-matnr.
-PARAMETERS: p_fyear TYPE zde_fyear OBLIGATORY,
+PARAMETERS: p_fyear TYPE zde_fyear,
             p_quart TYPE zde_quarter MODIF ID qtr,
             p_perio TYPE poper       MODIF ID mth.
 SELECT-OPTIONS: s_datum FOR sy-datum NO-EXTENSION MODIF ID dat.
@@ -45,7 +58,8 @@ SELECTION-SCREEN END OF BLOCK b1.
 
 SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-b02.
 PARAMETERS: p_tonn AS CHECKBOX,
-            p_legc AS CHECKBOX.
+            p_legc AS CHECKBOX,
+            p_slog AS CHECKBOX.
 SELECTION-SCREEN END OF BLOCK b2.
 
 
@@ -65,7 +79,7 @@ CLASS lcl_handler IMPLEMENTATION.
 
   METHOD on_added_function.
 
-    CHECK e_salv_function = 'SAVE'.
+    CHECK e_salv_function = 'ZSAVE'.
 
     " Rows picked in the standard selection column
     DATA(lt_rows) = go_alv->get_selections( )->get_selected_rows( ).
@@ -145,7 +159,32 @@ AT SELECTION-SCREEN OUTPUT.
   ENDLOOP.
 
 *&---------------------------------------------------------------------*
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_fyear.
+
+  PERFORM f4_fyear.
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_quart.
+
+  PERFORM f4_quart.
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_perio.
+
+  PERFORM f4_perio.
+
+*&---------------------------------------------------------------------*
 AT SELECTION-SCREEN.
+
+* Clicking a mode radio button raises PAI, so every check below used to
+* run while the user was still choosing the mode and threw errors on
+* fields they had not reached yet. Only the mode switch is skipped, so a
+* background run with a blank function code is still validated.
+  IF sscrfields-ucomm = 'MD'.
+    RETURN.
+  ENDIF.
+
+  IF s_werks[] IS INITIAL.
+    MESSAGE e001.
+  ENDIF.
 
   IF zcl_pp_fcst_util=>split_fyear( p_fyear ) = abap_false.
     MESSAGE e002 WITH p_fyear.
@@ -181,6 +220,14 @@ START-OF-SELECTION.
 
   PERFORM generate.
 
+* Always written, whether the run produced rows or not. This is the
+* record support reads in QAS when the numbers look wrong.
+  PERFORM save_log.
+
+  IF p_slog = abap_true.
+    lcl_handler=>show_log( gt_msg ).
+  ENDIF.
+
   IF gt_alv IS INITIAL.
     MESSAGE s008 DISPLAY LIKE 'I'.
     RETURN.
@@ -190,11 +237,79 @@ START-OF-SELECTION.
 
 
 *&---------------------------------------------------------------------*
+*& Application log - SLG1, object ZPP_FCST subobject GENERATE
+*&
+*& Everything the run wanted to say is written here: materials with no
+*& annual forecast, missing product categories, missing load factors.
+*& The user is not shown any of it.
+*&
+*& If the log object has not been created in SLG0 the run carries on
+*& without a log rather than failing. The list is what matters, and the
+*& Show message log checkbox still puts the same messages on screen.
+*&---------------------------------------------------------------------*
+FORM save_log.
+
+  DATA: ls_log    TYPE bal_s_log,
+        ls_bal    TYPE bal_s_msg,
+        ls_msg    TYPE bapiret2,
+        lv_handle TYPE balloghndl,
+        lt_handle TYPE bal_t_logh.
+
+  CHECK gt_msg IS NOT INITIAL.
+
+  ls_log-object    = 'ZPP_FCST'.
+  ls_log-subobject = 'GENERATE'.
+  ls_log-aldate    = sy-datum.
+  ls_log-altime    = sy-uzeit.
+  ls_log-aluser    = sy-uname.
+  ls_log-alprog    = sy-repid.
+
+* What the run was, so one log can be told from another in SLG1
+  ls_log-extnumber = |{ g_mode } { p_fyear } { sy-uname }|.
+
+  CALL FUNCTION 'BAL_LOG_CREATE'
+    EXPORTING  i_s_log      = ls_log
+    IMPORTING  e_log_handle = lv_handle
+    EXCEPTIONS OTHERS       = 1.
+
+  CHECK sy-subrc = 0.
+
+  LOOP AT gt_msg INTO ls_msg.
+    CLEAR ls_bal.
+    ls_bal-msgty = ls_msg-type.
+    ls_bal-msgid = ls_msg-id.
+    ls_bal-msgno = ls_msg-number.
+    ls_bal-msgv1 = ls_msg-message_v1.
+    ls_bal-msgv2 = ls_msg-message_v2.
+    ls_bal-msgv3 = ls_msg-message_v3.
+    ls_bal-msgv4 = ls_msg-message_v4.
+
+    CALL FUNCTION 'BAL_LOG_MSG_ADD'
+      EXPORTING  i_log_handle = lv_handle
+                 i_s_msg      = ls_bal
+      EXCEPTIONS OTHERS       = 1.
+  ENDLOOP.
+
+  APPEND lv_handle TO lt_handle.
+
+  CALL FUNCTION 'BAL_DB_SAVE'
+    EXPORTING  i_t_log_handle = lt_handle
+               i_save_all     = abap_true
+    EXCEPTIONS OTHERS         = 1.
+
+  IF sy-subrc = 0.
+    COMMIT WORK AND WAIT.
+  ENDIF.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
 FORM generate.
 
   DATA lt_msg TYPE bapiret2_t.
 
-  CLEAR gt_alv.
+  CLEAR: gt_alv, gt_msg.
   CREATE OBJECT go_fcst.
 
   g_mode = COND #( WHEN p_ann = abap_true THEN zcl_pp_fcst=>gc_mode-annual
@@ -233,7 +348,11 @@ FORM generate.
                                            et_msg     = lt_msg ).
   ENDCASE.
 
-  lcl_handler=>show_log( lt_msg ).
+* The messages are kept rather than shown. A user who selected nothing
+* wants to be told "no records", not handed six technical lines about
+* materials they never asked about. They go to the application log, and
+* on to the screen only if the log checkbox was ticked.
+  gt_msg = lt_msg.
 
 ENDFORM.
 
@@ -261,13 +380,25 @@ FORM display.
         ENDIF.
       ENDLOOP.
 
+*     The Save button is added in its own TRY. SAVE collides with a
+*     function that set_all( ) has already switched on, which raises
+*     CX_SALV_EXISTING - and in the old code that exception escaped to
+*     the outer CATCH, so the whole ALV failed to display and reported
+*     "no data selected". A toolbar button must never do that, and the
+*     name is now ZSAVE so it cannot clash.
       IF lv_save_ok = abap_true.
-        lo_funcs->add_function(
-          name     = 'SAVE'
-          icon     = CONV string( icon_system_save )
-          text     = 'Save'
-          tooltip  = 'Save the selected forecast lines'
-          position = if_salv_c_function_position=>right_of_salv_functions ).
+        TRY.
+            lo_funcs->add_function(
+              name     = 'ZSAVE'
+              icon     = CONV string( icon_system_save )
+              text     = 'Save'
+              tooltip  = 'Save the selected forecast lines'
+              position = if_salv_c_function_position=>right_of_salv_functions ).
+          CATCH cx_salv_existing cx_salv_wrong_call.
+*           The list is still worth showing without the button
+            MESSAGE 'Save button unavailable, list is display only'
+                    TYPE 'S' DISPLAY LIKE 'W'.
+        ENDTRY.
       ENDIF.
 
       "--- row selection replaces the old checkbox column ---------------
@@ -291,8 +422,11 @@ FORM display.
       go_alv->display( ).
 
     CATCH cx_salv_msg cx_salv_not_found cx_salv_data_error
-          cx_salv_existing cx_salv_wrong_call.
-      MESSAGE e008.
+          cx_salv_existing cx_salv_wrong_call INTO DATA(lx_salv).
+*     Reporting 008 "no data selected" for any ALV failure hid the real
+*     cause. The exception text is shown instead.
+      DATA(lv_err) = lx_salv->get_text( ).
+      MESSAGE lv_err TYPE 'E'.
   ENDTRY.
 
 ENDFORM.
@@ -306,47 +440,63 @@ FORM visible_columns CHANGING ct_show TYPE tt_fname.
 
   DATA lv_p TYPE numc2.
 
+  CLEAR ct_show.
+
+* ---- leading block, identical on all three FS sheets ----------------
   ct_show = VALUE tt_fname(
-    ( 'LIGHT' ) ( 'FCST_NO' ) ( 'WERKS' ) ( 'MATNR' ) ( 'MAKTX' ) ( 'MATKL' )
-    ( 'NTGEW' ) ( 'MVGR1_TXT' ) ( 'MVGR2_TXT' ) ( 'MVGR3_TXT' )
-    ( 'MVGR4_TXT' ) ( 'MVGR5_TXT' )
-    ( 'PROD_CAT' ) ( 'LOAD_FCT' ) ( 'MTS_MTO' ) ( 'MEINS' ) ( 'MESSAGE' ) ).
+    ( 'WERKS' ) ( 'MATNR' ) ( 'MAKTX' ) ( 'MATKL' ) ( 'NTGEW' )
+    ( 'MVGR1_TXT' ) ( 'MVGR2_TXT' ) ( 'MVGR3_TXT' )
+    ( 'MVGR4_TXT' ) ( 'MVGR5_TXT' ) ).
 
   CASE g_mode.
 
+*   ---- FS radio Button 1, row 24 (tonnage block from row 75) --------
     WHEN zcl_pp_fcst=>gc_mode-annual.
 
+*     Apr-25 .. Mar-26
       DO 12 TIMES.
         lv_p = sy-index.
-        APPEND CONV lvc_fname( |M{ lv_p }| )      TO ct_show.
-        APPEND CONV lvc_fname( |M{ lv_p }_FCST| ) TO ct_show.
-        IF p_tonn = abap_true.
-          APPEND CONV lvc_fname( |M{ lv_p }_TON| ) TO ct_show.
-        ENDIF.
+        APPEND CONV lvc_fname( |M{ lv_p }| ) TO ct_show.
       ENDDO.
 
-      APPEND 'LY_TOTAL'   TO ct_show.
-      APPEND 'FCST_TOTAL' TO ct_show.
+      APPEND 'LY_TOTAL'   TO ct_show.   " Total LY Sales Qty
+      APPEND 'PROD_CAT'   TO ct_show.   " Product Cat.
+      APPEND 'LOAD_FCT'   TO ct_show.   " Load Factor
+      APPEND 'FCST_TOTAL' TO ct_show.   " Forecast Qty_FY2026-27
 
+*     Apr-26 .. Mar-27
+      DO 12 TIMES.
+        lv_p = sy-index.
+        APPEND CONV lvc_fname( |M{ lv_p }_FCST| ) TO ct_show.
+      ENDDO.
+
+      IF p_tonn = abap_true.
+        DO 12 TIMES.
+          lv_p = sy-index.
+          APPEND CONV lvc_fname( |M{ lv_p }_TON| ) TO ct_show.
+        ENDDO.
+      ENDIF.
+
+*   ---- FS radio Button 2, row 17 ------------------------------------
     WHEN zcl_pp_fcst=>gc_mode-quarterly.
 
-      APPEND 'QUARTER'      TO ct_show.
-      APPEND 'M4_LAST'      TO ct_show.
-      APPEND 'M5_LAST'      TO ct_show.
-      APPEND 'M6_LAST'      TO ct_show.
-      APPEND 'LY_QTR_TOT'   TO ct_show.
-      APPEND 'M1_CURR'      TO ct_show.
-      APPEND 'M2_CURR'      TO ct_show.
-      APPEND 'M3_CURR'      TO ct_show.
-      APPEND 'L3M_TOT'      TO ct_show.
-      APPEND 'MAX_QTY'      TO ct_show.
-      APPEND 'FCST_QTY'     TO ct_show.
-      APPEND 'BUS_FCST'     TO ct_show.
-      APPEND 'BUS_FCST_ADD' TO ct_show.
-      APPEND 'FINAL_QTY'    TO ct_show.
-      APPEND 'M4_FCST'      TO ct_show.
-      APPEND 'M5_FCST'      TO ct_show.
-      APPEND 'M6_FCST'      TO ct_show.
+      APPEND 'M4_LAST'    TO ct_show.   " July'25
+      APPEND 'M5_LAST'    TO ct_show.   " Aug'25
+      APPEND 'M6_LAST'    TO ct_show.   " Sep'25
+      APPEND 'LY_QTR_TOT' TO ct_show.   " Total LY Quarter Sales Qty
+      APPEND 'M1_CURR'    TO ct_show.   " April'26
+      APPEND 'M2_CURR'    TO ct_show.   " May'26
+      APPEND 'M3_CURR'    TO ct_show.   " Jun'26
+      APPEND 'L3M_TOT'    TO ct_show.   " L3 Month Total Sales Qty
+      APPEND 'MAX_QTY'    TO ct_show.   " Max. Qty
+      APPEND 'PROD_CAT'   TO ct_show.   " Product Cat.
+      APPEND 'LOAD_FCT'   TO ct_show.   " Growth Based on Category
+      APPEND 'FCST_QTY'   TO ct_show.   " Forecast (Max * Growth %)
+      APPEND 'BUS_FCST'   TO ct_show.   " Business Forecast
+      APPEND 'FINAL_QTY'  TO ct_show.   " Final Forecast Qty
+      APPEND 'M4_FCST'    TO ct_show.   " July'26
+      APPEND 'M5_FCST'    TO ct_show.   " Aug'26
+      APPEND 'M6_FCST'    TO ct_show.   " Sep'26
 
       IF p_tonn = abap_true.
         APPEND 'M4_TON' TO ct_show.
@@ -354,22 +504,27 @@ FORM visible_columns CHANGING ct_show TYPE tt_fname.
         APPEND 'M6_TON' TO ct_show.
       ENDIF.
 
+      APPEND 'MTS_MTO'    TO ct_show.   " AE17, the last FS column
+
+*   ---- FS radio button 3, row 25 ------------------------------------
     WHEN zcl_pp_fcst=>gc_mode-monthly.
 
-      APPEND 'PERIOD'       TO ct_show.
-      APPEND 'M4_LAST'      TO ct_show.
-      APPEND 'M5_LAST'      TO ct_show.
-      APPEND 'M6_LAST'      TO ct_show.
-      APPEND 'LY_QTR_TOT'   TO ct_show.
-      APPEND 'M1_CURR'      TO ct_show.
-      APPEND 'M2_CURR'      TO ct_show.
-      APPEND 'M3_CURR'      TO ct_show.
-      APPEND 'L3M_AVG'      TO ct_show.
-      APPEND 'MAX_QTY'      TO ct_show.
-      APPEND 'FCST_QTY'     TO ct_show.
-      APPEND 'BUS_FCST'     TO ct_show.
-      APPEND 'BUS_FCST_ADD' TO ct_show.
-      APPEND 'FINAL_QTY'    TO ct_show.
+      APPEND 'M4_LAST'      TO ct_show.   " July'25
+      APPEND 'M5_LAST'      TO ct_show.   " Aug'25
+      APPEND 'M6_LAST'      TO ct_show.   " Sep'25
+      APPEND 'LY_QTR_TOT'   TO ct_show.   " Total LY Quarter Sales Qty
+      APPEND 'M1_CURR'      TO ct_show.   " April'26
+      APPEND 'M2_CURR'      TO ct_show.   " May'26
+      APPEND 'M3_CURR'      TO ct_show.   " Jun'26
+      APPEND 'L3M_AVG'      TO ct_show.   " L3 Month Average
+      APPEND 'PROD_CAT'     TO ct_show.   " Product Cat.
+      APPEND 'LOAD_FCT'     TO ct_show.   " Growth Based on Category
+      APPEND 'MAX_QTY'      TO ct_show.   " Average * Load
+      APPEND 'FCST_QTY'     TO ct_show.   " LY vs Current Requirement Qty
+      APPEND 'BUS_FCST'     TO ct_show.   " Business Forecast
+      APPEND 'FINAL_QTY'    TO ct_show.   " Final Forecast Qty
+      APPEND 'BUS_FCST_ADD' TO ct_show.   " Additonal plan qty july 26
+      APPEND 'TOTAL_QTY'    TO ct_show.   " final forecast qty, column Q
 
       IF p_tonn = abap_true.
         APPEND 'M4_TON' TO ct_show.
@@ -377,22 +532,57 @@ FORM visible_columns CHANGING ct_show TYPE tt_fname.
 
   ENDCASE.
 
+* ---- not drawn on this FS sheet, kept at the end --------------------
+  IF gc_show_extras = abap_true.
+
+    IF g_mode = zcl_pp_fcst=>gc_mode-quarterly.
+*     Sheet 2 shows Business Forecast but not the additional column.
+*     The Final ALV sheet carries it and the change upload writes it.
+      APPEND 'BUS_FCST_ADD' TO ct_show.
+    ELSE.
+*     MTS / MTO is drawn on sheet 2 only
+      APPEND 'MTS_MTO' TO ct_show.
+    ENDIF.
+
+    APPEND 'MEINS'   TO ct_show.   " unit for every quantity column
+    APPEND 'FCST_NO' TO ct_show.   " forecast number, FS requirement E
+    APPEND 'LIGHT'   TO ct_show.   " status light
+    APPEND 'MESSAGE' TO ct_show.   " why a row is flagged
+
+  ENDIF.
+
 ENDFORM.
 
 
 *&---------------------------------------------------------------------*
 FORM setup_columns USING pt_show TYPE tt_fname.
 
+  DATA: lv_col TYPE lvc_fname,
+        lv_hdr TYPE string,
+        lv_nam TYPE char3,
+        lv_pos TYPE i.
+
   DATA(lo_cols) = go_alv->get_columns( ).
   lo_cols->set_optimize( ).
 
-  TRY.
-      lo_cols->set_exception_column( 'LIGHT' ).
-    CATCH cx_salv_data_error.
-  ENDTRY.
+* An exception column is drawn in front of every other column whatever
+* position it is given, so it is only declared when the extras are on.
+* Declaring it and then hiding LIGHT still leaves the light in front of
+* Plant.
+  IF gc_show_extras = abap_true.
+    TRY.
+        lo_cols->set_exception_column( 'LIGHT' ).
+      CATCH cx_salv_data_error.
+    ENDTRY.
+  ENDIF.
 
-  " Hide everything that does not belong to this mode
-  LOOP AT lo_cols->get( ) INTO DATA(ls_col).
+* ---- hide everything that does not belong to this mode --------------
+* LOOP AT over a functional call iterates zero times in this release,
+* so the result is put in a variable first. Without this nothing is
+* hidden and every field of the structure is displayed.
+  DATA(lt_cols) = lo_cols->get( ).
+
+  LOOP AT lt_cols INTO DATA(ls_col).
 
     READ TABLE pt_show TRANSPORTING NO FIELDS
       WITH KEY table_line = ls_col-columnname.
@@ -406,16 +596,29 @@ FORM setup_columns USING pt_show TYPE tt_fname.
 
   ENDLOOP.
 
-  " Month columns carry real dates as headings
+* ---- display order --------------------------------------------------
+* PT_SHOW is already in the order the FS draws the columns, so the
+* position of a column is simply its index in that list. Without this
+* the ALV falls back to the order of the fields in the structure, which
+* puts the status light, the message and the forecast number in front
+* of Plant.
+  lv_pos = 0.
+  LOOP AT pt_show INTO lv_col.
+    lv_pos = lv_pos + 1.
+    TRY.
+        lo_cols->set_column_position( columnname = lv_col
+                                      position   = lv_pos ).
+      CATCH cx_salv_error.
+    ENDTRY.
+  ENDLOOP.
+
+* ---- headings -------------------------------------------------------
   IF g_mode = zcl_pp_fcst=>gc_mode-annual.
 
     DATA(lv_prev) = zcl_pp_fcst_util=>previous_fyear( p_fyear ).
 
-*   PERFORM ... USING takes data objects only, so the column name and the
-*   heading are built into variables first
-    DATA: lv_col TYPE lvc_fname,
-          lv_hdr TYPE string.
-
+*   PERFORM ... USING takes data objects only, so the column name and
+*   the heading are built into variables first
     DO 12 TIMES.
 
       DATA(lv_p) = CONV numc2( sy-index ).
@@ -425,7 +628,8 @@ FORM setup_columns USING pt_show TYPE tt_fname.
                                              IMPORTING ev_gjahr  = DATA(lv_yy)
                                                        ev_month  = DATA(lv_mm) ).
       lv_col = |M{ lv_p }|.
-      lv_hdr = |{ lv_mm }-{ lv_yy+2(2) }|.
+      PERFORM month_name USING lv_mm CHANGING lv_nam.
+      lv_hdr = |{ lv_nam }-{ lv_yy+2(2) }|.
       PERFORM txt USING lv_col lv_hdr.
 
       zcl_pp_fcst_util=>period_to_yearmonth( EXPORTING iv_fyear  = p_fyear
@@ -433,48 +637,59 @@ FORM setup_columns USING pt_show TYPE tt_fname.
                                              IMPORTING ev_gjahr  = lv_yy
                                                        ev_month  = lv_mm ).
       lv_col = |M{ lv_p }_FCST|.
-      lv_hdr = |FC { lv_mm }-{ lv_yy+2(2) }|.
+      PERFORM month_name USING lv_mm CHANGING lv_nam.
+      lv_hdr = |{ lv_nam }-{ lv_yy+2(2) }|.
       PERFORM txt USING lv_col lv_hdr.
 
       lv_col = |M{ lv_p }_TON|.
-      lv_hdr = |Ton { lv_mm }-{ lv_yy+2(2) }|.
+      PERFORM month_name USING lv_mm CHANGING lv_nam.
+      lv_hdr = |{ lv_nam }-{ lv_yy+2(2) } tonnage|.
       PERFORM txt USING lv_col lv_hdr.
 
     ENDDO.
 
-    PERFORM txt USING 'LY_TOTAL'   'Total LY Sales Qty'.
-    PERFORM txt USING 'FCST_TOTAL' 'Forecast Qty'.
+    PERFORM txt USING 'LY_TOTAL' 'Total LY Sales Qty'.
+    PERFORM txt USING 'LOAD_FCT' 'Load Factor'.
+
+    lv_hdr = |Forecast Qty FY{ p_fyear }|.
+    PERFORM txt USING 'FCST_TOTAL' lv_hdr.
 
   ELSE.
 
     PERFORM txt USING 'M4_LAST'      'LY Month 1'.
     PERFORM txt USING 'M5_LAST'      'LY Month 2'.
     PERFORM txt USING 'M6_LAST'      'LY Month 3'.
-    PERFORM txt USING 'LY_QTR_TOT'   'Total LY Quarter'.
+    PERFORM txt USING 'LY_QTR_TOT'   'Total LY Quarter Sales Qty'.
     PERFORM txt USING 'M1_CURR'      'Current Month 1'.
     PERFORM txt USING 'M2_CURR'      'Current Month 2'.
     PERFORM txt USING 'M3_CURR'      'Current Month 3'.
-    PERFORM txt USING 'L3M_TOT'      'L3 Month Total'.
+    PERFORM txt USING 'L3M_TOT'      'L3 Month Total Sales Qty'.
     PERFORM txt USING 'L3M_AVG'      'L3 Month Average'.
+    PERFORM txt USING 'LOAD_FCT'     'Growth Based on Category'.
     PERFORM txt USING 'BUS_FCST'     'Business Forecast'.
-    PERFORM txt USING 'BUS_FCST_ADD' 'Business Fcst Additional'.
+    PERFORM txt USING 'BUS_FCST_ADD' 'Additional Plan Qty'.
     PERFORM txt USING 'FINAL_QTY'    'Final Forecast Qty'.
+*   The FS heads both column O and column Q "Final Forecast Qty". The
+*   second is qualified here so the two can be told apart on screen.
+    PERFORM txt USING 'TOTAL_QTY'    'Final Fcst Qty incl. Additional'.
     PERFORM txt USING 'M4_FCST'      'Month 1'.
     PERFORM txt USING 'M5_FCST'      'Month 2'.
     PERFORM txt USING 'M6_FCST'      'Month 3'.
+    PERFORM txt USING 'M4_TON'       'Month 1 tonnage'.
+    PERFORM txt USING 'M5_TON'       'Month 2 tonnage'.
+    PERFORM txt USING 'M6_TON'       'Month 3 tonnage'.
 
     IF g_mode = zcl_pp_fcst=>gc_mode-quarterly.
-      PERFORM txt USING 'MAX_QTY'  'Max Qty'.
-      PERFORM txt USING 'FCST_QTY' 'Forecast Max x Growth'.
+      PERFORM txt USING 'MAX_QTY'  'Max. Qty'.
+      PERFORM txt USING 'FCST_QTY' 'Forecast (Max * Growth %)'.
     ELSE.
-      PERFORM txt USING 'MAX_QTY'  'Average x Load'.
-      PERFORM txt USING 'FCST_QTY' 'LY vs Current Reqt Qty'.
+      PERFORM txt USING 'MAX_QTY'  'Average * Load'.
+      PERFORM txt USING 'FCST_QTY' 'LY vs Current Requirement Qty'.
     ENDIF.
 
   ENDIF.
 
   PERFORM txt USING 'PROD_CAT'  'Product Cat.'.
-  PERFORM txt USING 'LOAD_FCT'  'Load Factor'.
   PERFORM txt USING 'MTS_MTO'   'MTS / MTO'.
   PERFORM txt USING 'MVGR1_TXT' 'Material Group 1'.
   PERFORM txt USING 'MVGR2_TXT' 'Material Group 2'.
@@ -487,14 +702,283 @@ ENDFORM.
 
 
 *&---------------------------------------------------------------------*
+*& Value helps
+*&
+*& Plant, material and date get their help from the data dictionary and
+*& need nothing here. Financial year, quarter and period are custom
+*& types with no check table, so each is built by hand. Every one of
+*& them shows the real calendar months behind the code, because M1
+*& meaning April is not something a user should have to remember.
+*&---------------------------------------------------------------------*
+FORM month_name USING pv_mm TYPE any
+                CHANGING cv_name TYPE any.
+
+  CONSTANTS lc_names TYPE char36
+    VALUE 'JanFebMarAprMayJunJulAugSepOctNovDec'.
+
+  DATA: lv_i   TYPE i,
+        lv_off TYPE i.
+
+  CLEAR cv_name.
+
+  lv_i = pv_mm.
+  CHECK lv_i >= 1 AND lv_i <= 12.
+
+  lv_off  = ( lv_i - 1 ) * 3.
+  cv_name = lc_names+lv_off(3).
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+FORM f4_fyear.
+
+  TYPES: BEGIN OF ty_f4,
+           fyear TYPE char9,
+           text  TYPE char30,
+         END OF ty_f4.
+
+  DATA: lt_f4  TYPE STANDARD TABLE OF ty_f4 WITH DEFAULT KEY,
+        ls_f4  TYPE ty_f4,
+        lt_ret TYPE STANDARD TABLE OF ddshretval WITH DEFAULT KEY,
+        ls_ret TYPE ddshretval,
+        lv_y   TYPE i,
+        lv_nx  TYPE i.
+
+* The financial year containing today is the one that started last April
+  lv_y = sy-datum(4).
+  IF sy-datum+4(2) < '04'.
+    lv_y = lv_y - 1.
+  ENDIF.
+
+* Five back and five forward is enough for planning and for restating
+  lv_y = lv_y - 5.
+
+  DO 11 TIMES.
+    CLEAR ls_f4.
+    lv_nx = lv_y + 1.
+    ls_f4-fyear = |{ lv_y }-{ lv_nx }|.
+    ls_f4-text  = |April { lv_y } to March { lv_nx }|.
+    APPEND ls_f4 TO lt_f4.
+    lv_y = lv_y + 1.
+  ENDDO.
+
+  CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
+    EXPORTING  retfield        = 'FYEAR'
+               dynpprog        = sy-repid
+               dynpnr          = sy-dynnr
+               dynprofield     = 'P_FYEAR'
+               value_org       = 'S'
+    TABLES     value_tab       = lt_f4
+               return_tab      = lt_ret
+    EXCEPTIONS parameter_error = 1
+               no_values_found = 2
+               OTHERS          = 3.
+
+  IF sy-subrc = 0.
+    READ TABLE lt_ret INTO ls_ret INDEX 1.
+    IF sy-subrc = 0.
+      p_fyear = ls_ret-fieldval.
+    ENDIF.
+  ENDIF.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+FORM f4_quart.
+
+  TYPES: BEGIN OF ty_f4,
+           quarter TYPE char1,
+           months  TYPE char24,
+         END OF ty_f4.
+
+  DATA: lt_f4  TYPE STANDARD TABLE OF ty_f4 WITH DEFAULT KEY,
+        ls_f4  TYPE ty_f4,
+        lt_ret TYPE STANDARD TABLE OF ddshretval WITH DEFAULT KEY,
+        ls_ret TYPE ddshretval,
+        lv_q   TYPE i,
+        lv_p1  TYPE numc2,
+        lv_p3  TYPE numc2,
+        lv_i   TYPE i,
+        lv_y1  TYPE gjahr,
+        lv_y3  TYPE gjahr,
+        lv_m1  TYPE numc2,
+        lv_m3  TYPE numc2,
+        lv_n1  TYPE char3,
+        lv_n3  TYPE char3,
+        lv_ok  TYPE abap_bool.
+
+* The financial year on the screen turns Q2 into "Jul 2026 to Sep 2026".
+* If it is not readable yet the months are still shown, without a year.
+  lv_ok = zcl_pp_fcst_util=>split_fyear( p_fyear ).
+
+  DO 4 TIMES.
+
+    CLEAR ls_f4.
+    lv_q = sy-index.
+    ls_f4-quarter = lv_q.
+
+    lv_i  = ( lv_q - 1 ) * 3 + 1.
+    lv_p1 = lv_i.
+    lv_i  = lv_i + 2.
+    lv_p3 = lv_i.
+
+    CLEAR: lv_y1, lv_y3, lv_m1, lv_m3.
+
+    IF lv_ok = abap_true.
+      zcl_pp_fcst_util=>period_to_yearmonth(
+        EXPORTING iv_fyear = p_fyear iv_period = lv_p1
+        IMPORTING ev_gjahr = lv_y1   ev_month  = lv_m1 ).
+      zcl_pp_fcst_util=>period_to_yearmonth(
+        EXPORTING iv_fyear = p_fyear iv_period = lv_p3
+        IMPORTING ev_gjahr = lv_y3   ev_month  = lv_m3 ).
+    ELSE.
+      lv_i  = ( lv_q - 1 ) * 3 + 4.
+      IF lv_i > 12.
+        lv_i = lv_i - 12.
+      ENDIF.
+      lv_m1 = lv_i.
+      lv_i  = lv_i + 2.
+      IF lv_i > 12.
+        lv_i = lv_i - 12.
+      ENDIF.
+      lv_m3 = lv_i.
+    ENDIF.
+
+    PERFORM month_name USING lv_m1 CHANGING lv_n1.
+    PERFORM month_name USING lv_m3 CHANGING lv_n3.
+
+    IF lv_y1 IS INITIAL.
+      ls_f4-months = |{ lv_n1 } to { lv_n3 }|.
+    ELSE.
+      ls_f4-months = |{ lv_n1 } { lv_y1 } to { lv_n3 } { lv_y3 }|.
+    ENDIF.
+
+    APPEND ls_f4 TO lt_f4.
+
+  ENDDO.
+
+  CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
+    EXPORTING  retfield        = 'QUARTER'
+               dynpprog        = sy-repid
+               dynpnr          = sy-dynnr
+               dynprofield     = 'P_QUART'
+               value_org       = 'S'
+    TABLES     value_tab       = lt_f4
+               return_tab      = lt_ret
+    EXCEPTIONS parameter_error = 1
+               no_values_found = 2
+               OTHERS          = 3.
+
+  IF sy-subrc = 0.
+    READ TABLE lt_ret INTO ls_ret INDEX 1.
+    IF sy-subrc = 0.
+      p_quart = ls_ret-fieldval.
+    ENDIF.
+  ENDIF.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+FORM f4_perio.
+
+  TYPES: BEGIN OF ty_f4,
+           period TYPE char2,
+           month  TYPE char3,
+           year   TYPE char4,
+         END OF ty_f4.
+
+  DATA: lt_f4  TYPE STANDARD TABLE OF ty_f4 WITH DEFAULT KEY,
+        ls_f4  TYPE ty_f4,
+        lt_ret TYPE STANDARD TABLE OF ddshretval WITH DEFAULT KEY,
+        ls_ret TYPE ddshretval,
+        lv_p   TYPE numc2,
+        lv_i   TYPE i,
+        lv_yy  TYPE gjahr,
+        lv_mm  TYPE numc2,
+        lv_nam TYPE char3,
+        lv_ok  TYPE abap_bool.
+
+  lv_ok = zcl_pp_fcst_util=>split_fyear( p_fyear ).
+
+  DO 12 TIMES.
+
+    CLEAR: ls_f4, lv_yy, lv_mm.
+    lv_p = sy-index.
+    ls_f4-period = lv_p.
+
+    IF lv_ok = abap_true.
+      zcl_pp_fcst_util=>period_to_yearmonth(
+        EXPORTING iv_fyear = p_fyear iv_period = lv_p
+        IMPORTING ev_gjahr = lv_yy   ev_month  = lv_mm ).
+      ls_f4-year = lv_yy.
+    ELSE.
+*     Period 1 is April, so the calendar month is the period plus three
+      lv_i = sy-index + 3.
+      IF lv_i > 12.
+        lv_i = lv_i - 12.
+      ENDIF.
+      lv_mm = lv_i.
+    ENDIF.
+
+    PERFORM month_name USING lv_mm CHANGING lv_nam.
+    ls_f4-month = lv_nam.
+
+    APPEND ls_f4 TO lt_f4.
+
+  ENDDO.
+
+  CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
+    EXPORTING  retfield        = 'PERIOD'
+               dynpprog        = sy-repid
+               dynpnr          = sy-dynnr
+               dynprofield     = 'P_PERIO'
+               value_org       = 'S'
+    TABLES     value_tab       = lt_f4
+               return_tab      = lt_ret
+    EXCEPTIONS parameter_error = 1
+               no_values_found = 2
+               OTHERS          = 3.
+
+  IF sy-subrc = 0.
+    READ TABLE lt_ret INTO ls_ret INDEX 1.
+    IF sy-subrc = 0.
+      p_perio = ls_ret-fieldval.
+    ENDIF.
+  ENDIF.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
 FORM txt USING pv_name TYPE any
                pv_text TYPE any.
 
+  DATA: lv_txt TYPE string,
+        lv_len TYPE lvc_outlen.
+
+* ALV picks WHICH of the three heading texts to draw from the column
+* output length - the short one below 10 characters, the medium one
+* below 20, the long one above that. A long heading on a narrow numeric
+* column was therefore drawn from the short text and cut off. The width
+* is set from the heading so the long text is chosen, and set_optimize
+* then widens further where the data needs it.
+  lv_txt = pv_text.
+  lv_len = strlen( lv_txt ).
+  IF lv_len < 10.
+    lv_len = 10.
+  ELSEIF lv_len > 40.
+    lv_len = 40.
+  ENDIF.
+
   TRY.
       DATA(lo_col) = go_alv->get_columns( )->get_column( CONV lvc_fname( pv_name ) ).
-      lo_col->set_short_text( CONV scrtext_s( pv_text ) ).
-      lo_col->set_medium_text( CONV scrtext_m( pv_text ) ).
-      lo_col->set_long_text( CONV scrtext_l( pv_text ) ).
+      lo_col->set_short_text( CONV scrtext_s( lv_txt ) ).
+      lo_col->set_medium_text( CONV scrtext_m( lv_txt ) ).
+      lo_col->set_long_text( CONV scrtext_l( lv_txt ) ).
+      lo_col->set_output_length( lv_len ).
     CATCH cx_salv_not_found.
   ENDTRY.
 

@@ -127,6 +127,13 @@ CLASS zcl_pp_fcst DEFINITION
              bus_fcst     TYPE zde_fcst_qty,
              bus_fcst_add TYPE zde_fcst_qty,
              final_qty    TYPE zde_fcst_qty,
+*            FS radio button 3 draws TWO finals, column O "Final
+*            Forecast Qty" and column Q "final forecast qty", with the
+*            additional plan quantity between them. FINAL_QTY is O,
+*            TOTAL_QTY is Q. Display only - it is FINAL_QTY plus
+*            BUS_FCST_ADD, both of which are stored, so nothing new is
+*            written to the database.
+             total_qty    TYPE zde_fcst_qty,
              m4_fcst      TYPE zde_fcst_qty,
              m5_fcst      TYPE zde_fcst_qty,
              m6_fcst      TYPE zde_fcst_qty,
@@ -446,16 +453,16 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
 
     LOOP AT lt_scope INTO DATA(ls_scope).
 
-      " Quarterly planning requires an annual forecast to exist
+*     The forecast number is carried across from the annual table, per
+*     the FS: "Insert the data with same forecast number by passing the
+*     fiscal year to ZPP_ADH_FORECAST_YEAR and take FORECAST number".
+*     That is a SAVE rule, not a display rule - the quarterly ALV does
+*     not draw the forecast number at all - so a material with no annual
+*     forecast is still calculated and shown here. SAVE is where it is
+*     refused.
       DATA(lv_no) = annual_number( iv_werks = ls_scope-werks
                                    iv_matnr = ls_scope-matnr
                                    iv_fyear = iv_fyear ).
-      IF lv_no IS INITIAL.
-        add_msg( EXPORTING iv_number = 005 iv_v1 = ls_scope-werks
-                           iv_v2 = ls_scope-matnr iv_v3 = iv_fyear
-                 CHANGING  ct_msg = et_msg ).
-        CONTINUE.
-      ENDIF.
 
       DATA(ls_alv) = VALUE ty_alv( werks   = ls_scope-werks
                                    matnr   = ls_scope-matnr
@@ -511,6 +518,7 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
           AND gjahr = @ls_alv-gjahr   AND quarter = @iv_quarter.
 
       ls_alv-final_qty = nmax( val1 = ls_alv-fcst_qty val2 = ls_alv-bus_fcst ).
+      ls_alv-total_qty = ls_alv-final_qty + ls_alv-bus_fcst_add.
 
       "--- Split back into the three months ------------------------------
       DO 3 TIMES.
@@ -598,15 +606,11 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
 
     LOOP AT lt_scope INTO DATA(ls_scope).
 
+*     Same as quarterly - read the number if it is there, but do not
+*     refuse to calculate without it. SAVE enforces the dependency.
       DATA(lv_no) = annual_number( iv_werks = ls_scope-werks
                                    iv_matnr = ls_scope-matnr
                                    iv_fyear = iv_fyear ).
-      IF lv_no IS INITIAL.
-        add_msg( EXPORTING iv_number = 005 iv_v1 = ls_scope-werks
-                           iv_v2 = ls_scope-matnr iv_v3 = iv_fyear
-                 CHANGING  ct_msg = et_msg ).
-        CONTINUE.
-      ENDIF.
 
       DATA(ls_alv) = VALUE ty_alv( werks   = ls_scope-werks
                                    matnr   = ls_scope-matnr
@@ -669,6 +673,7 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
           AND gjahr = @ls_alv-gjahr   AND period = @iv_period.
 
       ls_alv-final_qty = nmax( val1 = ls_alv-fcst_qty val2 = ls_alv-bus_fcst ).
+      ls_alv-total_qty = ls_alv-final_qty + ls_alv-bus_fcst_add.
 
       ls_alv-m4_fcst = ls_alv-final_qty.
       IF iv_tonnage = abap_true.
@@ -714,6 +719,18 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
             <ls>-fcst_no = number_get( <ls>-fyear ).
           ENDIF.
 
+*         NUMBER_GET_NEXT clears the number when the object or the
+*         interval is missing. Writing the row anyway put a blank
+*         forecast number into the table, reported success, and left
+*         quarterly reporting "annual forecast does not exist" two steps
+*         later with nothing to point at. The row is refused instead.
+          IF <ls>-fcst_no IS INITIAL.
+            add_msg( EXPORTING iv_number = 021 iv_v1 = <ls>-fyear
+                     CHANGING  ct_msg = rt_msg ).
+            <ls>-light = '1'.
+            CONTINUE.
+          ENDIF.
+
           DATA(ls_yr) = CORRESPONDING zppt_fcst_yr( <ls> ).
           ls_yr-aenam = sy-uname.
           ls_yr-aedat = sy-datum.
@@ -729,12 +746,41 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
 
         WHEN gc_mode-quarterly.
 
+*         The FS stores the quarterly row under the annual forecast
+*         number, so there has to be one. Refused here rather than at
+*         generation, so the user can still see and check the figures.
+          IF <ls>-fcst_no IS INITIAL.
+            <ls>-fcst_no = annual_number( iv_werks = <ls>-werks
+                                          iv_matnr = <ls>-matnr
+                                          iv_fyear = <ls>-fyear ).
+          ENDIF.
+          IF <ls>-fcst_no IS INITIAL.
+            add_msg( EXPORTING iv_number = 005 iv_v1 = <ls>-werks
+                               iv_v2 = <ls>-matnr iv_v3 = <ls>-fyear
+                     CHANGING  ct_msg = rt_msg ).
+            <ls>-light = '1'.
+            CONTINUE.
+          ENDIF.
+
           DATA(ls_qt) = CORRESPONDING zppt_fcst_qt( <ls> ).
           ls_qt-aenam = sy-uname.
           ls_qt-aedat = sy-datum.
           MODIFY zppt_fcst_qt FROM @ls_qt.
 
         WHEN gc_mode-monthly.
+
+          IF <ls>-fcst_no IS INITIAL.
+            <ls>-fcst_no = annual_number( iv_werks = <ls>-werks
+                                          iv_matnr = <ls>-matnr
+                                          iv_fyear = <ls>-fyear ).
+          ENDIF.
+          IF <ls>-fcst_no IS INITIAL.
+            add_msg( EXPORTING iv_number = 005 iv_v1 = <ls>-werks
+                               iv_v2 = <ls>-matnr iv_v3 = <ls>-fyear
+                     CHANGING  ct_msg = rt_msg ).
+            <ls>-light = '1'.
+            CONTINUE.
+          ENDIF.
 
           DATA(ls_mn) = CORRESPONDING zppt_fcst_mn( <ls> ).
           ls_mn-aenam = sy-uname.

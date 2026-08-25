@@ -12,3 +12,11 @@ duplicated copies of an object do not multiply the counts.
 
 It reads source, it does not compile — findings are candidates for review. Blind spots are
 listed at the end of `AUDIT-2026-08-23.md`.
+
+## Handover
+
+`ATC_HANDOVER.md` is the single-file handover for all ATC correction knowledge —
+project identity and marker rules, the 31 correction/activation rules with the failures
+behind them, finding routing, verified CDS / API / note mappings, the state of the 51-object
+OVL batch, and the gated questions still waiting on Arnav. Read it before any ATC work; the
+kb/ files and the atc-fix skill are the long-form sources it distils.

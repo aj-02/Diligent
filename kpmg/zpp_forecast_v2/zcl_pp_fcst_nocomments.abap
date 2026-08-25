@@ -104,6 +104,7 @@ CLASS zcl_pp_fcst DEFINITION
              bus_fcst     TYPE zde_fcst_qty,
              bus_fcst_add TYPE zde_fcst_qty,
              final_qty    TYPE zde_fcst_qty,
+             total_qty    TYPE zde_fcst_qty,
              m4_fcst      TYPE zde_fcst_qty,
              m5_fcst      TYPE zde_fcst_qty,
              m6_fcst      TYPE zde_fcst_qty,
@@ -396,12 +397,6 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
       DATA(lv_no) = annual_number( iv_werks = ls_scope-werks
                                    iv_matnr = ls_scope-matnr
                                    iv_fyear = iv_fyear ).
-      IF lv_no IS INITIAL.
-        add_msg( EXPORTING iv_number = 005 iv_v1 = ls_scope-werks
-                           iv_v2 = ls_scope-matnr iv_v3 = iv_fyear
-                 CHANGING  ct_msg = et_msg ).
-        CONTINUE.
-      ENDIF.
 
       DATA(ls_alv) = VALUE ty_alv( werks   = ls_scope-werks
                                    matnr   = ls_scope-matnr
@@ -452,6 +447,7 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
           AND gjahr = @ls_alv-gjahr   AND quarter = @iv_quarter.
 
       ls_alv-final_qty = nmax( val1 = ls_alv-fcst_qty val2 = ls_alv-bus_fcst ).
+      ls_alv-total_qty = ls_alv-final_qty + ls_alv-bus_fcst_add.
 
       DO 3 TIMES.
 
@@ -533,12 +529,6 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
       DATA(lv_no) = annual_number( iv_werks = ls_scope-werks
                                    iv_matnr = ls_scope-matnr
                                    iv_fyear = iv_fyear ).
-      IF lv_no IS INITIAL.
-        add_msg( EXPORTING iv_number = 005 iv_v1 = ls_scope-werks
-                           iv_v2 = ls_scope-matnr iv_v3 = iv_fyear
-                 CHANGING  ct_msg = et_msg ).
-        CONTINUE.
-      ENDIF.
 
       DATA(ls_alv) = VALUE ty_alv( werks   = ls_scope-werks
                                    matnr   = ls_scope-matnr
@@ -598,6 +588,7 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
           AND gjahr = @ls_alv-gjahr   AND period = @iv_period.
 
       ls_alv-final_qty = nmax( val1 = ls_alv-fcst_qty val2 = ls_alv-bus_fcst ).
+      ls_alv-total_qty = ls_alv-final_qty + ls_alv-bus_fcst_add.
 
       ls_alv-m4_fcst = ls_alv-final_qty.
       IF iv_tonnage = abap_true.
@@ -638,6 +629,13 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
             <ls>-fcst_no = number_get( <ls>-fyear ).
           ENDIF.
 
+          IF <ls>-fcst_no IS INITIAL.
+            add_msg( EXPORTING iv_number = 021 iv_v1 = <ls>-fyear
+                     CHANGING  ct_msg = rt_msg ).
+            <ls>-light = '1'.
+            CONTINUE.
+          ENDIF.
+
           DATA(ls_yr) = CORRESPONDING zppt_fcst_yr( <ls> ).
           ls_yr-aenam = sy-uname.
           ls_yr-aedat = sy-datum.
@@ -653,12 +651,38 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
 
         WHEN gc_mode-quarterly.
 
+          IF <ls>-fcst_no IS INITIAL.
+            <ls>-fcst_no = annual_number( iv_werks = <ls>-werks
+                                          iv_matnr = <ls>-matnr
+                                          iv_fyear = <ls>-fyear ).
+          ENDIF.
+          IF <ls>-fcst_no IS INITIAL.
+            add_msg( EXPORTING iv_number = 005 iv_v1 = <ls>-werks
+                               iv_v2 = <ls>-matnr iv_v3 = <ls>-fyear
+                     CHANGING  ct_msg = rt_msg ).
+            <ls>-light = '1'.
+            CONTINUE.
+          ENDIF.
+
           DATA(ls_qt) = CORRESPONDING zppt_fcst_qt( <ls> ).
           ls_qt-aenam = sy-uname.
           ls_qt-aedat = sy-datum.
           MODIFY zppt_fcst_qt FROM @ls_qt.
 
         WHEN gc_mode-monthly.
+
+          IF <ls>-fcst_no IS INITIAL.
+            <ls>-fcst_no = annual_number( iv_werks = <ls>-werks
+                                          iv_matnr = <ls>-matnr
+                                          iv_fyear = <ls>-fyear ).
+          ENDIF.
+          IF <ls>-fcst_no IS INITIAL.
+            add_msg( EXPORTING iv_number = 005 iv_v1 = <ls>-werks
+                               iv_v2 = <ls>-matnr iv_v3 = <ls>-fyear
+                     CHANGING  ct_msg = rt_msg ).
+            <ls>-light = '1'.
+            CONTINUE.
+          ENDIF.
 
           DATA(ls_mn) = CORRESPONDING zppt_fcst_mn( <ls> ).
           ls_mn-aenam = sy-uname.

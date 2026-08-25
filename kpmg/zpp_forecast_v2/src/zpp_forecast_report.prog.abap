@@ -7,7 +7,7 @@
 *&---------------------------------------------------------------------*
 REPORT zpp_forecast_report MESSAGE-ID zpp_fcst.
 
-TABLES: marc, zppt_fcst_yr.
+TABLES: marc, mara, zppt_fcst_yr, zppt_fcst_qt, zppt_fcst_mn.
 
 TYPES: BEGIN OF ty_out,
          fcst_no    TYPE zde_fcst_no,
@@ -38,13 +38,17 @@ DATA gt_out TYPE tt_out.
 
 *&---------------------------------------------------------------------*
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-b01.
-SELECT-OPTIONS: s_werks  FOR marc-werks OBLIGATORY,
+* The material group, quarter and period filters were declared over
+* ZPPT_FCST_YR-FCST_NO and MARC-MATNR, which gave them the wrong length
+* and a value help listing forecast numbers and materials. Each now sits
+* on the field it actually filters, so the dictionary help is correct.
+SELECT-OPTIONS: s_werks  FOR marc-werks,
                 s_matnr  FOR marc-matnr,
                 s_fcstno FOR zppt_fcst_yr-fcst_no,
-                s_matkl  FOR marc-matnr NO INTERVALS.   "material group filter
-PARAMETERS:     p_fyear  TYPE zde_fyear OBLIGATORY.
-SELECT-OPTIONS: s_quart  FOR zppt_fcst_yr-fcst_no NO INTERVALS,
-                s_perio  FOR zppt_fcst_yr-fcst_no NO INTERVALS.
+                s_matkl  FOR mara-matkl NO INTERVALS.
+PARAMETERS:     p_fyear  TYPE zde_fyear.
+SELECT-OPTIONS: s_quart  FOR zppt_fcst_qt-quarter NO INTERVALS,
+                s_perio  FOR zppt_fcst_mn-period  NO INTERVALS.
 SELECTION-SCREEN END OF BLOCK b1.
 
 *&---------------------------------------------------------------------*
@@ -57,7 +61,16 @@ INITIALIZATION.
   p_fyear = |{ gv_y }-{ gv_y + 1 }|.
 
 *&---------------------------------------------------------------------*
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_fyear.
+
+  PERFORM f4_fyear.
+
+*&---------------------------------------------------------------------*
 AT SELECTION-SCREEN.
+
+  IF s_werks[] IS INITIAL.
+    MESSAGE e001.
+  ENDIF.
 
   IF zcl_pp_fcst_util=>split_fyear( p_fyear ) = abap_false.
     MESSAGE e002 WITH p_fyear.
@@ -261,15 +274,91 @@ ENDFORM.
 
 
 *&---------------------------------------------------------------------*
+*& Financial year is a custom type with no check table, so its value
+*& help is built by hand. Plant, material, material group, forecast
+*& number, quarter and period all take theirs from the dictionary now
+*& that each is declared over the right field.
+*&---------------------------------------------------------------------*
+FORM f4_fyear.
+
+  TYPES: BEGIN OF ty_f4,
+           fyear TYPE char9,
+           text  TYPE char30,
+         END OF ty_f4.
+
+  DATA: lt_f4  TYPE STANDARD TABLE OF ty_f4 WITH DEFAULT KEY,
+        ls_f4  TYPE ty_f4,
+        lt_ret TYPE STANDARD TABLE OF ddshretval WITH DEFAULT KEY,
+        ls_ret TYPE ddshretval,
+        lv_y   TYPE i,
+        lv_nx  TYPE i.
+
+  lv_y = sy-datum(4).
+  IF sy-datum+4(2) < '04'.
+    lv_y = lv_y - 1.
+  ENDIF.
+
+  lv_y = lv_y - 5.
+
+  DO 11 TIMES.
+    CLEAR ls_f4.
+    lv_nx = lv_y + 1.
+    ls_f4-fyear = |{ lv_y }-{ lv_nx }|.
+    ls_f4-text  = |April { lv_y } to March { lv_nx }|.
+    APPEND ls_f4 TO lt_f4.
+    lv_y = lv_y + 1.
+  ENDDO.
+
+  CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
+    EXPORTING  retfield        = 'FYEAR'
+               dynpprog        = sy-repid
+               dynpnr          = sy-dynnr
+               dynprofield     = 'P_FYEAR'
+               value_org       = 'S'
+    TABLES     value_tab       = lt_f4
+               return_tab      = lt_ret
+    EXCEPTIONS parameter_error = 1
+               no_values_found = 2
+               OTHERS          = 3.
+
+  IF sy-subrc = 0.
+    READ TABLE lt_ret INTO ls_ret INDEX 1.
+    IF sy-subrc = 0.
+      p_fyear = ls_ret-fieldval.
+    ENDIF.
+  ENDIF.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
 FORM txt USING po_cols TYPE REF TO cl_salv_columns_table
                pv_name TYPE any
                pv_text TYPE any.
 
+  DATA: lv_txt TYPE string,
+        lv_len TYPE lvc_outlen.
+
+* ALV picks WHICH of the three heading texts to draw from the column
+* output length - the short one below 10 characters, the medium one
+* below 20, the long one above that. A long heading on a narrow numeric
+* column was therefore drawn from the short text and cut off. The width
+* is set from the heading so the long text is chosen, and set_optimize
+* then widens further where the data needs it.
+  lv_txt = pv_text.
+  lv_len = strlen( lv_txt ).
+  IF lv_len < 10.
+    lv_len = 10.
+  ELSEIF lv_len > 40.
+    lv_len = 40.
+  ENDIF.
+
   TRY.
       DATA(lo_col) = po_cols->get_column( CONV lvc_fname( pv_name ) ).
-      lo_col->set_long_text( CONV scrtext_l( pv_text ) ).
-      lo_col->set_medium_text( CONV scrtext_m( pv_text ) ).
-      lo_col->set_short_text( CONV scrtext_s( pv_text ) ).
+      lo_col->set_long_text( CONV scrtext_l( lv_txt ) ).
+      lo_col->set_medium_text( CONV scrtext_m( lv_txt ) ).
+      lo_col->set_short_text( CONV scrtext_s( lv_txt ) ).
+      lo_col->set_output_length( lv_len ).
     CATCH cx_salv_not_found.
   ENDTRY.
 

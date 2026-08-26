@@ -50,10 +50,25 @@ approves.
 3. If LC is deactivated and later re-activated, is the resulting gap in FLQITEMFI/FLQITEMBS
    acceptable, or must it be reconstructed? (Deactivation is not retroactive.)
 
-### Open technical checks
+### Technical checks — done 26/08/26
 
-- [ ] SE18/SE19 + CMOD — any customer implementation on FLQ BAdIs/exits? (Would mean the
-      defect is ours and fixable.)
+- [x] **SE95 Modification Browser — nothing.** Run three ways: object name `SAPLFLQEXT`,
+      `*FLQ*`, `*KO78*`, and once with every field blank. All empty. No repair or
+      modification to standard code anywhere in this system.
+- [x] **SE18 / SE19 — nothing implementable.** The only FLQ BAdI found is `RFLQ_DBSYS_OPT`
+      (enhancement spot `EFFLQ_DBSYS_OPT`, interface `IF_RFLQ_ASSIGN_CCR_DBSYS_OPT`,
+      description "Assign Liquidity Items Based on Document Chains"). It is flagged
+      **"Can only be implemented internally at SAP"** — no customer implementation is
+      possible. Note it sits in the item-assignment path despite the `DBSYS_OPT` name.
+- [x] **Enhancement implementations — none.** Spiral/Enhance check on `LFLQEXTF01` and
+      `LFLQEXTU12` found nothing. Consistent with the dump's call stack, which shows no BAdI
+      or enhancement frame between `RSM13000`/`%_COMMIT` and the failing FORM.
+
+**Conclusion: no customer code is involved anywhere in this path.** The defect is entirely
+in standard SAP, and there is no code fix available to us. The remedy is the customizing
+decision below.
+
+### Open technical checks
 - [ ] IMG → FSCM → Cash and Liquidity Management → Liquidity Calculation — is LC flagged
       active for OVL, and what is the exact activation node/table on this release?
 - [ ] `RS_ABAP_SOURCE_SCAN` on `FLQ_INSERT`, programs `SAPLFLQ*` — find the dynamic caller

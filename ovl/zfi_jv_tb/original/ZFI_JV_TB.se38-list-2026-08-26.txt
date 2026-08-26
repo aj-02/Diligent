@@ -1,0 +1,2792 @@
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB attrib                      Page      1
+--------------------------------------------------------------------------------
+
+
+
+Created on....21.10.2022    Last changed on/by........ 21.08.2026 SAP_ABAP
+Author........ABAPUSER01
+--------------------------------------------------------------------------------
+
+Title.........Joint Venture Trial Balance
+
+Type..................1     Reporting
+Status................
+Application...........
+Class.................
+Logical database......
+  from Application....
+Selection screen......
+Authorization group...
+Package...............ZFI_OTH
+
+  Start by Variants
+  Deactivate editor lock
+X Fixed point arithmetic active
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page      2
+--------------------------------------------------------------------------------
+
+    1  *&---------------------------------------------------------------------*
+    2  * Program    : ZFI_JV_TB                                              *
+    3  * Title      : Trail balance joint venture wise                       *
+    4  * FS No.     :                                                        *
+    5  * Author     : Hrishikesh Nikam                                       *
+    6  * Date       : 22-03-22                                               *
+    7  * Login Id   : ABAPUSER01                                             *
+    8  * Description: Report for Trail balance joint venture wise            *
+    9  * Tran. Code : ZJVTB                                                  *
+   10  *                                                                     *
+   11  ***********************************************************************
+   12  * Change History:-                                                    *
+   13  *                                                                     *
+   14  * Changed on  Changed by        TR No.     Description                *
+   15  * 01-11-2022  Hrishikesh Nikam  OCDK906236 ZJVTB Layout change        *
+   16  *                                                                     *
+   17  * 15-02-2023 Hrishikesh Nikam   OCDK906479 Rec indi & report of GT 10 JV
+       s *                                                                   *
+   18  *                                                                     *
+   19  * 13-03-2023 Hrishikesh Nikam      Display closing balance of all JVs *
+   20
+   21  * 19-02-2023 Aparna Anand        USD AND INR BOTH ADDITION
+                                                           *
+   22  *                                                                     *
+   23  * ADD HERE IF ANY CHANGE DONE IN THE PROGRAM                          *
+   24  *                                                                     *
+   25  *&---------------------------------------------------------------------*
+   26  REPORT zzjvtb_test.
+   27
+   28  TYPE-POOLS: vrm.
+   29
+   30  TABLES : jvto1,
+   31           sscrfields,
+   32           smp_dyntxt.
+   33
+   34  TYPES : BEGIN OF ty_jvto13,
+   35            ryear  TYPE  jvto1-ryear,
+   36            rtcur  TYPE  jvto1-rtcur,
+   37            drcrk  TYPE  jvto1-drcrk,
+   38            rbukrs TYPE jvto1-rbukrs,
+   39            rjvnam TYPE jvto1-rjvnam,
+   40            racct  TYPE jvto1-racct,
+   41            hslvt  TYPE jvto1-hslvt,
+   42            kslvt  TYPE jvto1-kslvt,
+   43          END OF ty_jvto13.
+   44
+   45  TYPES : BEGIN OF ty_jvto1,
+   46            ryear  TYPE  jvto1-ryear,
+   47            rtcur  TYPE  jvto1-rtcur,
+   48            drcrk  TYPE  jvto1-drcrk,
+   49            rbukrs TYPE jvto1-rbukrs,
+   50            rjvnam TYPE jvto1-rjvnam,
+   51            racct  TYPE jvto1-racct,
+   52            hslvt  TYPE jvto1-hslvt,
+   53            kslvt  TYPE jvto1-kslvt,
+   54          END OF ty_jvto1.
+   55
+   56  TYPES : BEGIN OF ty_jvto2,
+   57            ryear  TYPE  jvto1-ryear,
+   58            rtcur  TYPE  jvto1-rtcur,
+   59            drcrk  TYPE  jvto1-drcrk,
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page      3
+--------------------------------------------------------------------------------
+
+   60            rbukrs TYPE jvto1-rbukrs,
+   61            rjvnam TYPE jvto1-rjvnam,
+   62            racct  TYPE jvto1-racct,
+   63            kslvt  TYPE  jvto1-kslvt,
+   64          END OF ty_jvto2.
+   65
+   66  TYPES : BEGIN OF ty_jvt,
+   67            racct  TYPE jvto1-racct,
+   68            ryear  TYPE  jvto1-ryear,
+   69            rbukrs TYPE jvto1-rbukrs,
+   70            rjvnam TYPE jvto1-rjvnam,
+   71          END OF ty_jvt.
+   72
+   73  TYPES : BEGIN OF ty_jvso1,
+   74            ryear  TYPE jvso1-ryear,
+   75            rtcur  TYPE jvso1-rtcur,
+   76            drcrk  TYPE jvso1-drcrk,
+   77            poper  TYPE jvso1-poper,
+   78            rbukrs TYPE jvso1-rbukrs,
+   79            rjvnam TYPE jvso1-rjvnam,
+   80            racct  TYPE jvso1-racct,
+   81            hsl    TYPE jvso1-hsl,
+   82            ksl    TYPE jvso1-ksl,
+   83          END OF ty_jvso1.
+   84
+   85  TYPES : BEGIN OF ty_ska1,
+   86            ktopl TYPE ska1-ktopl,
+   87            saknr TYPE ska1-saknr,
+   88            xbilk TYPE ska1-xbilk,
+   89            sakan TYPE ska1-sakan,
+   90            txt20 TYPE skat-txt20,
+   91            txt50 TYPE skat-txt50,
+   92          END OF ty_ska1.
+   93
+   94  TYPES : BEGIN OF ty_skat,
+   95            saknr TYPE ska1-saknr,
+   96            txt50 TYPE skat-txt50,
+   97          END OF ty_skat.
+   98
+   99  TYPES : BEGIN OF ty_final,
+  100            rjvnam    TYPE jvto1-rjvnam,
+  101            racct     TYPE jvto1-racct,
+  102            txt50     TYPE skat-txt50,
+  103            bal_opn   TYPE decfloat34,
+  104            bal_opn_i TYPE decfloat34,
+  105            bal_opn_u TYPE decfloat34,
+  106            bal_cre   TYPE decfloat34,
+  107            bal_cre_i TYPE decfloat34,
+  108            bal_cre_u TYPE decfloat34,
+  109            bal_deb   TYPE decfloat34,
+  110            bal_deb_i TYPE decfloat34,
+  111            bal_deb_u TYPE decfloat34,
+  112            bal_clo   TYPE decfloat34,
+  113            bal_clo_i TYPE decfloat34,
+  114            bal_clo_u TYPE decfloat34,
+  115          END OF ty_final.
+  116
+  117  TYPES : BEGIN OF ty_final2,
+  118            rjvnam        TYPE jvto1-rjvnam,
+  119            racct         TYPE jvto1-racct,
+  120            txt50         TYPE skat-txt50,
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page      4
+--------------------------------------------------------------------------------
+
+  121            bal_opn(20)   TYPE c,
+  122            bal_opn_i(20) TYPE c,
+  123            bal_opn_u(20) TYPE c,
+  124            bal_cre(20)   TYPE c,
+  125            bal_cre_i(20) TYPE c,
+  126            bal_cre_u(20) TYPE c,
+  127            bal_deb(20)   TYPE c,
+  128            bal_deb_i(20) TYPE c,
+  129            bal_deb_u(20) TYPE c,
+  130            bal_clo(20)   TYPE c,
+  131            bal_clo_i(20) TYPE c,
+  132            bal_clo_u(20) TYPE c,
+  133          END OF ty_final2.
+  134
+  135  TYPES : BEGIN OF ty_final3,
+  136            racct TYPE jvto1-racct,
+  137            txt50 TYPE skat-txt50,
+  138          END OF ty_final3.
+  139
+  140  TYPES : BEGIN OF ty_final4,
+  141            racct     TYPE jvto1-racct,
+  142            txt50     TYPE skat-txt50,
+  143            bal_opn1  TYPE jvto1-hslvt,
+  144            bal_cre1  TYPE jvto1-hslvt,
+  145            bal_deb1  TYPE jvto1-hslvt,
+  146            bal_clo1  TYPE jvto1-hslvt,
+  147
+  148            bal_opn2  TYPE jvto1-hslvt,
+  149            bal_cre2  TYPE jvto1-hslvt,
+  150            bal_deb2  TYPE jvto1-hslvt,
+  151            bal_clo2  TYPE jvto1-hslvt,
+  152
+  153            bal_opn3  TYPE jvto1-hslvt,
+  154            bal_cre3  TYPE jvto1-hslvt,
+  155            bal_deb3  TYPE jvto1-hslvt,
+  156            bal_clo3  TYPE jvto1-hslvt,
+  157
+  158            bal_opn4  TYPE jvto1-hslvt,
+  159            bal_cre4  TYPE jvto1-hslvt,
+  160            bal_deb4  TYPE jvto1-hslvt,
+  161            bal_clo4  TYPE jvto1-hslvt,
+  162
+  163            bal_opn5  TYPE jvto1-hslvt,
+  164            bal_cre5  TYPE jvto1-hslvt,
+  165            bal_deb5  TYPE jvto1-hslvt,
+  166            bal_clo5  TYPE jvto1-hslvt,
+  167
+  168            bal_opn6  TYPE jvto1-hslvt,
+  169            bal_cre6  TYPE jvto1-hslvt,
+  170            bal_deb6  TYPE jvto1-hslvt,
+  171            bal_clo6  TYPE jvto1-hslvt,
+  172
+  173            bal_opn7  TYPE jvto1-hslvt,
+  174            bal_cre7  TYPE jvto1-hslvt,
+  175            bal_deb7  TYPE jvto1-hslvt,
+  176            bal_clo7  TYPE jvto1-hslvt,
+  177
+  178            bal_opn8  TYPE jvto1-hslvt,
+  179            bal_cre8  TYPE jvto1-hslvt,
+  180            bal_deb8  TYPE jvto1-hslvt,
+  181            bal_clo8  TYPE jvto1-hslvt,
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page      5
+--------------------------------------------------------------------------------
+
+  182
+  183            bal_opn9  TYPE jvto1-hslvt,
+  184            bal_cre9  TYPE jvto1-hslvt,
+  185            bal_deb9  TYPE jvto1-hslvt,
+  186            bal_clo9  TYPE jvto1-hslvt,
+  187
+  188            bal_opn10 TYPE jvto1-hslvt,
+  189            bal_cre10 TYPE jvto1-hslvt,
+  190            bal_deb10 TYPE jvto1-hslvt,
+  191            bal_clo10 TYPE jvto1-hslvt,
+  192
+  193          END OF ty_final4.
+  194
+  195  TYPES : BEGIN OF ty_alljv,
+  196            rjvnam TYPE jvto1-racct,
+  197          END OF ty_alljv.
+  198
+  199  DATA : lt_jvto1_ad  TYPE STANDARD TABLE OF ty_jvto13.
+  200
+  201  DATA : lt_jvto1    TYPE STANDARD TABLE OF ty_jvto1,
+  202         lt_jvto2    TYPE STANDARD TABLE OF ty_jvto2,
+  203         lt_jvt      TYPE STANDARD TABLE OF ty_jvt,
+  204         lt_jvso1_1  TYPE STANDARD TABLE OF ty_jvso1,
+  205         lt_jvso1_2  TYPE STANDARD TABLE OF ty_jvso1,
+  206         lt_ska1     TYPE STANDARD TABLE OF ty_ska1,
+  207         lt_skat     TYPE STANDARD TABLE OF ty_skat,
+  208         lt_final    TYPE STANDARD TABLE OF ty_final,
+  209         lt_bfinal   TYPE STANDARD TABLE OF ty_final,
+  210         lt_alljv    TYPE STANDARD TABLE OF ty_alljv,
+  211         lt_final2   TYPE STANDARD TABLE OF ty_final2,
+  212         lt_final3   TYPE STANDARD TABLE OF ty_final3,
+  213         lt_final4   TYPE STANDARD TABLE OF ty_final4,
+  214
+  215         ls_jvto1    TYPE ty_jvto1,
+  216         ls_jvto1_1  TYPE ty_jvto1,
+  217         ls_jvto1_2  TYPE ty_jvto1,
+  218         ls_jvto2    TYPE ty_jvto2,
+  219         ls_jvt      TYPE ty_jvt,
+  220         ls_jvt_1    TYPE ty_jvt,
+  221         ls_jvso1_1  TYPE ty_jvso1,
+  222         ls_jvso1_11 TYPE ty_jvso1,
+  223         ls_jvso1_2  TYPE ty_jvso1,
+  224         ls_jvso1_22 TYPE ty_jvso1,
+  225         ls_ska1     TYPE ty_ska1,
+  226         ls_skat     TYPE ty_skat,
+  227         ls_final    TYPE ty_final,
+  228         ls_final_1  TYPE ty_final,
+  229         ls_final_2  TYPE ty_final,
+  230         ls_bfinal   TYPE ty_final,
+  231         ls_alljv    TYPE ty_alljv,
+  232         ls_final2   TYPE ty_final2,
+  233         ls_final3   TYPE ty_final3,
+  234         ls_final4   TYPE ty_final4.
+  235
+  236  DATA : lt_fcat   TYPE slis_t_fieldcat_alv,
+  237         wa_fcat   TYPE slis_fieldcat_alv,
+  238         it_header TYPE slis_t_listheader,
+  239         wa_header TYPE slis_listheader,
+  240         wa_layout TYPE slis_layout_alv.
+  241
+  242  TYPES : BEGIN OF ty_final5,
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page      6
+--------------------------------------------------------------------------------
+
+  243            racct       TYPE jvto1-racct,
+  244            txt50       TYPE skat-txt50,
+  245            bal_clo(20) TYPE c,
+  246          END OF ty_final5.
+  247
+  248  TYPES : BEGIN OF ty_tcurr,
+  249            kurst TYPE tcurr-kurst,
+  250            fcurr TYPE tcurr-fcurr,
+  251            tcurr TYPE tcurr-tcurr,
+  252            gdatu TYPE tcurr-gdatu,
+  253            ukurs TYPE tcurr-ukurs,
+  254          END OF ty_tcurr.
+  255
+  256  DATA : it_curr TYPE STANDARD TABLE OF ty_tcurr.
+  257
+  258  DATA lt_fieldcat TYPE lvc_t_fcat.
+  259  DATA ls_lay      TYPE lvc_s_layo.
+  260  DATA ls_fieldcat LIKE LINE OF lt_fieldcat.
+  261  DATA lr_itab     TYPE REF TO data.
+  262  DATA lv_string   TYPE string.
+  263
+  264  FIELD-SYMBOLS <fs_itab> TYPE STANDARD TABLE .
+  265
+  266  DATA: gt_list    TYPE vrm_values.
+  267  DATA: gwa_list   TYPE vrm_value.
+  268  DATA: gt_values  TYPE TABLE OF dynpread,
+  269        gwa_values TYPE dynpread.
+  270
+  271  DATA: gv_selected_value(20) TYPE c.
+  272
+  273  DATA:int_header TYPE slis_t_listheader,
+  274       fs_header  TYPE slis_listheader,
+  275       t_line     LIKE fs_header-info.
+  276
+  277  DATA : zperiod     TYPE  rpmax,
+  278         zjv_nam     TYPE jvto1-rjvnam,
+  279         lv_diff     TYPE num,
+  280         lv_sumc     TYPE jvto1-hslvt,
+  281         lv_opnbal   TYPE jvto1-hslvt,
+  282         lv_opnbal_i TYPE jvto1-hslvt,
+  283         lv_opnbal_u TYPE jvto1-hslvt,
+  284         lv_clobal   TYPE jvto1-hslvt,
+  285         lv_clobal_i TYPE jvto1-hslvt,
+  286         lv_clobal_u TYPE jvto1-hslvt,
+  287         lv_debbal   TYPE jvto1-hslvt,
+  288         lv_debbal_i TYPE jvto1-hslvt,
+  289         lv_debbal_u TYPE jvto1-hslvt,
+  290         lv_crebal   TYPE jvto1-hslvt,
+  291         lv_crebal_i TYPE jvto1-hslvt,
+  292         lv_crebal_u TYPE jvto1-hslvt.
+  293
+  294  DATA : col_count TYPE i,
+  295         row_jv(6) TYPE c,
+  296         row_count TYPE i,
+  297         flg1      TYPE c.
+  298
+  299  DATA : gv_ukurs TYPE string.
+  300  DATA : lv_ukurs TYPE string.
+  301
+  302  DATA : gt_dynpread TYPE STANDARD TABLE OF dynpread,
+  303         gs_dynpread TYPE dynpread.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page      7
+--------------------------------------------------------------------------------
+
+  304
+  305  DATA: gt_return TYPE ddshretval OCCURS 0 WITH HEADER LINE.
+  306  *--------------------------------------------------------------*
+  307  *SELECTION SCREEN
+  308  *--------------------------------------------------------------*
+  309  SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME.
+  310
+  311  PARAMETERS : p_year  TYPE gjahr ,     "remove mandatory
+  312               p_bukrs TYPE bukrs .  "remove mandatory
+  313
+  314  SELECT-OPTIONS p_jvnam FOR zjv_nam  .    "remove mandatory
+  315
+  316  PARAMETERS: s_curr TYPE c AS LISTBOX VISIBLE LENGTH 20 .  "remove mandat
+       ory
+  317
+  318  SELECT-OPTIONS s_period FOR zperiod NO-EXTENSION.
+  319
+  320  SELECT-OPTIONS p_rrecin FOR jvto1-rrecin.
+  321
+  322  SELECTION-SCREEN END OF BLOCK b1.
+  323
+  324  SELECTION-SCREEN:  FUNCTION KEY 1 .  " code ADDED on 27.12.2023 by sande
+       ep rauthan
+  325
+  326  *--------------------------------------------------------------*
+  327  *At Selection Screen
+  328  *--------------------------------------------------------------*
+  329
+  330  * AT SELECTION-SCREEN.
+  331  *******code ADDED on 27.12.2023 by sandeep rauthan********
+  332  *   CASE sscrfields-ucomm.  " code ADDED on 27.12.2023 by sandeep rautha
+       n
+  333  *   WHEN 'FC01'.
+  334  *     PERFORM processguide.
+  335  *  ENDCASE.
+  336
+  337  *******code ADDED on 27.12.2023 by sandeep rauthan********
+  338
+  339
+  340
+  341
+  342
+  343  AT SELECTION-SCREEN OUTPUT.
+  344    LOOP AT SCREEN.
+  345      IF screen-name = 'S_PERIOD-LOW'.
+  346        screen-input = 0.
+  347        MODIFY SCREEN.
+  348      ENDIF.
+  349    ENDLOOP.
+  350
+  351
+  352  AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_jvnam-low.
+  353    gs_dynpread-fieldname = 'P_BUKRS'.
+  354    APPEND gs_dynpread TO gt_dynpread.
+  355
+  356    CALL FUNCTION 'DYNP_VALUES_READ'
+  357      EXPORTING
+  358        dyname               = sy-cprog
+  359        dynumb               = sy-dynnr
+  360        translate_to_upper   = 'X'
+  361      TABLES
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page      8
+--------------------------------------------------------------------------------
+
+  362        dynpfields           = gt_dynpread
+  363      EXCEPTIONS
+  364        invalid_abapworkarea = 1
+  365        invalid_dynprofield  = 2
+  366        invalid_dynproname   = 3
+  367        invalid_dynpronummer = 4
+  368        invalid_request      = 5
+  369        no_fielddescription  = 6
+  370        invalid_parameter    = 7
+  371        undefind_error       = 8
+  372        double_conversion    = 9
+  373        stepl_not_found      = 10
+  374        OTHERS               = 11.
+  375
+  376    CLEAR gs_dynpread.
+  377    READ TABLE gt_dynpread INTO gs_dynpread INDEX 1.
+  378
+  379    SELECT bukrs,
+  380           vname,
+  381           vtext
+  382      FROM t8jvt INTO TABLE @DATA(lt_jvf4)
+  383      WHERE bukrs = @gs_dynpread-fieldvalue.
+  384    IF gs_dynpread-fieldvalue IS INITIAL.
+  385      SELECT bukrs,
+  386             vname,
+  387             vtext
+  388        FROM t8jvt INTO TABLE @lt_jvf4.
+  389    ENDIF.
+  390
+  391
+  392    IF lt_jvf4 IS NOT INITIAL.
+  393      CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
+  394        EXPORTING
+  395          retfield        = 'P_JVNAM'
+  396          value_org       = 'S'
+  397        TABLES
+  398          value_tab       = lt_jvf4
+  399          return_tab      = gt_return
+  400        EXCEPTIONS
+  401          parameter_error = 1
+  402          no_values_found = 2
+  403          OTHERS          = 3.
+  404      IF sy-subrc <> 0.
+  405  * Implement suitable error handling here
+  406      ENDIF.
+  407    ENDIF.
+  408
+  409
+  410  AT SELECTION-SCREEN ON s_curr.
+  411    CLEAR: gwa_values, gt_values.
+  412    REFRESH gt_values.
+  413    gwa_values-fieldname = 'S_CURR'.
+  414    APPEND gwa_values TO gt_values.
+  415    CALL FUNCTION 'DYNP_VALUES_READ'
+  416      EXPORTING
+  417        dyname             = sy-cprog
+  418        dynumb             = sy-dynnr
+  419        translate_to_upper = 'X'
+  420      TABLES
+  421        dynpfields         = gt_values.
+  422
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page      9
+--------------------------------------------------------------------------------
+
+  423    READ TABLE gt_values INDEX 1 INTO gwa_values.
+  424    IF sy-subrc = 0 AND gwa_values-fieldvalue IS NOT INITIAL.
+  425      READ TABLE gt_list INTO gwa_list
+  426                        WITH KEY key = gwa_values-fieldvalue.
+  427      IF sy-subrc = 0.
+  428        gv_selected_value = gwa_list-text.
+  429      ENDIF.
+  430    ENDIF.
+  431
+  432  AT SELECTION-SCREEN .
+  433  *******code ADDED on 27.12.2023 by sandeep rauthan********
+  434    CASE sscrfields-ucomm.  " code ADDED on 27.12.2023 by sandeep rauthan
+  435      WHEN 'FC01'.
+  436        PERFORM processguide.
+  437    ENDCASE.
+  438
+  439  *******code ADDED on 27.12.2023 by sandeep rauthan********
+  440
+  441    CLEAR:row_count,flg1.
+  442    REFRESH lt_alljv[].
+  443  *  SELECT rjvnam FROM jvto1 INTO TABLE lt_alljv
+  444  *     WHERE ryear = p_year
+  445  *       AND rbukrs = p_bukrs
+  446  *       AND rjvnam IN p_jvnam
+  447  *       AND rldnr = '4A'
+  448  *       AND rrcty = '0'
+  449  *       AND rrecin IN  p_rrecin.
+  450    SELECT DISTINCT rjvnam
+  451    FROM jv_jvto1_acdoca_4a_4c_switch
+  452    INTO TABLE @lt_alljv
+  453    WHERE ryear  =  @p_year
+  454      AND rbukrs =  @p_bukrs
+  455      AND rjvnam IN @p_jvnam
+  456      AND rldnr  =  '4A'
+  457      AND rrcty  =  '0'
+  458      AND rrecin IN @p_rrecin.
+  459
+  460    SORT lt_alljv BY rjvnam ASCENDING.
+  461    DELETE ADJACENT DUPLICATES FROM lt_alljv.
+  462
+  463    DESCRIBE TABLE lt_alljv LINES row_count.
+  464    IF row_count GT 10.
+  465      flg1 = 'X'.
+  466      MESSAGE 'For more than 10 ventures only closing balance will be disp
+       layed' TYPE 'W'.
+  467    ENDIF.
+  468
+  469
+  470
+  471
+  472
+  473  *--------------------------------------------------------------*
+  474  *Initialization
+  475  *--------------------------------------------------------------*
+  476  INITIALIZATION.
+  477
+  478  ***************** code added by sandeep on 27.12.2023****************
+  479    smp_dyntxt-icon_id = icon_pdf .
+  480    smp_dyntxt-quickinfo = 'Manual'.
+  481    smp_dyntxt-icon_text = 'Process Guide'.
+  482    sscrfields-functxt_01 = smp_dyntxt.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page     10
+--------------------------------------------------------------------------------
+
+  483    CLEAR smp_dyntxt.
+  484  *****************code added by sandeep on 27.12.2023********************
+       **
+  485
+  486
+  487    gwa_list-key = '1'.
+  488    gwa_list-text = 'Company Code INR'.
+  489    APPEND gwa_list TO gt_list.
+  490    gwa_list-key = '2'.
+  491    gwa_list-text = 'Index Based USD'.
+  492    APPEND gwa_list TO gt_list.
+  493  *  CODE ADDED BY APARNA '' 19.02.2024
+  494    gwa_list-key = '3'.
+  495    gwa_list-text = 'USD & INR'.
+  496    APPEND gwa_list TO gt_list.
+  497  * CODE ENDED BY APARNA '' 19.02.2024
+  498    CALL FUNCTION 'VRM_SET_VALUES'
+  499      EXPORTING
+  500        id              = 'S_CURR'
+  501        values          = gt_list
+  502      EXCEPTIONS
+  503        id_illegal_name = 1
+  504        OTHERS          = 2.
+  505
+  506    MOVE: 'I' TO s_period-sign,
+  507          'EQ' TO s_period-option,
+  508          '1' TO s_period-low.
+  509    APPEND s_period.
+  510
+  511  *--------------------------------------------------------------*
+  512  *START-OF-SELECTION.
+  513  *--------------------------------------------------------------*
+  514
+  515  START-OF-SELECTION.
+  516
+  517
+  518  ******************* C0DE ADDED ON 31.12.2023 BY SANDEEP R**********
+  519
+  520    DATA : lv_error_msg TYPE string.
+  521
+  522    IF p_year IS INITIAL.
+  523      MESSAGE : 'fill the fiscal year,company code,joint venture and curre
+       ncy field' TYPE 'E'.
+  524
+  525    ELSEIF p_bukrs IS INITIAL.
+  526      MESSAGE : 'fill the company code field' TYPE 'E'.
+  527
+  528
+  529    ELSEIF p_jvnam IS INITIAL.
+  530      MESSAGE : 'fill the joint venture field' TYPE 'E'.
+  531
+  532
+  533    ELSEIF s_period IS INITIAL.
+  534      MESSAGE : 'fill the currency field' TYPE 'E'.
+  535
+  536    ENDIF.
+  537
+  538  ******************* C0DE ADDED ON 31.12.2023 BY SANDEEP R**********
+  539
+  540    PERFORM get_data.
+  541    PERFORM set_data.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page     11
+--------------------------------------------------------------------------------
+
+  542    PERFORM disp_data.
+  543
+  544  END-OF-SELECTION.
+  545
+  546  *--------------------------------------------------------------*
+  547  *FORM get_data.
+  548  *--------------------------------------------------------------*
+  549  FORM get_data.
+  550    break abapuser02.
+  551  *  SELECT racct
+  552  *   FROM jvto1 INTO CORRESPONDING FIELDS OF TABLE lt_jvt
+  553  *      WHERE ryear = p_year
+  554  *        AND rbukrs = p_bukrs
+  555  *        AND rjvnam IN p_jvnam
+  556  *        AND rldnr = '4A'
+  557  *        AND rrcty = '0'
+  558  *  AND rrecin IN p_rrecin.
+  559    SELECT DISTINCT racct
+  560    FROM jv_jvto1_acdoca_4a_4c_switch
+  561    INTO CORRESPONDING FIELDS OF TABLE @lt_jvt
+  562    WHERE ryear  =  @p_year
+  563      AND rbukrs =  @p_bukrs
+  564      AND rjvnam IN @p_jvnam
+  565      AND rldnr  =  '4A'
+  566      AND rrcty  =  '0'
+  567      AND rrecin IN @p_rrecin.
+  568
+  569    SORT lt_jvt BY racct ASCENDING.
+  570    DELETE ADJACENT DUPLICATES FROM lt_jvt COMPARING racct .
+  571    READ TABLE lt_jvt INTO DATA(ls_jvt) WITH KEY racct = '0000160206'.
+  572    IF ls_jvt IS INITIAL.
+  573      ls_jvt-racct = '0000160206'.
+  574      APPEND ls_jvt TO lt_jvt.
+  575      CLEAR ls_jvt.
+  576    ENDIF.
+  577
+  578    IF lt_jvt IS NOT INITIAL.
+  579
+  580      SELECT a~ktopl
+  581             a~saknr
+  582             a~xbilk
+  583             a~sakan
+  584             b~txt20
+  585             b~txt50
+  586        FROM ska1 AS a
+  587        INNER JOIN skat AS b ON b~saknr = a~saknr
+  588        INTO CORRESPONDING FIELDS OF TABLE lt_ska1
+  589        FOR ALL ENTRIES IN lt_jvt
+  590        WHERE a~saknr = lt_jvt-racct
+  591          AND a~ktopl = 'ONGC'
+  592          AND a~xbilk = ' '
+  593          AND b~spras = 'EN'
+  594      AND b~ktopl = 'ONGC'.
+  595
+  596      SELECT saknr
+  597             txt50
+  598        FROM skat
+  599      INTO TABLE lt_skat
+  600      FOR ALL ENTRIES IN lt_jvt
+  601      WHERE saknr = lt_jvt-racct
+  602      AND spras = 'E'.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page     12
+--------------------------------------------------------------------------------
+
+  603
+  604    ENDIF.
+  605
+  606    IF gv_selected_value  = 'Company Code INR'.
+  607
+  608  *    SELECT SUM( hslvt ) AS hslvt rjvnam racct
+  609  *      FROM jvto1 INTO CORRESPONDING FIELDS OF TABLE lt_jvto1
+  610  *      WHERE ryear = p_year
+  611  *        AND rbukrs = p_bukrs
+  612  *        AND rjvnam IN p_jvnam
+  613  *        AND rldnr = '4A'
+  614  *        AND rrcty = '0'
+  615  *        AND rrecin IN  p_rrecin
+  616  *    GROUP BY rjvnam racct.
+  617        SELECT SUM( hslvt ) AS hslvt,
+  618         rjvnam,
+  619         racct
+  620    FROM jv_jvto1_acdoca_4a_4c_switch
+  621    INTO CORRESPONDING FIELDS OF TABLE @lt_jvto1
+  622    WHERE ryear  =  @p_year
+  623      AND rbukrs =  @p_bukrs
+  624      AND rjvnam IN @p_jvnam
+  625      AND rldnr  =  '4A'
+  626      AND rrcty  =  '0'
+  627      AND rrecin IN @p_rrecin
+  628    GROUP BY rjvnam, racct.
+  629
+  630  *    SELECT SUM( hsl ) AS hsl rjvnam racct
+  631  *      FROM jvso1 INTO CORRESPONDING FIELDS OF TABLE lt_jvso1_1
+  632  *      WHERE ryear = p_year
+  633  *        AND rbukrs = p_bukrs
+  634  *        AND rjvnam IN p_jvnam
+  635  *        AND poper BETWEEN s_period-low AND s_period-high
+  636  *        AND rldnr = '4A'
+  637  *        AND rrcty = '0'
+  638  *        AND drcrk = 'H'
+  639  *        AND rrecin IN p_rrecin
+  640  *    GROUP BY rjvnam racct.
+  641        SELECT SUM( hsl ) AS hsl,
+  642         rjvnam,
+  643         racct
+  644    FROM jv_jvso1_acdoca
+  645    INTO CORRESPONDING FIELDS OF TABLE @lt_jvso1_1
+  646    WHERE ryear  =  @p_year
+  647      AND rbukrs =  @p_bukrs
+  648      AND rjvnam IN @p_jvnam
+  649      AND poper  BETWEEN @s_period-low AND @s_period-high
+  650      AND rldnr  =  '4A'
+  651      AND rrcty  =  '0'
+  652      AND drcrk  =  'H'
+  653      AND rrecin IN @p_rrecin
+  654    GROUP BY rjvnam, racct.
+  655
+  656  *    SELECT SUM( hsl ) AS hsl rjvnam racct
+  657  *      FROM jvso1 INTO CORRESPONDING FIELDS OF TABLE lt_jvso1_2
+  658  *      WHERE ryear = p_year
+  659  *        AND rbukrs = p_bukrs
+  660  *        AND rjvnam IN p_jvnam
+  661  *        AND poper BETWEEN s_period-low AND s_period-high
+  662  *        AND rldnr = '4A'
+  663  *        AND rrcty = '0'
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page     13
+--------------------------------------------------------------------------------
+
+  664  *        AND drcrk = 'S'
+  665  *        AND rrecin IN p_rrecin
+  666  *    GROUP BY rjvnam racct.
+  667  SELECT SUM( hsl ) AS hsl,
+  668         rjvnam,
+  669         racct
+  670    FROM jv_jvso1_acdoca
+  671    INTO CORRESPONDING FIELDS OF TABLE @lt_jvso1_2
+  672    WHERE ryear  =  @p_year
+  673      AND rbukrs =  @p_bukrs
+  674      AND rjvnam IN @p_jvnam
+  675      AND poper  BETWEEN @s_period-low AND @s_period-high
+  676      AND rldnr  =  '4A'
+  677      AND rrcty  =  '0'
+  678      AND drcrk  =  'S'
+  679      AND rrecin IN @p_rrecin
+  680    GROUP BY rjvnam, racct.
+  681
+  682    ELSEIF gv_selected_value  = 'Index Based USD'.
+  683
+  684  *    SELECT SUM( kslvt ) AS hslvt rjvnam racct
+  685  *       FROM jvto1 INTO CORRESPONDING FIELDS OF TABLE lt_jvto1
+  686  *       WHERE ryear = p_year
+  687  *         AND rbukrs = p_bukrs
+  688  *         AND rjvnam IN p_jvnam
+  689  *         AND rldnr = '4A'
+  690  *         AND rrcty = '0'
+  691  *         AND rrecin IN  p_rrecin
+  692  *    GROUP BY rjvnam racct.
+  693  SELECT SUM( hslvt ) AS hslvt,
+  694         rjvnam,
+  695         racct
+  696    FROM jv_jvto1_acdoca_4a_4c_switch
+  697    INTO CORRESPONDING FIELDS OF TABLE @lt_jvto1
+  698    WHERE ryear  =  @p_year
+  699      AND rbukrs =  @p_bukrs
+  700      AND rjvnam IN @p_jvnam
+  701      AND rldnr  =  '4A'
+  702      AND rrcty  =  '0'
+  703      AND rrecin IN @p_rrecin
+  704    GROUP BY rjvnam, racct.
+  705
+  706  *    SELECT SUM( ksl ) AS ksl rjvnam racct
+  707  *       FROM jvso1 INTO CORRESPONDING FIELDS OF TABLE lt_jvso1_1
+  708  *       WHERE ryear = p_year
+  709  *         AND rbukrs = p_bukrs
+  710  *         AND rjvnam IN p_jvnam
+  711  *         AND poper BETWEEN s_period-low AND s_period-high
+  712  *         AND rldnr = '4A'
+  713  *         AND rrcty = '0'
+  714  *         AND drcrk = 'H'
+  715  *         AND rrecin IN p_rrecin
+  716  *    GROUP BY rjvnam racct.
+  717  *
+  718  *    SELECT SUM( ksl ) AS ksl rjvnam racct
+  719  *      FROM jvso1 INTO CORRESPONDING FIELDS OF TABLE lt_jvso1_2
+  720  *      WHERE ryear = p_year
+  721  *        AND rbukrs = p_bukrs
+  722  *        AND rjvnam IN p_jvnam
+  723  *        AND poper BETWEEN s_period-low AND s_period-high
+  724  *        AND rldnr = '4A'
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page     14
+--------------------------------------------------------------------------------
+
+  725  *        AND rrcty = '0'
+  726  *        AND drcrk = 'S'
+  727  *        AND rrecin IN p_rrecin
+  728  *    GROUP BY rjvnam racct.
+  729  SELECT SUM( ksl ) AS ksl,
+  730         rjvnam,
+  731         racct
+  732    FROM jv_jvso1_acdoca
+  733    INTO CORRESPONDING FIELDS OF TABLE @lt_jvso1_1
+  734    WHERE ryear  =  @p_year
+  735      AND rbukrs =  @p_bukrs
+  736      AND rjvnam IN @p_jvnam
+  737      AND poper  BETWEEN @s_period-low AND @s_period-high
+  738      AND rldnr  =  '4A'
+  739      AND rrcty  =  '0'
+  740      AND drcrk  =  'H'
+  741      AND rrecin IN @p_rrecin
+  742    GROUP BY rjvnam, racct.
+  743
+  744  SELECT SUM( ksl ) AS ksl,
+  745         rjvnam,
+  746         racct
+  747    FROM jv_jvso1_acdoca
+  748    INTO CORRESPONDING FIELDS OF TABLE @lt_jvso1_2
+  749    WHERE ryear  =  @p_year
+  750      AND rbukrs =  @p_bukrs
+  751      AND rjvnam IN @p_jvnam
+  752      AND poper  BETWEEN @s_period-low AND @s_period-high
+  753      AND rldnr  =  '4A'
+  754      AND rrcty  =  '0'
+  755      AND drcrk  =  'S'
+  756      AND rrecin IN @p_rrecin
+  757    GROUP BY rjvnam, racct.
+  758
+  759  ************************************* CODE BEGIN BY APARNA ANAND 19.02.2
+       024     ADDITION USD + INR
+  760
+  761    ELSEIF gv_selected_value  = 'USD & INR'.
+  762
+  763
+  764
+  765  *    SELECT SUM( hslvt  ) AS  hslvt  SUM( kslvt ) AS   kslvt rjvnam racc
+       t
+  766  *      FROM jvto1 INTO CORRESPONDING FIELDS OF TABLE lt_jvto1
+  767  *      WHERE ryear = p_year
+  768  *        AND rbukrs = p_bukrs
+  769  *        AND rjvnam IN p_jvnam
+  770  *        AND rldnr = '4A'
+  771  *        AND rrcty = '0'
+  772  *        AND rrecin IN  p_rrecin
+  773  *    GROUP BY rjvnam racct .
+  774
+  775  *    SELECT SUM( hslvt  ) AS  hslvt  SUM( kslvt ) AS   kslvt rjvnam racc
+       t
+  776  *      FROM jvto1 INTO CORRESPONDING FIELDS OF TABLE lt_jvto1
+  777  *      WHERE ryear = p_year
+  778  *        AND rbukrs = p_bukrs
+  779  *        AND rjvnam IN p_jvnam
+  780  *        AND rldnr = '4A'
+  781  *        AND rrcty = '0'
+  782  *        AND rrecin IN  p_rrecin
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page     15
+--------------------------------------------------------------------------------
+
+  783  *    GROUP BY rjvnam racct .
+  784  SELECT SUM( hslvt ) AS hslvt,
+  785         SUM( kslvt ) AS kslvt,
+  786         rjvnam,
+  787         racct
+  788    FROM jv_jvto1_acdoca_4a_4c_switch
+  789    INTO CORRESPONDING FIELDS OF TABLE @lt_jvto1
+  790    WHERE ryear  =  @p_year
+  791      AND rbukrs =  @p_bukrs
+  792      AND rjvnam IN @p_jvnam
+  793      AND rldnr  =  '4A'
+  794      AND rrcty  =  '0'
+  795      AND rrecin IN @p_rrecin
+  796    GROUP BY rjvnam, racct.
+  797
+  798  *    SELECT SUM( hsl ) AS hsl SUM( ksl )  AS ksl rjvnam racct
+  799  *  FROM jvso1 INTO CORRESPONDING FIELDS OF TABLE lt_jvso1_1
+  800  *  WHERE ryear = p_year
+  801  *    AND rbukrs = p_bukrs
+  802  *    AND rjvnam IN p_jvnam
+  803  *    AND poper BETWEEN s_period-low AND s_period-high
+  804  *    AND rldnr = '4A'
+  805  *    AND rrcty = '0'
+  806  *    AND drcrk = 'H'
+  807  *    AND rrecin IN p_rrecin
+  808  *GROUP BY rjvnam racct.
+  809  *
+  810  *
+  811  *
+  812  *    SELECT SUM( hsl ) AS hsl SUM( ksl )  AS ksl rjvnam racct
+  813  *       FROM jvso1 INTO CORRESPONDING FIELDS OF TABLE lt_jvso1_2
+  814  *       WHERE ryear = p_year
+  815  *         AND rbukrs = p_bukrs
+  816  *         AND rjvnam IN p_jvnam
+  817  *         AND poper BETWEEN s_period-low AND s_period-high
+  818  *         AND rldnr = '4A'
+  819  *         AND rrcty = '0'
+  820  *         AND drcrk = 'S'
+  821  *         AND rrecin IN p_rrecin
+  822  *     GROUP BY rjvnam racct.
+  823  SELECT SUM( hsl ) AS hsl,
+  824         SUM( ksl ) AS ksl,
+  825         rjvnam,
+  826         racct
+  827    FROM jv_jvso1_acdoca
+  828    INTO CORRESPONDING FIELDS OF TABLE @lt_jvso1_1
+  829    WHERE ryear  =  @p_year
+  830      AND rbukrs =  @p_bukrs
+  831      AND rjvnam IN @p_jvnam
+  832      AND poper  BETWEEN @s_period-low AND @s_period-high
+  833      AND rldnr  =  '4A'
+  834      AND rrcty  =  '0'
+  835      AND drcrk  =  'H'
+  836      AND rrecin IN @p_rrecin
+  837    GROUP BY rjvnam, racct.
+  838
+  839
+  840  SELECT SUM( hsl ) AS hsl,
+  841         SUM( ksl ) AS ksl,
+  842         rjvnam,
+  843         racct
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page     16
+--------------------------------------------------------------------------------
+
+  844    FROM jv_jvso1_acdoca
+  845    INTO CORRESPONDING FIELDS OF TABLE @lt_jvso1_2
+  846    WHERE ryear  =  @p_year
+  847      AND rbukrs =  @p_bukrs
+  848      AND rjvnam IN @p_jvnam
+  849      AND poper  BETWEEN @s_period-low AND @s_period-high
+  850      AND rldnr  =  '4A'
+  851      AND rrcty  =  '0'
+  852      AND drcrk  =  'S'
+  853      AND rrecin IN @p_rrecin
+  854    GROUP BY rjvnam, racct.
+  855
+  856  **************************************** CODE ENDED APARNA ANAND 19.02.2
+       024    ADDITION USD + INR
+  857
+  858    ENDIF.
+  859
+  860
+  861  ENDFORM.
+  862  *--------------------------------------------------------------*
+  863  *FORM set_data.
+  864  *--------------------------------------------------------------*
+  865  FORM set_data.
+  866
+  867    SORT lt_jvt BY racct ASCENDING.
+  868    SORT lt_jvto1 BY racct  ASCENDING.
+  869    SORT lt_jvso1_1 BY racct  ASCENDING.
+  870    SORT lt_jvso1_2 BY racct  ASCENDING.
+  871    SORT lt_jvto1_ad BY racct  ASCENDING.
+  872
+  873    IF gv_selected_value  = 'Company Code INR'.
+  874
+  875      LOOP AT lt_jvt INTO ls_jvt .
+  876        LOOP AT lt_alljv INTO ls_alljv.
+  877          ls_final-rjvnam = ls_alljv-rjvnam.
+  878          CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+  879            EXPORTING
+  880              input  = ls_jvt-racct
+  881            IMPORTING
+  882              output = ls_final-racct.
+  883
+  884          READ TABLE lt_jvso1_1 INTO ls_jvso1_1 WITH KEY racct = ls_jvt-ra
+       cct rjvnam = ls_alljv-rjvnam.
+  885          IF ls_jvso1_1-hsl IS NOT INITIAL.
+  886            ls_final-bal_cre =  ls_jvso1_1-hsl * -1 .
+  887          ENDIF.
+  888
+  889          READ TABLE lt_jvso1_2 INTO ls_jvso1_2 WITH KEY racct = ls_jvt-ra
+       cct rjvnam = ls_alljv-rjvnam.
+  890          IF ls_jvso1_2-hsl IS NOT INITIAL.
+  891            ls_final-bal_deb =  ls_jvso1_2-hsl.
+  892          ENDIF.
+  893
+  894          READ TABLE lt_jvto1 INTO ls_jvto1 WITH KEY racct = ls_jvt-racct
+       rjvnam = ls_alljv-rjvnam.
+  895          READ TABLE lt_ska1 INTO ls_ska1 WITH KEY saknr = ls_jvto1-racct.
+  896          IF sy-subrc EQ 0.
+  897            ls_final-bal_opn = '0'.
+  898          ELSEIF sy-subrc NE 0.
+  899            ls_final-bal_opn = ls_jvto1-hslvt.
+  900          ENDIF.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page     17
+--------------------------------------------------------------------------------
+
+  901
+  902          READ TABLE lt_skat INTO ls_skat WITH KEY saknr = ls_jvt-racct.
+  903          ls_final-txt50 = ls_skat-txt50.
+  904
+  905          ls_final-bal_clo = ls_final-bal_clo + ls_final-bal_opn + ls_fina
+       l-bal_deb - ls_final-bal_cre.
+  906
+  907          IF ls_final IS NOT INITIAL.
+  908            IF ( ls_final-bal_clo NE '0.00' ) OR ( ls_final-bal_opn NE '0.
+       00') OR ( ls_final-bal_deb NE '0.00' ) OR ( ls_final-bal_cre NE '0.00' )
+       .
+  909              APPEND ls_final TO lt_final.
+  910            ENDIF.
+  911          ENDIF.
+  912
+  913          IF ls_final-racct = '160206'.
+  914            APPEND ls_final TO lt_final.
+  915          ENDIF.
+  916
+  917          IF ls_final-racct = '120170'." add by rohit on 16.07.2025
+  918            APPEND ls_final TO lt_final.
+  919          ENDIF.
+  920
+  921          CLEAR : ls_final,ls_jvso1_1,ls_jvto1,ls_ska1,ls_skat,ls_jvt_1,ls
+       _alljv,ls_jvso1_2.
+  922        ENDLOOP.
+  923        CLEAR ls_jvt.
+  924      ENDLOOP.
+  925
+  926    ELSEIF gv_selected_value  = 'Index Based USD'.
+  927
+  928      LOOP AT lt_jvt INTO ls_jvt .
+  929        LOOP AT lt_alljv INTO ls_alljv.
+  930          ls_final-rjvnam = ls_alljv-rjvnam.
+  931          CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+  932            EXPORTING
+  933              input  = ls_jvt-racct
+  934            IMPORTING
+  935              output = ls_final-racct.
+  936
+  937          READ TABLE lt_jvso1_1 INTO ls_jvso1_1 WITH KEY racct = ls_jvt-ra
+       cct rjvnam = ls_alljv-rjvnam.
+  938          IF ls_jvso1_1-ksl IS NOT INITIAL.
+  939            ls_final-bal_cre =  ls_jvso1_1-ksl * -1 .
+  940          ENDIF.
+  941
+  942          READ TABLE lt_jvso1_2 INTO ls_jvso1_2 WITH KEY racct = ls_jvt-ra
+       cct rjvnam = ls_alljv-rjvnam.
+  943          IF ls_jvso1_2-ksl IS NOT INITIAL.
+  944            ls_final-bal_deb =  ls_jvso1_2-ksl.
+  945          ENDIF.
+  946
+  947          READ TABLE lt_jvto1 INTO ls_jvto1 WITH KEY racct = ls_jvt-racct
+       rjvnam = ls_alljv-rjvnam.
+  948          READ TABLE lt_ska1 INTO ls_ska1 WITH KEY saknr = ls_jvto1-racct.
+  949          IF sy-subrc EQ 0.
+  950            ls_final-bal_opn = '0'.
+  951          ELSEIF sy-subrc NE 0.
+  952            ls_final-bal_opn = ls_jvto1-hslvt.
+  953          ENDIF.
+  954
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page     18
+--------------------------------------------------------------------------------
+
+  955          READ TABLE lt_skat INTO ls_skat WITH KEY saknr = ls_jvt-racct.
+  956          ls_final-txt50 = ls_skat-txt50.
+  957
+  958          ls_final-bal_clo = ls_final-bal_clo + ls_final-bal_opn + ls_fina
+       l-bal_deb - ls_final-bal_cre.
+  959
+  960          IF ls_final IS NOT INITIAL.
+  961            IF ( ls_final-bal_clo NE '0.00' ) OR ( ls_final-bal_opn NE '0.
+       00') OR ( ls_final-bal_deb NE '0.00' ) OR ( ls_final-bal_cre NE '0.00' )
+       .
+  962              APPEND ls_final TO lt_final.
+  963            ENDIF.
+  964          ENDIF.
+  965
+  966          IF ls_final-racct = '160206'.
+  967            APPEND ls_final TO lt_final.
+  968          ENDIF.
+  969          IF ls_final-racct = '120170'." add by rohit on 16.07.2025
+  970            APPEND ls_final TO lt_final.
+  971          ENDIF.
+  972          CLEAR : ls_final,ls_jvso1_1,ls_jvto1,ls_ska1,ls_skat,ls_jvt_1,ls
+       _alljv,ls_jvso1_2.
+  973        ENDLOOP.
+  974        CLEAR ls_jvt.
+  975      ENDLOOP.
+  976  ************************************************************************
+       ************************************
+  977    ELSEIF gv_selected_value  = 'USD & INR'.
+  978
+  979      LOOP AT lt_jvt INTO ls_jvt .
+  980        LOOP AT lt_alljv INTO ls_alljv.
+  981          ls_final-rjvnam = ls_alljv-rjvnam.
+  982          CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+  983            EXPORTING
+  984              input  = ls_jvt-racct
+  985            IMPORTING
+  986              output = ls_final-racct.
+  987
+  988          READ TABLE lt_jvso1_1 INTO ls_jvso1_1 WITH KEY racct = ls_jvt-ra
+       cct rjvnam = ls_alljv-rjvnam.
+  989          IF ls_jvso1_1-hsl IS NOT INITIAL.
+  990            ls_final-bal_cre_i =  ls_jvso1_1-hsl * -1 .
+  991            ls_final-bal_cre_u =  ls_jvso1_1-ksl * -1 .
+  992          ENDIF.
+  993
+  994          READ TABLE lt_jvso1_2 INTO ls_jvso1_2 WITH KEY racct = ls_jvt-ra
+       cct rjvnam = ls_alljv-rjvnam.
+  995          IF ls_jvso1_2-hsl IS NOT INITIAL.
+  996            ls_final-bal_deb_i =  ls_jvso1_2-hsl.
+  997            ls_final-bal_deb_u =  ls_jvso1_2-ksl.
+  998          ENDIF.
+  999
+ 1000          READ TABLE lt_jvto1 INTO ls_jvto1 WITH KEY racct = ls_jvt-racct
+       rjvnam = ls_alljv-rjvnam.
+ 1001          READ TABLE lt_ska1 INTO ls_ska1 WITH KEY saknr = ls_jvto1-racct.
+ 1002          IF sy-subrc EQ 0.
+ 1003            ls_final-bal_opn = '0'.
+ 1004          ELSEIF sy-subrc NE 0.
+ 1005            ls_final-bal_opn_i = ls_jvto1-hslvt.
+ 1006            ls_final-bal_opn_u = ls_jvto1-kslvt.
+ 1007          ENDIF.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page     19
+--------------------------------------------------------------------------------
+
+ 1008
+ 1009          READ TABLE lt_skat INTO ls_skat WITH KEY saknr = ls_jvt-racct.
+ 1010          ls_final-txt50 = ls_skat-txt50.
+ 1011
+ 1012          ls_final-bal_clo_i = ls_final-bal_clo_i + ls_final-bal_opn_i + l
+       s_final-bal_deb_i - ls_final-bal_cre_i.
+ 1013          ls_final-bal_clo_u = ls_final-bal_clo_u + ls_final-bal_opn_u + l
+       s_final-bal_deb_u - ls_final-bal_cre_u.
+ 1014
+ 1015          IF ls_final IS NOT INITIAL.
+ 1016            IF ( ls_final-bal_clo_i NE '0.00' )  OR ( ls_final-bal_clo_u N
+       E '0.00' ) OR ( ls_final-bal_opn_i NE '0.00') OR ( ls_final-bal_opn_u NE
+        '0.00')  OR ( ls_final-bal_deb_i NE '0.00' )  OR ( ls_final-bal_deb_u N
+       E '0.00' )
+ 1017             OR ( ls_final-bal_cre_i NE '0.00' ) OR ( ls_final-bal_cre_u N
+       E '0.00' ).
+ 1018              APPEND ls_final TO lt_final.
+ 1019            ENDIF.
+ 1020          ENDIF.
+ 1021
+ 1022          IF ls_final-racct = '160206'.
+ 1023            APPEND ls_final TO lt_final.
+ 1024          ENDIF.
+ 1025
+ 1026          IF ls_final-racct = '120170'." add by rohit on 16.07.2025
+ 1027            APPEND ls_final TO lt_final.
+ 1028          ENDIF.
+ 1029
+ 1030          CLEAR : ls_final,ls_jvso1_1,ls_jvto1,ls_ska1,ls_skat,ls_jvt_1,ls
+       _alljv,ls_jvso1_2.
+ 1031        ENDLOOP.
+ 1032        CLEAR ls_jvt.
+ 1033      ENDLOOP.
+ 1034
+ 1035    ENDIF.
+ 1036  ***********************************************************************
+ 1037
+ 1038
+ 1039    DATA lv_160206 TYPE skat-txt50.
+ 1040    CLEAR lv_160206.
+ 1041
+ 1042    SELECT SINGLE txt50 FROM skat INTO lv_160206 WHERE saknr = '0000160206
+       '
+ 1043                                                          AND ktopl = 'ONG
+       C'
+ 1044    AND spras = 'EN'.
+ 1045
+ 1046    CLEAR : lv_opnbal, lv_crebal,lv_clobal,lv_debbal , lv_opnbal_i, lv_cre
+       bal_i ,lv_clobal_i ,lv_debbal_i  ,lv_opnbal_u , lv_crebal_u ,lv_clobal_u
+        ,lv_debbal_u.
+ 1047    break abapuser02.
+ 1048    LOOP AT lt_alljv INTO ls_alljv.
+ 1049      LOOP AT lt_ska1 INTO ls_ska1.
+ 1050
+ 1051        READ TABLE lt_jvto1 INTO ls_jvto1 WITH KEY racct = ls_ska1-saknr r
+       jvnam = ls_alljv-rjvnam.
+ 1052        IF sy-subrc = 0.
+ 1053          IF gv_selected_value  = 'USD & INR'.
+ 1054  *           lv_opnbal   = ls_jvto1-kslvt.
+ 1055            lv_opnbal_i = ls_jvto1-hslvt.
+ 1056            lv_opnbal_u = ls_jvto1-kslvt.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page     20
+--------------------------------------------------------------------------------
+
+ 1057          ELSE.
+ 1058            lv_opnbal   = ls_jvto1-hslvt.
+ 1059          ENDIF.
+ 1060          DATA(flag_ad) = 'X'.
+ 1061          DATA(flag) = 'X'.
+ 1062        ENDIF.
+ 1063  *  ENDLOOP.
+ 1064
+ 1065        IF gv_selected_value  = 'Company Code INR'.
+ 1066          READ TABLE lt_jvso1_1 INTO ls_jvso1_1 WITH KEY racct = ls_ska1-s
+       aknr rjvnam = ls_alljv-rjvnam.
+ 1067          IF ls_jvso1_1-hsl IS NOT INITIAL.
+ 1068            lv_crebal = ls_jvso1_2-hsl * -1.
+ 1069            flag = 'X'.
+ 1070          ENDIF.
+ 1071          READ TABLE lt_jvso1_2 INTO ls_jvso1_2 WITH KEY racct = ls_ska1-s
+       aknr rjvnam = ls_alljv-rjvnam.
+ 1072          IF ls_jvso1_2-hsl IS NOT INITIAL.
+ 1073            lv_debbal = ls_jvso1_1-hsl.
+ 1074            flag = 'X'.
+ 1075          ENDIF.
+ 1076
+ 1077        ELSEIF gv_selected_value  = 'Index Based USD'.
+ 1078
+ 1079          READ TABLE lt_jvso1_1 INTO ls_jvso1_1 WITH KEY racct = ls_ska1-s
+       aknr rjvnam = ls_alljv-rjvnam.
+ 1080          IF ls_jvso1_1-hsl IS NOT INITIAL.
+ 1081            lv_crebal = ls_jvso1_2-hsl * -1.
+ 1082            flag = 'X'.
+ 1083          ENDIF.
+ 1084          READ TABLE lt_jvso1_2 INTO ls_jvso1_2 WITH KEY racct = ls_ska1-s
+       aknr rjvnam = ls_alljv-rjvnam.
+ 1085          IF ls_jvso1_2-hsl IS NOT INITIAL.
+ 1086            lv_debbal = ls_jvso1_1-hsl.
+ 1087            flag = 'X'.
+ 1088          ENDIF.
+ 1089        ELSEIF gv_selected_value  = 'USD & INR'.
+ 1090
+ 1091          READ TABLE lt_jvso1_1 INTO ls_jvso1_1 WITH KEY racct = ls_ska1-s
+       aknr rjvnam = ls_alljv-rjvnam.
+ 1092          IF sy-subrc = 0..
+ 1093            lv_crebal_i = ls_jvso1_2-hsl * -1.
+ 1094            lv_crebal_u = ls_jvso1_2-ksl * -1.
+ 1095            flag = 'X'.
+ 1096          ENDIF.
+ 1097          READ TABLE lt_jvso1_2 INTO ls_jvso1_2 WITH KEY racct = ls_ska1-s
+       aknr rjvnam = ls_alljv-rjvnam.
+ 1098          IF sy-subrc = 0.
+ 1099            lv_debbal_i = ls_jvso1_1-hsl.
+ 1100            lv_debbal_u = ls_jvso1_1-ksl.
+ 1101            flag = 'X'.
+ 1102          ENDIF.
+ 1103        ENDIF.
+ 1104
+ 1105  *BREAK abapuser02.
+ 1106        IF flag_ad = 'X'.
+ 1107          READ TABLE lt_final INTO ls_final WITH KEY racct = '160206' rjvn
+       am = ls_alljv-rjvnam.
+ 1108          IF sy-subrc = 0.
+ 1109            lv_clobal          = ls_final-bal_clo.
+ 1110            lv_clobal_i        = ls_final-bal_clo_i.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page     21
+--------------------------------------------------------------------------------
+
+ 1111            lv_clobal_u        = ls_final-bal_clo_u.
+ 1112            ls_final-bal_clo   = lv_opnbal .
+ 1113            ls_final-bal_clo_i = lv_opnbal_i.
+ 1114            ls_final-bal_clo_u = lv_opnbal_u .
+ 1115            ls_final-bal_clo   = ls_final-bal_clo   +  lv_clobal.
+ 1116            ls_final-bal_clo_i = ls_final-bal_clo_i +  lv_clobal_i.
+ 1117            ls_final-bal_clo_u = ls_final-bal_clo_u +  lv_clobal_u.
+ 1118            ls_final-bal_opn   = ls_final-bal_opn   +  lv_opnbal.
+ 1119            ls_final-bal_opn_i = ls_final-bal_opn_i +  lv_opnbal_i.
+ 1120            ls_final-bal_opn_u = ls_final-bal_opn_u +  lv_opnbal_u.
+ 1121            ls_final-bal_deb   = ls_final-bal_opn   +  lv_debbal.
+ 1122            ls_final-bal_deb_i = ls_final-bal_opn_i +  lv_debbal_i.
+ 1123            ls_final-bal_deb_u = ls_final-bal_opn_u +  lv_debbal_u.
+ 1124            ls_final-bal_cre   = ls_final-bal_opn   +  lv_crebal.
+ 1125            ls_final-bal_cre_i = ls_final-bal_opn_i +  lv_crebal_i.
+ 1126            ls_final-bal_cre_u = ls_final-bal_opn_u +  lv_crebal_u.
+ 1127            ls_final-txt50     = lv_160206.
+ 1128
+ 1129            IF flag = 'X'.
+ 1130              MODIFY lt_final FROM ls_final TRANSPORTING bal_opn bal_clo t
+       xt50 WHERE racct = '160206' AND rjvnam = ls_alljv-rjvnam.
+ 1131            ENDIF.
+ 1132            IF flag = 'X' AND  gv_selected_value  = 'USD & INR'.
+ 1133              MODIFY lt_final FROM ls_final TRANSPORTING bal_opn_i  bal_op
+       n_u  bal_clo_i  bal_clo_u  txt50 WHERE racct = '160206' AND rjvnam = ls_
+       alljv-rjvnam.
+ 1134            ENDIF.
+ 1135          ELSEIF ls_final IS INITIAL.
+ 1136
+ 1137          ENDIF.
+ 1138        ENDIF.
+ 1139
+ 1140
+ 1141        CLEAR : ls_final,ls_jvto1,lv_opnbal,ls_ska1,lv_debbal,lv_debbal_i
+       , lv_debbal_u ,lv_crebal, lv_crebal_i ,lv_crebal_u ,lv_clobal ,
+ 1142                lv_crebal_i ,lv_crebal_u, flag_ad, lv_opnbal_i, lv_opnbal_
+       u, lv_clobal_i, lv_clobal_u.
+ 1143      ENDLOOP.
+ 1144      CLEAR ls_alljv.
+ 1145    ENDLOOP.
+ 1146
+ 1147    PERFORM after_set_data.
+ 1148
+ 1149    CLEAR : lv_opnbal, lv_crebal,lv_crebal_i ,lv_crebal_u ,lv_clobal, lv_c
+       rebal_i ,lv_crebal_u ,lv_debbal ,lv_debbal_i , lv_debbal_u,
+ 1150            lv_opnbal_i, lv_opnbal_u.
+ 1151    break abapuser02.
+ 1152    LOOP AT lt_alljv INTO ls_alljv.
+ 1153      LOOP AT lt_bfinal INTO ls_bfinal WHERE rjvnam = ls_alljv-rjvnam.
+ 1154
+ 1155        IF ls_bfinal IS NOT INITIAL.
+ 1156
+ 1157          lv_opnbal   =  lv_opnbal   + ls_bfinal-bal_opn.
+ 1158          lv_opnbal_i =  lv_opnbal_i + ls_bfinal-bal_opn_i.
+ 1159          lv_opnbal_u =  lv_opnbal_u + ls_bfinal-bal_opn_u.
+ 1160          lv_clobal   =  lv_clobal   + ls_bfinal-bal_clo.
+ 1161          lv_clobal_i =  lv_clobal_i + ls_bfinal-bal_clo_i.
+ 1162          lv_clobal_u =  lv_clobal_u + ls_bfinal-bal_clo_u.
+ 1163          lv_crebal   =  lv_crebal   + ls_bfinal-bal_cre.
+ 1164          lv_crebal_i =  lv_crebal_i + ls_bfinal-bal_cre_i.
+ 1165          lv_crebal_u =  lv_crebal_u + ls_bfinal-bal_cre_u.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page     22
+--------------------------------------------------------------------------------
+
+ 1166          lv_debbal   =  lv_debbal   + ls_bfinal-bal_deb.
+ 1167          lv_debbal_i =  lv_debbal_i + ls_bfinal-bal_deb_i.
+ 1168          lv_debbal_u =  lv_debbal_i + ls_bfinal-bal_deb_u.
+ 1169
+ 1170          CLEAR ls_bfinal.
+ 1171        ENDIF.
+ 1172
+ 1173        DATA(flag2) = 'X'.
+ 1174      ENDLOOP.
+ 1175
+ 1176      IF flag = 'X'.
+ 1177        READ TABLE lt_final INTO ls_final WITH KEY racct = '120170' rjvnam
+        = ls_alljv-rjvnam.
+ 1178        ls_final-bal_opn   = ls_final-bal_opn   + lv_opnbal.
+ 1179        ls_final-bal_opn_i = ls_final-bal_opn_i + lv_opnbal_i.
+ 1180        ls_final-bal_opn_u = ls_final-bal_opn_u + lv_opnbal_u.
+ 1181        ls_final-bal_clo   = ls_final-bal_clo   + lv_clobal.
+ 1182        ls_final-bal_clo_i = ls_final-bal_clo_i + lv_clobal_i.
+ 1183        ls_final-bal_clo_u = ls_final-bal_clo_u + lv_clobal_u.
+ 1184        ls_final-bal_cre   = ls_final-bal_cre   + lv_crebal.
+ 1185        ls_final-bal_cre_i = ls_final-bal_cre_i + lv_crebal_i.
+ 1186        ls_final-bal_cre_u = ls_final-bal_cre_u + lv_crebal_u.
+ 1187        ls_final-bal_deb   = ls_final-bal_deb   + lv_debbal.
+ 1188        ls_final-bal_deb_i = ls_final-bal_deb_i + lv_debbal_i.
+ 1189        ls_final-bal_deb_u = ls_final-bal_deb_u + lv_debbal_u.
+ 1190
+ 1191        IF ls_final IS NOT INITIAL.
+ 1192          MODIFY lt_final FROM ls_final TRANSPORTING bal_opn bal_clo bal_c
+       re bal_deb
+ 1193           bal_opn_i  bal_opn_u  bal_clo_i  bal_clo_u  WHERE rjvnam = ls_a
+       lljv-rjvnam AND racct = '120170'.
+ 1194        ENDIF.
+ 1195  *      IF flag = 'X' AND  gv_selected_value  = 'USD & INR'.
+ 1196  *        MODIFY lt_final FROM ls_final TRANSPORTING bal_opn_i  bal_opn_u
+         bal_clo_i  bal_clo_u  txt50 WHERE racct = '120170' AND rjvnam = ls_all
+       jv-rjvnam.
+ 1197  *      ENDIF.
+ 1198      ENDIF.
+ 1199
+ 1200      CLEAR : ls_alljv ,ls_final ,lv_clobal ,lv_clobal_i,lv_clobal_u,lv_cr
+       ebal ,lv_crebal_i ,lv_crebal_u ,lv_opnbal ,lv_opnbal_i ,lv_opnbal_u ,lv_
+       debbal ,lv_debbal_i ,lv_debbal_u.
+ 1201    ENDLOOP.
+ 1202
+ 1203    CLEAR : ls_final,ls_jvto1,ls_ska1,lv_opnbal, lv_opnbal_i ,lv_opnbal_u
+       ,  lv_clobal ,lv_clobal_i,lv_clobal_u ,lv_crebal, lv_crebal_i ,lv_crebal
+       _u ,lv_debbal ,lv_debbal_i ,lv_debbal_u.
+ 1204
+ 1205    SORT lt_final BY rjvnam racct ASCENDING.
+ 1206    DELETE ADJACENT DUPLICATES FROM lt_final COMPARING rjvnam racct.
+ 1207
+ 1208    IF gv_selected_value  = 'USD & INR'.
+ 1209      flg1 = 'X'.
+ 1210    ENDIF.
+ 1211  ENDFORM.
+ 1212  *--------------------------------------------------------------*
+ 1213  *FORM disp_data.
+ 1214  *--------------------------------------------------------------*
+ 1215  FORM disp_data .
+ 1216  ******************************************Added on 01.11.2022 by hrishi
+       n*****************************
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page     23
+--------------------------------------------------------------------------------
+
+ 1217    IF lt_final IS NOT INITIAL.
+ 1218      MOVE-CORRESPONDING lt_final[] TO lt_final2[].
+ 1219      MOVE-CORRESPONDING lt_final[] TO lt_final3[].
+ 1220    ENDIF.
+ 1221
+ 1222    IF lt_final3 IS NOT INITIAL.
+ 1223      SORT lt_final3 BY racct ASCENDING.
+ 1224      DELETE ADJACENT DUPLICATES FROM lt_final3 COMPARING racct.
+ 1225    ENDIF.
+ 1226
+ 1227    IF lt_final3 IS NOT INITIAL.
+ 1228      SORT lt_final3 BY racct ASCENDING.
+ 1229
+ 1230      LOOP AT lt_final3 INTO ls_final3.
+ 1231        ls_final4-racct = ls_final3-racct.
+ 1232        ls_final4-txt50 = ls_final3-txt50.
+ 1233
+ 1234        APPEND ls_final4 TO lt_final4.
+ 1235        CLEAR ls_final4.
+ 1236      ENDLOOP.
+ 1237    ENDIF.
+ 1238
+ 1239
+ 1240    IF flg1 NE 'X'.
+ 1241
+ 1242      CLEAR col_count.
+ 1243      SORT lt_final2 BY rjvnam racct ASCENDING.
+ 1244      READ TABLE lt_alljv INTO DATA(ls_jvnam) INDEX 1.
+ 1245
+ 1246      IF ls_jvnam IS NOT INITIAL.
+ 1247        col_count = col_count + 1.
+ 1248
+ 1249        LOOP AT lt_final4 INTO ls_final4 .
+ 1250          LOOP AT lt_final2 INTO ls_final2 WHERE racct = ls_final4-racct A
+       ND rjvnam = ls_jvnam-rjvnam.
+ 1251            ls_final4-bal_clo1 = ls_final2-bal_clo.
+ 1252            ls_final4-bal_opn1 = ls_final2-bal_opn.
+ 1253            ls_final4-bal_deb1 = ls_final2-bal_deb.
+ 1254            ls_final4-bal_cre1 = ls_final2-bal_cre.
+ 1255            MODIFY lt_final4 FROM ls_final4 TRANSPORTING bal_clo1
+ 1256                                                         bal_opn1
+ 1257                                                         bal_deb1
+ 1258                                                         bal_cre1 WHERE ra
+       cct = ls_final2-racct.
+ 1259          ENDLOOP.
+ 1260        ENDLOOP.
+ 1261      ENDIF.
+ 1262
+ 1263      CLEAR ls_jvnam.
+ 1264      READ TABLE lt_alljv INTO ls_jvnam INDEX 2.
+ 1265
+ 1266      IF ls_jvnam IS NOT INITIAL.
+ 1267        col_count = col_count + 1.
+ 1268
+ 1269        LOOP AT lt_final4 INTO ls_final4 .
+ 1270          LOOP AT lt_final2 INTO ls_final2 WHERE racct = ls_final4-racct A
+       ND rjvnam = ls_jvnam-rjvnam.
+ 1271            ls_final4-bal_clo2 = ls_final2-bal_clo.
+ 1272            ls_final4-bal_opn2 = ls_final2-bal_opn.
+ 1273            ls_final4-bal_deb2 = ls_final2-bal_deb.
+ 1274            ls_final4-bal_cre2 = ls_final2-bal_cre.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page     24
+--------------------------------------------------------------------------------
+
+ 1275            MODIFY lt_final4 FROM ls_final4 TRANSPORTING bal_clo2
+ 1276                                                         bal_opn2
+ 1277                                                         bal_deb2
+ 1278                                                         bal_cre2 WHERE ra
+       cct = ls_final2-racct.
+ 1279          ENDLOOP.
+ 1280        ENDLOOP.
+ 1281      ENDIF.
+ 1282
+ 1283      CLEAR ls_jvnam.
+ 1284      READ TABLE lt_alljv INTO ls_jvnam INDEX 3.
+ 1285
+ 1286      IF ls_jvnam IS NOT INITIAL.
+ 1287        col_count = col_count + 1.
+ 1288
+ 1289        LOOP AT lt_final4 INTO ls_final4 .
+ 1290          LOOP AT lt_final2 INTO ls_final2 WHERE racct = ls_final4-racct A
+       ND rjvnam = ls_jvnam-rjvnam.
+ 1291            ls_final4-bal_clo3 = ls_final2-bal_clo.
+ 1292            ls_final4-bal_opn3 = ls_final2-bal_opn.
+ 1293            ls_final4-bal_deb3 = ls_final2-bal_deb.
+ 1294            ls_final4-bal_cre3 = ls_final2-bal_cre.
+ 1295            MODIFY lt_final4 FROM ls_final4 TRANSPORTING bal_clo3
+ 1296                                                         bal_opn3
+ 1297                                                         bal_deb3
+ 1298                                                         bal_cre3 WHERE ra
+       cct = ls_final2-racct.
+ 1299          ENDLOOP.
+ 1300        ENDLOOP.
+ 1301      ENDIF.
+ 1302
+ 1303      CLEAR ls_jvnam.
+ 1304      READ TABLE lt_alljv INTO ls_jvnam INDEX 4.
+ 1305
+ 1306      IF ls_jvnam IS NOT INITIAL.
+ 1307        col_count = col_count + 1.
+ 1308
+ 1309        LOOP AT lt_final4 INTO ls_final4 .
+ 1310          LOOP AT lt_final2 INTO ls_final2 WHERE racct = ls_final4-racct A
+       ND rjvnam = ls_jvnam-rjvnam.
+ 1311            ls_final4-bal_clo4 = ls_final2-bal_clo.
+ 1312            ls_final4-bal_opn4 = ls_final2-bal_opn.
+ 1313            ls_final4-bal_deb4 = ls_final2-bal_deb.
+ 1314            ls_final4-bal_cre4 = ls_final2-bal_cre.
+ 1315            MODIFY lt_final4 FROM ls_final4 TRANSPORTING bal_clo4
+ 1316                                                         bal_opn4
+ 1317                                                         bal_deb4
+ 1318                                                         bal_cre4 WHERE ra
+       cct = ls_final2-racct.
+ 1319          ENDLOOP.
+ 1320        ENDLOOP.
+ 1321      ENDIF.
+ 1322
+ 1323      CLEAR ls_jvnam.
+ 1324      READ TABLE lt_alljv INTO ls_jvnam INDEX 5.
+ 1325
+ 1326      IF ls_jvnam IS NOT INITIAL.
+ 1327        col_count = col_count + 1.
+ 1328
+ 1329        LOOP AT lt_final4 INTO ls_final4 .
+ 1330          LOOP AT lt_final2 INTO ls_final2 WHERE racct = ls_final4-racct A
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page     25
+--------------------------------------------------------------------------------
+
+       ND rjvnam = ls_jvnam-rjvnam.
+ 1331            ls_final4-bal_clo5 = ls_final2-bal_clo.
+ 1332            ls_final4-bal_opn5 = ls_final2-bal_opn.
+ 1333            ls_final4-bal_deb5 = ls_final2-bal_deb.
+ 1334            ls_final4-bal_cre5 = ls_final2-bal_cre.
+ 1335            MODIFY lt_final4 FROM ls_final4 TRANSPORTING bal_clo5
+ 1336                                                         bal_opn5
+ 1337                                                         bal_deb5
+ 1338                                                         bal_cre5 WHERE ra
+       cct = ls_final2-racct.
+ 1339          ENDLOOP.
+ 1340        ENDLOOP.
+ 1341      ENDIF.
+ 1342
+ 1343      CLEAR ls_jvnam.
+ 1344      READ TABLE lt_alljv INTO ls_jvnam INDEX 6.
+ 1345
+ 1346      IF ls_jvnam IS NOT INITIAL.
+ 1347        col_count = col_count + 1.
+ 1348
+ 1349        LOOP AT lt_final4 INTO ls_final4 .
+ 1350          LOOP AT lt_final2 INTO ls_final2 WHERE racct = ls_final4-racct A
+       ND rjvnam = ls_jvnam-rjvnam.
+ 1351            ls_final4-bal_clo6 = ls_final2-bal_clo.
+ 1352            ls_final4-bal_opn6 = ls_final2-bal_opn.
+ 1353            ls_final4-bal_deb6 = ls_final2-bal_deb.
+ 1354            ls_final4-bal_cre6 = ls_final2-bal_cre.
+ 1355            MODIFY lt_final4 FROM ls_final4 TRANSPORTING bal_clo6
+ 1356                                                         bal_opn6
+ 1357                                                         bal_deb6
+ 1358                                                         bal_cre6 WHERE ra
+       cct = ls_final2-racct.
+ 1359          ENDLOOP.
+ 1360        ENDLOOP.
+ 1361      ENDIF.
+ 1362
+ 1363      CLEAR ls_jvnam.
+ 1364      READ TABLE lt_alljv INTO ls_jvnam INDEX 7.
+ 1365
+ 1366      IF ls_jvnam IS NOT INITIAL.
+ 1367        col_count = col_count + 1.
+ 1368
+ 1369        LOOP AT lt_final4 INTO ls_final4 .
+ 1370          LOOP AT lt_final2 INTO ls_final2 WHERE racct = ls_final4-racct A
+       ND rjvnam = ls_jvnam-rjvnam.
+ 1371            ls_final4-bal_clo7 = ls_final2-bal_clo.
+ 1372            ls_final4-bal_opn7 = ls_final2-bal_opn.
+ 1373            ls_final4-bal_deb7 = ls_final2-bal_deb.
+ 1374            ls_final4-bal_cre7 = ls_final2-bal_cre.
+ 1375            MODIFY lt_final4 FROM ls_final4 TRANSPORTING bal_clo7
+ 1376                                                         bal_opn7
+ 1377                                                         bal_deb7
+ 1378                                                         bal_cre7 WHERE ra
+       cct = ls_final2-racct.
+ 1379          ENDLOOP.
+ 1380        ENDLOOP.
+ 1381      ENDIF.
+ 1382
+ 1383      CLEAR ls_jvnam.
+ 1384      READ TABLE lt_alljv INTO ls_jvnam INDEX 8.
+ 1385
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page     26
+--------------------------------------------------------------------------------
+
+ 1386      IF ls_jvnam IS NOT INITIAL.
+ 1387        col_count = col_count + 1.
+ 1388
+ 1389        LOOP AT lt_final4 INTO ls_final4 .
+ 1390          LOOP AT lt_final2 INTO ls_final2 WHERE racct = ls_final4-racct A
+       ND rjvnam = ls_jvnam-rjvnam.
+ 1391            ls_final4-bal_clo8 = ls_final2-bal_clo.
+ 1392            ls_final4-bal_opn8 = ls_final2-bal_opn.
+ 1393            ls_final4-bal_deb8 = ls_final2-bal_deb.
+ 1394            ls_final4-bal_cre8 = ls_final2-bal_cre.
+ 1395            MODIFY lt_final4 FROM ls_final4 TRANSPORTING bal_clo8
+ 1396                                                         bal_opn8
+ 1397                                                         bal_deb8
+ 1398                                                         bal_cre8 WHERE ra
+       cct = ls_final2-racct.
+ 1399          ENDLOOP.
+ 1400        ENDLOOP.
+ 1401      ENDIF.
+ 1402
+ 1403      CLEAR ls_jvnam.
+ 1404      READ TABLE lt_alljv INTO ls_jvnam INDEX 9.
+ 1405
+ 1406      IF ls_jvnam IS NOT INITIAL.
+ 1407        col_count = col_count + 1.
+ 1408
+ 1409        LOOP AT lt_final4 INTO ls_final4 .
+ 1410          LOOP AT lt_final2 INTO ls_final2 WHERE racct = ls_final4-racct A
+       ND rjvnam = ls_jvnam-rjvnam.
+ 1411            ls_final4-bal_clo9 = ls_final2-bal_clo.
+ 1412            ls_final4-bal_opn9 = ls_final2-bal_opn.
+ 1413            ls_final4-bal_deb9 = ls_final2-bal_deb.
+ 1414            ls_final4-bal_cre9 = ls_final2-bal_cre.
+ 1415            MODIFY lt_final4 FROM ls_final4 TRANSPORTING bal_clo9
+ 1416                                                         bal_opn9
+ 1417                                                         bal_deb9
+ 1418                                                         bal_cre9 WHERE ra
+       cct = ls_final2-racct.
+ 1419          ENDLOOP.
+ 1420        ENDLOOP.
+ 1421      ENDIF.
+ 1422
+ 1423      CLEAR ls_jvnam.
+ 1424      READ TABLE lt_alljv INTO ls_jvnam INDEX 10.
+ 1425
+ 1426      IF ls_jvnam IS NOT INITIAL.
+ 1427        col_count = col_count + 1.
+ 1428
+ 1429        LOOP AT lt_final4 INTO ls_final4 .
+ 1430          LOOP AT lt_final2 INTO ls_final2 WHERE racct = ls_final4-racct A
+       ND rjvnam = ls_jvnam-rjvnam.
+ 1431            ls_final4-bal_clo10 = ls_final2-bal_clo.
+ 1432            ls_final4-bal_opn10 = ls_final2-bal_opn.
+ 1433            ls_final4-bal_deb10 = ls_final2-bal_deb.
+ 1434            ls_final4-bal_cre10 = ls_final2-bal_cre.
+ 1435            MODIFY lt_final4 FROM ls_final4 TRANSPORTING bal_clo10
+ 1436                                                         bal_opn10
+ 1437                                                         bal_deb10
+ 1438                                                         bal_cre10 WHERE r
+       acct = ls_final2-racct.
+ 1439          ENDLOOP.
+ 1440        ENDLOOP.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page     27
+--------------------------------------------------------------------------------
+
+ 1441      ENDIF.
+ 1442
+ 1443  ***************************************End of addn by hrishi n on 01.11.
+       2022**************************************
+ 1444
+ 1445      PERFORM fcat_fill.
+ 1446      PERFORM alv_display.
+ 1447    ELSEIF flg1 EQ 'X' .
+ 1448
+ 1449
+ 1450      DATA clo_jvnam1 TYPE string.
+ 1451      DATA clo_jvnam2 TYPE string.
+ 1452      DATA col_nam TYPE string.
+ 1453      DATA col_nam2 TYPE string.
+ 1454
+ 1455
+ 1456      ls_fieldcat-fieldname = 'RACCT'.
+ 1457      ls_fieldcat-col_pos   = '1'.
+ 1458      ls_fieldcat-coltext   = 'G/L account'.
+ 1459      APPEND ls_fieldcat TO lt_fieldcat.
+ 1460
+ 1461      ls_fieldcat-fieldname = 'TXT50'.
+ 1462      ls_fieldcat-col_pos   = '2'.
+ 1463      ls_fieldcat-outputlen = '50'.
+ 1464      ls_fieldcat-coltext   = 'G/L Description'.
+ 1465      APPEND ls_fieldcat TO lt_fieldcat.
+ 1466  *******************************************************    APARNA
+ 1467      IF gv_selected_value  = 'USD & INR'.
+ 1468        LOOP AT lt_alljv INTO DATA(ls_jvnam1).
+ 1469          CLEAR : clo_jvnam1,clo_jvnam2.
+ 1470          clo_jvnam1 = sy-tabix.
+ 1471          CONCATENATE 'BAL_CLO_U' clo_jvnam1 INTO clo_jvnam1.
+ 1472          CONCATENATE 'Closing Bal USD' ls_jvnam1-rjvnam INTO clo_jvnam2 S
+       EPARATED BY space.
+ 1473          ls_fieldcat-fieldname = clo_jvnam1.
+ 1474          ls_fieldcat-col_pos   = sy-tabix + 2.
+ 1475          ls_fieldcat-coltext   = clo_jvnam2.
+ 1476          ls_fieldcat-outputlen = '20'.
+ 1477          ls_fieldcat-do_sum    = abap_true.
+ 1478  *      LS_FIELDCAT-NO_ZERO   = ABAP_TRUE.
+ 1479          ls_fieldcat-inttype   = 'P'.
+ 1480          ls_fieldcat-decimals  = '3'.
+ 1481          APPEND ls_fieldcat TO lt_fieldcat.
+ 1482        ENDLOOP.
+ 1483        DATA(lt_fcat_tmp) = lt_fieldcat.
+ 1484        SORT lt_fcat_tmp DESCENDING BY col_pos.
+ 1485        TRY.
+ 1486            DATA(lv_cat) =  lt_fcat_tmp[ 1 ]-col_pos.
+ 1487          CATCH cx_sy_itab_line_not_found.
+ 1488        ENDTRY.
+ 1489
+ 1490        LOOP AT lt_alljv INTO ls_jvnam1.
+ 1491          CLEAR : clo_jvnam1,clo_jvnam2.
+ 1492          clo_jvnam1 = sy-tabix.
+ 1493          CONCATENATE 'BAL_CLO_I' clo_jvnam1 INTO clo_jvnam1.
+ 1494          CONCATENATE 'Closing Bal INR' ls_jvnam1-rjvnam INTO clo_jvnam2 S
+       EPARATED BY space.
+ 1495          ls_fieldcat-fieldname = clo_jvnam1.
+ 1496          .
+ 1497          ls_fieldcat-col_pos = lv_cat + sy-tabix.
+ 1498          ls_fieldcat-coltext   = clo_jvnam2.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page     28
+--------------------------------------------------------------------------------
+
+ 1499          ls_fieldcat-outputlen = '20'.
+ 1500          ls_fieldcat-do_sum    = abap_true.
+ 1501  *      LS_FIELDCAT-NO_ZERO   = ABAP_TRUE.
+ 1502          ls_fieldcat-inttype   = 'P'.
+ 1503          ls_fieldcat-decimals  = '3'.
+ 1504          APPEND ls_fieldcat TO lt_fieldcat.
+ 1505          CLEAR  : ls_fieldcat .
+ 1506        ENDLOOP.
+ 1507        CLEAR  lv_cat.
+ 1508      ELSE.
+ 1509  *******************************************************APARNA
+ 1510        LOOP AT lt_alljv INTO ls_jvnam1.
+ 1511          CLEAR : clo_jvnam1,clo_jvnam2.
+ 1512          clo_jvnam1 = sy-tabix.
+ 1513          CONCATENATE 'BAL_CLO' clo_jvnam1 INTO clo_jvnam1.
+ 1514          CONCATENATE 'Closing Bal' ls_jvnam1-rjvnam INTO clo_jvnam2 SEPAR
+       ATED BY space.
+ 1515          ls_fieldcat-fieldname = clo_jvnam1.
+ 1516          ls_fieldcat-col_pos   = sy-tabix + 2.
+ 1517          ls_fieldcat-coltext   = clo_jvnam2.
+ 1518          ls_fieldcat-outputlen = '20'.
+ 1519          ls_fieldcat-do_sum    = abap_true.
+ 1520  *      LS_FIELDCAT-NO_ZERO   = ABAP_TRUE.
+ 1521          ls_fieldcat-inttype   = 'P'.
+ 1522          ls_fieldcat-decimals  = '3'.
+ 1523          APPEND ls_fieldcat TO lt_fieldcat.
+ 1524        ENDLOOP.
+ 1525      ENDIF.
+ 1526      CALL METHOD cl_alv_table_create=>create_dynamic_table
+ 1527        EXPORTING
+ 1528          it_fieldcatalog = lt_fieldcat
+ 1529        IMPORTING
+ 1530          ep_table        = lr_itab.
+ 1531
+ 1532      ASSIGN lr_itab->* TO <fs_itab>.
+ 1533
+ 1534      DATA lr_itab_line TYPE REF TO data.
+ 1535      DATA lt_final5 TYPE REF TO data.
+ 1536  *
+ 1537      FIELD-SYMBOLS <fs_itab_line> TYPE any.
+ 1538      FIELD-SYMBOLS <fs_itab2> TYPE STANDARD TABLE.
+ 1539  *
+ 1540      CREATE DATA lr_itab_line LIKE LINE OF <fs_itab>.
+ 1541      ASSIGN lr_itab_line->* TO <fs_itab_line>.
+ 1542
+ 1543
+ 1544
+ 1545      CREATE DATA lr_itab LIKE STANDARD TABLE OF <fs_itab_line>.
+ 1546      ASSIGN lr_itab->* TO <fs_itab2>.
+ 1547
+ 1548      FIELD-SYMBOLS: <fs1>,
+ 1549                     <fs2>,
+ 1550                     <fs3>,
+ 1551                     <fs4>,
+ 1552                     <fs5>.
+ 1553      .
+ 1554      DATA col_no TYPE i.
+ 1555      ASSIGN COMPONENT 1 OF STRUCTURE <fs_itab_line> TO <fs1>.
+ 1556      ASSIGN COMPONENT 2 OF STRUCTURE <fs_itab_line> TO <fs2>.
+ 1557
+ 1558      CLEAR ls_final3.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page     29
+--------------------------------------------------------------------------------
+
+ 1559      CLEAR ls_final.
+ 1560      SORT lt_final BY racct.
+ 1561      break abapuser02.
+ 1562      LOOP AT lt_final3 INTO ls_final3.
+ 1563
+ 1564        col_no = 3.
+ 1565
+ 1566        <fs1> = ls_final3-racct.
+ 1567        <fs2> = ls_final3-txt50.
+ 1568        IF gv_selected_value  = 'USD & INR'.
+ 1569          LOOP AT lt_final INTO ls_final WHERE racct = ls_final3-racct.
+ 1570            CONCATENATE 'Closing Bal USD' ls_final-rjvnam INTO col_nam SEP
+       ARATED BY space.
+ 1571            CONCATENATE 'Closing Bal INR' ls_final-rjvnam INTO col_nam2 SE
+       PARATED BY space.
+ 1572            READ TABLE lt_fieldcat INTO ls_fieldcat WITH KEY coltext = col
+       _nam.
+ 1573            IF sy-subrc = 0.
+ 1574              col_no = ls_fieldcat-col_pos.
+ 1575              ASSIGN COMPONENT col_no OF STRUCTURE <fs_itab_line> TO <fs5>
+       .
+ 1576
+ 1577              <fs5> = ls_final-bal_clo_u.
+ 1578
+ 1579              UNASSIGN <fs5>.
+ 1580            ENDIF.
+ 1581            READ TABLE lt_fieldcat INTO ls_fieldcat WITH KEY coltext = col
+       _nam2.
+ 1582            IF sy-subrc = 0.
+ 1583              col_no = ls_fieldcat-col_pos.
+ 1584
+ 1585              ASSIGN COMPONENT col_no OF STRUCTURE <fs_itab_line> TO <fs5>
+       .
+ 1586
+ 1587              <fs5> = ls_final-bal_clo_i.
+ 1588
+ 1589              UNASSIGN <fs5>.
+ 1590            ENDIF.
+ 1591
+ 1592
+ 1593          ENDLOOP.
+ 1594        ELSE.
+ 1595          LOOP AT lt_final INTO ls_final WHERE racct = ls_final3-racct.
+ 1596            CONCATENATE 'Closing Bal' ls_final-rjvnam INTO col_nam SEPARAT
+       ED BY space.
+ 1597            READ TABLE lt_fieldcat INTO ls_fieldcat WITH KEY coltext = col
+       _nam.
+ 1598            col_no = ls_fieldcat-col_pos.
+ 1599            ASSIGN COMPONENT col_no OF STRUCTURE <fs_itab_line> TO <fs5>.
+ 1600
+ 1601            <fs5> = ls_final-bal_clo.
+ 1602
+ 1603            UNASSIGN <fs5>.
+ 1604          ENDLOOP.
+ 1605        ENDIF.
+ 1606        INSERT <fs_itab_line> INTO TABLE <fs_itab> .
+ 1607        CLEAR <fs_itab_line>.
+ 1608        CLEAR:col_no.
+ 1609      ENDLOOP.
+ 1610      UNASSIGN <fs1>.
+ 1611      UNASSIGN <fs2>.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page     30
+--------------------------------------------------------------------------------
+
+ 1612
+ 1613      IF <fs_itab> IS NOT INITIAL.
+ 1614        <fs_itab2> = <fs_itab> .
+ 1615
+ 1616        CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY_LVC'
+ 1617          EXPORTING
+ 1618            i_callback_program     = sy-cprog
+ 1619            i_callback_top_of_page = 'TOP_OF_PAGE'
+ 1620            is_layout_lvc          = ls_lay
+ 1621            it_fieldcat_lvc        = lt_fieldcat
+ 1622            i_default              = 'X'
+ 1623            i_save                 = 'A'
+ 1624          TABLES
+ 1625            t_outtab               = <fs_itab>
+ 1626          EXCEPTIONS
+ 1627            program_error          = 1
+ 1628            OTHERS                 = 2.
+ 1629        IF sy-subrc <> 0.
+ 1630  * Implement suitable error handling here
+ 1631        ENDIF.
+ 1632  *        DATA: lo_alv       TYPE REF TO cl_salv_table,
+ 1633  *              lo_columns   TYPE REF TO cl_salv_columns_table,
+ 1634  *              lo_layout    TYPE REF TO cl_salv_layout,
+ 1635  *              lo_disp_set  TYPE REF TO cl_salv_display_settings,
+ 1636  *              lo_column    TYPE REF TO cl_salv_column_table,
+ 1637  *              lo_functions TYPE REF TO cl_salv_functions,
+ 1638  *              lo_agr       TYPE REF TO cl_salv_aggregations,
+ 1639  *              style        TYPE outputstyle.
+ 1640  *
+ 1641  *        DATA ls_layout_key TYPE salv_s_layout_key.
+ 1642  *
+ 1643  *       TRY.
+ 1644  *           cl_salv_table=>factory(
+ 1645  *             IMPORTING
+ 1646  *               r_salv_table = lo_alv
+ 1647  *             CHANGING
+ 1648  *               t_table = <fs_itab> ).
+ 1649  *        CATCH cx_salv_msg .
+ 1650  *       ENDTRY.
+ 1651  *
+ 1652  *        LO_COLUMNS = LO_ALV->GET_COLUMNS( ).
+ 1653  *        LO_COLUMNS->SET_OPTIMIZE( ABAP_TRUE ).
+ 1654  *
+ 1655  *        LOOP AT LT_FIELDCAT INTO LS_FIELDCAT.
+ 1656  *         TRY.
+ 1657  *          LO_COLUMN ?= LO_COLUMNS->GET_COLUMN( LS_FIELDCAT-FIELDNAME ).
+ 1658  *          LO_COLUMN->SET_LONG_TEXT( LS_FIELDCAT-COLTEXT ).
+ 1659  *
+ 1660  *          CATCH cx_salv_not_found.
+ 1661  *         ENDTRY.
+ 1662  *        ENDLOOP.
+ 1663  *
+ 1664  *       lo_layout = lo_alv->get_layout( ).
+ 1665  *       lo_layout->set_default( abap_true ).
+ 1666  *
+ 1667  *       ls_layout_key-report = sy-repid.
+ 1668  *       lo_layout->set_key( ls_layout_key ).
+ 1669  *
+ 1670  *       lo_layout->set_save_restriction( if_salv_c_layout=>restrict_none
+        ).
+ 1671  *
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page     31
+--------------------------------------------------------------------------------
+
+ 1672  *       lo_functions = lo_alv->get_functions( ).
+ 1673  *       lo_functions->set_all( abap_true ).
+ 1674  *
+ 1675  *       lo_disp_set = lo_alv->get_display_settings( ).
+ 1676  *       lo_disp_set->set_striped_pattern( abap_true ).
+ 1677  *
+ 1678  *       lo_alv->display( ).
+ 1679  *
+ 1680      ENDIF.
+ 1681
+ 1682    ENDIF.
+ 1683
+ 1684  ENDFORM.
+ 1685  *--------------------------------------------------------------*
+ 1686  *FORM fcat_fill .
+ 1687  FORM fcat_fill .
+ 1688  *--------------------------------------------------------------*
+ 1689  ******************************************Added on 01.11.2022 by hrishi
+       n*****************************
+ 1690    DATA : h_opbal TYPE string,
+ 1691           h_clbal TYPE string,
+ 1692           h_crbal TYPE string,
+ 1693           h_dbbal TYPE string.
+ 1694
+ 1695    READ TABLE lt_alljv INTO DATA(ls_jvnam) INDEX 1.
+ 1696    CLEAR : h_opbal, h_clbal, h_crbal, h_dbbal.
+ 1697    CONCATENATE : 'Opening Balance (' ls_jvnam-rjvnam ')' INTO h_opbal SEP
+       ARATED BY space,
+ 1698                  'Closing Balance (' ls_jvnam-rjvnam ')' INTO h_clbal SEP
+       ARATED BY space,
+ 1699                  'Credit Balance ('  ls_jvnam-rjvnam ')' INTO h_crbal SEP
+       ARATED BY space,
+ 1700                  'Debit Balance ('   ls_jvnam-rjvnam ')' INTO h_dbbal SEP
+       ARATED BY space.
+ 1701
+ 1702    PERFORM alv_fcat USING :   'RACCT'      'G/L account'       ' ' ,
+ 1703                               'TXT50'      'G/L Description'   ' ' ,
+ 1704                               'BAL_OPN1'    h_opbal   'X' ,
+ 1705                               'BAL_DEB1'    h_dbbal   'X' ,
+ 1706                               'BAL_CRE1'    h_crbal   'X' ,
+ 1707                               'BAL_CLO1'    h_clbal   'X' .
+ 1708
+ 1709    IF col_count GE 2.
+ 1710      CLEAR : h_opbal, h_clbal, h_crbal, h_dbbal, ls_jvnam.
+ 1711      READ TABLE lt_alljv INTO ls_jvnam INDEX 2.
+ 1712      CONCATENATE : 'Opening Balance (' ls_jvnam-rjvnam ')' INTO h_opbal S
+       EPARATED BY space,
+ 1713                    'Closing Balance (' ls_jvnam-rjvnam ')' INTO h_clbal S
+       EPARATED BY space,
+ 1714                    'Credit Balance ('  ls_jvnam-rjvnam ')' INTO h_crbal S
+       EPARATED BY space,
+ 1715                    'Debit Balance ('   ls_jvnam-rjvnam ')' INTO h_dbbal S
+       EPARATED BY space.
+ 1716
+ 1717      PERFORM alv_fcat USING :  'BAL_OPN2'    h_opbal   'X' ,
+ 1718                                'BAL_DEB2'    h_dbbal   'X' ,
+ 1719                                'BAL_CRE2'    h_crbal   'X' ,
+ 1720                                'BAL_CLO2'    h_clbal   'X' .
+ 1721    ENDIF.
+ 1722
+ 1723    IF col_count GE 3.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page     32
+--------------------------------------------------------------------------------
+
+ 1724      CLEAR : h_opbal, h_clbal, h_crbal, h_dbbal, ls_jvnam.
+ 1725      READ TABLE lt_alljv INTO ls_jvnam INDEX 3.
+ 1726      CONCATENATE : 'Opening Balance (' ls_jvnam-rjvnam ')' INTO h_opbal S
+       EPARATED BY space,
+ 1727                    'Closing Balance (' ls_jvnam-rjvnam ')' INTO h_clbal S
+       EPARATED BY space,
+ 1728                    'Credit Balance ('  ls_jvnam-rjvnam ')' INTO h_crbal S
+       EPARATED BY space,
+ 1729                    'Debit Balance ('   ls_jvnam-rjvnam ')' INTO h_dbbal S
+       EPARATED BY space.
+ 1730
+ 1731      PERFORM alv_fcat USING :   'BAL_OPN3'   h_opbal   'X' ,
+ 1732                                 'BAL_DEB3'   h_dbbal   'X' ,
+ 1733                                 'BAL_CRE3'   h_crbal   'X' ,
+ 1734                                 'BAL_CLO3'   h_clbal   'X' .
+ 1735    ENDIF.
+ 1736
+ 1737    IF col_count GE 4.
+ 1738      CLEAR : h_opbal, h_clbal, h_crbal, h_dbbal, ls_jvnam.
+ 1739      READ TABLE lt_alljv INTO ls_jvnam INDEX 4.
+ 1740      CONCATENATE : 'Opening Balance (' ls_jvnam-rjvnam ')' INTO h_opbal S
+       EPARATED BY space,
+ 1741                    'Closing Balance (' ls_jvnam-rjvnam ')' INTO h_clbal S
+       EPARATED BY space,
+ 1742                    'Credit Balance ('  ls_jvnam-rjvnam ')' INTO h_crbal S
+       EPARATED BY space,
+ 1743                    'Debit Balance ('   ls_jvnam-rjvnam ')' INTO h_dbbal S
+       EPARATED BY space.
+ 1744
+ 1745      PERFORM alv_fcat USING : 'BAL_OPN4'    h_opbal   'X' ,
+ 1746                               'BAL_DEB4'    h_dbbal   'X' ,
+ 1747                               'BAL_CRE4'    h_crbal   'X' ,
+ 1748                               'BAL_CLO4'    h_clbal   'X' .
+ 1749    ENDIF.
+ 1750
+ 1751    IF col_count GE 5.
+ 1752      CLEAR : h_opbal, h_clbal, h_crbal, h_dbbal, ls_jvnam.
+ 1753      READ TABLE lt_alljv INTO ls_jvnam INDEX 5.
+ 1754      CONCATENATE : 'Opening Balance (' ls_jvnam-rjvnam ')' INTO h_opbal S
+       EPARATED BY space,
+ 1755                    'Closing Balance (' ls_jvnam-rjvnam ')' INTO h_clbal S
+       EPARATED BY space,
+ 1756                    'Credit Balance ('  ls_jvnam-rjvnam ')' INTO h_crbal S
+       EPARATED BY space,
+ 1757                    'Debit Balance ('   ls_jvnam-rjvnam ')' INTO h_dbbal S
+       EPARATED BY space.
+ 1758
+ 1759      PERFORM alv_fcat USING :   'BAL_OPN5'    h_opbal   'X' ,
+ 1760                                 'BAL_DEB5'    h_dbbal   'X' ,
+ 1761                                 'BAL_CRE5'    h_crbal   'X' ,
+ 1762                                 'BAL_CLO5'    h_clbal   'X' .
+ 1763    ENDIF.
+ 1764
+ 1765    IF col_count GE 6.
+ 1766      CLEAR : h_opbal, h_clbal, h_crbal, h_dbbal, ls_jvnam.
+ 1767      READ TABLE lt_alljv INTO ls_jvnam INDEX 6.
+ 1768      CONCATENATE : 'Opening Balance (' ls_jvnam-rjvnam ')' INTO h_opbal S
+       EPARATED BY space,
+ 1769                    'Closing Balance (' ls_jvnam-rjvnam ')' INTO h_clbal S
+       EPARATED BY space,
+ 1770                    'Credit Balance ('  ls_jvnam-rjvnam ')' INTO h_crbal S
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page     33
+--------------------------------------------------------------------------------
+
+       EPARATED BY space,
+ 1771                    'Debit Balance ('   ls_jvnam-rjvnam ')' INTO h_dbbal S
+       EPARATED BY space.
+ 1772
+ 1773      PERFORM alv_fcat USING :   'BAL_OPN6'    h_opbal   'X' ,
+ 1774                                 'BAL_DEB6'    h_dbbal   'X' ,
+ 1775                                 'BAL_CRE6'    h_crbal   'X' ,
+ 1776                                 'BAL_CLO6'    h_clbal   'X' .
+ 1777    ENDIF.
+ 1778
+ 1779    IF col_count GE 7.
+ 1780      CLEAR : h_opbal, h_clbal, h_crbal, h_dbbal, ls_jvnam.
+ 1781      READ TABLE lt_alljv INTO ls_jvnam INDEX 7.
+ 1782      CONCATENATE : 'Opening Balance (' ls_jvnam-rjvnam ')' INTO h_opbal S
+       EPARATED BY space,
+ 1783                    'Closing Balance (' ls_jvnam-rjvnam ')' INTO h_clbal S
+       EPARATED BY space,
+ 1784                    'Credit Balance ('  ls_jvnam-rjvnam ')' INTO h_crbal S
+       EPARATED BY space,
+ 1785                    'Debit Balance ('   ls_jvnam-rjvnam ')' INTO h_dbbal S
+       EPARATED BY space.
+ 1786
+ 1787      PERFORM alv_fcat USING :   'BAL_OPN7'    h_opbal   'X' ,
+ 1788                                 'BAL_DEB7'    h_dbbal   'X' ,
+ 1789                                 'BAL_CRE7'    h_crbal   'X' ,
+ 1790                                 'BAL_CLO7'    h_clbal   'X' .
+ 1791    ENDIF.
+ 1792
+ 1793    IF col_count GE 8.
+ 1794      CLEAR : h_opbal, h_clbal, h_crbal, h_dbbal, ls_jvnam.
+ 1795      READ TABLE lt_alljv INTO ls_jvnam INDEX 8.
+ 1796      CONCATENATE : 'Opening Balance (' ls_jvnam-rjvnam ')' INTO h_opbal S
+       EPARATED BY space,
+ 1797                    'Closing Balance (' ls_jvnam-rjvnam ')' INTO h_clbal S
+       EPARATED BY space,
+ 1798                    'Credit Balance ('  ls_jvnam-rjvnam ')' INTO h_crbal S
+       EPARATED BY space,
+ 1799                    'Debit Balance ('   ls_jvnam-rjvnam ')' INTO h_dbbal S
+       EPARATED BY space.
+ 1800
+ 1801      PERFORM alv_fcat USING :   'BAL_OPN8'    h_opbal   'X' ,
+ 1802                                 'BAL_DEB8'    h_dbbal   'X' ,
+ 1803                                 'BAL_CRE8'    h_crbal   'X' ,
+ 1804                                 'BAL_CLO8'    h_clbal   'X' .
+ 1805    ENDIF.
+ 1806
+ 1807    IF col_count GE 9.
+ 1808      CLEAR : h_opbal, h_clbal, h_crbal, h_dbbal, ls_jvnam.
+ 1809      READ TABLE lt_alljv INTO ls_jvnam INDEX 9.
+ 1810      CONCATENATE : 'Opening Balance (' ls_jvnam-rjvnam ')' INTO h_opbal S
+       EPARATED BY space,
+ 1811                    'Closing Balance (' ls_jvnam-rjvnam ')' INTO h_clbal S
+       EPARATED BY space,
+ 1812                    'Credit Balance ('  ls_jvnam-rjvnam ')' INTO h_crbal S
+       EPARATED BY space,
+ 1813                    'Debit Balance ('   ls_jvnam-rjvnam ')' INTO h_dbbal S
+       EPARATED BY space.
+ 1814
+ 1815      PERFORM alv_fcat USING :   'BAL_OPN9'    h_opbal   'X' ,
+ 1816                                 'BAL_DEB9'    h_dbbal   'X' ,
+ 1817                                 'BAL_CRE9'    h_crbal   'X' ,
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page     34
+--------------------------------------------------------------------------------
+
+ 1818                                 'BAL_CLO9'    h_clbal   'X' .
+ 1819    ENDIF.
+ 1820
+ 1821    IF col_count GE 10.
+ 1822      CLEAR : h_opbal, h_clbal, h_crbal, h_dbbal, ls_jvnam.
+ 1823      READ TABLE lt_alljv INTO ls_jvnam INDEX 10.
+ 1824      CONCATENATE : 'Opening Balance (' ls_jvnam-rjvnam ')' INTO h_opbal S
+       EPARATED BY space,
+ 1825                    'Closing Balance (' ls_jvnam-rjvnam ')' INTO h_clbal S
+       EPARATED BY space,
+ 1826                    'Credit Balance ('  ls_jvnam-rjvnam ')' INTO h_crbal S
+       EPARATED BY space,
+ 1827                    'Debit Balance ('   ls_jvnam-rjvnam ')' INTO h_dbbal S
+       EPARATED BY space.
+ 1828
+ 1829      PERFORM alv_fcat USING :   'BAL_OPN10'    h_opbal   'X' ,
+ 1830                                 'BAL_DEB10'    h_dbbal   'X' ,
+ 1831                                 'BAL_CRE10'    h_crbal   'X' ,
+ 1832                                 'BAL_CLO10'    h_clbal   'X' .
+ 1833    ENDIF.
+ 1834
+ 1835  ***************************************End of addn by hrishi n on 01.11.
+       2022**************************************
+ 1836  ENDFORM.
+ 1837  *--------------------------------------------------------------*
+ 1838  *FORM  alv_fcat  .
+ 1839  *--------------------------------------------------------------*
+ 1840  FORM alv_fcat  USING    VALUE(p_011)
+ 1841                          VALUE(p_012)
+ 1842                          VALUE(p_013).
+ 1843
+ 1844    wa_fcat-fieldname   = p_011.
+ 1845    wa_fcat-seltext_l   = p_012.
+ 1846    IF wa_fcat-fieldname EQ 'TXT50' OR wa_fcat-fieldname EQ 'RACCT'.
+ 1847    ELSE.
+ 1848      wa_fcat-do_sum      = 'X'.
+ 1849    ENDIF.
+ 1850
+ 1851    APPEND wa_fcat TO lt_fcat.
+ 1852    CLEAR wa_fcat.
+ 1853  ENDFORM.
+ 1854  *--------------------------------------------------------------*
+ 1855  *FORM alv_display .
+ 1856  *--------------------------------------------------------------*
+ 1857  FORM alv_display .
+ 1858    wa_layout-info_fieldname     = 'LINE_COLOR'.
+ 1859    wa_layout-colwidth_optimize  = 'X'.
+ 1860    wa_layout-zebra              = 'X'.
+ 1861
+ 1862    CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+ 1863      EXPORTING
+ 1864        i_callback_program     = sy-cprog
+ 1865        i_callback_top_of_page = 'TOP_OF_PAGE'
+ 1866        is_layout              = wa_layout
+ 1867        it_fieldcat            = lt_fcat
+ 1868        i_default              = 'X'
+ 1869        i_save                 = 'A'
+ 1870      TABLES
+ 1871        t_outtab               = lt_final4
+ 1872      EXCEPTIONS
+ 1873        program_error          = 1
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page     35
+--------------------------------------------------------------------------------
+
+ 1874        OTHERS                 = 2.
+ 1875    IF sy-subrc <> 0.
+ 1876  * Implement suitable error handling here
+ 1877    ENDIF.
+ 1878
+ 1879  ENDFORM.
+ 1880  *--------------------------------------------------------------*
+ 1881  *FORM top_of_page.
+ 1882  *--------------------------------------------------------------*
+ 1883  FORM top_of_page.
+ 1884    PERFORM ex_change.
+ 1885    REFRESH int_header[].
+ 1886    fs_header-typ = 'H'.
+ 1887    fs_header-info = 'Joint Venture Trial Balance'.
+ 1888    APPEND fs_header TO int_header.
+ 1889    CLEAR fs_header.
+ 1890
+ 1891    fs_header-typ = 'S'.
+ 1892    fs_header-info =  p_year .
+ 1893    APPEND fs_header TO int_header.
+ 1894    CLEAR fs_header.
+ 1895
+ 1896    fs_header-typ = 'S'.
+ 1897    fs_header-info =  p_bukrs .
+ 1898    APPEND fs_header TO int_header.
+ 1899    CLEAR fs_header.
+ 1900
+ 1901    fs_header-typ = 'S'.
+ 1902    fs_header-info = gwa_list-text .
+ 1903    APPEND fs_header TO int_header.
+ 1904    CLEAR fs_header.
+ 1905
+ 1906    fs_header-typ = 'S'.
+ 1907    CONCATENATE  s_period-low+1(2) ' To ' space s_period-high+1(2) INTO fs
+       _header-info SEPARATED BY space.
+ 1908    APPEND fs_header TO int_header.
+ 1909    CLEAR fs_header.
+ 1910
+ 1911    fs_header-typ = 'S'.
+ 1912    fs_header-info = gv_ukurs .
+ 1913    APPEND fs_header TO int_header.
+ 1914    CLEAR fs_header.
+ 1915
+ 1916    fs_header-typ = 'S'.
+ 1917    fs_header-info = lv_ukurs .
+ 1918    APPEND fs_header TO int_header.
+ 1919    CLEAR fs_header.
+ 1920
+ 1921    CALL FUNCTION 'REUSE_ALV_COMMENTARY_WRITE'
+ 1922      EXPORTING
+ 1923        it_list_commentary = int_header.
+ 1924
+ 1925  ENDFORM.
+ 1926  *--------------------------------------------------------------*
+ 1927  *FORM after_set_data.
+ 1928  *--------------------------------------------------------------*
+ 1929  FORM after_set_data.
+ 1930
+ 1931    CLEAR : ls_final.
+ 1932    LOOP AT lt_final INTO ls_final.
+ 1933      IF ls_final-racct GE 500000 AND ls_final-racct LE 599999.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page     36
+--------------------------------------------------------------------------------
+
+ 1934        APPEND ls_final TO lt_bfinal.
+ 1935        DELETE TABLE lt_final FROM ls_final.
+ 1936        CLEAR ls_final.
+ 1937      ENDIF.
+ 1938    ENDLOOP.
+ 1939
+ 1940    SORT lt_bfinal BY racct ASCENDING.
+ 1941
+ 1942  ENDFORM.
+ 1943  *&---------------------------------------------------------------------*
+ 1944  *&      Form  PROCESSGUIDE
+ 1945  *&---------------------------------------------------------------------*
+ 1946  *       text
+ 1947  *----------------------------------------------------------------------*
+ 1948  *  -->  p1        text
+ 1949  *  <--  p2        text
+ 1950  *----------------------------------------------------------------------*
+ 1951  FORM processguide .
+ 1952
+ 1953    DATA : la_gos_dis  TYPE sibflporb.
+ 1954
+ 1955  *variable to attachment
+ 1956    DATA: lv_attano TYPE string.
+ 1957
+ 1958
+ 1959
+ 1960
+ 1961    IF sy-uname CA sy-abcde.
+ 1962
+ 1963      DATA lv_ip_mode TYPE c.
+ 1964      CLEAR : lv_attano,la_gos_dis.
+ 1965
+ 1966      la_gos_dis-objtype = 'ZGOS3'.
+ 1967      lv_attano = 'ZJVTBPROCESSGUIDE'.
+ 1968      la_gos_dis-instid  = lv_attano.
+ 1969      la_gos_dis-catid  = 'BO'.
+ 1970      lv_ip_mode = 'C'. "create/change/display/delete
+ 1971
+ 1972      CALL FUNCTION 'GOS_ATTACHMENT_LIST_POPUP'
+ 1973        EXPORTING
+ 1974          is_object      = la_gos_dis
+ 1975          ip_attachments = 'X'
+ 1976          ip_mode        = lv_ip_mode.
+ 1977
+ 1978    ELSE.
+ 1979
+ 1980      MESSAGE 'To update attachment list contact SAP core team. Continue t
+       o view process guide.' TYPE 'S'.
+ 1981
+ 1982      CLEAR : lv_attano,la_gos_dis.
+ 1983
+ 1984      la_gos_dis-objtype = 'ZGOS3'.
+ 1985      lv_attano = 'ZJVTBPROCESSGUIDE'.
+ 1986      la_gos_dis-instid  = lv_attano.
+ 1987      la_gos_dis-catid  = 'BO'.
+ 1988
+ 1989      CALL FUNCTION 'GOS_ATTACHMENT_LIST_POPUP'
+ 1990        EXPORTING
+ 1991          is_object = la_gos_dis.
+ 1992
+ 1993    ENDIF.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page     37
+--------------------------------------------------------------------------------
+
+ 1994
+ 1995  ENDFORM.
+ 1996
+ 1997  *&---------------------------------------------------------------------*
+ 1998  *&      Form  EX_CHANGE
+ 1999  *&---------------------------------------------------------------------*
+ 2000  *       text
+ 2001  *----------------------------------------------------------------------*
+ 2002  *  -->  p1        text
+ 2003  *  <--  p2        text
+ 2004  *----------------------------------------------------------------------*
+ 2005  FORM ex_change .
+ 2006
+ 2007    DATA: t_year  TYPE gjahr.
+ 2008    DATA  gv_ukurs2 TYPE tcurr-ukurs.
+ 2009    DATA lv_month TYPE i.
+ 2010    DATA lv_days(2) TYPE c.
+ 2011    DATA lv_month1 TYPE rpmax.
+ 2012    DATA lv_month2 TYPE rpmax.
+ 2013    DATA lv_budat TYPE sy-datum.
+ 2014    DATA lv_budat2 TYPE sy-datum.
+ 2015    DATA lv_budat3 TYPE sy-datum.
+ 2016    CLEAR : gv_ukurs2 , lv_month1 , lv_month2,  lv_ukurs , lv_budat3.
+ 2017
+ 2018
+ 2019  *********************************************
+ 2020    lv_month1+1(2) = s_period-high+1(2) .
+ 2021    lv_month2+1(2) = s_period-low+1(2) .
+ 2022
+ 2023    "soc by rohit on 01.05.2026.
+ 2024
+ 2025    IF lv_month1 GT 9.
+ 2026
+ 2027      t_year =  p_year + 1.
+ 2028
+ 2029    ELSE .
+ 2030      t_year = p_year.
+ 2031
+ 2032    ENDIF.
+ 2033
+ 2034    "eoc by rohit on 01.05.2026.
+ 2035
+ 2036
+ 2037
+ 2038    IF  lv_month1+1(2)      = '01'.
+ 2039      lv_month1+1(2) = '04'.
+ 2040    ELSEIF   lv_month1+1(2)   = '02'.
+ 2041      lv_month1+1(2) = '05'.
+ 2042    ELSEIF  lv_month1+1(2) = '03'.
+ 2043      lv_month1+1(2) = '06'.
+ 2044    ELSEIF   lv_month1+1(2) = '04'.
+ 2045      lv_month1+1(2) = '07'.
+ 2046    ELSEIF  lv_month1+1(2) = '05'.
+ 2047      lv_month1+1(2) = '08'.
+ 2048    ELSEIF lv_month1+1(2) = '06'.
+ 2049      lv_month1+1(2) = '09'.
+ 2050    ELSEIF  lv_month1+1(2) = '07'.
+ 2051      lv_month1+1(2) = '10'.
+ 2052    ELSEIF  lv_month1+1(2) = '08'.
+ 2053      lv_month1+1(2) = '11'.
+ 2054    ELSEIF  lv_month1+1(2) = '09'.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page     38
+--------------------------------------------------------------------------------
+
+ 2055      lv_month1+1(2) = '12'.
+ 2056    ELSEIF  lv_month1+1(2) = '10'.
+ 2057      lv_month1+1(2) = '01'.
+ 2058    ELSEIF  lv_month1+1(2)  = '11'.
+ 2059      lv_month1+1(2) = '02'.
+ 2060    ELSEIF  lv_month1+1(2) = '12'.
+ 2061      lv_month1+1(2) = '03'.
+ 2062    ENDIF.
+ 2063
+ 2064  **************************************
+ 2065    IF  lv_month2+1(2)      = '01'.
+ 2066      lv_month2+1(2) = '04'.
+ 2067    ELSEIF   lv_month2+1(2)   = '02'.
+ 2068      lv_month2+1(2) = '05'.
+ 2069    ELSEIF  lv_month2+1(2) = '03'.
+ 2070      lv_month2+1(2) = '06'.
+ 2071    ELSEIF   lv_month2+1(2) = '04'.
+ 2072      lv_month2+1(2) = '07'.
+ 2073    ELSEIF  lv_month2+1(2) = '05'.
+ 2074      lv_month2+1(2) = '08'.
+ 2075    ELSEIF lv_month2+1(2) = '06'.
+ 2076      lv_month2+1(2) = '09'.
+ 2077    ELSEIF  lv_month2+1(2) = '07'.
+ 2078      lv_month2+1(2) = '10'.
+ 2079    ELSEIF  lv_month2+1(2) = '08'.
+ 2080      lv_month2+1(2) = '11'.
+ 2081    ELSEIF  lv_month2+1(2) = '09'.
+ 2082      lv_month2+1(2) = '12'.
+ 2083    ELSEIF  lv_month2+1(2) = '10'.
+ 2084      lv_month2+1(2) = '01'.
+ 2085    ELSEIF  lv_month2+1(2)  = '11'.
+ 2086      lv_month2+1(2) = '02'.
+ 2087    ELSEIF  lv_month2+1(2) = '12'.
+ 2088      lv_month2+1(2) = '03'.
+ 2089    ENDIF.
+ 2090  *****************************************************************
+ 2091    IF s_period-high IS NOT INITIAL.
+ 2092
+ 2093      CLEAR lv_days.
+ 2094      IF  lv_month1+1(2)  = '02'.
+ 2095        lv_days = '28'.
+ 2096      ELSEIF (  lv_month1+1(2)  = '04' OR  lv_month1+1(2)  = '06' OR  lv_m
+       onth1+1(2)  = '09' OR   lv_month1+1(2)  = '11' ).
+ 2097        lv_days = '30'.
+ 2098      ELSE.
+ 2099        lv_days = '31'.
+ 2100      ENDIF.
+ 2101
+ 2102      IF p_year NE t_year.   " SOC BY ROHIT ON 01.05.2026
+ 2103        CONCATENATE   lv_days lv_month1+1(2) t_year  INTO lv_budat.
+ 2104        CONCATENATE   '01' lv_month1+1(2) t_year   INTO lv_budat3.
+ 2105
+ 2106      ELSE .
+ 2107        CONCATENATE   lv_days lv_month1+1(2) p_year  INTO lv_budat.
+ 2108        CONCATENATE   '01' lv_month1+1(2) p_year   INTO lv_budat3.
+ 2109
+ 2110      ENDIF.    " EOC BY ROHIT ON 01.05.2026
+ 2111
+ 2112      CONDENSE lv_budat.
+ 2113      CALL FUNCTION 'CONVERSION_EXIT_INVDT_INPUT'
+ 2114        EXPORTING
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page     39
+--------------------------------------------------------------------------------
+
+ 2115          input  = lv_budat
+ 2116        IMPORTING
+ 2117          output = lv_budat.
+ 2118
+ 2119      CALL FUNCTION 'CONVERSION_EXIT_INVDT_INPUT'
+ 2120        EXPORTING
+ 2121          input  = lv_budat3
+ 2122        IMPORTING
+ 2123          output = lv_budat3.
+ 2124
+ 2125  *    SELECT SINGLE ukurs
+ 2126  *          FROM tcurr
+ 2127  *          INTO gv_ukurs2
+ 2128  *         WHERE kurst = 'CLT'
+ 2129  *           AND fcurr = 'USD'
+ 2130  *           AND tcurr = 'INR'
+ 2131  *           AND gdatu BETWEEN lv_budat AND lv_budat3.
+ 2132      SELECT ukurs
+ 2133            FROM tcurr UP TO 1 ROWS
+ 2134            INTO gv_ukurs2
+ 2135           WHERE kurst = 'CLT'
+ 2136             AND fcurr = 'USD'
+ 2137             AND tcurr = 'INR'
+ 2138             AND gdatu BETWEEN lv_budat AND lv_budat3 ORDER BY PRIMARY KEY
+       . ENDSELECT.
+ 2139      gv_ukurs = gv_ukurs2.
+ 2140
+ 2141    ELSE.
+ 2142      CLEAR lv_days.
+ 2143      IF s_period-low+1(2)  = '02'.
+ 2144        lv_days = '28'.
+ 2145      ELSEIF ( s_period-low+1(2)  = '04' OR s_period-low+1(2)  = '06' OR s
+       _period-low+1(2)  = '09' OR s_period-low+1(2)  = '11' ).
+ 2146        lv_days = '30'.
+ 2147      ELSE.
+ 2148        lv_days = '31'.
+ 2149      ENDIF.
+ 2150
+ 2151
+ 2152      CONCATENATE lv_days lv_month2+1(2) p_year    INTO lv_budat.
+ 2153
+ 2154      CONDENSE lv_budat.
+ 2155      CALL FUNCTION 'CONVERSION_EXIT_INVDT_INPUT'
+ 2156        EXPORTING
+ 2157          input  = lv_budat
+ 2158        IMPORTING
+ 2159          output = lv_budat.
+ 2160  *
+ 2161
+ 2162      SELECT SINGLE ukurs
+ 2163            FROM tcurr
+ 2164            INTO gv_ukurs2
+ 2165           WHERE kurst = 'CLT'
+ 2166             AND fcurr = 'USD'
+ 2167             AND tcurr = 'INR'
+ 2168             AND gdatu = lv_budat.
+ 2169
+ 2170    ENDIF.
+ 2171    gv_ukurs = gv_ukurs2.
+ 2172  ************************************************************************
+       *************** avarage rate
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB                             Page     40
+--------------------------------------------------------------------------------
+
+ 2173
+ 2174  *  DO.
+ 2175
+ 2176    CLEAR :lv_days ,  gv_ukurs2 .
+ 2177
+ 2178    IF   lv_month2+1(2)  = '02'.
+ 2179      lv_days = '28'.
+ 2180    ELSEIF (   lv_month2+1(2)  = '04' OR   lv_month2+1(2)  = '06' OR  lv_m
+       onth2+1(2)  = '09' OR   lv_month2+1(2) = '11' ).
+ 2181      lv_days = '30'.
+ 2182    ELSE.
+ 2183      lv_days = '31'.
+ 2184    ENDIF.
+ 2185
+ 2186    CONCATENATE  '01' lv_month2+1(2) p_year  INTO lv_budat2.
+ 2187
+ 2188    CONDENSE lv_budat2.
+ 2189    CALL FUNCTION 'CONVERSION_EXIT_INVDT_INPUT'
+ 2190      EXPORTING
+ 2191        input  = lv_budat2
+ 2192      IMPORTING
+ 2193        output = lv_budat2.
+ 2194
+ 2195    SELECT kurst
+ 2196          fcurr
+ 2197          tcurr
+ 2198          gdatu
+ 2199           ukurs
+ 2200          FROM tcurr
+ 2201          INTO TABLE it_curr
+ 2202         WHERE kurst = 'NTA'
+ 2203           AND fcurr = 'USD'
+ 2204           AND tcurr = 'INR'
+ 2205           AND gdatu BETWEEN  lv_budat AND lv_budat2.
+ 2206
+ 2207    LOOP AT it_curr INTO DATA(wa_curr).
+ 2208      lv_ukurs = lv_ukurs + wa_curr-ukurs.
+ 2209    ENDLOOP.
+ 2210
+ 2211    lv_ukurs =  lv_ukurs /  s_period-high+1(2).
+ 2212
+ 2213  ENDFORM.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Program ZFI_JV_TB text e                      Page     41
+--------------------------------------------------------------------------------
+
+Title:
+   Joint Venture Trial Balance
+
+--------------------------------------------------------------------------------
+Selection texts:
+
+P_BUKRS
+        Company Code
+P_JVNAM
+        Joint Venture
+P_RRECIN
+        Recovery Indicator
+P_YEAR
+        Fiscal Year
+S_CURR
+        Currency
+S_PERIOD
+        Period
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment ZFI_JV_TB        Page     42
+--------------------------------------------------------------------------------
+
+Subroutines:                                                  Line  Page
+
+AFTER_SET_DATA................ ZFI_JV_TB                      1147    21
+                               ZFI_JV_TB                      1929    35
+ALV_DISPLAY................... ZFI_JV_TB                      1446    27
+                               ZFI_JV_TB                      1857    34
+ALV_FCAT...................... ZFI_JV_TB                      1702    31
+                               ZFI_JV_TB                      1702    31
+                               ZFI_JV_TB                      1702    31
+                               ZFI_JV_TB                      1702    31
+                               ZFI_JV_TB                      1702    31
+                               ZFI_JV_TB                      1702    31
+                               ZFI_JV_TB                      1717    31
+                               ZFI_JV_TB                      1717    31
+                               ZFI_JV_TB                      1717    31
+                               ZFI_JV_TB                      1717    31
+                               ZFI_JV_TB                      1731    32
+                               ZFI_JV_TB                      1731    32
+                               ZFI_JV_TB                      1731    32
+                               ZFI_JV_TB                      1731    32
+                               ZFI_JV_TB                      1745    32
+                               ZFI_JV_TB                      1745    32
+                               ZFI_JV_TB                      1745    32
+                               ZFI_JV_TB                      1745    32
+                               ZFI_JV_TB                      1759    32
+                               ZFI_JV_TB                      1759    32
+                               ZFI_JV_TB                      1759    32
+                               ZFI_JV_TB                      1759    32
+                               ZFI_JV_TB                      1773    33
+                               ZFI_JV_TB                      1773    33
+                               ZFI_JV_TB                      1773    33
+                               ZFI_JV_TB                      1773    33
+                               ZFI_JV_TB                      1787    33
+                               ZFI_JV_TB                      1787    33
+                               ZFI_JV_TB                      1787    33
+                               ZFI_JV_TB                      1787    33
+                               ZFI_JV_TB                      1801    33
+                               ZFI_JV_TB                      1801    33
+                               ZFI_JV_TB                      1801    33
+                               ZFI_JV_TB                      1801    33
+                               ZFI_JV_TB                      1815    33
+                               ZFI_JV_TB                      1815    33
+                               ZFI_JV_TB                      1815    33
+                               ZFI_JV_TB                      1815    33
+                               ZFI_JV_TB                      1829    34
+                               ZFI_JV_TB                      1829    34
+                               ZFI_JV_TB                      1829    34
+                               ZFI_JV_TB                      1829    34
+                               ZFI_JV_TB                      1840    34
+DISP_DATA..................... ZFI_JV_TB                       542    11
+                               ZFI_JV_TB                      1215    22
+EX_CHANGE..................... ZFI_JV_TB                      1884    35
+                               ZFI_JV_TB                      2005    37
+FCAT_FILL..................... ZFI_JV_TB                      1445    27
+                               ZFI_JV_TB                      1687    31
+GET_DATA...................... ZFI_JV_TB                       540    10
+                               ZFI_JV_TB                       549    11
+PROCESSGUIDE.................. ZFI_JV_TB                       436     9
+                               ZFI_JV_TB                      1951    36
+SET_DATA...................... ZFI_JV_TB                       541    10
+                               ZFI_JV_TB                       865    16
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment ZFI_JV_TB        Page     43
+--------------------------------------------------------------------------------
+
+TOP_OF_PAGE................... ZFI_JV_TB                      1883    35
+--------------------------------------------------------------------------------
+
+Messages:
+
+                                                              Line  Page
+
+?............................. ZFI_JV_TB                       466     9
+?............................. ZFI_JV_TB                       523    10
+?............................. ZFI_JV_TB                       526    10
+?............................. ZFI_JV_TB                       530    10
+?............................. ZFI_JV_TB                       534    10
+?............................. ZFI_JV_TB                      1980    36
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment ZFI_JV_TB        Page     44
+--------------------------------------------------------------------------------
+
+External calls
+
+
+Function Modules                                              Line  Page
+
+CONVERSION_EXIT_ALPHA_OUTPUT.. ZFI_JV_TB                       878    16
+                               ZFI_JV_TB                       931    17
+                               ZFI_JV_TB                       982    18
+CONVERSION_EXIT_INVDT_INPUT... ZFI_JV_TB                      2113    38
+                               ZFI_JV_TB                      2119    39
+                               ZFI_JV_TB                      2155    39
+                               ZFI_JV_TB                      2189    40
+DYNP_VALUES_READ.............. ZFI_JV_TB                       356     7
+                               ZFI_JV_TB                       415     8
+F4IF_INT_TABLE_VALUE_REQUEST.. ZFI_JV_TB                       393     8
+GOS_ATTACHMENT_LIST_POPUP..... ZFI_JV_TB                      1972    36
+                               ZFI_JV_TB                      1989    36
+REUSE_ALV_COMMENTARY_WRITE.... ZFI_JV_TB                      1921    35
+REUSE_ALV_GRID_DISPLAY........ ZFI_JV_TB                      1862    34
+REUSE_ALV_GRID_DISPLAY_LVC.... ZFI_JV_TB                      1616    30
+VRM_SET_VALUES................ ZFI_JV_TB                       498    10
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment ZFI_JV_TB        Page     45
+--------------------------------------------------------------------------------
+
+DATABASE OPERATIONS
+
+
+SELECT:                                                       Line  Page
+
+JV_JVSO1_ACDOCA............... ZFI_JV_TB                       644    12
+                               ZFI_JV_TB                       670    13
+                               ZFI_JV_TB                       732    14
+                               ZFI_JV_TB                       747    14
+                               ZFI_JV_TB                       827    15
+                               ZFI_JV_TB                       844    16
+JV_JVTO1_ACDOCA_4A_4C_SWITCH.. ZFI_JV_TB                       451     9
+                               ZFI_JV_TB                       560    11
+                               ZFI_JV_TB                       620    12
+                               ZFI_JV_TB                       696    13
+                               ZFI_JV_TB                       788    15
+SKA1.......................... ZFI_JV_TB                       586    11
+SKAT.......................... ZFI_JV_TB                       598    11
+                               ZFI_JV_TB                      1042    19
+T8JVT......................... ZFI_JV_TB                       382     8
+                               ZFI_JV_TB                       388     8
+TCURR......................... ZFI_JV_TB                      2133    39
+                               ZFI_JV_TB                      2163    39
+                               ZFI_JV_TB                      2200    40
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment ZFI_JV_TB        Page     46
+--------------------------------------------------------------------------------
+
+INTERNAL TABLE OPERATIONS
+
+
+READ TABLE:                                                   Line  Page
+
+GT_DYNPREAD................... ZFI_JV_TB                       377     8
+GT_LIST....................... ZFI_JV_TB                       425     9
+GT_VALUES..................... ZFI_JV_TB                       423     9
+LT_ALLJV...................... ZFI_JV_TB                      1244    23
+                               ZFI_JV_TB                      1264    23
+                               ZFI_JV_TB                      1284    24
+                               ZFI_JV_TB                      1304    24
+                               ZFI_JV_TB                      1324    24
+                               ZFI_JV_TB                      1344    25
+                               ZFI_JV_TB                      1364    25
+                               ZFI_JV_TB                      1384    25
+                               ZFI_JV_TB                      1404    26
+                               ZFI_JV_TB                      1424    26
+                               ZFI_JV_TB                      1695    31
+                               ZFI_JV_TB                      1711    31
+                               ZFI_JV_TB                      1725    32
+                               ZFI_JV_TB                      1739    32
+                               ZFI_JV_TB                      1753    32
+                               ZFI_JV_TB                      1767    32
+                               ZFI_JV_TB                      1781    33
+                               ZFI_JV_TB                      1795    33
+                               ZFI_JV_TB                      1809    33
+                               ZFI_JV_TB                      1823    34
+LT_FIELDCAT................... ZFI_JV_TB                      1572    29
+                               ZFI_JV_TB                      1581    29
+                               ZFI_JV_TB                      1597    29
+LT_FINAL...................... ZFI_JV_TB                      1107    20
+                               ZFI_JV_TB                      1177    22
+LT_JVSO1_1.................... ZFI_JV_TB                       884    16
+                               ZFI_JV_TB                       937    17
+                               ZFI_JV_TB                       988    18
+                               ZFI_JV_TB                      1066    20
+                               ZFI_JV_TB                      1079    20
+                               ZFI_JV_TB                      1091    20
+LT_JVSO1_2.................... ZFI_JV_TB                       889    16
+                               ZFI_JV_TB                       942    17
+                               ZFI_JV_TB                       994    18
+                               ZFI_JV_TB                      1071    20
+                               ZFI_JV_TB                      1084    20
+                               ZFI_JV_TB                      1097    20
+LT_JVT........................ ZFI_JV_TB                       571    11
+LT_JVTO1...................... ZFI_JV_TB                       894    16
+                               ZFI_JV_TB                       947    17
+                               ZFI_JV_TB                      1000    18
+                               ZFI_JV_TB                      1051    19
+LT_SKA1....................... ZFI_JV_TB                       895    16
+                               ZFI_JV_TB                       948    17
+                               ZFI_JV_TB                      1001    18
+LT_SKAT....................... ZFI_JV_TB                       902    17
+                               ZFI_JV_TB                       955    18
+                               ZFI_JV_TB                      1009    19
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment ZFI_JV_TB        Page     47
+--------------------------------------------------------------------------------
+
+MODIFY:                                                       Line  Page
+
+LT_FINAL...................... ZFI_JV_TB                      1130    21
+                               ZFI_JV_TB                      1133    21
+                               ZFI_JV_TB                      1192    22
+LT_FINAL4..................... ZFI_JV_TB                      1255    23
+                               ZFI_JV_TB                      1275    24
+                               ZFI_JV_TB                      1295    24
+                               ZFI_JV_TB                      1315    24
+                               ZFI_JV_TB                      1335    25
+                               ZFI_JV_TB                      1355    25
+                               ZFI_JV_TB                      1375    25
+                               ZFI_JV_TB                      1395    26
+                               ZFI_JV_TB                      1415    26
+                               ZFI_JV_TB                      1435    26
+--------------------------------------------------------------------------------
+
+
+DELETE:                                                       Line  Page
+
+LT_ALLJV...................... ZFI_JV_TB                       461     9
+LT_FINAL...................... ZFI_JV_TB                      1206    22
+                               ZFI_JV_TB                      1935    36
+LT_FINAL3..................... ZFI_JV_TB                      1224    23
+LT_JVT........................ ZFI_JV_TB                       570    11
+--------------------------------------------------------------------------------

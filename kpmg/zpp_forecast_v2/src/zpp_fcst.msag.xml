@@ -60,7 +60,7 @@
      <SPRSL>E</SPRSL>
      <ARBGB>ZPP_FCST</ARBGB>
      <MSGNR>009</MSGNR>
-     <TEXT>Forecast number &amp;1 saved for &amp;2 material(s)</TEXT>
+     <TEXT>&amp;1 material(s) saved, each under its own forecast number</TEXT>
     </T100>
     <T100>
      <SPRSL>E</SPRSL>

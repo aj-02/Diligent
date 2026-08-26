@@ -804,9 +804,13 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
 
     IF lv_saved > 0.
       COMMIT WORK AND WAIT.
+*     The forecast number is per plant, material and financial year -
+*     that is the key of ZPPT_FCST_YR - so a run over ten materials
+*     draws ten numbers. Naming only the first one here read as though
+*     that single number covered them all. The count is reported and
+*     each row carries its own number in the Forecast Number column.
       add_msg( EXPORTING iv_type = 'S' iv_number = 009
-                         iv_v1 = VALUE #( ct_alv[ status = 'S' ]-fcst_no OPTIONAL )
-                         iv_v2 = lv_saved
+                         iv_v1 = lv_saved
                CHANGING  ct_msg = rt_msg ).
     ELSE.
       ROLLBACK WORK.

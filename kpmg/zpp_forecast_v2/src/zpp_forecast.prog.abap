@@ -28,7 +28,13 @@ TYPES tt_fname TYPE STANDARD TABLE OF lvc_fname WITH DEFAULT KEY.
 * them back, which also restores the traffic light column.
 CONSTANTS gc_show_extras TYPE abap_bool VALUE abap_false.
 
+* GUI status of THIS program carrying ZSAVE, ZSELALL, ZDESEL and ZEXCEL.
+* Change here only - it is used to set the status and to report it when
+* it cannot be found.
+CONSTANTS gc_status TYPE sypfkey VALUE 'PF_STATUS'.
+
 DATA: gt_msg  TYPE bapiret2_t,
+      gt_show TYPE tt_fname,
       gt_alv  TYPE zcl_pp_fcst=>tt_alv,
       go_fcst TYPE REF TO zcl_pp_fcst,
       go_alv  TYPE REF TO cl_salv_table,
@@ -59,29 +65,78 @@ SELECTION-SCREEN END OF BLOCK b1.
 SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-b02.
 PARAMETERS: p_tonn AS CHECKBOX,
             p_legc AS CHECKBOX,
-            p_slog AS CHECKBOX.
+            p_save AS CHECKBOX.
 SELECTION-SCREEN END OF BLOCK b2.
 
 
 *&---------------------------------------------------------------------*
-*& Local handler for the Save function added to the SALV toolbar
+*& Message log popup
+*&
+*& The SALV toolbar route is gone. add_function raises
+*& CX_SALV_WRONG_CALL in this release and a GUI status could not be
+*& resolved, so saving is driven from the selection screen instead and
+*& this class is left with the one thing still needed.
 *&---------------------------------------------------------------------*
 CLASS lcl_handler DEFINITION.
+
   PUBLIC SECTION.
+
     CLASS-METHODS on_added_function
       FOR EVENT added_function OF cl_salv_events
       IMPORTING e_salv_function.
+
     CLASS-METHODS show_log
       IMPORTING it_msg TYPE bapiret2_t.
+
+  PRIVATE SECTION.
+
+    CLASS-METHODS save_selected.
+    CLASS-METHODS select_all
+      IMPORTING iv_on TYPE abap_bool.
+    CLASS-METHODS export.
+
 ENDCLASS.
 
 CLASS lcl_handler IMPLEMENTATION.
 
   METHOD on_added_function.
 
-    CHECK e_salv_function = 'ZSAVE'.
+*   Every function code of the GUI status arrives here. Anything not
+*   listed is ignored, so a button added to the status before it is
+*   coded here does nothing rather than something unexpected.
+    CASE e_salv_function.
 
-    " Rows picked in the standard selection column
+      WHEN 'ZSAVE'.
+        save_selected( ).
+
+      WHEN 'ZSELALL'.
+        select_all( abap_true ).
+
+      WHEN 'ZDESEL'.
+        select_all( abap_false ).
+
+      WHEN 'ZEXCEL'.
+        export( ).
+
+      WHEN 'BACK' OR 'EXIT' OR 'CANC'.
+*       A hand built status owns its own exit codes
+        LEAVE TO SCREEN 0.
+
+      WHEN OTHERS.
+        RETURN.
+
+    ENDCASE.
+
+  ENDMETHOD.
+
+
+  METHOD save_selected.
+
+    DATA lv_row TYPE i.
+
+*   The button saves what the user picked. The Save checkbox on the
+*   selection screen saves everything - both routes end in the same
+*   class method, which decides the table from the mode.
     DATA(lt_rows) = go_alv->get_selections( )->get_selected_rows( ).
 
     IF lt_rows IS INITIAL.
@@ -93,7 +148,7 @@ CLASS lcl_handler IMPLEMENTATION.
       <ls>-mark = abap_false.
     ENDLOOP.
 
-    LOOP AT lt_rows INTO DATA(lv_row).
+    LOOP AT lt_rows INTO lv_row.
       READ TABLE gt_alv ASSIGNING <ls> INDEX lv_row.
       IF sy-subrc = 0.
         <ls>-mark = abap_true.
@@ -105,6 +160,118 @@ CLASS lcl_handler IMPLEMENTATION.
 
     go_alv->refresh( ).
     show_log( lt_msg ).
+
+  ENDMETHOD.
+
+
+  METHOD select_all.
+
+    DATA: lt_rows TYPE salv_t_row,
+          lv_row  TYPE i.
+
+    IF iv_on = abap_true.
+      lv_row = 1.
+      WHILE lv_row <= lines( gt_alv ).
+        APPEND lv_row TO lt_rows.
+        lv_row = lv_row + 1.
+      ENDWHILE.
+    ENDIF.
+
+*   An empty table clears the selection, which is Deselect all
+    go_alv->get_selections( )->set_selected_rows( lt_rows ).
+    go_alv->refresh( ).
+
+  ENDMETHOD.
+
+
+  METHOD export.
+
+    DATA: lt_out  TYPE string_table,
+          lv_line TYPE string,
+          lv_val  TYPE string,
+          lv_col  TYPE lvc_fname,
+          lv_tab  TYPE c LENGTH 1,
+          lv_file TYPE string,
+          lv_path TYPE string,
+          lv_full TYPE string,
+          lv_msg  TYPE string,
+          lv_ix   TYPE i.
+
+    FIELD-SYMBOLS <lv_f> TYPE any.
+
+    IF gt_alv IS INITIAL.
+      MESSAGE s008 DISPLAY LIKE 'I'.
+      RETURN.
+    ENDIF.
+
+    lv_tab = cl_abap_char_utilities=>horizontal_tab.
+
+*   Only the columns the list is showing, in the order it shows them,
+*   so the file matches the screen rather than the whole structure
+    CLEAR lv_line.
+    LOOP AT gt_show INTO lv_col.
+      IF lv_line IS INITIAL.
+        lv_line = lv_col.
+      ELSE.
+        CONCATENATE lv_line lv_tab lv_col INTO lv_line.
+      ENDIF.
+    ENDLOOP.
+    APPEND lv_line TO lt_out.
+
+    LOOP AT gt_alv ASSIGNING FIELD-SYMBOL(<ls>).
+
+      CLEAR: lv_line, lv_ix.
+
+      LOOP AT gt_show INTO lv_col.
+
+        lv_ix = lv_ix + 1.
+        CLEAR lv_val.
+        UNASSIGN <lv_f>.
+        ASSIGN COMPONENT lv_col OF STRUCTURE <ls> TO <lv_f>.
+        IF <lv_f> IS ASSIGNED.
+          lv_val = <lv_f>.
+          CONDENSE lv_val.
+        ENDIF.
+
+        IF lv_ix = 1.
+          lv_line = lv_val.
+        ELSE.
+          CONCATENATE lv_line lv_tab lv_val INTO lv_line.
+        ENDIF.
+
+      ENDLOOP.
+
+      APPEND lv_line TO lt_out.
+
+    ENDLOOP.
+
+    CONCATENATE 'ZFORECAST_' g_mode '.txt' INTO lv_file.
+
+    cl_gui_frontend_services=>file_save_dialog(
+      EXPORTING  default_file_name = lv_file
+                 default_extension = 'txt'
+      CHANGING   filename          = lv_file
+                 path              = lv_path
+                 fullpath          = lv_full
+      EXCEPTIONS OTHERS            = 1 ).
+
+    IF sy-subrc <> 0 OR lv_full IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    cl_gui_frontend_services=>gui_download(
+      EXPORTING  filename         = lv_full
+                 filetype         = 'ASC'
+      CHANGING   data_tab         = lt_out
+      EXCEPTIONS file_write_error = 1
+                 OTHERS           = 2 ).
+
+    IF sy-subrc = 0.
+      CONCATENATE 'List saved to' lv_full INTO lv_msg SEPARATED BY space.
+      MESSAGE lv_msg TYPE 'S'.
+    ELSE.
+      MESSAGE e013 WITH lv_full.
+    ENDIF.
 
   ENDMETHOD.
 
@@ -224,13 +391,15 @@ START-OF-SELECTION.
 * record support reads in QAS when the numbers look wrong.
   PERFORM save_log.
 
-  IF p_slog = abap_true.
-    lcl_handler=>show_log( gt_msg ).
-  ENDIF.
-
   IF gt_alv IS INITIAL.
     MESSAGE s008 DISPLAY LIKE 'I'.
     RETURN.
+  ENDIF.
+
+* Saved before the list is drawn, so the forecast number and the result
+* of each row are already on the rows the list shows.
+  IF p_save = abap_true.
+    PERFORM save_all.
   ENDIF.
 
   PERFORM display.
@@ -358,58 +527,91 @@ ENDFORM.
 
 
 *&---------------------------------------------------------------------*
-FORM display.
+*& Save
+*&
+*& One routine for all three modes. The class decides which table the
+*& rows belong to from the mode it is given:
+*&
+*&   Annual     ZPPT_FCST_YR   draws the forecast number from SNRO
+*&   Quarterly  ZPPT_FCST_QT   reuses the annual number
+*&   Monthly    ZPPT_FCST_MN   reuses the annual number
+*&
+*& Every generated row is saved. The user has already narrowed the run
+*& with plant, material and year on the selection screen, so there is
+*& nothing further to pick.
+*&---------------------------------------------------------------------*
+FORM save_all.
 
-  DATA lt_show TYPE tt_fname.
+* LIKE LINE OF s_werks, not RSELOPTION - the generic select option line
+* types LOW as CHAR 45, which is not compatible with WERKS_D
+  DATA ls_w LIKE LINE OF s_werks.
+
+* Saving is a different activity from displaying, so it is checked again
+  LOOP AT s_werks INTO ls_w.
+    IF zcl_pp_fcst_util=>check_authority( iv_werks = ls_w-low
+                                          iv_actvt = '01' ) = abap_false.
+      MESSAGE e010 WITH ls_w-low '01'.
+    ENDIF.
+  ENDLOOP.
+
+* SAVE works on the rows carrying MARK
+  LOOP AT gt_alv ASSIGNING FIELD-SYMBOL(<ls>).
+    <ls>-mark = abap_true.
+  ENDLOOP.
+
+  DATA(lt_msg) = go_fcst->save( EXPORTING iv_mode = g_mode
+                                CHANGING  ct_alv  = gt_alv ).
+
+* The outcome of a save is something the user asked for, so unlike the
+* generation messages it is shown rather than only logged
+  lcl_handler=>show_log( lt_msg ).
+
+  APPEND LINES OF lt_msg TO gt_msg.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+FORM display.
 
   TRY.
       cl_salv_table=>factory( IMPORTING r_salv_table = go_alv
                               CHANGING  t_table      = gt_alv ).
 
-      "--- toolbar: standard functions plus Save ------------------------
-      DATA(lo_funcs) = go_alv->get_functions( ).
-      lo_funcs->set_all( ).
+      "--- toolbar -------------------------------------------------------
+      go_alv->get_functions( )->set_all( ).
 
       DATA(lv_save_ok) = abap_true.
 
-      LOOP AT s_werks INTO DATA(ls_w).
-        IF zcl_pp_fcst_util=>check_authority( iv_werks = ls_w-low
+      LOOP AT s_werks INTO DATA(ls_w2).
+        IF zcl_pp_fcst_util=>check_authority( iv_werks = ls_w2-low
                                               iv_actvt = '01' ) = abap_false.
           lv_save_ok = abap_false.
           EXIT.
         ENDIF.
       ENDLOOP.
 
-*     The Save button is added in its own TRY. SAVE collides with a
-*     function that set_all( ) has already switched on, which raises
-*     CX_SALV_EXISTING - and in the old code that exception escaped to
-*     the outer CATCH, so the whole ALV failed to display and reported
-*     "no data selected". A toolbar button must never do that, and the
-*     name is now ZSAVE so it cannot clash.
+*     The GUI status of THIS program carries the custom buttons.
+*     set_functions = c_functions_all keeps SALV's own functions working
+*     alongside it. If the status cannot be resolved the display below
+*     falls back rather than dumping, and the Save checkbox on the
+*     selection screen still saves.
       IF lv_save_ok = abap_true.
-        TRY.
-            lo_funcs->add_function(
-              name     = 'ZSAVE'
-              icon     = CONV string( icon_system_save )
-              text     = 'Save'
-              tooltip  = 'Save the selected forecast lines'
-              position = if_salv_c_function_position=>right_of_salv_functions ).
-          CATCH cx_salv_existing cx_salv_wrong_call.
-*           The list is still worth showing without the button
-            MESSAGE 'Save button unavailable, list is display only'
-                    TYPE 'S' DISPLAY LIKE 'W'.
-        ENDTRY.
+        go_alv->set_screen_status(
+          pfstatus      = gc_status
+          report        = sy-repid
+          set_functions = cl_salv_table=>c_functions_all ).
       ENDIF.
 
-      "--- row selection replaces the old checkbox column ---------------
+      "--- row selection, so the buttons have something to act on -------
       go_alv->get_selections( )->set_selection_mode(
         if_salv_c_selection_mode=>row_column ).
 
       SET HANDLER lcl_handler=>on_added_function FOR go_alv->get_event( ).
 
       "--- columns ------------------------------------------------------
-      PERFORM visible_columns CHANGING lt_show.
-      PERFORM setup_columns   USING    lt_show.
+      PERFORM visible_columns CHANGING gt_show.
+      PERFORM setup_columns   USING    gt_show.
 
       DATA(lv_head) = |{ SWITCH string( g_mode
                                         WHEN 'A' THEN 'Annual'
@@ -419,10 +621,25 @@ FORM display.
 
       go_alv->get_display_settings( )->set_list_header( CONV lvc_title( lv_head ) ).
 
-      go_alv->display( ).
+*     SALV resolves the status when it draws the list, not when
+*     set_screen_status is called, so a status it cannot find surfaces
+*     here. Redrawn with SALV's own status instead of dumping.
+      TRY.
+          go_alv->display( ).
+        CATCH cx_salv_object_not_found.
+          DATA(lv_stmsg) = |GUI status { gc_status } not found in { sy-repid }, | &&
+                           |standard toolbar used|.
+          MESSAGE lv_stmsg TYPE 'S' DISPLAY LIKE 'W'.
+          go_alv->set_screen_status(
+            report        = 'SAPLSALV_METADATA_STATUS'
+            pfstatus      = 'SALV_STANDARD'
+            set_functions = cl_salv_table=>c_functions_all ).
+          go_alv->display( ).
+      ENDTRY.
 
     CATCH cx_salv_msg cx_salv_not_found cx_salv_data_error
-          cx_salv_existing cx_salv_wrong_call INTO DATA(lx_salv).
+          cx_salv_existing cx_salv_wrong_call
+          cx_salv_object_not_found INTO DATA(lx_salv).
 *     Reporting 008 "no data selected" for any ALV failure hid the real
 *     cause. The exception text is shown instead.
       DATA(lv_err) = lx_salv->get_text( ).
@@ -531,6 +748,16 @@ FORM visible_columns CHANGING ct_show TYPE tt_fname.
       ENDIF.
 
   ENDCASE.
+
+* ---- the result of a save --------------------------------------------
+* Only when the run actually saved. The forecast number and the per row
+* outcome are the point of pressing save, so they are shown then and
+* only then. The traffic light stays off - an exception column is drawn
+* in front of Plant whatever position it is given.
+  IF p_save = abap_true.
+    APPEND 'FCST_NO' TO ct_show.
+    APPEND 'MESSAGE' TO ct_show.
+  ENDIF.
 
 * ---- not drawn on this FS sheet, kept at the end --------------------
   IF gc_show_extras = abap_true.

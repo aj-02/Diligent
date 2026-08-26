@@ -707,8 +707,7 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
     IF lv_saved > 0.
       COMMIT WORK AND WAIT.
       add_msg( EXPORTING iv_type = 'S' iv_number = 009
-                         iv_v1 = VALUE #( ct_alv[ status = 'S' ]-fcst_no OPTIONAL )
-                         iv_v2 = lv_saved
+                         iv_v1 = lv_saved
                CHANGING  ct_msg = rt_msg ).
     ELSE.
       ROLLBACK WORK.

@@ -1,0 +1,3636 @@
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTU13                            Page      1
+--------------------------------------------------------------------------------
+
+    1  FUNCTION FLQ_ASSIGNMENT_STRING.
+    2  *"----------------------------------------------------------------------
+    3  *"*"Lokale Schnittstelle:
+    4  *"  IMPORTING
+    5  *"     REFERENCE(I_ASSIGNMENT) TYPE  ANY
+    6  *"  CHANGING
+    7  *"     REFERENCE(CONDITION) TYPE  STRING
+    8  *"----------------------------------------------------------------------
+    9
+   10
+   11
+   12    DATA: l_fieldvaln TYPE string,
+   13          lt_dfies    LIKE dfies OCCURS 0 WITH HEADER LINE.
+   14
+   15    STATICS: BEGIN OF lt_ext OCCURS 0,
+   16               fieldname TYPE fieldname,
+   17               END OF lt_ext.
+   18
+   19    FIELD-SYMBOLS: <fieldname> TYPE any,
+   20                   <fieldval>  TYPE any.
+   21
+   22    IF lt_ext[] IS INITIAL.
+   23      CALL FUNCTION 'DDIF_NAMETAB_GET'
+   24        EXPORTING
+   25          tabname   = 'FLQ_ASSIGNMENT'
+   26        TABLES
+   27          dfies_tab = lt_dfies.
+   28
+   29      LOOP AT lt_dfies.
+   30        lt_ext-fieldname = lt_dfies-fieldname.
+   31        APPEND lt_ext.
+   32      ENDLOOP.
+   33    ENDIF.
+   34
+   35    CLEAR condition.
+   36
+   37    LOOP AT lt_ext ASSIGNING <fieldname>.
+   38
+   39      ASSIGN COMPONENT <fieldname> OF STRUCTURE i_assignment TO <fieldval>
+       .
+   40      CONCATENATE '''' <fieldval> '''' INTO l_fieldvaln.
+   41      IF sy-tabix = 1.
+   42        CONCATENATE <fieldname> '=' l_fieldvaln
+   43        INTO condition SEPARATED BY space.
+   44      ELSE.
+   45        CONCATENATE condition 'AND ' <fieldname> '=' l_fieldvaln
+   46                      INTO condition SEPARATED BY space.
+   47      ENDIF.
+   48      CLEAR l_fieldvaln.
+   49    ENDLOOP.
+   50
+   51  ENDFUNCTION.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU13       Page      2
+--------------------------------------------------------------------------------
+
+External calls
+
+
+Function Modules                                              Line  Page
+
+DDIF_NAMETAB_GET.............. LFLQEXTU13                       23     1
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTU01                            Page      3
+--------------------------------------------------------------------------------
+
+    1  FUNCTION FLQ_CONDITION_STRING.
+    2  *"----------------------------------------------------------------------
+    3  *"*"Lokale Schnittstelle:
+    4  *"  IMPORTING
+    5  *"     REFERENCE(I_LQPOS) TYPE  FLQPOS
+    6  *"     REFERENCE(I_BUKRS) TYPE  BUKRS
+    7  *"     REFERENCE(I_GSBER) TYPE  GSBER
+    8  *"     REFERENCE(I_EXTENSION) TYPE  FLQ_EXTENSION
+    9  *"  EXPORTING
+   10  *"     REFERENCE(CONDITION) TYPE  STRING
+   11  *"----------------------------------------------------------------------
+   12
+   13    DATA: l_fieldval1 TYPE string,
+   14          l_fieldval2 TYPE string,
+   15          l_fieldval3 TYPE string,
+   16          l_extval    TYPE string,
+   17          l_lqpos     TYPE flqpos,                            "nte2074386
+   18          l_bukrs     TYPE bukrs,                             "nte2074386
+   19          l_gsber     TYPE gsber.                             "nte2074386
+   20
+   21    CLEAR condition.
+   22
+   23    l_lqpos = i_lqpos.                                        "nte2074386
+   24    l_bukrs = i_bukrs.                                        "nte2074386
+   25    l_gsber = i_gsber.                                        "nte2074386
+   26
+   27    IF l_lqpos CS ''''.                                       "nte2074386
+   28      REPLACE ALL OCCURRENCES OF '''' IN l_lqpos WITH ''''''''''."2074386
+   29    ENDIF.
+   30    IF l_bukrs CS ''''.                                       "nte2074386
+   31      REPLACE ALL OCCURRENCES OF '''' IN l_bukrs WITH ''''''''''."2074386
+   32    ENDIF.
+   33    IF l_gsber CS ''''.                                       "nte2074386
+   34      REPLACE ALL OCCURRENCES OF '''' IN l_gsber WITH ''''''''''."2074386
+   35    ENDIF.
+   36
+   37    CONCATENATE '''' l_lqpos '''' INTO l_fieldval1.           "nte2074386
+   38    CONCATENATE '''' l_bukrs '''' INTO l_fieldval2.           "nte2074386
+   39    CONCATENATE '''' l_gsber '''' INTO l_fieldval3.           "nte2074386
+   40
+   41    CONCATENATE 'LQPOS =' l_fieldval1
+   42                'AND BUKRS =' l_fieldval2
+   43                'AND GSBER =' l_fieldval3 'AND'
+   44                INTO condition SEPARATED BY space.
+   45
+   46    CALL FUNCTION 'FLQ_EXTENSION_STRING'
+   47      EXPORTING
+   48        i_extension = i_extension
+   49      CHANGING
+   50        condition   = l_extval.
+   51
+   52    CONCATENATE condition l_extval INTO condition SEPARATED BY space.
+   53
+   54  ENDFUNCTION.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU01       Page      4
+--------------------------------------------------------------------------------
+
+External calls
+
+
+Function Modules                                              Line  Page
+
+FLQ_EXTENSION_STRING.......... LFLQEXTU01                       46     3
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTU05                            Page      5
+--------------------------------------------------------------------------------
+
+    1  FUNCTION FLQ_DELETE_EXTSN.
+    2  *"----------------------------------------------------------------------
+    3  *"*"Lokale Schnittstelle:
+    4  *"  IMPORTING
+    5  *"     REFERENCE(I_FLG_DIRECT) TYPE  XFELD OPTIONAL
+    6  *"  TABLES
+    7  *"      T_ITEM_DEL STRUCTURE  FLQITEM
+    8  *"  EXCEPTIONS
+    9  *"      INS_ERROR_IT
+   10  *"      UPD_ERROR_IT
+   11  *"      DEL_ERROR_IT
+   12  *"      UPD_ERROR_SU
+   13  *"      INS_ERROR_SU
+   14  *"      TYPE_ERROR
+   15  *"----------------------------------------------------------------------
+   16
+   17  * Delete Items on Data Base - adjust totals             "nte1782146
+   18    FIELD-SYMBOLS: <FLQITEMO> TYPE FLQITEM.
+   19
+   20  * Collect totals
+   21    LOOP AT T_ITEM_DEL ASSIGNING <FLQITEMO> WHERE XDELETE = SPACE.
+   22      MOVE-CORRESPONDING <FLQITEMO> TO GT_SUM_UPD.
+   23      MULTIPLY: GT_SUM_UPD-WRBTR BY -1, GT_SUM_UPD-DMBTR BY -1, GT_SUM_UPD
+       -KWBTR BY -1.
+   24      COLLECT GT_SUM_UPD.
+   25    ENDLOOP.
+   26
+   27  * Old items (current and hist) are deleted
+   28    APPEND LINES OF T_ITEM_DEL TO G_T_ITEM_DEL.
+   29
+   30    IF SY-ONCOM <> 'P' AND I_FLG_DIRECT = SPACE.
+   31      PERFORM UPDATE_ITEM ON COMMIT LEVEL LEVEL_UPDATE.
+   32      PERFORM UPDATE_SUM  ON COMMIT LEVEL LEVEL_FMSU.
+   33    ELSE.
+   34      PERFORM UPDATE_ITEM.
+   35      PERFORM UPDATE_SUM.
+   36    ENDIF.
+   37
+   38
+   39  ENDFUNCTION.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU05       Page      6
+--------------------------------------------------------------------------------
+
+Subroutines:                                                  Line  Page
+
+UPDATE_ITEM................... LFLQEXTU05                       34     5
+UPDATE_SUM.................... LFLQEXTU05                       35     5
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTU02                            Page      7
+--------------------------------------------------------------------------------
+
+    1  FUNCTION FLQ_EXTENSION_STRING.
+    2  *"----------------------------------------------------------------------
+    3  *"*"Lokale Schnittstelle:
+    4  *"  IMPORTING
+    5  *"     REFERENCE(I_EXTENSION) TYPE  ANY
+    6  *"  TABLES
+    7  *"      ET_WHERE STRUCTURE  RSDSWHERE OPTIONAL
+    8  *"  CHANGING
+    9  *"     REFERENCE(CONDITION) TYPE  STRING
+   10  *"----------------------------------------------------------------------
+   11
+   12    DATA: l_fieldvaln TYPE string,
+   13          l_clause    TYPE RSDSWHERE,                         "nte1943794
+   14          lt_dfies    LIKE dfies OCCURS 0 WITH HEADER LINE,
+   15          l_string    TYPE string.                            "nte2074386
+   16
+   17    STATICS: BEGIN OF lt_ext OCCURS 0,
+   18               fieldname TYPE fieldname,
+   19               END OF lt_ext.
+   20
+   21    FIELD-SYMBOLS: <fieldname> TYPE any,
+   22                   <fieldval>  TYPE any.
+   23
+   24    IF lt_ext[] IS INITIAL.
+   25      CALL FUNCTION 'DDIF_NAMETAB_GET'
+   26        EXPORTING
+   27          tabname   = 'FLQ_EXTENSION'
+   28        TABLES
+   29          dfies_tab = lt_dfies.
+   30
+   31      LOOP AT lt_dfies.
+   32        lt_ext-fieldname = lt_dfies-fieldname.
+   33        APPEND lt_ext.
+   34      ENDLOOP.
+   35    ENDIF.
+   36
+   37    CLEAR condition.
+   38
+   39    LOOP AT lt_ext ASSIGNING <fieldname>.
+   40
+   41      ASSIGN COMPONENT <fieldname> OF STRUCTURE i_extension TO <fieldval>.
+   42      IF <fieldval> CS ''''.                                  "nte2074386
+   43        l_string = <fieldval>.
+   44        REPLACE ALL OCCURRENCES OF '''' IN l_string
+   45                                           WITH ''''''''''.   "nte2074386
+   46        ASSIGN l_string TO <fieldval>.                        "nte2074386
+   47      ENDIF.
+   48      CONCATENATE '''' <fieldval> '''' INTO l_fieldvaln.
+   49      IF sy-tabix = 1.
+   50        CONCATENATE <fieldname> '=' l_fieldvaln
+   51        INTO condition SEPARATED BY space.
+   52        l_clause = condition.                                 "nte1943794
+   53      ELSE.
+   54        CONCATENATE condition 'AND ' <fieldname> '=' l_fieldvaln
+   55                      INTO condition SEPARATED BY space.
+   56        CONCATENATE 'AND ' <fieldname> '=' l_fieldvaln        "nte1943794
+   57        INTO l_clause SEPARATED BY space.
+   58      ENDIF.
+   59      append l_clause to ET_WHERE.                            "nte1943794
+   60      CLEAR l_fieldvaln.
+   61    ENDLOOP.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTU02                            Page      8
+--------------------------------------------------------------------------------
+
+   62
+   63  ENDFUNCTION.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU02       Page      9
+--------------------------------------------------------------------------------
+
+External calls
+
+
+Function Modules                                              Line  Page
+
+DDIF_NAMETAB_GET.............. LFLQEXTU02                       25     7
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTU12                            Page     10
+--------------------------------------------------------------------------------
+
+    1  FUNCTION FLQ_INSERT_EXTSN.
+    2  *"----------------------------------------------------------------------
+    3  *"*"Verbuchungsfunktionsbaustein:
+    4  *"
+    5  *"*"Lokale Schnittstelle:
+    6  *"  IMPORTING
+    7  *"     VALUE(I_FLG_DIRECT) TYPE  XFELD OPTIONAL
+    8  *"  TABLES
+    9  *"      T_ITEM_NEW STRUCTURE  FLQITEM
+   10  *"  EXCEPTIONS
+   11  *"      INS_ERROR_IT
+   12  *"      UPD_ERROR_SU
+   13  *"      INS_ERROR_SU
+   14  *"      TYPE_ERROR
+   15  *"----------------------------------------------------------------------
+   16
+   17  * Expects NEW items for one or several Actual               "nte1782146
+   18  * We add a GUID for non-empy Extension
+   19  * Insert Items and Update Totals
+   20    FIELD-SYMBOLS: <FLQITEMN> TYPE FLQITEM.
+   21    DATA: L_EXTENSION  TYPE FLQ_EXTENSION,
+   22          L_EXIST_SUM  TYPE XFELD,
+   23          L_SUM        TYPE FLQSUM,
+   24          L_CONDSTRING TYPE STRING.
+   25
+   26    LOOP AT T_ITEM_NEW ASSIGNING <FLQITEMN>.
+   27
+   28      CLEAR: L_EXTENSION, <FLQITEMN>-GUID.
+   29      MOVE-CORRESPONDING <FLQITEMN> TO L_EXTENSION.           "nte2041931
+   30
+   31      IF L_EXTENSION IS INITIAL.
+   32        IF <FLQITEMN>-XDELETE IS INITIAL.                     "nte2195383
+   33          MOVE-CORRESPONDING <FLQITEMN> TO GT_SUM_UPD.
+   34          COLLECT GT_SUM_UPD.
+   35        ENDIF.
+   36      ELSE.
+   37
+   38        PERFORM EXISTING_SUM CHANGING <FLQITEMN>
+   39                                      L_EXIST_SUM.
+   40        IF L_EXIST_SUM = SPACE.
+   41          PERFORM CONDITION USING <FLQITEMN> L_CONDSTRING.
+   42          SELECT SINGLE GUID FROM  FLQSUM INTO <FLQITEMN>-GUID
+   43                 WHERE  (L_CONDSTRING).
+   44
+   45          IF <FLQITEMN>-GUID <> SPACE.
+   46            IF <FLQITEMN>-XDELETE IS INITIAL.                 "nte2195383
+   47              MOVE-CORRESPONDING <FLQITEMN> TO GT_SUM_UPD.
+   48              COLLECT GT_SUM_UPD.
+   49            ENDIF.
+   50          ELSE.
+   51            CALL FUNCTION 'GUID_CREATE'  "#EC FB_OLDED
+   52              IMPORTING
+   53                EV_GUID_32 = <FLQITEMN>-GUID.
+   54
+   55            IF <FLQITEMN>-XDELETE IS INITIAL.                 "nte2195383
+   56              MOVE-CORRESPONDING <FLQITEMN> TO L_SUM.
+   57              APPEND L_SUM TO GT_SUM_INS.
+   58            ENDIF.
+   59          ENDIF.
+   60        ENDIF.
+   61      ENDIF.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTU12                            Page     11
+--------------------------------------------------------------------------------
+
+   62      APPEND <FLQITEMN> TO G_T_ITEM_INS.
+   63    ENDLOOP.
+   64
+   65    IF SY-ONCOM <> 'P' AND I_FLG_DIRECT = SPACE.
+   66      PERFORM UPDATE_ITEM ON COMMIT LEVEL LEVEL_UPDATE.
+   67      PERFORM UPDATE_SUM  ON COMMIT LEVEL LEVEL_FMSU.
+   68    ELSE.
+   69      PERFORM UPDATE_ITEM.
+   70      PERFORM UPDATE_SUM.
+   71    ENDIF.
+   72
+   73
+   74  ENDFUNCTION.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU12       Page     12
+--------------------------------------------------------------------------------
+
+Subroutines:                                                  Line  Page
+
+CONDITION..................... LFLQEXTU12                       41    10
+EXISTING_SUM.................. LFLQEXTU12                       38    10
+UPDATE_ITEM................... LFLQEXTU12                       69    11
+UPDATE_SUM.................... LFLQEXTU12                       70    11
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU12       Page     13
+--------------------------------------------------------------------------------
+
+External calls
+
+
+Function Modules                                              Line  Page
+
+GUID_CREATE................... LFLQEXTU12                       51    10
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU12       Page     14
+--------------------------------------------------------------------------------
+
+DATABASE OPERATIONS
+
+
+SELECT:                                                       Line  Page
+
+FLQSUM........................ LFLQEXTU12                       42    10
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTU03                            Page     15
+--------------------------------------------------------------------------------
+
+    1  FUNCTION FLQ_UPDATE_EXTSN.
+    2  *"----------------------------------------------------------------------
+    3  *"*"Lokale Schnittstelle:
+    4  *"  IMPORTING
+    5  *"     REFERENCE(I_FLG_DIRECT) TYPE  XFELD OPTIONAL
+    6  *"     REFERENCE(I_TESTMODE) TYPE  XFELD OPTIONAL
+    7  *"  EXPORTING
+    8  *"     REFERENCE(E_OLDPOS) TYPE  FLQPOS
+    9  *"     REFERENCE(E_FLG_CHANGED) TYPE  XFELD
+   10  *"  TABLES
+   11  *"      T_ITEM_NEW STRUCTURE  FLQITEM
+   12  *"      T_ITEM_OLD STRUCTURE  FLQITEM
+   13  *"  EXCEPTIONS
+   14  *"      INS_ERROR_IT
+   15  *"      UPD_ERROR_IT
+   16  *"      DEL_ERROR_IT
+   17  *"      UPD_ERROR_SU
+   18  *"      INS_ERROR_SU
+   19  *"      TYPE_ERROR
+   20  *"----------------------------------------------------------------------
+   21
+   22  * Expects to get (no test inside!) OLD and NEW for one Actual
+   23  * Comparison and data base update
+   24    FIELD-SYMBOLS: <flqitemn> TYPE flqitem,
+   25                   <flqitemo> TYPE flqitem.
+   26
+   27    DATA: lqorig_old   TYPE flqorig,
+   28          lqorig_new   TYPE flqorig,
+   29          l_extension  TYPE flq_extension,
+   30          l_exist_sum  TYPE xfeld,
+   31          l_sum        TYPE flqsum,
+   32          l_exto       type flq_extension,
+   33          l_extn       type flq_extension,
+   34          l_condstring TYPE string ,
+   35          l_flg_ident  TYPE xfeld.
+   36
+   37    READ TABLE t_item_new INDEX 1 ASSIGNING <flqitemn>.
+   38    IF sy-subrc = 0.
+   39      IF <flqitemn>-xdelete = 'X'.                            "nte2210322
+   40        READ TABLE t_item_new ASSIGNING <flqitemn>
+   41                             WITH KEY xdelete = space.        "nte2210322
+   42        IF sy-subrc = 0.                                      "nte2210322
+   43          lqorig_new = <flqitemn>-lqorig.                     "nte2210322
+   44        ENDIF.
+   45      ELSE.                                                   "nte2210322
+   46        lqorig_new = <flqitemn>-lqorig.
+   47      ENDIF.
+   48    ENDIF.
+   49
+   50    CLEAR: e_flg_changed, e_oldpos.
+   51
+   52    LOOP AT t_item_old ASSIGNING <flqitemo> WHERE xdelete = space.
+   53      IF e_oldpos = space.
+   54        e_oldpos = <flqitemo>-lqpos.
+   55      ELSEIF e_oldpos = '*'. "stable end
+   56      ELSEIF e_oldpos <> <flqitemo>-lqpos.
+   57        e_oldpos = '*'.
+   58      ENDIF.
+   59      lqorig_old = <flqitemo>-lqorig.
+   60
+   61  *    CHECK i_testmode = space. "todo move
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTU03                            Page     16
+--------------------------------------------------------------------------------
+
+   62
+   63      IF lqorig_new  = lqorig_old.
+   64  *    PERFORM condition USING <flqitemo> l_condstring.
+   65        move-corresponding <flqitemo> to l_exto.
+   66
+   67        LOOP AT t_item_new ASSIGNING <flqitemn>
+   68          WHERE  lqpos = <flqitemo>-lqpos
+   69          and    gsber = <flqitemo>-gsber
+   70          and    bukrs = <flqitemo>-bukrs
+   71          and    lqday = <flqitemo>-lqday  "nte1782146 for FB02
+   72          and    twaer = <flqitemo>-twaer. "nte1782146 for CURREX
+   73          move-corresponding <flqitemn> to l_extn.
+   74          check l_extn = l_exto and
+   75                <flqitemn>-wrbtr = <flqitemo>-wrbtr AND
+   76                <flqitemn>-dmbtr = <flqitemo>-dmbtr AND
+   77                <flqitemn>-kwbtr = <flqitemo>-kwbtr.
+   78          <flqitemn>-xdelete = <flqitemo>-xdelete = 'I'. "identical "XLQEX
+       TENSION2
+   79          l_flg_ident = 'X'."XLQEXTENSION1
+   80          EXIT.
+   81        ENDLOOP.
+   82      ENDIF.
+   83    ENDLOOP.
+   84
+   85  * Collect totals
+   86    LOOP AT t_item_old ASSIGNING <flqitemo> WHERE xdelete = space.
+   87      MOVE-CORRESPONDING <flqitemo> TO gt_sum_upd.
+   88      MULTIPLY: gt_sum_upd-wrbtr BY -1, gt_sum_upd-dmbtr BY -1, gt_sum_upd
+       -kwbtr BY -1.
+   89      COLLECT gt_sum_upd.
+   90    ENDLOOP.
+   91    LOOP AT t_item_new ASSIGNING <flqitemn> WHERE xdelete = space."XLQEXTE
+       NSION2
+   92      e_flg_changed = 'X'.
+   93      CLEAR: l_extension, <flqitemn>-guid.
+   94      MOVE-CORRESPONDING <FLQITEMN> TO L_EXTENSION.           "nte2041931
+   95
+   96      IF l_extension IS INITIAL.
+   97        MOVE-CORRESPONDING <flqitemn> TO gt_sum_upd.
+   98        COLLECT gt_sum_upd.
+   99      ELSE.
+  100
+  101        PERFORM existing_sum CHANGING <flqitemn>
+  102                                      l_exist_sum.
+  103        IF l_exist_sum = space.
+  104          PERFORM condition USING <flqitemn> l_condstring.
+  105          SELECT SINGLE guid FROM  flqsum INTO <flqitemn>-guid
+  106                 WHERE  (l_condstring).
+  107
+  108          IF <flqitemn>-guid <> space.
+  109            MOVE-CORRESPONDING <flqitemn> TO gt_sum_upd.
+  110            COLLECT gt_sum_upd.
+  111          ELSE.
+  112            CALL FUNCTION 'GUID_CREATE'  "#EC FB_OLDED
+  113              IMPORTING
+  114                ev_guid_32 = <flqitemn>-guid.
+  115
+  116            MOVE-CORRESPONDING <flqitemn> TO l_sum.
+  117            APPEND l_sum TO gt_sum_ins.
+  118          ENDIF.
+  119        ENDIF.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTU03                            Page     17
+--------------------------------------------------------------------------------
+
+  120      ENDIF.
+  121    ENDLOOP.
+  122
+  123  * Update of timestamp for partial replacement "XLQEXTENSION1
+  124    IF l_flg_ident <> space.
+  125      LOOP AT t_item_new ASSIGNING <flqitemn> WHERE xdelete = 'I'."nte1782
+       146
+  126        APPEND <flqitemn> TO g_t_item_upd_adm."XLQEXTENSION1
+  127        EXIT.
+  128      ENDLOOP.
+  129    ENDIF.
+  130
+  131  * We always insert remaining new
+  132    LOOP AT t_item_new ASSIGNING <flqitemn> WHERE xdelete = space."XLQEXTE
+       NSION2
+  133      APPEND <flqitemn> TO g_t_item_ins.
+  134    ENDLOOP.
+  135
+  136  * Old items (current and hist)  with same origin as new are deleted
+  137    LOOP AT t_item_old ASSIGNING <flqitemo> WHERE lqorig = lqorig_new
+  138                                            AND   xdelete <> 'I'. "XLQEXTE
+       NSION2
+  139      APPEND <flqitemo> TO g_t_item_del. "XLQEXTENSION1
+  140    ENDLOOP.
+  141
+  142  * Current old items with other origin go into history
+  143    IF lqorig_new <> lqorig_old.
+  144      LOOP AT t_item_old ASSIGNING <flqitemo> WHERE xdelete = space.
+  145        APPEND <flqitemo> TO g_t_item_hst. "XLQEXTENSION1
+  146      ENDLOOP.
+  147    ENDIF.
+  148
+  149    CHECK i_testmode = space. "todo move
+  150
+  151    IF sy-oncom <> 'P' AND i_flg_direct = space.
+  152      PERFORM update_item ON COMMIT LEVEL level_update.
+  153      PERFORM update_sum  ON COMMIT LEVEL level_fmsu.
+  154    ELSE.
+  155      PERFORM update_item.
+  156      PERFORM update_sum.
+  157    ENDIF.
+  158
+  159
+  160  ENDFUNCTION.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU03       Page     18
+--------------------------------------------------------------------------------
+
+Subroutines:                                                  Line  Page
+
+CONDITION..................... LFLQEXTU03                      104    16
+EXISTING_SUM.................. LFLQEXTU03                      101    16
+UPDATE_ITEM................... LFLQEXTU03                      155    17
+UPDATE_SUM.................... LFLQEXTU03                      156    17
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU03       Page     19
+--------------------------------------------------------------------------------
+
+External calls
+
+
+Function Modules                                              Line  Page
+
+GUID_CREATE................... LFLQEXTU03                      112    16
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU03       Page     20
+--------------------------------------------------------------------------------
+
+DATABASE OPERATIONS
+
+
+SELECT:                                                       Line  Page
+
+FLQSUM........................ LFLQEXTU03                      105    16
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU03       Page     21
+--------------------------------------------------------------------------------
+
+INTERNAL TABLE OPERATIONS
+
+
+READ TABLE:                                                   Line  Page
+
+T_ITEM_NEW.................... LFLQEXTU03                       37    15
+                               LFLQEXTU03                       40    15
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTU06                            Page     22
+--------------------------------------------------------------------------------
+
+    1  FUNCTION FLQ_UPDATE_FC_EXTSN.
+    2  *"----------------------------------------------------------------------
+    3  *"*"Local Interface:
+    4  *"  IMPORTING
+    5  *"     REFERENCE(I_FLG_DIRECT) TYPE  XFELD OPTIONAL
+    6  *"     REFERENCE(I_TESTMODE) TYPE  XFELD OPTIONAL
+    7  *"  EXPORTING
+    8  *"     REFERENCE(E_OLDPOS) TYPE  FLQPOS
+    9  *"     REFERENCE(E_FLG_CHANGED) TYPE  XFELD
+   10  *"  TABLES
+   11  *"      T_FIN_ITEM_NEW STRUCTURE  FLQITEM OPTIONAL
+   12  *"      T_FIN_ITEM_OLD STRUCTURE  FLQITEM OPTIONAL
+   13  *"  EXCEPTIONS
+   14  *"      INS_ERROR_IT
+   15  *"      UPD_ERROR_IT
+   16  *"      DEL_ERROR_IT
+   17  *"      UPD_ERROR_SU
+   18  *"      INS_ERROR_SU
+   19  *"      TYPE_ERROR
+   20  *"----------------------------------------------------------------------
+   21
+   22  * Expects to get (no test inside!) OLD and NEW for one Actual
+   23  * Comparison and data base update
+   24    FIELD-SYMBOLS: <flqitemn> TYPE flqitem,
+   25                   <flqitemo> TYPE flqitem.
+   26    FIELD-SYMBOLS: <flqitemfi_fc> TYPE flqitem.
+   27    DATA: lqorig_old   TYPE flqorig,
+   28          lqorig_new   TYPE flqorig,
+   29          l_extension  TYPE flq_extension,
+   30          l_exist_sum  TYPE xfeld,
+   31          l_sum        TYPE flqsum_fc,
+   32          l_exto       type flq_extension,
+   33          l_extn       type flq_extension,
+   34          l_condstring TYPE string ,
+   35          l_flg_ident  TYPE xfeld.
+   36    DATA: lt_flqitemfi_fc LIKE flqitem OCCURS 0 WITH HEADER LINE.
+   37    READ TABLE t_fin_item_new INDEX 1 ASSIGNING <flqitemn>.
+   38
+   39    IF sy-subrc = 0.
+   40      lqorig_new = <flqitemn>-lqorig.
+   41    ENDIF.
+   42
+   43    CLEAR: G_T_ITEM_OLD[], G_T_ITEM_OLD.
+   44    LOOP AT t_fin_item_old ASSIGNING <flqitemo> WHERE xdelete = space.
+   45
+   46      LOOP AT G_T_ITEM_OLD  TRANSPORTING NO FIELDS where zbukr = <flqitemo
+       >-bukrs
+   47                                                   AND   belnr = <flqitemo
+       >-belnr
+   48                                                   AND   gjahr = <flqitemo
+       >-gjahr
+   49                                                   AND   buzei = <flqitemo
+       >-buzei.
+   50        exit.
+   51
+   52      ENDLOOP.
+   53
+   54      check sy-subrc <> 0.
+   55
+   56      SELECT * FROM flqitemfi_fc INTO CORRESPONDING FIELDS OF TABLE lt_flq
+       itemfi_fc WHERE  zbukr = <flqitemo>-bukrs
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTU06                            Page     23
+--------------------------------------------------------------------------------
+
+   57                                                             AND   belnr =
+        <flqitemo>-belnr
+   58                                                             AND   gjahr =
+        <flqitemo>-gjahr
+   59                                                             AND   buzei =
+        <flqitemo>-buzei.
+   60      CHECK sy-subrc = 0.
+   61      CLEAR: e_flg_changed, e_oldpos.
+   62
+   63      LOOP AT lt_flqitemfi_fc ASSIGNING <flqitemfi_fc>.
+   64
+   65        IF e_oldpos = space.
+   66          e_oldpos = <flqitemfi_fc>-lqpos.
+   67        ELSEIF e_oldpos = '*'. "stable end
+   68        ELSEIF e_oldpos <> <flqitemfi_fc>-lqpos.
+   69          e_oldpos = '*'.
+   70        ENDIF.
+   71
+   72        MOVE-CORRESPONDING <flqitemfi_fc> TO l_exto.
+   73        LOOP AT t_fin_item_new ASSIGNING <flqitemn>
+   74          WHERE  lqpos = <flqitemfi_fc>-lqpos
+   75          AND    gsber = <flqitemfi_fc>-gsber
+   76          AND    bukrs = <flqitemfi_fc>-bukrs
+   77          AND    fdlev = <flqitemfi_fc>-fdlev
+   78          AND    lqday = <flqitemfi_fc>-lqday  " for FB02
+   79          AND    twaer = <flqitemfi_fc>-twaer. " for CURREX.
+   80          MOVE-CORRESPONDING <flqitemn> TO l_extn.
+   81          CHECK l_extn = l_exto AND
+   82                <flqitemfi_fc>-wrbtr = <flqitemn>-wrbtr.
+   83          <flqitemn>-xdelete = <flqitemfi_fc>-xdelete = 'I'. "identical "X
+       LQEXTENSION2
+   84          l_flg_ident = 'X'."XLQEXTENSION1
+   85          EXIT.
+   86        ENDLOOP.
+   87        APPEND <flqitemfi_fc> TO g_t_item_old.
+   88      ENDLOOP.
+   89
+   90      LOOP AT lt_flqitemfi_fc ASSIGNING <flqitemfi_fc> WHERE xdelete = spa
+       ce.
+   91        MOVE-CORRESPONDING <flqitemfi_fc> TO gt_sum_upd_fc.
+   92        MULTIPLY: gt_sum_upd_fc-wrbtr BY -1.
+   93        gt_sum_upd_fc-lqtype = con_lqtype_fc_fi_doc.
+   94        COLLECT gt_sum_upd_fc.
+   95      ENDLOOP.
+   96    ENDLOOP.
+   97
+   98    LOOP AT t_fin_item_new ASSIGNING <flqitemn> WHERE xdelete = space."XLQ
+       EXTENSION2
+   99      e_flg_changed = 'X'.
+  100      CLEAR: l_extension, <flqitemn>-guid.
+  101      MOVE-CORRESPONDING <flqitemn> TO l_extension.
+  102
+  103      IF l_extension IS INITIAL.
+  104        MOVE-CORRESPONDING <flqitemn> TO gt_sum_upd_fc.
+  105        gt_sum_upd_fc-lqtype = con_lqtype_fc_fi_doc.
+  106        COLLECT gt_sum_upd_fc.
+  107      ELSE.
+  108
+  109        PERFORM existing_sum_fc CHANGING <flqitemn>
+  110                                      l_exist_sum.
+  111        IF l_exist_sum = space.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTU06                            Page     24
+--------------------------------------------------------------------------------
+
+  112          PERFORM condition USING <flqitemn> l_condstring.
+  113          SELECT SINGLE guid FROM  flqsum_fc INTO <flqitemn>-guid
+  114                 WHERE  (l_condstring).
+  115
+  116          IF <flqitemn>-guid <> space.
+  117            MOVE-CORRESPONDING <flqitemn> TO gt_sum_upd_fc.
+  118            gt_sum_upd_fc-lqtype = con_lqtype_fc_fi_doc.
+  119            COLLECT gt_sum_upd_fc.
+  120          ELSE.
+  121            CALL FUNCTION 'GUID_CREATE'  "#EC FB_OLDED
+  122              IMPORTING
+  123                ev_guid_32 = <flqitemn>-guid.
+  124
+  125            MOVE-CORRESPONDING <flqitemn> TO l_sum.
+  126            l_sum-lqtype = con_lqtype_fc_fi_doc.
+  127            APPEND l_sum TO gt_sum_ins_fc.
+  128          ENDIF.
+  129        ENDIF.
+  130      ENDIF.
+  131    ENDLOOP.
+  132
+  133  * Update of timestamp for partial replacement "XLQEXTENSION1
+  134    IF l_flg_ident <> space.
+  135      LOOP AT t_fin_item_new ASSIGNING <flqitemn> WHERE xdelete = 'I'."XLQ
+       EXTENSION2
+  136        APPEND <flqitemn> TO g_t_item_upd_adm."XLQEXTENSION1
+  137        EXIT.
+  138      ENDLOOP.
+  139    ENDIF.
+  140
+  141  * We always insert remaining new
+  142    LOOP AT t_fin_item_new ASSIGNING <flqitemn> WHERE xdelete = space."XLQ
+       EXTENSION2
+  143      APPEND <flqitemn> TO g_t_item_ins.
+  144    ENDLOOP.
+  145
+  146  * Old items (current and hist)  with same origin as new are deleted
+  147    LOOP AT g_t_item_old ASSIGNING <flqitemo> WHERE xdelete <> 'I'. "XLQEX
+       TENSION2
+  148      APPEND <flqitemo> TO g_t_item_del. "XLQEXTENSION1
+  149    ENDLOOP.
+  150
+  151    CHECK i_testmode = space.
+  152
+  153    IF sy-oncom <> 'P' AND i_flg_direct = space.
+  154      PERFORM update_item_fifc ON COMMIT LEVEL level_update.
+  155      PERFORM update_sum_fc  ON COMMIT LEVEL level_fmsu.
+  156    ELSE.
+  157      PERFORM update_item_fifc.
+  158      PERFORM update_sum_fc.
+  159    ENDIF.
+  160
+  161
+  162  ENDFUNCTION.
+  163  *&---------------------------------------------------------------------*
+  164  *&      Form  update_item_fc
+  165  *&---------------------------------------------------------------------*
+  166  *       text
+  167  *----------------------------------------------------------------------*
+  168  FORM update_item_fifc .
+  169
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTU06                            Page     25
+--------------------------------------------------------------------------------
+
+  170    DATA: l_f_flqitemfi   LIKE  flqitemfi_fc.
+  171
+  172    FIELD-SYMBOLS <item> TYPE flqitem .
+  173
+  174  *----- History
+  175
+  176
+  177  *----- Delete
+  178    LOOP AT g_t_item_del ASSIGNING <item>.
+  179
+  180      MOVE-CORRESPONDING <item> TO l_f_flqitemfi.
+  181      DELETE  flqitemfi_fc FROM  l_f_flqitemfi.
+  182
+  183      IF sy-subrc <> 0.
+  184        RAISE del_error_it.
+  185      ENDIF.
+  186    ENDLOOP.
+  187
+  188  *----- Insert
+  189    LOOP AT g_t_item_ins ASSIGNING <item>.
+  190
+  191      MOVE-CORRESPONDING <item> TO l_f_flqitemfi.
+  192      INSERT  flqitemfi_fc FROM  l_f_flqitemfi.
+  193
+  194      IF sy-subrc <> 0.
+  195        RAISE ins_error_it.
+  196      ENDIF.
+  197    ENDLOOP.
+  198
+  199  *---- Update Admin data of leftover old "XLQEXTENSION1
+  200    LOOP AT g_t_item_upd_adm ASSIGNING <item>.
+  201
+  202      UPDATE  flqitemfi_fc SET
+  203        cpudt = <item>-cpudt
+  204        cputm = <item>-cputm
+  205        uname = <item>-uname
+  206             WHERE  zbukr   = <item>-zbukr
+  207             AND    belnr   = <item>-belnr
+  208             AND    gjahr   = <item>-gjahr
+  209             AND    buzei   = <item>-buzei.
+  210
+  211    ENDLOOP.
+  212
+  213    CLEAR: g_t_item_ins[], g_t_item_del[],
+  214       g_t_item_upd_adm[]."XLQEXTENSION1
+  215
+  216  ENDFORM.                    " UPDATE_ITEM
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU06       Page     26
+--------------------------------------------------------------------------------
+
+Subroutines:                                                  Line  Page
+
+CONDITION..................... LFLQEXTU06                      112    24
+EXISTING_SUM_FC............... LFLQEXTU06                      109    23
+UPDATE_ITEM_FIFC.............. LFLQEXTU06                      157    24
+                               LFLQEXTU06                      168    24
+UPDATE_SUM_FC................. LFLQEXTU06                      158    24
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU06       Page     27
+--------------------------------------------------------------------------------
+
+External calls
+
+
+Function Modules                                              Line  Page
+
+GUID_CREATE................... LFLQEXTU06                      121    24
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU06       Page     28
+--------------------------------------------------------------------------------
+
+DATABASE OPERATIONS
+
+
+SELECT:                                                       Line  Page
+
+FLQITEMFI_FC.................. LFLQEXTU06                       56    22
+FLQSUM_FC..................... LFLQEXTU06                      113    24
+--------------------------------------------------------------------------------
+
+
+UPDATE:                                                       Line  Page
+
+FLQITEMFI_FC.................. LFLQEXTU06                      202    25
+--------------------------------------------------------------------------------
+
+DELETE:
+
+                                                              Line  Page
+
+FLQITEMFI_FC.................. LFLQEXTU06                      181    25
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU06       Page     29
+--------------------------------------------------------------------------------
+
+INTERNAL TABLE OPERATIONS
+
+
+READ TABLE:                                                   Line  Page
+
+T_FIN_ITEM_NEW................ LFLQEXTU06                       37    22
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTU08                            Page     30
+--------------------------------------------------------------------------------
+
+    1  FUNCTION FLQ_UPDATE_FC_EXTSN_MMPARK.
+    2  *"----------------------------------------------------------------------
+    3  *"*"Local Interface:
+    4  *"  IMPORTING
+    5  *"     REFERENCE(I_FLG_DIRECT) TYPE  XFELD OPTIONAL
+    6  *"     REFERENCE(I_TESTMODE) TYPE  XFELD OPTIONAL
+    7  *"  EXPORTING
+    8  *"     REFERENCE(E_OLDPOS) TYPE  FLQPOS
+    9  *"     REFERENCE(E_FLG_CHANGED) TYPE  XFELD
+   10  *"  TABLES
+   11  *"      T_ITEM_NEW STRUCTURE  FLQITEM
+   12  *"      T_ITEM_OLD STRUCTURE  FLQITEM
+   13  *"----------------------------------------------------------------------
+   14
+   15    data t_flqitempark type flqitemmmpark_fc occurs 0.          "nte224799
+       2
+   16
+   17    FIELD-SYMBOLS: <flqitemn> TYPE flqitem ,
+   18                   <flqitemo> TYPE flqitem .
+   19    FIELD-SYMBOLS: <flqitempark_fc> TYPE flqitem .
+   20    FIELD-SYMBOLS: <flqitempark> LIKE LINE OF t_flqitempark.
+   21    DATA: lqorig_old   TYPE flqorig,
+   22          lqorig_new   TYPE flqorig,
+   23          l_extension  TYPE flq_extension,
+   24          l_exist_sum  TYPE xfeld,
+   25          l_sum        TYPE flqsum_fc,
+   26          l_exto       TYPE flq_extension,
+   27          l_extn       TYPE flq_extension,
+   28          l_condstring TYPE string ,
+   29          l_flg_ident  TYPE xfeld.
+   30    DATA: lt_flqitempark_fc LIKE flqitem OCCURS 0 WITH HEADER LINE.
+   31    READ TABLE t_item_new INDEX 1 ASSIGNING <flqitemn>.
+   32    IF sy-subrc = 0.
+   33      lqorig_new = <flqitemn>-lqorig.
+   34    ENDIF.
+   35
+   36    CLEAR: e_flg_changed, e_oldpos.
+   37    CLEAR: g_t_item_old[],g_t_item_old.
+   38
+   39    LOOP AT t_item_old ASSIGNING <flqitemo> WHERE xdelete = space.
+   40      SELECT * FROM FLQITEMMMPARK_FC INTO CORRESPONDING FIELDS OF TABLE t_
+       flqitempark WHERE  bukrs = <flqitemo>-zbukr
+   41                                                             AND   belnr =
+        <flqitemo>-belnr
+   42                                                             AND   gjahr =
+        <flqitemo>-gjahr
+   43                                                             AND   bzkey =
+        <flqitemo>-buzei.
+   44      LOOP AT t_flqitempark ASSIGNING <flqitempark>.
+   45        MOVE-CORRESPONDING <flqitempark> TO lt_flqitempark_fc.  "nte224799
+       2
+   46        lt_flqitempark_fc-buzei = <flqitempark>-bzkey.          "nte224799
+       2
+   47        APPEND lt_flqitempark_fc.                               "nte224799
+       2
+   48      ENDLOOP.
+   49
+   50      CHECK sy-subrc = 0.
+   51      CLEAR: e_flg_changed, e_oldpos.
+   52
+   53      LOOP AT lt_flqitempark_fc ASSIGNING <flqitempark_fc>.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTU08                            Page     31
+--------------------------------------------------------------------------------
+
+   54
+   55        IF e_oldpos = space.
+   56          e_oldpos = <flqitempark_fc>-lqpos.
+   57        ELSEIF e_oldpos = '*'. "stable end
+   58        ELSEIF e_oldpos <> <flqitempark_fc>-lqpos.
+   59          e_oldpos = '*'.
+   60        ENDIF.
+   61
+   62        MOVE-CORRESPONDING <flqitempark_fc> TO l_exto.
+   63        LOOP AT t_item_new ASSIGNING <flqitemn>
+   64          WHERE  lqpos = <flqitempark_fc>-lqpos
+   65          AND    gsber = <flqitempark_fc>-gsber
+   66          AND    bukrs = <flqitempark_fc>-bukrs
+   67          AND    fdlev = <flqitempark_fc>-fdlev
+   68          AND    lqday = <flqitempark_fc>-lqday
+   69          AND    twaer = <flqitempark_fc>-twaer.
+   70          MOVE-CORRESPONDING <flqitemn> TO l_extn.
+   71          CHECK l_extn = l_exto AND
+   72                <flqitempark_fc>-wrbtr = <flqitemn>-wrbtr.
+   73          <flqitemn>-xdelete = <flqitempark_fc>-xdelete = 'I'. "identical
+       "XLQEXTENSION2
+   74          l_flg_ident = 'X'."XLQEXTENSION1
+   75          EXIT.
+   76        ENDLOOP.
+   77        APPEND <flqitempark_fc> TO g_t_item_old.
+   78      ENDLOOP.
+   79      LOOP AT lt_flqitempark_fc ASSIGNING <flqitempark_fc> WHERE xdelete =
+        space.
+   80        MOVE-CORRESPONDING <flqitempark_fc> TO gt_sum_upd_fc.
+   81        MULTIPLY: gt_sum_upd_fc-wrbtr BY -1.
+   82        gt_sum_upd_fc-lqtype = CON_LQTYPE_FC_MM_PARK.
+   83        COLLECT gt_sum_upd_fc.
+   84      ENDLOOP.
+   85    ENDLOOP.
+   86
+   87    LOOP AT t_item_new ASSIGNING <flqitemn> WHERE xdelete = space."XLQEXTE
+       NSION2
+   88      e_flg_changed = 'X'.
+   89      CLEAR: l_extension, <flqitemn>-guid.
+   90      MOVE-CORRESPONDING <flqitemn> TO l_extension.
+   91
+   92      IF l_extension IS INITIAL.
+   93        MOVE-CORRESPONDING <flqitemn> TO gt_sum_upd_fc.
+   94        gt_sum_upd_fc-lqtype = CON_LQTYPE_FC_MM_PARK.
+   95        COLLECT gt_sum_upd_fc.
+   96      ELSE.
+   97        CLEAR l_exist_sum.
+   98        PERFORM existing_sum_fc CHANGING <flqitemn>
+   99                                         l_exist_sum.
+  100        IF l_exist_sum = space.
+  101          PERFORM condition USING <flqitemn> l_condstring.
+  102          SELECT SINGLE guid FROM  flqsum_fc INTO <flqitemn>-guid
+  103                 WHERE  (l_condstring).
+  104
+  105          IF <flqitemn>-guid <> space.
+  106            MOVE-CORRESPONDING <flqitemn> TO gt_sum_upd_fc.
+  107            gt_sum_upd_fc-lqtype = CON_LQTYPE_FC_MM_PARK.
+  108            COLLECT gt_sum_upd_fc.
+  109          ELSE.
+  110            CALL FUNCTION 'GUID_CREATE'  "#EC FB_OLDED
+  111              IMPORTING
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTU08                            Page     32
+--------------------------------------------------------------------------------
+
+  112                ev_guid_32 = <flqitemn>-guid.
+  113
+  114            MOVE-CORRESPONDING <flqitemn> TO l_sum.
+  115            l_sum-lqtype = CON_LQTYPE_FC_MM_PARK.
+  116            APPEND l_sum TO gt_sum_ins_fc.
+  117          ENDIF.
+  118        ENDIF.
+  119      ENDIF.
+  120    ENDLOOP.
+  121
+  122  * Update of timestamp for partial replacement "XLQEXTENSION1
+  123    IF l_flg_ident <> space.
+  124      LOOP AT t_item_new ASSIGNING <flqitemn> WHERE xdelete = 'I'."XLQEXTE
+       NSION2
+  125        APPEND <flqitemn> TO g_t_item_upd_adm."XLQEXTENSION1
+  126        EXIT.
+  127      ENDLOOP.
+  128    ENDIF.
+  129
+  130  * We always insert remaining new
+  131    LOOP AT t_item_new ASSIGNING <flqitemn> WHERE xdelete = space."XLQEXTE
+       NSION2
+  132      APPEND <flqitemn> TO g_t_item_ins.
+  133    ENDLOOP.
+  134
+  135  * Old items (current and hist)  with same origin as new are deleted
+  136    LOOP AT g_t_item_old ASSIGNING <flqitemo> WHERE xdelete <> 'I'. "XLQEX
+       TENSION2
+  137      APPEND <flqitemo> TO g_t_item_del. "XLQEXTENSION1
+  138    ENDLOOP.
+  139
+  140    CHECK i_testmode = space.
+  141
+  142    IF sy-oncom <> 'P' AND i_flg_direct = space.
+  143      PERFORM update_item_mmpark ON COMMIT LEVEL level_update.
+  144      PERFORM update_sum_fc      ON COMMIT LEVEL level_fmsu.
+  145    ELSE.
+  146      PERFORM update_item_mmpark.
+  147      PERFORM update_sum_fc.
+  148    ENDIF.
+  149
+  150  ENDFUNCTION.
+  151
+  152  *&---------------------------------------------------------------------*
+  153  *&      Form  update_item_mmpark
+  154  *&---------------------------------------------------------------------*
+  155  *       text
+  156  *----------------------------------------------------------------------*
+  157  FORM update_item_mmpark .
+  158
+  159    DATA: l_f_flqitemfi   LIKE  flqitemmmpark_fc.
+  160
+  161    FIELD-SYMBOLS <item> TYPE flqitem .
+  162
+  163  *----- History
+  164
+  165
+  166  *----- Delete
+  167    LOOP AT g_t_item_del ASSIGNING <item>.
+  168
+  169      MOVE-CORRESPONDING <item> TO l_f_flqitemfi.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTU08                            Page     33
+--------------------------------------------------------------------------------
+
+  170      l_f_flqitemfi-bzkey = <item>-buzei.                  "nte2247992
+  171      DELETE  flqitemmmpark_fc FROM  l_f_flqitemfi.
+  172
+  173      IF sy-subrc <> 0.
+  174        RAISE del_error_it.
+  175      ENDIF.
+  176    ENDLOOP.
+  177
+  178  *----- Insert
+  179    LOOP AT g_t_item_ins ASSIGNING <item>.
+  180
+  181      MOVE-CORRESPONDING <item> TO l_f_flqitemfi.
+  182      l_f_flqitemfi-bzkey = <item>-buzei.                  "nte2247992
+  183      INSERT  flqitemmmpark_fc FROM  l_f_flqitemfi.
+  184
+  185      IF sy-subrc <> 0.
+  186        RAISE ins_error_it.
+  187      ENDIF.
+  188    ENDLOOP.
+  189
+  190  *---- Update Admin data of leftover old "XLQEXTENSION1
+  191    LOOP AT g_t_item_upd_adm ASSIGNING <item>.
+  192
+  193      UPDATE  flqitemmmpark_fc SET
+  194        cpudt = <item>-cpudt
+  195        cputm = <item>-cputm
+  196        uname = <item>-uname
+  197             WHERE  bukrs   = <item>-zbukr
+  198             AND    belnr   = <item>-belnr
+  199             AND    gjahr   = <item>-gjahr
+  200             AND    bzkey   = <item>-buzei.
+  201
+  202    ENDLOOP.
+  203
+  204    CLEAR: g_t_item_ins[], g_t_item_del[], g_t_item_hst[],
+  205       g_t_item_upd_adm[]."XLQEXTENSION1
+  206
+  207  ENDFORM.                    " UPDATE_ITEM
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU08       Page     34
+--------------------------------------------------------------------------------
+
+Subroutines:                                                  Line  Page
+
+CONDITION..................... LFLQEXTU08                      101    31
+EXISTING_SUM_FC............... LFLQEXTU08                       98    31
+UPDATE_ITEM_MMPARK............ LFLQEXTU08                      146    32
+                               LFLQEXTU08                      157    32
+UPDATE_SUM_FC................. LFLQEXTU08                      147    32
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU08       Page     35
+--------------------------------------------------------------------------------
+
+External calls
+
+
+Function Modules                                              Line  Page
+
+GUID_CREATE................... LFLQEXTU08                      110    31
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU08       Page     36
+--------------------------------------------------------------------------------
+
+DATABASE OPERATIONS
+
+
+SELECT:                                                       Line  Page
+
+FLQITEMMMPARK_FC.............. LFLQEXTU08                       40    30
+FLQSUM_FC..................... LFLQEXTU08                      102    31
+--------------------------------------------------------------------------------
+
+
+UPDATE:                                                       Line  Page
+
+FLQITEMMMPARK_FC.............. LFLQEXTU08                      193    33
+--------------------------------------------------------------------------------
+
+DELETE:
+
+                                                              Line  Page
+
+FLQITEMMMPARK_FC.............. LFLQEXTU08                      171    33
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU08       Page     37
+--------------------------------------------------------------------------------
+
+INTERNAL TABLE OPERATIONS
+
+
+READ TABLE:                                                   Line  Page
+
+T_ITEM_NEW.................... LFLQEXTU08                       31    30
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTU11                            Page     38
+--------------------------------------------------------------------------------
+
+    1  FUNCTION flq_update_fc_extsn_mmpo.
+    2  *"----------------------------------------------------------------------
+    3  *"*"Local Interface:
+    4  *"  TABLES
+    5  *"      T_MMPO_ITEM_DEL STRUCTURE  FLQITEMPO_FC
+    6  *"      T_MMPO_ITEM_INS STRUCTURE  FLQITEMPO_FC
+    7  *"  EXCEPTIONS
+    8  *"      INS_ERROR_IT
+    9  *"      DEL_ERROR_IT
+   10  *"      UPD_ERROR_SU
+   11  *"----------------------------------------------------------------------
+   12
+   13  *----- Beschreibung der verschiedenen Tabellen ------------------------*
+   14
+   15  *-INS  Saetze werden auf der Datenbank eingefuegt
+   16  *-DEL  Saetze werden von der Datenbank entfernt.
+   17
+   18  * Die Summentabelle wird jeweils entsprechend angepasst.
+   19  *  TABLES FLQITEMFI_FC.
+   20    DATA: l_t_flqsum_fc  LIKE flqsum_fc OCCURS 0 WITH HEADER LINE.
+   21    DATA: l_condstring TYPE string,
+   22          l_guid LIKE flqsum_fc-guid,
+   23          l_extension TYPE flq_extension.
+   24
+   25    DATA: ls_flqitem_del TYPE flqitem,
+   26          ls_flqitem_ins TYPE flqitem.
+   27  *----- Einzelposten Delete
+   28    LOOP AT t_mmpo_item_del.
+   29      MULTIPLY t_mmpo_item_del-wrbtr BY -1.
+   30  * Find sum information
+   31      MOVE-CORRESPONDING t_mmpo_item_del TO l_t_flqsum_fc.
+   32      l_t_flqsum_fc-lqtype = con_lqtype_fc_mm_po.
+   33      l_t_flqsum_fc-zbukr  = l_t_flqsum_fc-bukrs.
+   34  ** GUID information
+   35  *    MOVE-CORRESPONDING t_mmpo_item_del TO ls_flqitem_del.
+   36  *    PERFORM condition USING ls_flqitem_del l_condstring.
+   37  *    SELECT SINGLE guid FROM  flqsum_fc INTO l_t_flqsum_fc-guid
+   38  *           WHERE  (l_condstring).
+   39  * DELETE
+   40      DELETE flqitempo_fc FROM t_mmpo_item_del.
+   41      CHECK sy-subrc = 0.                                     "nte1017035
+   42      COLLECT l_t_flqsum_fc.
+   43    ENDLOOP.
+   44
+   45  *----- Einzelposten Insert
+   46    LOOP AT t_mmpo_item_ins.
+   47      CLEAR: ls_flqitem_ins, l_extension.
+   48  *Find sum information
+   49      MOVE-CORRESPONDING t_mmpo_item_ins TO l_t_flqsum_fc.
+   50      l_t_flqsum_fc-lqtype = con_lqtype_fc_mm_po.
+   51      l_t_flqsum_fc-zbukr  = l_t_flqsum_fc-bukrs.
+   52  *Create GUID--only for extension
+   53      MOVE-CORRESPONDING t_mmpo_item_ins TO l_extension.
+   54      IF l_extension IS NOT INITIAL.
+   55          MOVE-CORRESPONDING t_mmpo_item_ins TO ls_flqitem_ins.
+   56          PERFORM condition USING ls_flqitem_ins l_condstring.
+   57          l_condstring = cl_abap_dyn_prg=>escape_quotes(  l_condstring ).
+        " fix security check
+   58          SELECT SINGLE guid FROM flqsum_fc INTO l_t_flqsum_fc-guid
+   59                 WHERE  (l_condstring).
+   60          IF l_t_flqsum_fc-guid IS INITIAL.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTU11                            Page     39
+--------------------------------------------------------------------------------
+
+   61             SELECT SINGLE guid FROM  flqitempo_fc INTO l_t_flqsum_fc-guid
+   62                 WHERE  (l_condstring).
+   63             IF l_t_flqsum_fc-guid IS INITIAL.
+   64                 CALL FUNCTION 'GUID_CREATE'  "#EC FB_OLDED
+   65                 IMPORTING
+   66                     ev_guid_32 = l_t_flqsum_fc-guid.
+   67             ENDIF.
+   68          ENDIF.
+   69          t_mmpo_item_ins-guid = l_t_flqsum_fc-guid.          "nte2225692
+   70      ENDIF.
+   71  * insert
+   72      INSERT flqitempo_fc FROM t_mmpo_item_ins.
+   73      CHECK sy-subrc = 0.                                     "nte1017035
+   74      COLLECT l_t_flqsum_fc.
+   75    ENDLOOP.
+   76
+   77  *----- Summen
+   78    SORT l_t_flqsum_fc BY
+   79                      lqtype
+   80                      lqpos
+   81                      bukrs
+   82                      gsber
+   83                      lqday
+   84                      zbukr
+   85                      fdlev
+   86                      twaer
+   87                      guid.
+   88
+   89    LOOP AT l_t_flqsum_fc.
+   90
+   91      PERFORM update_sum_fc_single USING l_t_flqsum_fc.
+   92      CHECK sy-subrc <> 0.
+   93
+   94      INSERT flqsum_fc FROM l_t_flqsum_fc.
+   95      CHECK sy-subrc <> 0.
+   96
+   97      PERFORM update_sum_fc_single USING l_t_flqsum_fc.
+   98
+   99      CHECK sy-subrc <> 0.
+  100      RAISE upd_error_su.
+  101    ENDLOOP.
+  102
+  103  ENDFUNCTION.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU11       Page     40
+--------------------------------------------------------------------------------
+
+Subroutines:                                                  Line  Page
+
+CONDITION..................... LFLQEXTU11                       56    38
+UPDATE_SUM_FC_SINGLE.......... LFLQEXTU11                       91    39
+                               LFLQEXTU11                       97    39
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU11       Page     41
+--------------------------------------------------------------------------------
+
+External calls
+
+
+Function Modules                                              Line  Page
+
+GUID_CREATE................... LFLQEXTU11                       64    39
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU11       Page     42
+--------------------------------------------------------------------------------
+
+DATABASE OPERATIONS
+
+
+SELECT:                                                       Line  Page
+
+FLQITEMPO_FC.................. LFLQEXTU11                       61    39
+FLQSUM_FC..................... LFLQEXTU11                       58    38
+--------------------------------------------------------------------------------
+
+DELETE:
+
+                                                              Line  Page
+
+FLQITEMPO_FC.................. LFLQEXTU11                       40    38
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTU10                            Page     43
+--------------------------------------------------------------------------------
+
+    1  FUNCTION FLQ_UPDATE_FC_EXTSN_MMPR .
+    2  *"----------------------------------------------------------------------
+    3  *"*"Local Interface:
+    4  *"  TABLES
+    5  *"      T_MMPR_ITEM_DEL STRUCTURE  FLQITEMPR_FC OPTIONAL
+    6  *"      T_MMPR_ITEM_INS STRUCTURE  FLQITEMPR_FC OPTIONAL
+    7  *"  EXCEPTIONS
+    8  *"      INS_ERROR_IT
+    9  *"      DEL_ERROR_IT
+   10  *"      UPD_ERROR_SU
+   11  *"----------------------------------------------------------------------
+   12
+   13  *----- Beschreibung der verschiedenen Tabellen ------------------------*
+   14
+   15  *-INS  Saetze werden auf der Datenbank eingefuegt
+   16  *-DEL  Saetze werden von der Datenbank entfernt.
+   17
+   18  * Die Summentabelle wird jeweils entsprechend angepasst.
+   19    TABLES FLQITEMFI_FC.
+   20    DATA: L_T_FLQSUM_FC  LIKE FLQSUM_FC OCCURS 0 WITH HEADER LINE.
+   21    DATA: l_condstring TYPE string,
+   22          l_extension TYPE flq_extension,
+   23          l_guid LIKE FLQSUM_FC-guid.
+   24  *  FIELD-SYMBOLS: <FLQitempr_del> TYPE flqitem,
+   25  *                 <FLQitempr_ins> TYPE flqitem.
+   26  data:   ls_flqitem_del like flqitem,
+   27          ls_flqitem_ins like flqitem.
+   28  *----- Einzelposten Delete
+   29
+   30    LOOP AT T_MMPR_ITEM_DEL.
+   31      MULTIPLY: T_MMPR_ITEM_DEL-WRBTR BY -1, T_MMPR_ITEM_DEL-DMBTR BY -1.
+   32      MOVE-CORRESPONDING T_MMPR_ITEM_DEL TO L_T_FLQSUM_FC.
+   33      L_T_FLQSUM_FC-LQTYPE = CON_LQTYPE_FC_MM_PR .
+   34      L_T_FLQSUM_FC-ZBUKR  = L_T_FLQSUM_FC-BUKRS.
+   35      DELETE FLQITEMPR_FC FROM T_MMPR_ITEM_DEL.
+   36      CHECK SY-SUBRC = 0.
+   37      COLLECT L_T_FLQSUM_FC.
+   38    ENDLOOP.
+   39
+   40    LOOP AT T_MMPR_ITEM_INS.
+   41      MOVE-CORRESPONDING T_MMPR_ITEM_INS TO L_T_FLQSUM_FC.
+   42       CLEAR:l_extension, ls_flqitem_ins.
+   43      MOVE-CORRESPONDING T_MMPR_ITEM_INS TO l_extension.
+   44      IF l_extension IS not INITIAL.
+   45      MOVE-CORRESPONDING T_MMPR_ITEM_INS TO ls_flqitem_ins.
+   46      PERFORM condition USING ls_flqitem_ins l_condstring.
+   47      SELECT SINGLE guid FROM  flqsum_fc INTO L_T_FLQSUM_FC-guid
+   48                WHERE  (l_condstring).
+   49      if l_t_flqsum_fc-guid is initial.
+   50      SELECT SINGLE guid FROM FLQITEMPR_FC
+   51        INTO L_T_FLQSUM_FC-guid WHERE  (l_condstring).
+   52        if l_t_flqsum_fc-guid is initial.
+   53        CALL FUNCTION 'GUID_CREATE'  "#EC FB_OLDED
+   54          IMPORTING
+   55            ev_guid_32 = l_t_flqsum_fc-guid.
+   56        endif.
+   57      ENDIF.
+   58      ENDIF.
+   59      T_MMPR_ITEM_INS-GUID = L_T_FLQSUM_FC-GUID.
+   60      L_T_FLQSUM_FC-LQTYPE = CON_LQTYPE_FC_MM_PR .
+   61      L_T_FLQSUM_FC-ZBUKR  = L_T_FLQSUM_FC-BUKRS.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTU10                            Page     44
+--------------------------------------------------------------------------------
+
+   62      INSERT FLQITEMPR_FC FROM T_MMPR_ITEM_INS.
+   63      CHECK SY-SUBRC = 0.
+   64      COLLECT L_T_FLQSUM_FC.
+   65    ENDLOOP.
+   66
+   67  *----- Summen
+   68    SORT L_T_FLQSUM_FC BY
+   69                      LQTYPE
+   70                      LQPOS
+   71                      BUKRS
+   72                      GSBER
+   73                      LQDAY
+   74                      ZBUKR
+   75                      FDLEV
+   76                      TWAER
+   77                      GUID.
+   78
+   79    LOOP AT L_T_FLQSUM_FC.
+   80
+   81      PERFORM UPDATE_SUM_FC_SINGLE USING L_T_FLQSUM_FC.
+   82      CHECK SY-SUBRC <> 0.
+   83
+   84      INSERT FLQSUM_FC FROM L_T_FLQSUM_FC.
+   85      CHECK SY-SUBRC <> 0.
+   86
+   87      PERFORM UPDATE_SUM_FC_SINGLE USING L_T_FLQSUM_FC.
+   88
+   89      CHECK SY-SUBRC <> 0.
+   90      RAISE UPD_ERROR_SU.
+   91    ENDLOOP.
+   92
+   93  ENDFUNCTION.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU10       Page     45
+--------------------------------------------------------------------------------
+
+Subroutines:                                                  Line  Page
+
+CONDITION..................... LFLQEXTU10                       46    43
+UPDATE_SUM_FC_SINGLE.......... LFLQEXTU10                       81    44
+                               LFLQEXTU10                       87    44
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU10       Page     46
+--------------------------------------------------------------------------------
+
+External calls
+
+
+Function Modules                                              Line  Page
+
+GUID_CREATE................... LFLQEXTU10                       53    43
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU10       Page     47
+--------------------------------------------------------------------------------
+
+DATABASE OPERATIONS
+
+
+SELECT:                                                       Line  Page
+
+FLQITEMPR_FC.................. LFLQEXTU10                       50    43
+FLQSUM_FC..................... LFLQEXTU10                       47    43
+--------------------------------------------------------------------------------
+
+DELETE:
+
+                                                              Line  Page
+
+FLQITEMPR_FC.................. LFLQEXTU10                       35    43
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTU09                            Page     48
+--------------------------------------------------------------------------------
+
+    1  FUNCTION flq_update_fc_extsn_sdso.
+    2  *"----------------------------------------------------------------------
+    3  *"*"Verbuchungsfunktionsbaustein:
+    4  *"
+    5  *"*"Lokale Schnittstelle:
+    6  *"  TABLES
+    7  *"      T_SDSO_ITEM_NEW STRUCTURE  FLQITEMSO_FC OPTIONAL
+    8  *"      T_SDSO_ITEM_OLD STRUCTURE  FLQITEMSO_FC OPTIONAL
+    9  *"  EXCEPTIONS
+   10  *"      INS_ERROR_HD
+   11  *"      UPD_ERROR_HD
+   12  *"      INS_ERROR_IT
+   13  *"      DEL_ERROR_IT
+   14  *"      UPD_ERROR_SU
+   15  *"      TYPE_ERROR
+   16  *"----------------------------------------------------------------------
+   17
+   18  *----- Beschreibung der verschiedenen Tabellen ------------------------*
+   19
+   20  *-INS  Saetze werden auf der Datenbank eingefuegt
+   21  *-UPD  Saetze zum Update auf der Datenbank
+   22  *-DEL  Saetze werden von der Datenbank entfernt.
+   23
+   24  *----- Summen direkt, ohne globales Memory                  "nte1019785
+   25    DATA: l_t_sum LIKE flqsum_fc OCCURS 0 WITH HEADER LINE,
+   26          l_sum TYPE flqsum_fc,
+   27          l_extension TYPE flq_extension,
+   28          l_exist_sum  TYPE xfeld,
+   29          l_exto       TYPE flq_extension,
+   30          l_extn       TYPE flq_extension,
+   31          l_condstring TYPE string,
+   32          l_guid TYPE flqsum_fc-guid,
+   33          l_item TYPE flqitem.
+   34
+   35    FIELD-SYMBOLS: <item_new> TYPE flqitemso_fc,
+   36                   <item_old> TYPE flqitemso_fc,
+   37                   <item_so>  TYPE flqitemso_fc.
+   38
+   39
+   40
+   41    LOOP AT t_sdso_item_old ASSIGNING <item_old>.
+   42
+   43       MOVE-CORRESPONDING <item_old> TO l_exto.
+   44
+   45       LOOP AT t_sdso_item_new ASSIGNING <item_new>
+   46                WHERE bukrs = <item_old>-bukrs
+   47                  AND gsber = <item_old>-gsber
+   48                  AND lqpos = <item_old>-lqpos
+   49                  AND lqday = <item_old>-lqday
+   50                  AND fdlev = <item_old>-fdlev.
+   51         MOVE-CORRESPONDING <item_new> TO l_extn.
+   52          CHECK l_extn = l_exto AND
+   53                <item_old>-wrbtr = <item_new>-wrbtr.
+   54         APPEND <item_new> TO g_t_item_sd_upd_adm.
+   55         DELETE t_sdso_item_old.
+   56         DELETE t_sdso_item_new.
+   57       ENDLOOP.
+   58
+   59    ENDLOOP.
+   60
+   61    LOOP AT t_sdso_item_old ASSIGNING <item_so>.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTU09                            Page     49
+--------------------------------------------------------------------------------
+
+   62      APPEND <item_so> TO g_t_item_sd_upd_del.
+   63      MULTIPLY: <item_so>-wrbtr BY -1.
+   64      MOVE-CORRESPONDING <item_so> TO  gt_sum_upd_fc.
+   65      gt_sum_upd_fc-zbukr = <item_so>-bukrs.
+   66      gt_sum_upd_fc-lqtype = con_lqtype_fc_sd_or.
+   67      COLLECT gt_sum_upd_fc.
+   68    ENDLOOP.
+   69
+   70
+   71    LOOP AT t_sdso_item_new ASSIGNING <item_so>.
+   72      CLEAR:l_extension, gt_sum_upd_fc-guid,l_item.
+   73      MOVE-CORRESPONDING <item_so> TO l_extension.
+   74      IF l_extension IS INITIAL.
+   75        MOVE-CORRESPONDING <item_so> TO gt_sum_upd_fc.
+   76        gt_sum_upd_fc-zbukr = <item_so>-bukrs.
+   77        gt_sum_upd_fc-lqtype = con_lqtype_fc_sd_or.
+   78        COLLECT gt_sum_upd_fc.
+   79      ELSE.
+   80        CLEAR l_guid.
+   81        MOVE-CORRESPONDING <item_so> TO l_item.
+   82        PERFORM existing_sum_fc CHANGING l_item
+   83                                      l_exist_sum.
+   84
+   85        IF l_exist_sum = space.
+   86        PERFORM condition USING l_item l_condstring.
+   87        SELECT SINGLE guid FROM flqsum_fc INTO <item_so>-guid
+   88                                      WHERE (l_condstring).
+   89        IF <item_so>-guid <> space.
+   90          MOVE-CORRESPONDING <item_so> TO gt_sum_upd_fc.
+   91          gt_sum_upd_fc-lqtype = con_lqtype_fc_sd_or.
+   92          COLLECT gt_sum_upd_fc.
+   93        ELSE.
+   94          CALL FUNCTION 'GUID_CREATE'
+   95            IMPORTING
+   96              ev_guid_32 = <item_so>-guid.
+   97
+   98          MOVE-CORRESPONDING <item_so> TO l_sum.
+   99          l_sum-zbukr = <item_so>-bukrs.
+  100          l_sum-lqtype = con_lqtype_fc_sd_or.
+  101          APPEND l_sum TO gt_sum_ins_fc.
+  102        ENDIF.
+  103      ENDIF.
+  104      ENDIF.
+  105     APPEND <item_so> TO g_t_item_sd_upd_ins.
+  106    ENDLOOP.
+  107
+  108   PERFORM update_item_sdso.
+  109   PERFORM update_sum_fc.
+  110
+  111  *  PERFORM update_sum_m USING l_flg_xlqtop.
+  112
+  113
+  114  ENDFUNCTION.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU09       Page     50
+--------------------------------------------------------------------------------
+
+Subroutines:                                                  Line  Page
+
+CONDITION..................... LFLQEXTU09                       86    49
+EXISTING_SUM_FC............... LFLQEXTU09                       82    49
+UPDATE_ITEM_SDSO.............. LFLQEXTU09                      108    49
+UPDATE_SUM_FC................. LFLQEXTU09                      109    49
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU09       Page     51
+--------------------------------------------------------------------------------
+
+External calls
+
+
+Function Modules                                              Line  Page
+
+GUID_CREATE................... LFLQEXTU09                       94    49
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU09       Page     52
+--------------------------------------------------------------------------------
+
+DATABASE OPERATIONS
+
+
+SELECT:                                                       Line  Page
+
+FLQSUM_FC..................... LFLQEXTU09                       87    49
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU09       Page     53
+--------------------------------------------------------------------------------
+
+INTERNAL TABLE OPERATIONS
+
+
+DELETE:                                                       Line  Page
+
+T_SDSO_ITEM_NEW............... LFLQEXTU09                       56    48
+T_SDSO_ITEM_OLD............... LFLQEXTU09                       55    48
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTU16                            Page     54
+--------------------------------------------------------------------------------
+
+    1  FUNCTION FLQ_UPDATE_FC_EXTSN_TRD1.                          "nte2051121
+    2  *"----------------------------------------------------------------------
+    3  *"*"Local Interface:
+    4  *"  TABLES
+    5  *"      T_TRD1_ITEM_DEL STRUCTURE  FLQITEMD1_FC
+    6  *"      T_TRD1_ITEM_INS STRUCTURE  FLQITEMD1_FC
+    7  *"  EXCEPTIONS
+    8  *"      INS_ERROR_IT
+    9  *"      DEL_ERROR_IT
+   10  *"      UPD_ERROR_SU
+   11  *"----------------------------------------------------------------------
+   12  *----- Beschreibung der verschiedenen Tabellen ------------------------*
+   13
+   14  *-INS  Saetze werden auf der Datenbank eingefuegt
+   15  *-DEL  Saetze werden von der Datenbank entfernt.
+   16
+   17  * Die Summentabelle wird jeweils entsprechend angepasst.
+   18    DATA: L_T_FLQSUM_FC  LIKE FLQSUM_FC OCCURS 0 WITH HEADER LINE.
+   19    DATA: L_CONDSTRING TYPE STRING,
+   20          L_GUID       LIKE FLQSUM_FC-GUID,
+   21          L_EXTENSION  TYPE FLQ_EXTENSION.
+   22
+   23    DATA: LS_FLQITEM_DEL TYPE FLQITEM,
+   24          LS_FLQITEM_INS TYPE FLQITEM.
+   25
+   26  *----- Einzelposten Delete
+   27    LOOP AT T_TRD1_ITEM_DEL.
+   28      MULTIPLY: T_TRD1_ITEM_DEL-WRBTR BY -1, T_TRD1_ITEM_DEL-DMBTR BY -1.
+   29      MOVE-CORRESPONDING T_TRD1_ITEM_DEL TO L_T_FLQSUM_FC.
+   30      L_T_FLQSUM_FC-LQTYPE = CON_LQTYPE_FC_TR_LO.
+   31      L_T_FLQSUM_FC-ZBUKR  = L_T_FLQSUM_FC-BUKRS.
+   32      DELETE FLQITEMD1_FC FROM T_TRD1_ITEM_DEL.
+   33      CHECK SY-SUBRC = 0.
+   34      COLLECT L_T_FLQSUM_FC.
+   35    ENDLOOP.
+   36
+   37    LOOP AT T_TRD1_ITEM_INS.
+   38      CLEAR: L_EXTENSION, LS_FLQITEM_INS.
+   39      MOVE-CORRESPONDING T_TRD1_ITEM_INS TO L_T_FLQSUM_FC.
+   40      MOVE-CORRESPONDING T_TRD1_ITEM_INS TO L_EXTENSION.
+   41      IF CL_FLQ_TECH=>DCF_EXTENSION( ) IS NOT INITIAL
+   42        AND L_EXTENSION IS NOT INITIAL.
+   43        MOVE-CORRESPONDING T_TRD1_ITEM_INS TO LS_FLQITEM_INS.
+   44        PERFORM CONDITION USING LS_FLQITEM_INS L_CONDSTRING.
+   45        SELECT SINGLE GUID FROM FLQSUM_FC INTO L_T_FLQSUM_FC-GUID
+   46          WHERE (L_CONDSTRING).
+   47        IF L_T_FLQSUM_FC-GUID IS INITIAL.
+   48          SELECT SINGLE GUID FROM FLQITEMD1_FC INTO L_T_FLQSUM_FC-GUID
+   49            WHERE (L_CONDSTRING).
+   50            IF L_T_FLQSUM_FC-GUID IS INITIAL.
+   51              CALL FUNCTION 'GUID_CREATE'
+   52               IMPORTING
+   53                 EV_GUID_32 = L_T_FLQSUM_FC-GUID.
+   54            ENDIF.
+   55        ENDIF.
+   56        T_TRD1_ITEM_INS-GUID = L_T_FLQSUM_FC-GUID.
+   57      ELSE.
+   58        CLEAR L_EXTENSION.
+   59        MOVE-CORRESPONDING L_EXTENSION TO T_TRD1_ITEM_INS.
+   60      ENDIF.
+   61      L_T_FLQSUM_FC-LQTYPE = CON_LQTYPE_FC_TR_LO.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTU16                            Page     55
+--------------------------------------------------------------------------------
+
+   62      L_T_FLQSUM_FC-ZBUKR  = L_T_FLQSUM_FC-BUKRS.
+   63      INSERT FLQITEMD1_FC FROM T_TRD1_ITEM_INS.
+   64      CHECK SY-SUBRC = 0.
+   65      COLLECT L_T_FLQSUM_FC.
+   66    ENDLOOP.
+   67
+   68  *----- Summen
+   69    SORT L_T_FLQSUM_FC BY
+   70                      LQTYPE
+   71                      LQPOS
+   72                      BUKRS
+   73                      GSBER
+   74                      LQDAY
+   75                      ZBUKR
+   76                      FDLEV
+   77                      TWAER
+   78                      GUID.
+   79
+   80    LOOP AT L_T_FLQSUM_FC.
+   81
+   82      PERFORM UPDATE_SUM_FC_SINGLE USING L_T_FLQSUM_FC.
+   83      CHECK SY-SUBRC <> 0.
+   84
+   85      INSERT FLQSUM_FC FROM L_T_FLQSUM_FC.
+   86      CHECK SY-SUBRC <> 0.
+   87
+   88      PERFORM UPDATE_SUM_FC_SINGLE USING L_T_FLQSUM_FC.
+   89
+   90      CHECK SY-SUBRC <> 0.
+   91      RAISE UPD_ERROR_SU.
+   92    ENDLOOP.
+   93
+   94  ENDFUNCTION.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU16       Page     56
+--------------------------------------------------------------------------------
+
+Subroutines:                                                  Line  Page
+
+CONDITION..................... LFLQEXTU16                       44    54
+UPDATE_SUM_FC_SINGLE.......... LFLQEXTU16                       82    55
+                               LFLQEXTU16                       88    55
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU16       Page     57
+--------------------------------------------------------------------------------
+
+External calls
+
+
+Function Modules                                              Line  Page
+
+GUID_CREATE................... LFLQEXTU16                       51    54
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU16       Page     58
+--------------------------------------------------------------------------------
+
+DATABASE OPERATIONS
+
+
+SELECT:                                                       Line  Page
+
+FLQITEMD1_FC.................. LFLQEXTU16                       48    54
+FLQSUM_FC..................... LFLQEXTU16                       45    54
+--------------------------------------------------------------------------------
+
+DELETE:
+
+                                                              Line  Page
+
+FLQITEMD1_FC.................. LFLQEXTU16                       32    54
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTU14                            Page     59
+--------------------------------------------------------------------------------
+
+    1  FUNCTION FLQ_UPDATE_FC_EXTSN_TRT1.                          "nte2051121
+    2  *"----------------------------------------------------------------------
+    3  *"*"Local Interface:
+    4  *"  TABLES
+    5  *"      T_TRT1_ITEM_DEL STRUCTURE  FLQITEMT1_FC
+    6  *"      T_TRT1_ITEM_INS STRUCTURE  FLQITEMT1_FC
+    7  *"  EXCEPTIONS
+    8  *"      INS_ERROR_IT
+    9  *"      DEL_ERROR_IT
+   10  *"      UPD_ERROR_SU
+   11  *"----------------------------------------------------------------------
+   12  *----- Beschreibung der verschiedenen Tabellen ------------------------*
+   13
+   14  *-INS  Saetze werden auf der Datenbank eingefuegt
+   15  *-DEL  Saetze werden von der Datenbank entfernt.
+   16
+   17  * Die Summentabelle wird jeweils entsprechend angepasst.
+   18    DATA: L_T_FLQSUM_FC  LIKE FLQSUM_FC OCCURS 0 WITH HEADER LINE.
+   19    DATA: L_CONDSTRING TYPE STRING,
+   20          L_GUID       LIKE FLQSUM_FC-GUID,
+   21          L_EXTENSION  TYPE FLQ_EXTENSION.
+   22
+   23    DATA: LS_FLQITEM_DEL TYPE FLQITEM,
+   24          LS_FLQITEM_INS TYPE FLQITEM.
+   25
+   26  *----- Einzelposten Delete
+   27    LOOP AT T_TRT1_ITEM_DEL.
+   28      MULTIPLY: T_TRT1_ITEM_DEL-WRBTR BY -1, T_TRT1_ITEM_DEL-DMBTR BY -1.
+   29      MOVE-CORRESPONDING T_TRT1_ITEM_DEL TO L_T_FLQSUM_FC.
+   30      L_T_FLQSUM_FC-LQTYPE = CON_LQTYPE_FC_TR_TM.
+   31      L_T_FLQSUM_FC-ZBUKR  = L_T_FLQSUM_FC-BUKRS.
+   32      DELETE FLQITEMT1_FC FROM T_TRT1_ITEM_DEL.
+   33      CHECK SY-SUBRC = 0.
+   34      COLLECT L_T_FLQSUM_FC.
+   35    ENDLOOP.
+   36
+   37    LOOP AT T_TRT1_ITEM_INS.
+   38      CLEAR: L_EXTENSION, LS_FLQITEM_INS.
+   39      MOVE-CORRESPONDING T_TRT1_ITEM_INS TO L_T_FLQSUM_FC.
+   40      MOVE-CORRESPONDING T_TRT1_ITEM_INS TO L_EXTENSION.
+   41      IF CL_FLQ_TECH=>DCF_EXTENSION( ) IS NOT INITIAL
+   42        AND L_EXTENSION IS NOT INITIAL.
+   43        MOVE-CORRESPONDING T_TRT1_ITEM_INS TO LS_FLQITEM_INS.
+   44        PERFORM CONDITION USING LS_FLQITEM_INS L_CONDSTRING.
+   45        SELECT SINGLE GUID FROM FLQSUM_FC INTO L_T_FLQSUM_FC-GUID
+   46          WHERE (L_CONDSTRING).
+   47        IF L_T_FLQSUM_FC-GUID IS INITIAL.
+   48          SELECT SINGLE GUID FROM FLQITEMT1_FC INTO L_T_FLQSUM_FC-GUID
+   49            WHERE (L_CONDSTRING).
+   50            IF L_T_FLQSUM_FC-GUID IS INITIAL.
+   51              CALL FUNCTION 'GUID_CREATE'
+   52               IMPORTING
+   53                 EV_GUID_32 = L_T_FLQSUM_FC-GUID.
+   54            ENDIF.
+   55        ENDIF.
+   56        T_TRT1_ITEM_INS-GUID = L_T_FLQSUM_FC-GUID.
+   57      ELSE.
+   58        CLEAR L_EXTENSION.
+   59        MOVE-CORRESPONDING L_EXTENSION TO T_TRT1_ITEM_INS.
+   60      ENDIF.
+   61      L_T_FLQSUM_FC-LQTYPE = CON_LQTYPE_FC_TR_TM.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTU14                            Page     60
+--------------------------------------------------------------------------------
+
+   62      L_T_FLQSUM_FC-ZBUKR  = L_T_FLQSUM_FC-BUKRS.
+   63      INSERT FLQITEMT1_FC FROM T_TRT1_ITEM_INS.
+   64      CHECK SY-SUBRC = 0.
+   65      COLLECT L_T_FLQSUM_FC.
+   66    ENDLOOP.
+   67
+   68  *----- Summen
+   69    SORT L_T_FLQSUM_FC BY
+   70                      LQTYPE
+   71                      LQPOS
+   72                      BUKRS
+   73                      GSBER
+   74                      LQDAY
+   75                      ZBUKR
+   76                      FDLEV
+   77                      TWAER
+   78                      GUID.
+   79
+   80    LOOP AT L_T_FLQSUM_FC.
+   81
+   82      PERFORM UPDATE_SUM_FC_SINGLE USING L_T_FLQSUM_FC.
+   83      CHECK SY-SUBRC <> 0.
+   84
+   85      INSERT FLQSUM_FC FROM L_T_FLQSUM_FC.
+   86      CHECK SY-SUBRC <> 0.
+   87
+   88      PERFORM UPDATE_SUM_FC_SINGLE USING L_T_FLQSUM_FC.
+   89
+   90      CHECK SY-SUBRC <> 0.
+   91      RAISE UPD_ERROR_SU.
+   92    ENDLOOP.
+   93
+   94  ENDFUNCTION.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU14       Page     61
+--------------------------------------------------------------------------------
+
+Subroutines:                                                  Line  Page
+
+CONDITION..................... LFLQEXTU14                       44    59
+UPDATE_SUM_FC_SINGLE.......... LFLQEXTU14                       82    60
+                               LFLQEXTU14                       88    60
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU14       Page     62
+--------------------------------------------------------------------------------
+
+External calls
+
+
+Function Modules                                              Line  Page
+
+GUID_CREATE................... LFLQEXTU14                       51    59
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU14       Page     63
+--------------------------------------------------------------------------------
+
+DATABASE OPERATIONS
+
+
+SELECT:                                                       Line  Page
+
+FLQITEMT1_FC.................. LFLQEXTU14                       48    59
+FLQSUM_FC..................... LFLQEXTU14                       45    59
+--------------------------------------------------------------------------------
+
+DELETE:
+
+                                                              Line  Page
+
+FLQITEMT1_FC.................. LFLQEXTU14                       32    59
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTU07                            Page     64
+--------------------------------------------------------------------------------
+
+    1  FUNCTION flq_update_fc_pak_extsn.
+    2  *"----------------------------------------------------------------------
+    3  *"*"Local Interface:
+    4  *"  IMPORTING
+    5  *"     REFERENCE(I_FLG_DIRECT) TYPE  XFELD OPTIONAL
+    6  *"     REFERENCE(I_TESTMODE) TYPE  XFELD OPTIONAL
+    7  *"  EXPORTING
+    8  *"     REFERENCE(E_OLDPOS) TYPE  FLQPOS
+    9  *"     REFERENCE(E_FLG_CHANGED) TYPE  XFELD
+   10  *"  TABLES
+   11  *"      T_ITEM_NEW STRUCTURE  FLQITEMPARK_FC
+   12  *"      T_ITEM_OLD STRUCTURE  FLQITEMPARK_FC
+   13  *"----------------------------------------------------------------------
+   14
+   15  * Expects to get (no test inside!) OLD and NEW for one Actual
+   16  * Comparison and data base update
+   17    TYPES: BEGIN OF ty_flqitempark_fc_del.
+   18              include type flqitempark_fc.
+   19              TYPES: xdelete type flqxdel,
+   20           END OF ty_flqitempark_fc_del.
+   21
+   22    FIELD-SYMBOLS: <flqitemn> TYPE ty_flqitempark_fc_del ,
+   23                   <flqitemo> TYPE ty_flqitempark_fc_del.     "nte2074411
+   24  *                 <flqitem>  TYPE flqitem.                  "nte2074411
+   25    DATA: l_flqitem TYPE flqitem.                             "nte2074411
+   26    FIELD-SYMBOLS: <flqitempark_fc> TYPE ty_flqitempark_fc_del .
+   27    DATA: lqorig_old   TYPE flqorig,
+   28          lqorig_new   TYPE flqorig,
+   29          l_extension  TYPE flq_extension,
+   30          l_exist_sum  TYPE xfeld,
+   31          l_sum        TYPE flqsum_fc,
+   32          l_exto       TYPE flq_extension,
+   33          l_extn       TYPE flq_extension,
+   34          l_condstring TYPE string ,
+   35          l_flg_ident  TYPE xfeld.
+   36    DATA: lt_flqitempark_fc TYPE ty_flqitempark_fc_del OCCURS 0 WITH HEADE
+       R LINE,
+   37          lt_item_new_del TYPE ty_flqitempark_fc_del OCCURS 0 WITH HEADER
+       LINE,
+   38          lt_item_old_del TYPE ty_flqitempark_fc_del OCCURS 0 WITH HEADER
+       LINE,
+   39          lt_itempark_old TYPE ty_flqitempark_fc_del OCCURS 0 WITH HEADER
+       LINE.
+   40    APPEND LINES OF t_item_new TO lt_item_new_del.
+   41    APPEND LINES OF t_item_old TO lt_item_old_del.
+   42    READ TABLE lt_item_new_del INDEX 1 ASSIGNING <flqitemn>.
+   43    IF sy-subrc = 0.
+   44      lqorig_new = <flqitemn>-lqorig.
+   45    ENDIF.
+   46
+   47    CLEAR: e_flg_changed, e_oldpos.
+   48    CLEAR: lt_itempark_old[],lt_itempark_old.
+   49
+   50    LOOP AT lt_item_old_del ASSIGNING <flqitemo> WHERE xdelete = space.
+   51      SELECT * FROM flqitempark_fc INTO CORRESPONDING FIELDS OF TABLE lt_f
+       lqitempark_fc
+   52        WHERE ausbk  = <flqitemo>-ausbk
+   53        AND   belnr  = <flqitemo>-belnr
+   54        AND   gjahr  = <flqitemo>-gjahr
+   55        AND   bzkey  = <flqitemo>-bzkey
+   56        AND   pkoart = <flqitemo>-pkoart.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTU07                            Page     65
+--------------------------------------------------------------------------------
+
+   57
+   58      CHECK sy-subrc = 0.
+   59      CLEAR: e_flg_changed, e_oldpos.
+   60
+   61      LOOP AT lt_flqitempark_fc ASSIGNING <flqitempark_fc>.
+   62
+   63        IF e_oldpos = space.
+   64          e_oldpos = <flqitempark_fc>-lqpos.
+   65        ELSEIF e_oldpos = '*'. "stable end
+   66        ELSEIF e_oldpos <> <flqitempark_fc>-lqpos.
+   67          e_oldpos = '*'.
+   68        ENDIF.
+   69
+   70        MOVE-CORRESPONDING <flqitempark_fc> TO l_exto.
+   71        LOOP AT lt_item_new_del ASSIGNING <flqitemn>
+   72          WHERE  lqpos = <flqitempark_fc>-lqpos
+   73          AND    gsber = <flqitempark_fc>-gsber
+   74          AND    bukrs = <flqitempark_fc>-bukrs
+   75          AND    fdlev = <flqitempark_fc>-fdlev
+   76          AND    lqday = <flqitempark_fc>-lqday
+   77          AND    twaer = <flqitempark_fc>-twaer.
+   78          MOVE-CORRESPONDING <flqitemn> TO l_extn.
+   79          CHECK l_extn = l_exto AND
+   80                <flqitempark_fc>-wrbtr = <flqitemn>-wrbtr.
+   81          <flqitemn>-xdelete = <flqitempark_fc>-xdelete = 'I'. "identical
+       "XLQEXTENSION2
+   82          l_flg_ident = 'X'."XLQEXTENSION1
+   83          EXIT.
+   84        ENDLOOP.
+   85        APPEND <flqitempark_fc> TO lt_itempark_old.
+   86      ENDLOOP.
+   87      LOOP AT lt_flqitempark_fc ASSIGNING <flqitempark_fc> WHERE xdelete =
+        space.
+   88        MOVE-CORRESPONDING <flqitempark_fc> TO gt_sum_upd_fc.
+   89        gt_sum_upd_fc-zbukr = <flqitempark_fc>-ausbk.
+   90        MULTIPLY: gt_sum_upd_fc-wrbtr BY -1.
+   91        gt_sum_upd_fc-lqtype = con_lqtype_fc_parked.
+   92        COLLECT gt_sum_upd_fc.
+   93      ENDLOOP.
+   94    ENDLOOP.
+   95
+   96    LOOP AT lt_item_new_del ASSIGNING <flqitemn> WHERE xdelete = space."XL
+       QEXTENSION2
+   97      e_flg_changed = 'X'.
+   98      CLEAR: l_extension, <flqitemn>-guid.
+   99      MOVE-CORRESPONDING <flqitemn> TO l_extension.
+  100
+  101      IF l_extension IS INITIAL.
+  102        MOVE-CORRESPONDING <flqitemn> TO gt_sum_upd_fc.
+  103        gt_sum_upd_fc-zbukr = <flqitemn>-ausbk.
+  104        gt_sum_upd_fc-lqtype = con_lqtype_fc_parked.
+  105        COLLECT gt_sum_upd_fc.
+  106      ELSE.
+  107        CLEAR l_exist_sum.
+  108  *      MOVE-CORRESPONDING <flqitemn> TO <flqitem>.          "nte2074411
+  109  *      <flqitem>-zbukr = <flqitemn>-ausbk.                  "nte2074411
+  110        MOVE-CORRESPONDING <flqitemn> TO l_flqitem.           "nte2074411
+  111        l_flqitem-zbukr = <flqitemn>-ausbk.                   "nte2074411
+  112        PERFORM existing_sum_fc CHANGING l_flqitem            "nte2074411
+  113                                         l_exist_sum.
+  114        IF l_exist_sum = space.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTU07                            Page     66
+--------------------------------------------------------------------------------
+
+  115  *        MOVE-CORRESPONDING <flqitemn> TO <flqitem>.        "nte2074411
+  116  *        <flqitem>-zbukr = <flqitemn>-ausbk.                "nte2074411
+  117          MOVE-CORRESPONDING <flqitemn> TO l_flqitem.         "nte2074411
+  118          l_flqitem-zbukr = <flqitemn>-ausbk.                 "nte2074411
+  119          PERFORM condition USING l_flqitem l_condstring.     "nte2074411
+  120          SELECT SINGLE guid FROM  flqsum_fc INTO <flqitemn>-guid
+  121                 WHERE  (l_condstring).
+  122
+  123          IF <flqitemn>-guid <> space.
+  124            MOVE-CORRESPONDING <flqitemn> TO gt_sum_upd_fc.
+  125            gt_sum_upd_fc-zbukr = <flqitemn>-ausbk.
+  126            gt_sum_upd_fc-lqtype = con_lqtype_fc_parked.
+  127            COLLECT gt_sum_upd_fc.
+  128          ELSE.
+  129            CALL FUNCTION 'GUID_CREATE'  "#EC FB_OLDED
+  130              IMPORTING
+  131                ev_guid_32 = <flqitemn>-guid.
+  132
+  133            MOVE-CORRESPONDING <flqitemn> TO l_sum.
+  134            l_sum-zbukr = <flqitemn>-ausbk.
+  135            l_sum-lqtype = con_lqtype_fc_parked.
+  136            APPEND l_sum TO gt_sum_ins_fc.
+  137          ENDIF.
+  138        ENDIF.
+  139      ENDIF.
+  140    ENDLOOP.
+  141
+  142  * Update of timestamp for partial replacement "XLQEXTENSION1
+  143    IF l_flg_ident <> space.
+  144      LOOP AT lt_item_new_del ASSIGNING <flqitemn> WHERE xdelete = 'I'."XL
+       QEXTENSION2
+  145        APPEND <flqitemn> TO g_t_itempark_upd_adm."XLQEXTENSION1
+  146        EXIT.
+  147      ENDLOOP.
+  148    ENDIF.
+  149
+  150  * We always insert remaining new
+  151    LOOP AT lt_item_new_del ASSIGNING <flqitemn> WHERE xdelete = space."XL
+       QEXTENSION2
+  152      APPEND <flqitemn> TO g_t_itempark_ins.
+  153    ENDLOOP.
+  154
+  155  * Old items (current and hist)  with same origin as new are deleted
+  156    LOOP AT lt_itempark_old ASSIGNING <flqitemo> WHERE xdelete <> 'I'. "XL
+       QEXTENSION2
+  157      APPEND <flqitemo> TO g_t_itempark_del. "XLQEXTENSION1
+  158    ENDLOOP.
+  159
+  160    CHECK i_testmode = space.
+  161
+  162    IF sy-oncom <> 'P' AND i_flg_direct = space.
+  163      PERFORM update_item_fipark ON COMMIT LEVEL level_update.
+  164      PERFORM update_sum_fc      ON COMMIT LEVEL level_fmsu.
+  165    ELSE.
+  166      PERFORM update_item_fipark.
+  167      PERFORM update_sum_fc.
+  168    ENDIF.
+  169
+  170  ENDFUNCTION.
+  171
+  172  *&---------------------------------------------------------------------*
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTU07                            Page     67
+--------------------------------------------------------------------------------
+
+  173  *&      Form  update_item_pak
+  174  *&---------------------------------------------------------------------*
+  175  *       text
+  176  *----------------------------------------------------------------------*
+  177  FORM update_item_fipark .
+  178
+  179    FIELD-SYMBOLS <item> TYPE flqitempark_fc .
+  180
+  181  *----- History
+  182
+  183
+  184  *----- Delete
+  185    LOOP AT g_t_itempark_del ASSIGNING <item>.
+  186
+  187      DELETE  flqitempark_fc FROM  <item>.
+  188
+  189      IF sy-subrc <> 0.
+  190        RAISE del_error_it.
+  191      ENDIF.
+  192    ENDLOOP.
+  193
+  194  *----- Insert
+  195    LOOP AT g_t_itempark_ins ASSIGNING <item>.
+  196
+  197      INSERT  flqitempark_fc FROM  <item>.
+  198
+  199      IF sy-subrc <> 0.
+  200        RAISE ins_error_it.
+  201      ENDIF.
+  202    ENDLOOP.
+  203
+  204  *---- Update Admin data of leftover old "XLQEXTENSION1
+  205    LOOP AT g_t_itempark_upd_adm ASSIGNING <item>.
+  206
+  207      UPDATE  flqitempark_fc SET
+  208        cpudt = <item>-cpudt
+  209        cputm = <item>-cputm
+  210        uname = <item>-uname
+  211             WHERE  ausbk   = <item>-ausbk
+  212             AND    belnr   = <item>-belnr
+  213             AND    gjahr   = <item>-gjahr
+  214             AND    bzkey   = <item>-bzkey.
+  215
+  216    ENDLOOP.
+  217
+  218    CLEAR: g_t_itempark_ins[], g_t_itempark_del[], g_t_itempark_hst[],
+  219       g_t_itempark_upd_adm[]."XLQEXTENSION1
+  220
+  221  ENDFORM.                    " UPDATE_ITEM
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU07       Page     68
+--------------------------------------------------------------------------------
+
+Subroutines:                                                  Line  Page
+
+CONDITION..................... LFLQEXTU07                      119    66
+EXISTING_SUM_FC............... LFLQEXTU07                      112    65
+UPDATE_ITEM_FIPARK............ LFLQEXTU07                      166    66
+                               LFLQEXTU07                      177    67
+UPDATE_SUM_FC................. LFLQEXTU07                      167    66
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU07       Page     69
+--------------------------------------------------------------------------------
+
+External calls
+
+
+Function Modules                                              Line  Page
+
+GUID_CREATE................... LFLQEXTU07                      129    66
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU07       Page     70
+--------------------------------------------------------------------------------
+
+DATABASE OPERATIONS
+
+
+SELECT:                                                       Line  Page
+
+FLQITEMPARK_FC................ LFLQEXTU07                       51    64
+FLQSUM_FC..................... LFLQEXTU07                      120    66
+--------------------------------------------------------------------------------
+
+
+UPDATE:                                                       Line  Page
+
+FLQITEMPARK_FC................ LFLQEXTU07                      207    67
+--------------------------------------------------------------------------------
+
+DELETE:
+
+                                                              Line  Page
+
+FLQITEMPARK_FC................ LFLQEXTU07                      187    67
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU07       Page     71
+--------------------------------------------------------------------------------
+
+INTERNAL TABLE OPERATIONS
+
+
+READ TABLE:                                                   Line  Page
+
+LT_ITEM_NEW_DEL............... LFLQEXTU07                       42    64
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTU04                            Page     72
+--------------------------------------------------------------------------------
+
+    1  FUNCTION flq_update_new_old.
+    2  *"----------------------------------------------------------------------
+    3  *"*"Lokale Schnittstelle:
+    4  *"  IMPORTING
+    5  *"     REFERENCE(I_TESTMODE) TYPE  XFELD OPTIONAL
+    6  *"     REFERENCE(I_BULKMODE) TYPE  XFELD DEFAULT 'X'
+    7  *"  EXPORTING
+    8  *"     REFERENCE(E_FLG_CHANGED) TYPE  XFELD
+    9  *"  TABLES
+   10  *"      T_ITEM_NEW STRUCTURE  FLQITEM
+   11  *"      T_ITEM_OLD STRUCTURE  FLQITEM
+   12  *"----------------------------------------------------------------------
+   13
+   14  * Expects to get OLD and NEW for All Actuals at once
+   15  * Comparison and data base update
+   16
+   17    DATA:
+   18      lt_item_new_by_act TYPE t_flqitem_by_act,
+   19      lt_item_old_by_act TYPE t_flqitem_by_act,
+   20      l_oldpos           TYPE flqpos,
+   21      l_flg_changed      TYPE xfeld,
+   22      lt_item_old        TYPE TABLE OF flqitem.
+   23
+   24    FIELD-SYMBOLS:
+   25      <new_by_act>    TYPE s_flqitem_by_act,
+   26      <old_by_act>    TYPE s_flqitem_by_act.
+   27
+   28    CHECK i_testmode = space. "todo move
+   29
+   30    " First of all, group the input new items/old items by actual lines
+   31    PERFORM grouping_by_actual TABLES   t_item_new
+   32                               CHANGING lt_item_new_by_act.
+   33    PERFORM grouping_by_actual TABLES   t_item_old
+   34                               CHANGING lt_item_old_by_act.
+   35
+   36    IF i_bulkmode = 'X'.
+   37      " Process one actual a time.
+   38      "...However update db all in once after this
+   39      LOOP AT lt_item_new_by_act ASSIGNING <new_by_act>.
+   40        READ TABLE lt_item_old_by_act ASSIGNING <old_by_act>
+   41          WITH KEY zbukr = <new_by_act>-zbukr
+   42                   belnr = <new_by_act>-belnr
+   43                   gjahr = <new_by_act>-gjahr
+   44                   buzei = <new_by_act>-buzei.
+   45
+   46        IF sy-subrc = 0.
+   47          PERFORM prepare_update_extsn TABLES <new_by_act>-items
+   48                                              <old_by_act>-items
+   49                                       USING  i_testmode
+   50                                              l_oldpos
+   51                                              l_flg_changed.
+   52        ELSE. " If there's new, but no old.
+   53          PERFORM prepare_update_extsn TABLES <new_by_act>-items
+   54                                              lt_item_old " This should be
+        empty
+   55                                       USING  i_testmode
+   56                                              l_oldpos
+   57                                              l_flg_changed.
+   58        ENDIF.
+   59
+   60        " If any changed, overall is changed
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTU04                            Page     73
+--------------------------------------------------------------------------------
+
+   61        IF e_flg_changed <> 'X'.
+   62          e_flg_changed = l_flg_changed.
+   63        ENDIF.
+   64      ENDLOOP.
+   65
+   66      " Update db
+   67      CHECK i_testmode = space. "todo move
+   68
+   69      PERFORM bulk_update_item.
+   70      PERFORM bulk_update_sum.
+   71
+   72    ELSE.
+   73
+   74      LOOP AT lt_item_new_by_act ASSIGNING <new_by_act>.
+   75        READ TABLE lt_item_old_by_act ASSIGNING <old_by_act>
+   76          WITH KEY zbukr = <new_by_act>-zbukr
+   77                   belnr = <new_by_act>-belnr
+   78                   gjahr = <new_by_act>-gjahr
+   79                   buzei = <new_by_act>-buzei.
+   80
+   81        CALL FUNCTION 'FLQ_UPDATE_EXTSN'
+   82          EXPORTING
+   83  *         I_FLG_DIRECT  =
+   84            i_testmode    = i_testmode
+   85          IMPORTING
+   86            e_oldpos      = l_oldpos
+   87            e_flg_changed = l_flg_changed
+   88          TABLES
+   89            t_item_new    = <new_by_act>-items
+   90            t_item_old    = <old_by_act>-items
+   91          EXCEPTIONS
+   92            ins_error_it  = 1
+   93            upd_error_it  = 2
+   94            del_error_it  = 3
+   95            upd_error_su  = 4
+   96            ins_error_su  = 5
+   97            type_error    = 6
+   98            OTHERS        = 7.
+   99        IF sy-subrc <> 0.
+  100  * Implement suitable error handling here
+  101        ENDIF.
+  102
+  103        IF e_flg_changed <> 'X'.
+  104          e_flg_changed = l_flg_changed.
+  105        ENDIF.
+  106
+  107        CHECK l_flg_changed <> space.
+  108        PERFORM db_commit USING i_testmode space.
+  109
+  110      ENDLOOP.
+  111
+  112      PERFORM db_commit  USING i_testmode con_on.
+  113
+  114    ENDIF.
+  115
+  116  ENDFUNCTION.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU04       Page     74
+--------------------------------------------------------------------------------
+
+Subroutines:                                                  Line  Page
+
+BULK_UPDATE_ITEM.............. LFLQEXTU04                       69    73
+BULK_UPDATE_SUM............... LFLQEXTU04                       70    73
+DB_COMMIT..................... LFLQEXTU04                      108    73
+                               LFLQEXTU04                      112    73
+GROUPING_BY_ACTUAL............ LFLQEXTU04                       31    72
+                               LFLQEXTU04                       33    72
+PREPARE_UPDATE_EXTSN.......... LFLQEXTU04                       47    72
+                               LFLQEXTU04                       53    72
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU04       Page     75
+--------------------------------------------------------------------------------
+
+External calls
+
+
+Function Modules                                              Line  Page
+
+FLQ_UPDATE_EXTSN.............. LFLQEXTU04                       81    73
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTU04       Page     76
+--------------------------------------------------------------------------------
+
+INTERNAL TABLE OPERATIONS
+
+
+READ TABLE:                                                   Line  Page
+
+LT_ITEM_OLD_BY_ACT............ LFLQEXTU04                       40    72
+                               LFLQEXTU04                       75    73
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTTOP                            Page     77
+--------------------------------------------------------------------------------
+
+    1  FUNCTION-POOL FLQEXT.                       "MESSAGE-ID ..
+    2
+    3  * INCLUDE LFLQEXTD...                        " Local class definition
+    4  TYPE-POOLS: LEVEL.
+    5  include FLQCONSTANTS.
+    6
+    7
+    8
+    9  * Puffer für Update on Commit
+   10  DATA:
+   11  g_t_item_ins LIKE flqitem OCCURS 0 WITH HEADER LINE,
+   12  g_t_item_del LIKE flqitem OCCURS 0 WITH HEADER LINE,
+   13  g_t_item_hst LIKE flqitem OCCURS 0 WITH HEADER LINE,
+   14  g_t_item_old like flqitem occurs 0 WITH HEADER LINE,           "added by
+        chris 20121207
+   15  g_t_item_upd_adm LIKE flqitem OCCURS 0, "XLQEXTENSION1
+   16
+   17  g_t_itempark_ins LIKE flqitempark_fc OCCURS 0 WITH HEADER LINE,
+   18  g_t_itempark_del LIKE flqitempark_fc OCCURS 0 WITH HEADER LINE,
+   19  g_t_itempark_hst LIKE flqitempark_fc OCCURS 0 WITH HEADER LINE,
+   20  g_t_itempark_old like flqitempark_fc occurs 0 WITH HEADER LINE,
+         "added by marvin wang 2013/12/31
+   21  g_t_itempark_upd_adm LIKE flqitempark_fc OCCURS 0, "XLQEXTENSION1
+   22
+   23  gt_sum_upd   LIKE flqsum OCCURS 0 with header line,
+   24  gt_sum_ins   LIKE flqsum OCCURS 0,
+   25
+   26  gt_sum_upd_fc like flqsum_fc OCCURS 0 WITH HEADER LINE,
+   27  gt_sum_ins_fc LIKE flqsum_fc OCCURS 0,
+   28
+   29  g_t_item_sd_upd_adm like flqitemso_fc OCCURS 0,
+   30  g_t_item_sd_upd_ins LIKE flqitemso_fc OCCURS 0 WITH HEADER LINE,
+   31  g_t_item_sd_upd_del LIKE flqitemso_fc OCCURS 0 WITH HEADER LINE.
+   32
+   33  constants:  g_c_commit like sy-tfill value 100.
+   34
+   35  TYPES:
+   36    t_flqitem TYPE STANDARD TABLE OF flqitem
+   37      WITH DEFAULT KEY.
+   38
+   39  TYPES:
+   40    BEGIN OF s_flqitem_by_act,
+   41      zbukr  TYPE flqbukrs,
+   42      belnr  TYPE belnr_d,
+   43      gjahr  TYPE gjahr,
+   44      buzei  TYPE buzei,
+   45      items  TYPE t_flqitem,
+   46      delflg TYPE abap_bool,
+   47    END OF s_flqitem_by_act.
+   48
+   49  TYPES:
+   50    t_flqitem_by_act TYPE HASHED TABLE OF s_flqitem_by_act
+   51      WITH UNIQUE KEY zbukr belnr gjahr buzei.
+   52
+   53  TYPES:
+   54    t_h_flqitembs TYPE HASHED TABLE OF flqitembs
+   55      WITH UNIQUE KEY zbukr belnr gjahr buzei bukrs gsber lqpos lqorig gui
+       d,
+   56    t_h_flqitemfi TYPE HASHED TABLE OF flqitemfi
+   57      WITH UNIQUE KEY zbukr belnr gjahr buzei bukrs gsber lqpos lqorig gui
+       d.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTF01                            Page     78
+--------------------------------------------------------------------------------
+
+    1  *----------------------------------------------------------------------*
+    2  ***INCLUDE LFLQEXTF01 .
+    3  *----------------------------------------------------------------------*
+    4  *&---------------------------------------------------------------------*
+    5  *&      Form  UPDATE_ITEM
+    6  *&---------------------------------------------------------------------*
+    7  FORM update_item .
+    8
+    9    DATA: l_f_flqitembs   LIKE  flqitembs.
+   10    DATA: l_f_flqitemfi   LIKE  flqitemfi.
+   11
+   12    FIELD-SYMBOLS <item> TYPE flqitem.
+   13
+   14  *----- History
+   15    LOOP AT g_t_item_hst ASSIGNING <item>.
+   16
+   17      <item>-xdelete = con_on.
+   18
+   19      CASE <item>-lqtype .
+   20        WHEN con_lqtype_bank_st.
+   21
+   22          MOVE-CORRESPONDING <item> TO l_f_flqitembs.
+   23          UPDATE flqitembs FROM  l_f_flqitembs.
+   24
+   25        WHEN con_lqtype_fi_doc.
+   26
+   27          MOVE-CORRESPONDING <item> TO l_f_flqitemfi.
+   28          UPDATE flqitemfi FROM  l_f_flqitemfi.
+   29
+   30        WHEN OTHERS.
+   31          RAISE type_error.
+   32      ENDCASE.
+   33
+   34      IF sy-subrc <> 0.
+   35        RAISE upd_error_it.
+   36      ENDIF.
+   37    ENDLOOP.
+   38
+   39  *----- Delete
+   40    LOOP AT g_t_item_del ASSIGNING <item>.
+   41
+   42      CASE <item>-lqtype .
+   43        WHEN con_lqtype_bank_st.
+   44
+   45          MOVE-CORRESPONDING <item> TO l_f_flqitembs.
+   46          DELETE  flqitembs FROM  l_f_flqitembs.
+   47
+   48        WHEN con_lqtype_fi_doc.
+   49
+   50          MOVE-CORRESPONDING <item> TO l_f_flqitemfi.
+   51          DELETE  flqitemfi FROM  l_f_flqitemfi.
+   52
+   53        WHEN OTHERS.
+   54          RAISE type_error.
+   55      ENDCASE.
+   56
+   57      IF sy-subrc <> 0.
+   58        RAISE del_error_it.
+   59      ENDIF.
+   60    ENDLOOP.
+   61
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTF01                            Page     79
+--------------------------------------------------------------------------------
+
+   62  *----- Insert
+   63    LOOP AT g_t_item_ins ASSIGNING <item>.
+   64
+   65      CASE <item>-lqtype .
+   66        WHEN con_lqtype_bank_st.
+   67
+   68          MOVE-CORRESPONDING <item> TO l_f_flqitembs.
+   69          INSERT  flqitembs FROM  l_f_flqitembs.
+   70
+   71        WHEN con_lqtype_fi_doc.
+   72
+   73          MOVE-CORRESPONDING <item> TO l_f_flqitemfi.
+   74          INSERT  flqitemfi FROM  l_f_flqitemfi.
+   75
+   76        WHEN OTHERS.
+   77          RAISE type_error.
+   78      ENDCASE.
+   79
+   80      IF sy-subrc <> 0.
+   81        RAISE ins_error_it.
+   82      ENDIF.
+   83    ENDLOOP.
+   84
+   85  *---- Update Admin data of leftover old "XLQEXTENSION1
+   86    LOOP AT g_t_item_upd_adm ASSIGNING <item>.
+   87      CASE <item>-lqtype .
+   88        WHEN con_lqtype_bank_st.
+   89
+   90          UPDATE  flqitembs SET
+   91            cpudt = <item>-cpudt
+   92            cputm = <item>-cputm
+   93            uname = <item>-uname
+   94                 WHERE  zbukr   = <item>-zbukr
+   95                 AND    belnr   = <item>-belnr
+   96                 AND    gjahr   = <item>-gjahr
+   97                 AND    buzei   = <item>-buzei
+   98                 AND    lqorig  = <item>-lqorig.
+   99
+  100        WHEN con_lqtype_fi_doc.
+  101
+  102          UPDATE  flqitemfi SET
+  103            cpudt = <item>-cpudt
+  104            cputm = <item>-cputm
+  105            uname = <item>-uname
+  106                 WHERE  zbukr   = <item>-zbukr
+  107                 AND    belnr   = <item>-belnr
+  108                 AND    gjahr   = <item>-gjahr
+  109                 AND    buzei   = <item>-buzei
+  110                 AND    lqorig  = <item>-lqorig.
+  111
+  112        WHEN OTHERS.
+  113          RAISE type_error.
+  114      ENDCASE.
+  115    ENDLOOP.
+  116
+  117
+  118
+  119    CLEAR: g_t_item_ins[], g_t_item_del[], g_t_item_hst[],
+  120       g_t_item_upd_adm[]."XLQEXTENSION1
+  121
+  122  ENDFORM.                    " UPDATE_ITEM
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTF01                            Page     80
+--------------------------------------------------------------------------------
+
+  123  *&---------------------------------------------------------------------*
+  124  *&      Form  UPDATE_SUM
+  125  *&---------------------------------------------------------------------*
+  126  FORM update_sum .
+  127
+  128    FIELD-SYMBOLS <sum> TYPE flqsum.
+  129
+  130    SORT gt_sum_ins BY
+  131      bukrs
+  132      lqpos
+  133      twaer
+  134      lqday
+  135      zbukr
+  136      lqtype
+  137      gsber
+  138      guid.
+  139
+  140    LOOP AT gt_sum_ins ASSIGNING <sum>.
+  141      INSERT flqsum FROM <sum>.
+  142      CHECK sy-subrc <> 0.
+  143      RAISE ins_error_su.
+  144    ENDLOOP.
+  145
+  146    SORT gt_sum_upd BY
+  147          bukrs
+  148          lqpos
+  149          twaer
+  150          lqday
+  151          zbukr
+  152          lqtype
+  153          gsber
+  154          guid.
+  155
+  156    LOOP AT gt_sum_upd ASSIGNING <sum>.
+  157      PERFORM single_update USING <sum>.
+  158      CHECK sy-subrc <> 0.
+  159      INSERT flqsum FROM <sum>.
+  160      CHECK sy-subrc <> 0.
+  161      PERFORM single_update USING <sum>.
+  162      CHECK sy-subrc <> 0.
+  163      RAISE upd_error_su.
+  164    ENDLOOP.
+  165
+  166    CLEAR: gt_sum_ins[], gt_sum_upd[].
+  167
+  168  ENDFORM.                    " UPDATE_SUM
+  169  *&---------------------------------------------------------------------*
+  170  *&      Form  SINGLE_UPDATE
+  171  *&---------------------------------------------------------------------*
+  172  FORM single_update  USING    p_sum TYPE flqsum.
+  173
+  174      UPDATE flqsum SET      wrbtr  =  wrbtr  +  p_sum-wrbtr
+  175                           dmbtr  =  dmbtr  +  p_sum-dmbtr
+  176                           kwbtr  =  kwbtr  +  p_sum-kwbtr
+  177          WHERE  bukrs  =  p_sum-bukrs
+  178          AND    lqpos  =  p_sum-lqpos
+  179          AND    twaer  =  p_sum-twaer
+  180          AND    lqday  =  p_sum-lqday
+  181          AND    zbukr  =  p_sum-zbukr
+  182          AND    lqtype =  p_sum-lqtype
+  183          AND    gsber  =  p_sum-gsber
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTF01                            Page     81
+--------------------------------------------------------------------------------
+
+  184          AND    guid   =  p_sum-guid.
+  185
+  186
+  187
+  188  ENDFORM.                    " SINGLE_UPDATE
+  189
+  190
+  191  *&---------------------------------------------------------------------*
+  192  *&      Form  UPDATE_SUM
+  193  *&---------------------------------------------------------------------*
+  194  FORM update_sum_fc .
+  195
+  196    FIELD-SYMBOLS <sum> TYPE flqsum_fc.
+  197
+  198    SORT gt_sum_ins_fc BY
+  199      bukrs
+  200      lqpos
+  201      twaer
+  202      lqday
+  203      zbukr
+  204      lqtype
+  205      gsber
+  206      fdlev
+  207      guid.
+  208
+  209    LOOP AT gt_sum_ins_fc ASSIGNING <sum>.
+  210      INSERT flqsum_fc FROM <sum>.
+  211      CHECK sy-subrc <> 0.
+  212      RAISE ins_error_su.
+  213    ENDLOOP.
+  214
+  215    SORT gt_sum_upd_fc BY
+  216          bukrs
+  217          lqpos
+  218          twaer
+  219          lqday
+  220          zbukr
+  221          lqtype
+  222          gsber
+  223          fdlev
+  224          guid.
+  225
+  226    LOOP AT gt_sum_upd_fc ASSIGNING <sum>.
+  227      PERFORM single_update_fc USING <sum>.
+  228      CHECK sy-subrc <> 0.
+  229      INSERT flqsum_fc FROM <sum>.
+  230      CHECK sy-subrc <> 0.
+  231      PERFORM single_update_fc USING <sum>.
+  232      CHECK sy-subrc <> 0.
+  233      RAISE upd_error_su.
+  234    ENDLOOP.
+  235
+  236    CLEAR: gt_sum_ins_fc[], gt_sum_upd_fc[].
+  237
+  238  ENDFORM.                    " UPDATE_SUM_FC
+  239  *&---------------------------------------------------------------------*
+  240  *&      Form  SINGLE_UPDATE_FC
+  241  *&---------------------------------------------------------------------*
+  242  FORM single_update_fc  USING    p_sum TYPE flqsum_fc.
+  243
+  244      UPDATE flqsum_fc SET      wrbtr  =  wrbtr  +  p_sum-wrbtr
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTF01                            Page     82
+--------------------------------------------------------------------------------
+
+  245          WHERE  bukrs  =  p_sum-bukrs
+  246          AND    lqpos  =  p_sum-lqpos
+  247          AND    twaer  =  p_sum-twaer
+  248          AND    lqday  =  p_sum-lqday
+  249          AND    zbukr  =  p_sum-zbukr
+  250          AND    lqtype =  p_sum-lqtype
+  251          AND    gsber  =  p_sum-gsber
+  252          AND    fdlev  =  p_sum-fdlev
+  253          AND    guid   =  p_sum-guid.
+  254
+  255
+  256  ENDFORM.                    " SINGLE_UPDATE_FC
+  257  *&---------------------------------------------------------------------*
+  258  *&      Form  UPDATE_SUM_FC_SINGLE
+  259  *&---------------------------------------------------------------------*
+  260  *       text
+  261  *----------------------------------------------------------------------*
+  262  *      -->P_L_T_FLQSUM_FC  text
+  263  *----------------------------------------------------------------------*
+  264  FORM update_sum_fc_single USING  u_f_sum    STRUCTURE flqsum_fc.
+  265
+  266    UPDATE flqsum_fc SET  wrbtr  =  wrbtr  +  u_f_sum-wrbtr
+  267    WHERE  lqtype =  u_f_sum-lqtype
+  268    AND    lqpos  =  u_f_sum-lqpos
+  269    AND    bukrs  =  u_f_sum-bukrs
+  270    AND    gsber  =  u_f_sum-gsber
+  271    AND    lqday  =  u_f_sum-lqday
+  272    AND    zbukr  =  u_f_sum-zbukr
+  273    AND    fdlev  =  u_f_sum-fdlev
+  274    AND    twaer  =  u_f_sum-twaer
+  275    AND    guid   =  u_f_sum-guid.
+  276
+  277  ENDFORM.                    " UPDATE_SUM_FC_SINGLE
+  278  *&---------------------------------------------------------------------*
+  279  *&      Form  UPDATE_ITEM_SDSO
+  280  *&---------------------------------------------------------------------*
+  281  *       text
+  282  *----------------------------------------------------------------------*
+  283  *  -->  p1        text
+  284  *  <--  p2        text
+  285  *----------------------------------------------------------------------*
+  286  FORM update_item_sdso .
+  287    DATA: l_f_item_so TYPE flqitemso_fc.
+  288    FIELD-SYMBOLS: <item_so> TYPE flqitemso_fc.
+  289
+  290    LOOP AT g_t_item_sd_upd_del ASSIGNING <item_so>.
+  291      MOVE-CORRESPONDING <item_so> to l_f_item_so.
+  292          DELETE flqitemso_fc FROM l_f_item_so.
+  293      IF sy-subrc <> 0.
+  294        RAISE del_error_it.
+  295      ENDIF.
+  296    ENDLOOP.
+  297
+  298  *----- Insert
+  299    LOOP AT g_t_item_sd_upd_ins ASSIGNING <item_so>.
+  300      MOVE-CORRESPONDING <item_so> to l_f_item_so.
+  301          INSERT flqitemso_fc FROM l_f_item_so.
+  302      IF sy-subrc <> 0.
+  303        RAISE ins_error_it.
+  304      ENDIF.
+  305    ENDLOOP.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTF01                            Page     83
+--------------------------------------------------------------------------------
+
+  306
+  307  *---- Update Admin data of leftover old "XLQEXTENSION1
+  308    LOOP AT g_t_item_sd_upd_adm ASSIGNING <item_so>.
+  309          UPDATE  flqitemso_fc SET
+  310            cpudt = <item_so>-cpudt
+  311            cputm = <item_so>-cputm
+  312            uname = <item_so>-uname
+  313                 WHERE  awtyp   = <item_so>-awtyp
+  314                 AND    awref   = <item_so>-awref
+  315                 AND    awpos   = <item_so>-awpos
+  316                 AND    bukrs   = <item_so>-bukrs
+  317                .
+  318
+  319    ENDLOOP.
+  320
+  321  CLEAR: g_t_item_sd_upd_del[], g_t_item_sd_upd_ins[],
+  322         g_t_item_sd_upd_adm[].
+  323
+  324  ENDFORM.                    " UPDATE_ITEM_SDSO
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTF01       Page     84
+--------------------------------------------------------------------------------
+
+Subroutines:                                                  Line  Page
+
+SINGLE_UPDATE................. LFLQEXTF01                      157    80
+                               LFLQEXTF01                      161    80
+                               LFLQEXTF01                      172    80
+SINGLE_UPDATE_FC.............. LFLQEXTF01                      227    81
+                               LFLQEXTF01                      231    81
+                               LFLQEXTF01                      242    81
+UPDATE_ITEM................... LFLQEXTF01                        7    78
+UPDATE_ITEM_SDSO.............. LFLQEXTF01                      286    82
+UPDATE_SUM.................... LFLQEXTF01                      126    80
+UPDATE_SUM_FC................. LFLQEXTF01                      194    81
+UPDATE_SUM_FC_SINGLE.......... LFLQEXTF01                      264    82
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTF01       Page     85
+--------------------------------------------------------------------------------
+
+DATABASE OPERATIONS
+
+
+UPDATE:                                                       Line  Page
+
+FLQITEMBS..................... LFLQEXTF01                       23    78
+                               LFLQEXTF01                       90    79
+FLQITEMFI..................... LFLQEXTF01                       28    78
+                               LFLQEXTF01                      102    79
+FLQITEMSO_FC.................. LFLQEXTF01                      309    83
+FLQSUM........................ LFLQEXTF01                      174    80
+FLQSUM_FC..................... LFLQEXTF01                      244    81
+                               LFLQEXTF01                      266    82
+--------------------------------------------------------------------------------
+
+DELETE:
+
+                                                              Line  Page
+
+FLQITEMBS..................... LFLQEXTF01                       46    78
+FLQITEMFI..................... LFLQEXTF01                       51    78
+FLQITEMSO_FC.................. LFLQEXTF01                      292    82
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTF02                            Page     86
+--------------------------------------------------------------------------------
+
+    1  *----------------------------------------------------------------------*
+    2  ***INCLUDE LFLQEXTF02 .
+    3  *----------------------------------------------------------------------*
+    4  *&---------------------------------------------------------------------*
+    5  *&      Form  CONDITION
+    6  *&---------------------------------------------------------------------*
+    7  *       Merge dynamical condition on Account Assignment
+    8  *----------------------------------------------------------------------*
+    9  FORM condition  USING    p_lqitem TYPE flqitem
+   10                           c_condition TYPE string.
+   11
+   12    DATA: l_extension TYPE  flq_extension.
+   13
+   14    MOVE-CORRESPONDING p_lqitem TO l_extension .
+   15
+   16    CALL FUNCTION 'FLQ_CONDITION_STRING'
+   17      EXPORTING
+   18        i_lqpos     = p_lqitem-lqpos
+   19        i_bukrs     = p_lqitem-bukrs
+   20        i_gsber     = p_lqitem-gsber
+   21        i_extension = l_extension
+   22      IMPORTING
+   23        condition   = c_condition.
+   24
+   25  ENDFORM.                    " CONDITION
+   26  *&---------------------------------------------------------------------*
+   27  *&      Form  EXISTING_SUM
+   28  *&---------------------------------------------------------------------*
+   29  *       Check whether new item fits in buffered totals
+   30  *----------------------------------------------------------------------*
+   31  FORM existing_sum  CHANGING l_flqitem  TYPE flqitem
+   32                              c_exist_sum.
+   33
+   34    DATA: l_extit type flq_extension,
+   35          l_extsu type flq_extension.
+   36
+   37    FIELD-SYMBOLS <sum> TYPE flqsum.
+   38
+   39    clear c_exist_sum. "XLQEXTENSION2
+   40    move-corresponding l_flqitem to l_extit.
+   41
+   42    LOOP AT gt_sum_ins ASSIGNING <sum>
+   43      WHERE lqpos = l_flqitem-lqpos
+   44      and   bukrs = l_flqitem-bukrs
+   45      and   gsber = l_flqitem-gsber
+   46      and   twaer = l_flqitem-twaer
+   47      and   lqday = l_flqitem-lqday
+   48      and   zbukr = l_flqitem-zbukr
+   49      and  lqtype = l_flqitem-lqtype.
+   50      move-corresponding <sum> to l_extsu.
+   51      check l_extsu = l_extit.
+   52      l_flqitem-guid = <sum>-guid.
+   53      ADD: l_flqitem-wrbtr TO <sum>-wrbtr,
+   54           l_flqitem-dmbtr TO <sum>-dmbtr,
+   55           l_flqitem-kwbtr TO <sum>-kwbtr.
+   56      c_exist_sum = 'X'.
+   57      EXIT.
+   58    ENDLOOP.
+   59    CHECK c_exist_sum = space.
+   60    LOOP AT gt_sum_upd ASSIGNING <sum>
+   61      WHERE lqpos = l_flqitem-lqpos
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTF02                            Page     87
+--------------------------------------------------------------------------------
+
+   62      and   bukrs = l_flqitem-bukrs
+   63      and   gsber = l_flqitem-gsber
+   64      and   twaer = l_flqitem-twaer
+   65      and   lqday = l_flqitem-lqday
+   66      and   zbukr = l_flqitem-zbukr
+   67      and  lqtype = l_flqitem-lqtype.
+   68      move-corresponding <sum> to l_extsu.
+   69      check l_extsu = l_extit.
+   70      l_flqitem-guid = <sum>-guid.
+   71      ADD: l_flqitem-wrbtr TO <sum>-wrbtr,
+   72           l_flqitem-dmbtr TO <sum>-dmbtr,
+   73           l_flqitem-kwbtr TO <sum>-kwbtr.
+   74      c_exist_sum = 'X'.
+   75      EXIT.
+   76    ENDLOOP.
+   77
+   78  ENDFORM.                    " EXISTING_SUM
+   79
+   80  *&---------------------------------------------------------------------*
+   81  *&      Form  EXISTING_SUM_FC
+   82  *&---------------------------------------------------------------------*
+   83  *       Check whether new item fits in buffered totals
+   84  *----------------------------------------------------------------------*
+   85  FORM existing_sum_fc  CHANGING l_flqitem  TYPE flqitem
+   86                              c_exist_sum.
+   87
+   88    DATA: l_extit type flq_extension,
+   89          l_extsu type flq_extension.
+   90
+   91    FIELD-SYMBOLS <sum> TYPE flqsum_fc.
+   92
+   93    clear c_exist_sum. "XLQEXTENSION2
+   94    move-corresponding l_flqitem to l_extit.
+   95
+   96    LOOP AT gt_sum_ins_fc ASSIGNING <sum>
+   97      WHERE lqpos = l_flqitem-lqpos
+   98      and   bukrs = l_flqitem-bukrs
+   99      and   gsber = l_flqitem-gsber
+  100      and   twaer = l_flqitem-twaer
+  101      and   lqday = l_flqitem-lqday
+  102      and   zbukr = l_flqitem-zbukr
+  103      and  lqtype = l_flqitem-lqtype
+  104      and   fdlev = l_flqitem-fdlev.
+  105      move-corresponding <sum> to l_extsu.
+  106      check l_extsu = l_extit.
+  107      l_flqitem-guid = <sum>-guid.
+  108      ADD: l_flqitem-wrbtr TO <sum>-wrbtr.
+  109      c_exist_sum = 'X'.
+  110      EXIT.
+  111    ENDLOOP.
+  112    CHECK c_exist_sum = space.
+  113    LOOP AT gt_sum_upd_fc ASSIGNING <sum>
+  114      WHERE lqpos = l_flqitem-lqpos
+  115      and   bukrs = l_flqitem-bukrs
+  116      and   gsber = l_flqitem-gsber
+  117      and   twaer = l_flqitem-twaer
+  118      and   lqday = l_flqitem-lqday
+  119      and   zbukr = l_flqitem-zbukr
+  120      and  lqtype = l_flqitem-lqtype
+  121      and   fdlev = l_flqitem-fdlev.
+  122      move-corresponding <sum> to l_extsu.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTF02                            Page     88
+--------------------------------------------------------------------------------
+
+  123      check l_extsu = l_extit.
+  124      l_flqitem-guid = <sum>-guid.
+  125      ADD: l_flqitem-wrbtr TO <sum>-wrbtr.
+  126      c_exist_sum = 'X'.
+  127      EXIT.
+  128    ENDLOOP.
+  129
+  130  ENDFORM.                    " EXISTING_SUM_FC
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTF02       Page     89
+--------------------------------------------------------------------------------
+
+Subroutines:                                                  Line  Page
+
+CONDITION..................... LFLQEXTF02                        9    86
+EXISTING_SUM.................. LFLQEXTF02                       31    86
+EXISTING_SUM_FC............... LFLQEXTF02                       85    87
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTF02       Page     90
+--------------------------------------------------------------------------------
+
+External calls
+
+
+Function Modules                                              Line  Page
+
+FLQ_CONDITION_STRING.......... LFLQEXTF02                       16    86
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTF03                            Page     91
+--------------------------------------------------------------------------------
+
+    1  *&---------------------------------------------------------------------*
+    2  *&  Include           LFLQEXTF03
+    3  *&---------------------------------------------------------------------*
+    4  *&---------------------------------------------------------------------*
+    5  *&      Form  grouping_by_actual
+    6  *&---------------------------------------------------------------------*
+    7  *       Group liquidity items by their actual documents
+    8  *----------------------------------------------------------------------*
+    9  *      -->T_ITEM          text
+   10  *      -->CT_ITEM_BY_ACT  text
+   11  *----------------------------------------------------------------------*
+   12  FORM grouping_by_actual TABLES   t_item         STRUCTURE flqitem
+   13                          CHANGING ct_item_by_act TYPE t_flqitem_by_act.
+   14
+   15    DATA:
+   16      ls_item_by_act TYPE s_flqitem_by_act.
+   17
+   18    FIELD-SYMBOLS:
+   19      <fs_item>        TYPE flqitem,
+   20      <fs_item_by_act> TYPE s_flqitem_by_act.
+   21
+   22    LOOP AT t_item ASSIGNING <fs_item>.
+   23      READ TABLE ct_item_by_act ASSIGNING <fs_item_by_act>
+   24        WITH KEY zbukr = <fs_item>-zbukr
+   25                 belnr = <fs_item>-belnr
+   26                 gjahr = <fs_item>-gjahr
+   27                 buzei = <fs_item>-buzei.
+   28      IF sy-subrc = 0.
+   29        APPEND <fs_item> TO <fs_item_by_act>-items.
+   30      ELSE.
+   31        CLEAR: ls_item_by_act.
+   32        MOVE-CORRESPONDING <fs_item> TO ls_item_by_act.
+   33        APPEND <fs_item> TO ls_item_by_act-items.
+   34        INSERT ls_item_by_act INTO TABLE ct_item_by_act.
+   35      ENDIF.
+   36    ENDLOOP.
+   37
+   38  ENDFORM.                    " grouping_by_actual
+   39
+   40  *&---------------------------------------------------------------------*
+   41  *&      Form  prepare_update_extsn
+   42  *&---------------------------------------------------------------------*
+   43  *       Prepare data to update db (No actual update)
+   44  *----------------------------------------------------------------------*
+   45  *      -->T_ITEM_NEW     text
+   46  *      -->T_ITEM_OLD     text
+   47  *      -->I_TESTMODE     text
+   48  *      -->E_OLDPOS       text
+   49  *      -->E_FLG_CHANGED  text
+   50  *----------------------------------------------------------------------*
+   51  FORM prepare_update_extsn TABLES t_item_new  STRUCTURE flqitem
+   52                                   t_item_old  STRUCTURE flqitem
+   53                            USING  i_testmode   TYPE xfeld
+   54                                   e_oldpos     TYPE flqpos
+   55                                   e_flg_changed TYPE xfeld.
+   56
+   57    FIELD-SYMBOLS: <flqitemn> TYPE flqitem,
+   58                   <flqitemo> TYPE flqitem.
+   59
+   60    DATA: lqorig_old   TYPE flqorig,
+   61          lqorig_new   TYPE flqorig,
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTF03                            Page     92
+--------------------------------------------------------------------------------
+
+   62          l_extension  TYPE flq_extension,
+   63          l_exist_sum  TYPE xfeld,
+   64          l_sum        TYPE flqsum,
+   65          l_exto       TYPE flq_extension,
+   66          l_extn       TYPE flq_extension,
+   67          l_condstring TYPE string ,
+   68          l_flg_ident  TYPE xfeld.
+   69
+   70    READ TABLE t_item_new INDEX 1 ASSIGNING <flqitemn>.
+   71    IF sy-subrc = 0.
+   72      lqorig_new = <flqitemn>-lqorig.
+   73    ENDIF.
+   74
+   75    CLEAR: e_flg_changed, e_oldpos.
+   76
+   77    LOOP AT t_item_old ASSIGNING <flqitemo> WHERE xdelete = space.
+   78      IF e_oldpos = space.
+   79        e_oldpos = <flqitemo>-lqpos.
+   80      ELSEIF e_oldpos = '*'. "stable end
+   81      ELSEIF e_oldpos <> <flqitemo>-lqpos.
+   82        e_oldpos = '*'.
+   83      ENDIF.
+   84      lqorig_old = <flqitemo>-lqorig.
+   85
+   86      " If new = old, no need to update. We put a flag 'I' there.
+   87      IF lqorig_new  = lqorig_old.
+   88        MOVE-CORRESPONDING <flqitemo> TO l_exto.
+   89
+   90        LOOP AT t_item_new ASSIGNING <flqitemn>
+   91          WHERE  lqpos = <flqitemo>-lqpos
+   92          AND    gsber = <flqitemo>-gsber
+   93          AND    bukrs = <flqitemo>-bukrs.
+   94          MOVE-CORRESPONDING <flqitemn> TO l_extn.
+   95          CHECK l_extn = l_exto AND
+   96                <flqitemn>-wrbtr = <flqitemo>-wrbtr AND
+   97                <flqitemn>-dmbtr = <flqitemo>-dmbtr AND
+   98                <flqitemn>-kwbtr = <flqitemo>-kwbtr.
+   99          <flqitemn>-xdelete = <flqitemo>-xdelete = 'I'. "identical "XLQEX
+       TENSION2
+  100          l_flg_ident = 'X'."XLQEXTENSION1
+  101          EXIT.
+  102        ENDLOOP.
+  103      ENDIF.
+  104    ENDLOOP.
+  105
+  106  * Collect totals
+  107    LOOP AT t_item_old ASSIGNING <flqitemo> WHERE xdelete = space.
+  108      MOVE-CORRESPONDING <flqitemo> TO gt_sum_upd.
+  109      MULTIPLY: gt_sum_upd-wrbtr BY -1, gt_sum_upd-dmbtr BY -1, gt_sum_upd
+       -kwbtr BY -1.
+  110      COLLECT gt_sum_upd.
+  111    ENDLOOP.
+  112    LOOP AT t_item_new ASSIGNING <flqitemn> WHERE xdelete = space."XLQEXTE
+       NSION2
+  113      e_flg_changed = 'X'.
+  114      CLEAR: l_extension, <flqitemn>-guid.
+  115      MOVE-CORRESPONDING <flqitemn> TO l_extension.
+  116
+  117      IF l_extension IS INITIAL.
+  118        MOVE-CORRESPONDING <flqitemn> TO gt_sum_upd.
+  119        COLLECT gt_sum_upd.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTF03                            Page     93
+--------------------------------------------------------------------------------
+
+  120      ELSE.
+  121
+  122        PERFORM existing_sum CHANGING <flqitemn>
+  123                                      l_exist_sum.
+  124        IF l_exist_sum = space.
+  125          PERFORM condition USING <flqitemn> l_condstring.
+  126          SELECT SINGLE guid FROM  flqsum INTO <flqitemn>-guid
+  127                 WHERE  (l_condstring).
+  128
+  129          IF <flqitemn>-guid <> space.
+  130            MOVE-CORRESPONDING <flqitemn> TO gt_sum_upd.
+  131            COLLECT gt_sum_upd.
+  132          ELSE.
+  133            CALL FUNCTION 'GUID_CREATE'                     "#EC FB_OLDED
+  134              IMPORTING
+  135                ev_guid_32 = <flqitemn>-guid.
+  136
+  137            MOVE-CORRESPONDING <flqitemn> TO l_sum.
+  138            APPEND l_sum TO gt_sum_ins.
+  139          ENDIF.
+  140        ENDIF.
+  141      ENDIF.
+  142    ENDLOOP.
+  143
+  144  * Update of timestamp for partial replacement "XLQEXTENSION1
+  145    IF l_flg_ident <> space.
+  146      LOOP AT t_item_new ASSIGNING <flqitemn> WHERE xdelete = space."XLQEX
+       TENSION2
+  147        APPEND <flqitemn> TO g_t_item_upd_adm."XLQEXTENSION1
+  148        EXIT.
+  149      ENDLOOP.
+  150    ENDIF.
+  151
+  152  * We always insert remaining new
+  153    LOOP AT t_item_new ASSIGNING <flqitemn> WHERE xdelete = space."XLQEXTE
+       NSION2
+  154      APPEND <flqitemn> TO g_t_item_ins.
+  155    ENDLOOP.
+  156
+  157  * Old items (current and hist)  with same origin as new are deleted
+  158    LOOP AT t_item_old ASSIGNING <flqitemo> WHERE lqorig = lqorig_new
+  159                                            AND   xdelete <> 'I'. "XLQEXTE
+       NSION2
+  160      APPEND <flqitemo> TO g_t_item_del. "XLQEXTENSION1
+  161    ENDLOOP.
+  162
+  163  * Current old items with other origin go into history
+  164    IF lqorig_new <> lqorig_old.
+  165      LOOP AT t_item_old ASSIGNING <flqitemo> WHERE xdelete = space.
+  166        APPEND <flqitemo> TO g_t_item_hst. "XLQEXTENSION1
+  167      ENDLOOP.
+  168    ENDIF.
+  169
+  170  ENDFORM.                    " prepare_update_extsn
+  171
+  172  *&---------------------------------------------------------------------*
+  173  *&      Form  BULK_UPDATE_ITEM
+  174  *&---------------------------------------------------------------------*
+  175  FORM bulk_update_item .
+  176
+  177    DATA:
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTF03                            Page     94
+--------------------------------------------------------------------------------
+
+  178      lt_item_bs_ins TYPE t_h_flqitembs,
+  179      lt_item_bs_upd TYPE t_h_flqitembs,
+  180      lt_item_bs_del TYPE t_h_flqitembs,
+  181      lt_item_fi_ins TYPE t_h_flqitemfi,
+  182      lt_item_fi_upd TYPE t_h_flqitemfi,
+  183      lt_item_fi_del TYPE t_h_flqitemfi,
+  184
+  185      l_f_flqitembs  TYPE flqitembs,
+  186      l_f_flqitemfi  TYPE flqitemfi.
+  187
+  188    FIELD-SYMBOLS:
+  189      <item>         TYPE flqitem,
+  190      <fs_item_bs>   TYPE flqitembs,
+  191      <fs_item_fi>   TYPE flqitemfi.
+  192
+  193  *----- History
+  194    LOOP AT g_t_item_hst ASSIGNING <item>.
+  195
+  196      <item>-xdelete = con_on.
+  197
+  198      CASE <item>-lqtype .
+  199        WHEN con_lqtype_bank_st.
+  200
+  201          MOVE-CORRESPONDING <item> TO l_f_flqitembs.
+  202
+  203          READ TABLE lt_item_bs_upd TRANSPORTING NO FIELDS
+  204          FROM l_f_flqitembs.
+  205
+  206          IF sy-subrc <> 0.
+  207            INSERT l_f_flqitembs INTO TABLE lt_item_bs_upd.
+  208          ENDIF.
+  209
+  210        WHEN con_lqtype_fi_doc.
+  211
+  212          MOVE-CORRESPONDING <item> TO l_f_flqitemfi.
+  213
+  214          READ TABLE lt_item_fi_upd TRANSPORTING NO FIELDS
+  215          FROM l_f_flqitemfi.
+  216
+  217          IF sy-subrc <> 0.
+  218            INSERT l_f_flqitemfi INTO TABLE lt_item_fi_upd.
+  219          ENDIF.
+  220
+  221        WHEN OTHERS.
+  222          RAISE type_error.
+  223      ENDCASE.
+  224
+  225    ENDLOOP.
+  226
+  227  *----- Delete
+  228    LOOP AT g_t_item_del ASSIGNING <item>.
+  229
+  230      CASE <item>-lqtype .
+  231        WHEN con_lqtype_bank_st.
+  232
+  233          MOVE-CORRESPONDING <item> TO l_f_flqitembs.
+  234
+  235          READ TABLE lt_item_bs_del TRANSPORTING NO FIELDS
+  236          FROM l_f_flqitembs.
+  237
+  238          IF sy-subrc <> 0.
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTF03                            Page     95
+--------------------------------------------------------------------------------
+
+  239            INSERT l_f_flqitembs INTO TABLE lt_item_bs_del.
+  240          ENDIF.
+  241
+  242        WHEN con_lqtype_fi_doc.
+  243
+  244          MOVE-CORRESPONDING <item> TO l_f_flqitemfi.
+  245
+  246          READ TABLE lt_item_fi_del TRANSPORTING NO FIELDS
+  247          FROM l_f_flqitemfi.
+  248
+  249          IF sy-subrc <> 0.
+  250            INSERT l_f_flqitemfi INTO TABLE lt_item_fi_del.
+  251          ENDIF.
+  252
+  253        WHEN OTHERS.
+  254          RAISE type_error.
+  255      ENDCASE.
+  256
+  257    ENDLOOP.
+  258
+  259  *----- Insert
+  260    LOOP AT g_t_item_ins ASSIGNING <item>.
+  261
+  262      CASE <item>-lqtype .
+  263        WHEN con_lqtype_bank_st.
+  264
+  265          MOVE-CORRESPONDING <item> TO l_f_flqitembs.
+  266
+  267          READ TABLE lt_item_bs_ins ASSIGNING <fs_item_bs>
+  268          FROM l_f_flqitembs.
+  269
+  270          IF sy-subrc = 0.
+  271            MOVE-CORRESPONDING l_f_flqitembs TO <fs_item_bs>.
+  272          ELSE.
+  273            INSERT l_f_flqitembs INTO TABLE lt_item_bs_ins.
+  274          ENDIF.
+  275
+  276        WHEN con_lqtype_fi_doc.
+  277
+  278          MOVE-CORRESPONDING <item> TO l_f_flqitemfi.
+  279
+  280          READ TABLE lt_item_fi_ins ASSIGNING <fs_item_fi>
+  281          FROM l_f_flqitemfi.
+  282
+  283          IF sy-subrc = 0.
+  284            MOVE-CORRESPONDING l_f_flqitemfi TO <fs_item_fi>.
+  285          ELSE.
+  286            INSERT l_f_flqitemfi INTO TABLE lt_item_fi_ins.
+  287          ENDIF.
+  288
+  289        WHEN OTHERS.
+  290          RAISE type_error.
+  291      ENDCASE.
+  292
+  293    ENDLOOP.
+  294
+  295  *---- Update Admin data of leftover old "XLQEXTENSION1
+  296    LOOP AT g_t_item_upd_adm ASSIGNING <item>.
+  297      CASE <item>-lqtype .
+  298        WHEN con_lqtype_bank_st.
+  299
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTF03                            Page     96
+--------------------------------------------------------------------------------
+
+  300          UPDATE  flqitembs SET
+  301            cpudt = <item>-cpudt
+  302            cputm = <item>-cputm
+  303            uname = <item>-uname
+  304                 WHERE  zbukr   = <item>-zbukr
+  305                 AND    belnr   = <item>-belnr
+  306                 AND    gjahr   = <item>-gjahr
+  307                 AND    buzei   = <item>-buzei
+  308                 AND    lqorig  = <item>-lqorig.
+  309
+  310        WHEN con_lqtype_fi_doc.
+  311
+  312          UPDATE  flqitemfi SET
+  313            cpudt = <item>-cpudt
+  314            cputm = <item>-cputm
+  315            uname = <item>-uname
+  316                 WHERE  zbukr   = <item>-zbukr
+  317                 AND    belnr   = <item>-belnr
+  318                 AND    gjahr   = <item>-gjahr
+  319                 AND    buzei   = <item>-buzei
+  320                 AND    lqorig  = <item>-lqorig.
+  321
+  322        WHEN OTHERS.
+  323          RAISE type_error.
+  324      ENDCASE.
+  325    ENDLOOP.
+  326
+  327    UPDATE flqitembs FROM TABLE lt_item_bs_upd.
+  328    IF sy-subrc <> 0.
+  329      RAISE upd_error_it.
+  330    ENDIF.
+  331
+  332    UPDATE flqitemfi FROM TABLE lt_item_fi_upd.
+  333    IF sy-subrc <> 0.
+  334      RAISE upd_error_it.
+  335    ENDIF.
+  336
+  337    DELETE flqitembs FROM TABLE lt_item_bs_del.
+  338    IF sy-subrc <> 0.
+  339      RAISE del_error_it.
+  340    ENDIF.
+  341
+  342    DELETE flqitemfi FROM TABLE lt_item_fi_del.
+  343    IF sy-subrc <> 0.
+  344      RAISE del_error_it.
+  345    ENDIF.
+  346
+  347    INSERT flqitembs FROM TABLE lt_item_bs_ins.
+  348    IF sy-subrc <> 0.
+  349      RAISE ins_error_it.
+  350    ENDIF.
+  351
+  352    INSERT flqitemfi FROM TABLE lt_item_fi_ins.
+  353    IF sy-subrc <> 0.
+  354      RAISE ins_error_it.
+  355    ENDIF.
+  356
+  357    CLEAR: g_t_item_ins[], g_t_item_del[], g_t_item_hst[],
+  358       g_t_item_upd_adm[]."XLQEXTENSION1
+  359
+  360  ENDFORM.                    " bulk_update_item
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTF03                            Page     97
+--------------------------------------------------------------------------------
+
+  361
+  362
+  363  *&---------------------------------------------------------------------*
+  364  *&      Form  BULK_UPDATE_SUM
+  365  *&---------------------------------------------------------------------*
+  366  FORM bulk_update_sum .
+  367
+  368    DATA:
+  369      lt_sum_ins TYPE TABLE OF flqsum,
+  370      lt_sum_upd TYPE TABLE OF flqsum,
+  371      l_sum      TYPE flqsum.
+  372
+  373    FIELD-SYMBOLS <sum> TYPE flqsum.
+  374
+  375    " First insert from GT_SUM_INS
+  376    SORT gt_sum_ins BY
+  377      bukrs
+  378      lqpos
+  379      twaer
+  380      lqday
+  381      zbukr
+  382      lqtype
+  383      gsber
+  384      guid.
+  385
+  386    " If two 'insert' have the same key, the later one should be
+  387    " an 'update' to the former one
+  388    LOOP AT gt_sum_ins INTO l_sum.
+  389      READ TABLE lt_sum_ins ASSIGNING <sum>
+  390      WITH KEY  bukrs  = l_sum-bukrs
+  391                lqpos  = l_sum-lqpos
+  392                twaer  = l_sum-twaer
+  393                lqday  = l_sum-lqday
+  394                zbukr  = l_sum-zbukr
+  395                lqtype = l_sum-lqtype
+  396                gsber  = l_sum-gsber
+  397                guid   = l_sum-guid.
+  398      IF sy-subrc = 0.
+  399        ADD: l_sum-wrbtr TO <sum>-wrbtr,
+  400             l_sum-dmbtr TO <sum>-dmbtr,
+  401             l_sum-kwbtr TO <sum>-kwbtr.
+  402      ELSE.
+  403        INSERT l_sum INTO TABLE lt_sum_ins.
+  404      ENDIF.
+  405    ENDLOOP.
+  406
+  407    INSERT flqsum FROM TABLE lt_sum_ins.
+  408    IF sy-subrc <> 0.
+  409      RAISE ins_error_su.
+  410    ENDIF.
+  411
+  412    CLEAR lt_sum_ins.
+  413
+  414    " Second, deal with the GT_SUM_UPD.
+  415    " Not all entries in GT_SUM_UPD means an 'update',
+  416    " some are 'insert' actually
+  417    LOOP AT gt_sum_upd ASSIGNING <sum>.
+  418      MOVE-CORRESPONDING <sum> TO l_sum.
+  419
+  420      SELECT SINGLE wrbtr dmbtr kwbtr
+  421          FROM flqsum
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Include LFLQEXTF03                            Page     98
+--------------------------------------------------------------------------------
+
+  422          INTO CORRESPONDING FIELDS OF l_sum
+  423          WHERE bukrs  = <sum>-bukrs
+  424            AND lqpos  = <sum>-lqpos
+  425            AND twaer  = <sum>-twaer
+  426            AND lqday  = <sum>-lqday
+  427            AND zbukr  = <sum>-zbukr
+  428            AND lqtype = <sum>-lqtype
+  429            AND gsber  = <sum>-gsber
+  430            AND guid   = <sum>-guid.
+  431
+  432      IF sy-subrc = 0.
+  433        ADD: <sum>-wrbtr TO l_sum-wrbtr,
+  434             <sum>-dmbtr TO l_sum-dmbtr,
+  435             <sum>-kwbtr TO l_sum-kwbtr.
+  436        INSERT l_sum INTO TABLE lt_sum_upd.
+  437      ELSE.
+  438        INSERT <sum> INTO TABLE lt_sum_ins.
+  439      ENDIF.
+  440    ENDLOOP.
+  441
+  442    UPDATE flqsum FROM TABLE lt_sum_upd.
+  443    IF sy-subrc <> 0.
+  444      RAISE upd_error_su.
+  445    ENDIF.
+  446
+  447    INSERT flqsum FROM TABLE lt_sum_ins.
+  448    IF sy-subrc <> 0.
+  449      RAISE upd_error_su.
+  450    ENDIF.
+  451
+  452    CLEAR: gt_sum_ins[], gt_sum_upd[].
+  453
+  454  ENDFORM.                    " bulk_update_sum
+  455
+  456  *&---------------------------------------------------------------------*
+  457  *&      Form  DB_COMMIT
+  458  *&---------------------------------------------------------------------*
+  459  *       DB Commit nach jeweils G_C_COMMIT geaenderten Belegen
+  460  *----------------------------------------------------------------------*
+  461  form db_commit using p_test p_clear.
+  462
+  463    statics: l_cnt_commit like sy-tfill.
+  464
+  465    check p_test = space.
+  466
+  467    if p_clear <> space.
+  468      check l_cnt_commit > 0.
+  469      clear l_cnt_commit.
+  470      commit work. exit.
+  471    endif.
+  472
+  473    add 1 to l_cnt_commit.
+  474
+  475    check l_cnt_commit >= g_c_commit.
+  476    clear l_cnt_commit.
+  477    commit work.
+  478
+  479  endform.                    " DB_commit
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTF03       Page     99
+--------------------------------------------------------------------------------
+
+Subroutines:                                                  Line  Page
+
+BULK_UPDATE_ITEM.............. LFLQEXTF03                      175    93
+BULK_UPDATE_SUM............... LFLQEXTF03                      366    97
+CONDITION..................... LFLQEXTF03                      125    93
+DB_COMMIT..................... LFLQEXTF03                      461    98
+EXISTING_SUM.................. LFLQEXTF03                      122    93
+GROUPING_BY_ACTUAL............ LFLQEXTF03                       12    91
+PREPARE_UPDATE_EXTSN.......... LFLQEXTF03                       51    91
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTF03       Page    100
+--------------------------------------------------------------------------------
+
+External calls
+
+
+Function Modules                                              Line  Page
+
+GUID_CREATE................... LFLQEXTF03                      133    93
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTF03       Page    101
+--------------------------------------------------------------------------------
+
+DATABASE OPERATIONS
+
+
+SELECT:                                                       Line  Page
+
+FLQSUM........................ LFLQEXTF03                      126    93
+                               LFLQEXTF03                      421    97
+--------------------------------------------------------------------------------
+
+
+UPDATE:                                                       Line  Page
+
+FLQITEMBS..................... LFLQEXTF03                      300    96
+                               LFLQEXTF03                      327    96
+FLQITEMFI..................... LFLQEXTF03                      312    96
+                               LFLQEXTF03                      332    96
+FLQSUM........................ LFLQEXTF03                      442    98
+--------------------------------------------------------------------------------
+
+DELETE:
+
+                                                              Line  Page
+
+FLQITEMBS..................... LFLQEXTF03                      337    96
+FLQITEMFI..................... LFLQEXTF03                      342    96
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+26.08.26 OCQ      Internal Program Environment LFLQEXTF03       Page    102
+--------------------------------------------------------------------------------
+
+INTERNAL TABLE OPERATIONS
+
+
+READ TABLE:                                                   Line  Page
+
+CT_ITEM_BY_ACT................ LFLQEXTF03                       23    91
+LT_ITEM_BS_DEL................ LFLQEXTF03                      235    94
+LT_ITEM_BS_INS................ LFLQEXTF03                      267    95
+LT_ITEM_BS_UPD................ LFLQEXTF03                      203    94
+LT_ITEM_FI_DEL................ LFLQEXTF03                      246    95
+LT_ITEM_FI_INS................ LFLQEXTF03                      280    95
+LT_ITEM_FI_UPD................ LFLQEXTF03                      214    94
+LT_SUM_INS.................... LFLQEXTF03                      389    97
+T_ITEM_NEW.................... LFLQEXTF03                       70    92
+--------------------------------------------------------------------------------

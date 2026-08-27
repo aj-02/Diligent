@@ -2,21 +2,37 @@
 
 | # | Date | Issue | Cause | Fix | TR | Status |
 |---|------|-------|-------|-----|----|--------|
-| 1 | 26/08/26 | Q1 FY27 run: last venture **VN2012** not populated in the Excel output (`RawData` sheet). Reported by Gitesh S Lad, Corporate Accounts. | Venture columns come 1:1 from `lt_alljv`, a `SELECT DISTINCT rjvnam` on `jv_jvto1_acdoca_4a_4c_switch` filtered by `ryear/rbukrs/rjvnam/rldnr='4A'/rrcty='0'/rrecin`. A venture with no matching **totals** row for that year/company code/recovery indicator gets no field-catalogue entry, so no column on screen and none in Excel. Not an export or template limit — the 24.07.2026 run exported all 73 columns from the same template. | Proposed: build the venture list from the JV master `T8JVT` (BUKRS = p_bukrs, VNAME IN p_jvnam) instead of from posted totals, so every master venture gets a column (zero-filled where there is no data). Pending confirmation of the selection values used on the 04.08.2026 run. | — | Open — awaiting clean source download + confirmation |
+| 1 | 26/08/26 | Q1 FY27 run: last venture **VN2012** not populated in the Excel output (`RawData` sheet). Reported by Gitesh S Lad, Corporate Accounts. | **Excel template, not ABAP.** The template-based spreadsheet export writes the list into the workbook's `RawData` defined name, which is `RawData!$A$1:$BV$778` — 74 columns. The report needs 75 (G/L account + description + 73 ventures), so the 75th column falls outside the range and is never written. Always hits the alphabetically last venture. | Widen the defined names in the template: `RawData` → `=RawData!$A$1:$CZ$5000`, `Header` → `=Header!$A$11:$CZ$5000`. Headroom to CZ so the next new venture does not repeat it. Summary sheets that map RawData by position (`USD_PL_Sub_Heads2` ends at BV, `USD_BS_Sub_Head2` at BW) need their formulas extended one column right. | n/a — no code change | Fix handed over 27/08/26, awaiting user confirmation |
 
-## Evidence (26/08/26)
+## How it was localised (26–27/08/26)
 
-Compared the two output workbooks in `~/Downloads`:
+Ruled out in order, each with evidence:
 
-- `ZJVTB_24.07.2026_Final.xlsx` → `RawData` = **75 columns** (A1:BW776), last header
-  `Closing Bal VN2012`, 109 non-zero rows in that column.
-- `ZJVTB for Q1 FY27_SAP PR run date 04.08.2026.xlsx` → `RawData` = **74 columns**
-  (A1:BV779), last header `Closing Bal VN2002`. `Closing Bal VN2012` absent entirely —
-  header and data.
-- The other 74 headers are identical and in the same order in both files.
-- Both sheets carry SAP's `bestFit` column widths, so both are genuine SAP exports —
-  the July file was not hand-patched.
-- The workbook's `VN2012` sheet (a separate single-venture run) shows 75 GLs with debit
-  and 77 with credit movement, so VN2012 *does* have Q1 FY27 activity.
-- Conclusion: on the 04.08.2026 run the field catalogue itself had 72 ventures. The
-  spreadsheet export did not drop a column.
+1. **Export/template column limit?** Not a hard limit — `ZJVTB_24.07.2026_Final.xlsx` has 75 columns
+   (A1:BW776) including `Closing Bal VN2012` with 109 non-zero rows, against
+   `ZJVTB for Q1 FY27 … 04.08.2026.xlsx` with 74 (A1:BV779). Same 74 headers, same order.
+2. **Venture list SELECT dropping VN2012?** No. Breakpoint on the `SELECT DISTINCT rjvnam`
+   in `AT SELECTION-SCREEN`: `lt_alljv` contained VN2012, last of 27 in the test run.
+3. **Field catalogue losing it?** No. `lt_fieldcat` had all 29 entries —
+   `BAL_CLO27` / `Closing Bal VN2012` at `col_pos 29`, positions contiguous 1…29.
+4. **Saved ALV layout hiding the new column?** No. The column is displayed in the grid, and
+   the direct download from that same list carries it.
+5. **Template export.** Only the "upload the Excel" path loses it. `RawData` defined name is
+   74 columns wide. Root cause.
+
+The 24.07.2026 file reconciles with this: its `RawData` name is still `$A$1:$BV$765` while its
+content runs to BW776 — it was produced by the direct download and put into the workbook by
+hand, not by a template export.
+
+## Separate defects noted, not fixed
+
+- Four `break abapuser02.` statements left in a productive report — source lines 550, 1047,
+  1151, 1561 of the filed baseline.
+- `disp_data`, single-currency fill loop: `READ TABLE lt_fieldcat … WITH KEY coltext` has no
+  `sy-subrc` check. On a miss it reuses the previous `ls_fieldcat-col_pos` and writes the
+  amount into the wrong venture's column.
+- Field names are positional (`BAL_CLO<sy-tabix>`), so `BAL_CLO27` means a different venture
+  depending on what the selection returned. Any saved ALV layout is therefore only valid for
+  one particular venture set.
+- Object name unresolved: the `REPORT` statement reads `zzjvtb_test` while the SE38 print
+  header says `ZFI_JV_TB`. Arnav confirms this is what runs in the backend.

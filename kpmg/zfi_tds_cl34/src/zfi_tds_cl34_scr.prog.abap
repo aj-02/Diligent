@@ -50,10 +50,20 @@ SELECTION-SCREEN END OF BLOCK b1.
 *&---------------------------------------------------------------------*
 *& MANUAL POST-CREATION STEPS
 *&
-*& This object ships by paste, so nothing below travels with the source -
-*& neither the text pool nor the program attributes. Work through the
-*& whole list after creating the program; the same list is the paste
-*& sheet's checklist.
+*& WHICH OF THESE APPLY DEPENDS ON HOW THE OBJECT ARRIVES.
+*&
+*&   abapGit ZIP (ZFI_TDS_CL34.zip in the object folder)
+*&     Steps 2, 3 and 4 are already carried in zfi_tds_cl34.prog.xml -
+*&     the title, the five selection texts, the text symbol and the
+*&     Fixed point arithmetic / Unicode attributes are all serialised in
+*&     its PROGDIR and TPOOL sections, so the import creates the four
+*&     programs with the texts already in place, and step 1 with them.
+*&     Verify step 2 regardless: attributes are the one thing worth
+*&     eyeing after any import.
+*&
+*&   Paste from this file
+*&     Nothing below travels with the source. Work through the whole
+*&     list; it is the paste sheet's checklist.
 *&
 *& 1. OBJECT CREATION
 *&    ZFI_TDS_CL34                      executable program (type 1)
@@ -96,6 +106,7 @@ SELECTION-SCREEN END OF BLOCK b1.
 *& 4. Goto -> Text elements -> Text symbols
 *&     b01       Selection
 *&
-*& Until steps 3 and 4 are done the block frame is blank and the fields
-*& show their technical names.
+*& Until steps 3 and 4 are done - by hand after a paste, or by the
+*& import after a ZIP - the block frame is blank and the fields show
+*& their technical names.
 *&---------------------------------------------------------------------*

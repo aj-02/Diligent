@@ -278,11 +278,12 @@ row with F and G blank and is counted — never a short dump, never a silent ski
 Not built, because the FS did not ask for it: transaction code, variant, spool/background
 handling, download-to-file, ALV layout variants beyond the standard `set_all( )` toolbar.
 
-**Authorisation IS built**, though the FS did not ask for it. Build decision D1 moved the
-read off `I_WithholdingTaxItem` — which is authorisation-filtered by its own DCLS — onto
-raw `WITH_ITEM` / `BKPF` / `BSEG`, and a base-table `SELECT` performs no check of its own.
-Without a replacement the report would show TDS base amounts, tax amounts, vendor names and
-vendor PANs for every company code any user cared to type. `CHECK_AUTHORISATION` checks
+**Authorisation IS built**, though the FS did not ask for it. The report shows TDS base
+amounts, tax amounts, vendor names and vendor PANs, so it should not be readable for a
+company code the user has no rights to. `I_WithholdingTaxItem` carries its own DCLS, but
+that only covers the driver select — the `BKPF`, `BSEG`, `LFA1` and exemption reads are
+plain table selects with no check of their own, and the whole design has to survive being
+switched to base tables (§10.1). `CHECK_AUTHORISATION` checks
 `F_BKPF_BUK` (`BUKRS`, `ACTVT` = `03`) against every company code the selection resolves to.
 It is called **twice**: from `VALIDATE_SELECTION` for the dialog case, where `TYPE 'E'` keeps
 the user on the field, and again at `START-OF-SELECTION`, because `AT SELECTION-SCREEN` does
@@ -317,8 +318,9 @@ exactly the kind of report that gets scheduled. The object name is an assumption
 
 ## 10. Open points
 
-The full register is `docs/QUERIES.md` (Q1–Q15). Ranked, the ones that change a number on
-a compliance report:
+The full register is `docs/QUERIES.md` (Q1–Q20). **Q12 comes before all of them** — if the
+two CDS views the FS names are absent or their element names differ, the program does not
+activate at all. After that, ranked by what changes a number on a compliance report:
 
 1. **Q1 — column Y accumulation rule.** `FIWTIN_ACC_EXEM` is keyed by `SECCO`, so a vendor
    accumulates once per section code. The build shows the latest `WT_DATE` row not after
@@ -334,25 +336,46 @@ a compliance report:
 6. **Q6 — reversed and parked documents** are currently reported, not excluded. Client
    decision.
 
-### 10.1 Build decision D1 — base tables instead of the CDS views
+### 10.1 The report is built to the FS as written
 
-FS cell [B2] names `I_WITHHOLDINGTAXITEM` and `I_JOURNALENTRY`. **This report reads
-`WITH_ITEM`, `BKPF` and `BSEG` instead.**
+Every FS instruction is implemented as the FS states it, with **one** exception, set out in
+§10.2. That is a deliberate position, not an oversight.
 
-Reason: the CDS element names cannot be verified on the target landscape (older S/4
-release, no ADT connection to the Astral system), and a wrong element name costs a real
-activation cycle. `WITH_ITEM` / `BKPF` / `BSEG` field names are stable across every
-release. The output is identical, with one behavioural detail carried across: the CDS view
-adds `wt_withcd <> ''` to its own `WHERE` clause, so the base-table read carries
-`AND w~wt_withcd <> @space` and the two paths return the same rows. The CDS path is
-additionally authorisation-filtered by its DCLS; the raw select is not, which is why
-`CHECK_AUTHORISATION` was added — see §8.
+An earlier draft of this object departed from the FS in five places on the strength of a
+DDIC read taken from a development system that is **not** the Astral landscape. Those
+departures have been withdrawn. A field list read from the wrong system is not evidence
+about this one, and the FS is the signed document. Where the FS may be wrong, the target
+system will say so at activation — that is a faster and more reliable answer than an
+inference from a different box, and each one is a small, isolated change:
 
-The whole withholding read is isolated in **one form, `FETCH_WT_ITEMS`**. Swapping the
-report onto the two CDS views later means rewriting that form and nothing else —
-everything downstream works off `GT_WITEM` / `GT_BKPF` / `GT_BSEG` only.
+| FS cell | As written, as built | If it fails | Query |
+|---|---|---|---|
+| [B2] | `I_WithholdingTaxItem` ⋈ `I_JournalEntry` | equivalent `WITH_ITEM` + `BKPF` select is written out verbatim in the `FETCH_WT_ITEMS` comment | Q12 |
+| [I2] | `T059Z-TXT40` | move col I to `T059OT-TEXT40` (closer) or `T059ZT-TEXT40` | Q9 |
+| [K2] [M2] | `BSEG-H_BUDAT` / `H_BLDAT` | `BKPF-BUDAT` / `BLDAT`, already buffered — one line | Q17 |
+| [G2] | `KTOPL` hardcoded `'ASTL'` | read from `T001`; the value is the named constant `GC_KTOPL_GL` | Q18 |
+| [H27] | `MBEW-BWKEY` = `RSEG-WERKS` | pass `RSEG-BWKEY` instead | Q19 |
 
-Registered as QUERIES Q12 for confirmation.
+The riskiest of these by far is **[B2]**: a wrong CDS element name stops activation
+outright, so it is the first thing to try. The whole withholding read is isolated in **one
+form, `FETCH_WT_ITEMS`** — everything downstream works off `GT_WITEM` / `GT_BKPF` /
+`GT_BSEG` and never touches a view, so swapping the data source is a single-form change.
+
+### 10.2 The one departure — the RMRP branch test
+
+The GLCode Logic tab says *"For records having AWKEY as RMRP"*. The report tests
+**`BKPF-AWTYP`**.
+
+The FS is its own evidence here. Two rows below that instruction it says *"Get AWKEY and
+provide first 10 digits of AWKEY in BELNR of RSEG and Fiscal year in GJAHR"*. A field
+cannot both equal `RMRP` and hold a ten-digit invoice number followed by a four-digit
+year. `RMRP` is the reference *transaction*, which is `AWTYP`; `AWKEY` is the reference
+*key* the same tab then cuts the invoice number out of.
+
+This one was not left literal because, unlike the five above, **it fails silently**.
+`AWKEY = 'RMRP'` matches no document at all: every purchase-order invoice would fall
+through to the direct-FI branch, column F would be wrong for most of the report, and
+nothing would error. Registered as QUERIES Q14 for Bhavin Suthar.
 
 ---
 

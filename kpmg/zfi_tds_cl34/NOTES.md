@@ -23,13 +23,31 @@ field list — it overrides both the FS and BUILD_BRIEF §D4), `docs/QUERIES.md`
 open points for Ankita Parikh and Bhavin Suthar), `BUILD_BRIEF.md` (the pinned build
 contract).
 
-## Shipping: PASTE-ONLY
+## Shipping: abapGit ZIP, with paste as the fallback
 
-There is **no `.abapgit.xml`** and `src/` is not an abapGit serialisation — it is four
-loose `.abap` files named the abapGit way. Paste them in SE38.
+The object is **screen-free by design** — `CL_SALV_TABLE`, no `CALL SCREEN`, no
+`cl_gui_custom_container` — which is what makes it ZIP-shippable. Adding any of those
+reverts it to paste-only.
 
-Nothing below travels with the source. The same list is the trailer comment of
-`ZFI_TDS_CL34_SCR`, so it is in front of whoever pastes the object:
+**`ZFI_TDS_CL34.zip`** (object folder root) is a full abapGit offline serialisation:
+
+```
+.abapgit.xml
+src/package.devc.xml
+src/zfi_tds_cl34.prog.abap        + .prog.xml   SUBC 1, FIXPT, VARCL, UCCHECK, TPOOL
+src/zfi_tds_cl34_top.prog.abap    + .prog.xml   SUBC I
+src/zfi_tds_cl34_scr.prog.abap    + .prog.xml   SUBC I
+src/zfi_tds_cl34_forms.prog.abap  + .prog.xml   SUBC I
+```
+
+The main program's `TPOOL` carries the **title, all five selection texts and text symbol
+`B01`**, and its `PROGDIR` carries `FIXPT` and `UCCHECK`. So on the ZIP path steps 1–4
+below are done by the import — check step 2 anyway, attributes are worth eyeing after any
+import. Re-zip from `src/` rather than reusing the archive if the sources change, and
+check the four object names are free in the target before importing.
+
+The steps below apply **when pasting**. Nothing travels with a paste. The same list is the
+trailer comment of `ZFI_TDS_CL34_SCR`, so it is in front of whoever pastes the object:
 
 1. Create the three includes as type **INCLUDE (I)**, not as executable programs.
    `ZFI_TDS_CL34_TOP` must **not** carry a `REPORT` / `PROGRAM` statement of its own.

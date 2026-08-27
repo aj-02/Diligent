@@ -225,18 +225,34 @@ ENDFORM.
 *& Read the driver set: the withholding tax items, their document
 *& headers and every line item of those documents.
 *&
-*& THIS IS THE ONLY FORM THAT READS THE WITHHOLDING TAX DATA. Build
-*& contract D1 puts the report on the WITH_ITEM / BKPF base tables rather
-*& than on the CDS views I_WITHHOLDINGTAXITEM and I_JOURNALENTRY named in
-*& the FS, because the CDS element names cannot be verified on this
-*& landscape and a wrong element name costs an activation cycle. The read
-*& is isolated here on purpose: swapping the report onto the two CDS
-*& views later means rewriting this form and nothing else. Everything
-*& downstream works off GT_WITEM / GT_BKPF / GT_BSEG only.
+*& THIS IS THE ONLY FORM THAT READS THE WITHHOLDING TAX DATA. It reads
+*& the two CDS views FS [B2] names, I_WITHHOLDINGTAXITEM inner-joined to
+*& I_JOURNALENTRY, under the FS's mandatory filter of company code,
+*& fiscal year and posting date.
 *&
-*& The CDS view adds WT_WITHCD <> SPACE to its own WHERE clause, so the
-*& base-table read carries the same restriction and the two paths return
-*& the same rows.
+*& The read is isolated here on purpose. None of the CDS element names
+*& can be verified without the target system, so if the view rejects one
+*& of them THIS FORM IS THE ONLY ONE TO CHANGE - everything downstream
+*& works off GT_WITEM / GT_BKPF / GT_BSEG and never touches a view. The
+*& equivalent base-table read, should the views turn out to be absent or
+*& thin on this release, is:
+*&
+*&   SELECT w~bukrs, w~belnr, w~gjahr, w~buzei, w~witht, w~wt_withcd,
+*&          w~wt_acco, w~wt_qsshh, w~wt_qbshh, w~qsatz
+*&     FROM with_item AS w
+*&     INNER JOIN bkpf AS h ON  h~bukrs = w~bukrs
+*&                          AND h~belnr = w~belnr
+*&                          AND h~gjahr = w~gjahr
+*&     WHERE h~bukrs IN @s_bukrs AND h~gjahr = @p_gjahr
+*&       AND h~budat IN @s_budat AND w~wt_acco IN @s_lifnr
+*&       AND w~koart = 'K' AND w~wt_withcd <> @space
+*&     INTO TABLE @gt_witem.
+*&
+*& The header buffer GT_BKPF is still read from BKPF and the line items
+*& from BSEG, because that is what the FS itself asks for everywhere
+*& except this one driver select: [L2] names BKPF for XBLNR, [J2] [K2]
+*& [M2] [N2] [O2] name BSEG, and the GLCode Logic tab works on BSEG,
+*& AWKEY, RSEG, EKKN, MBEW and T030.
 *&
 *& Section code is filtered in ABAP rather than in the WHERE clause. It
 *& lives on the line item, and the very same BSEG read serves the vendor
@@ -248,21 +264,31 @@ FORM fetch_wt_items.
 
   CLEAR: gt_witem, gt_bkpf, gt_bseg, gt_dockey, gv_nobseg.
 
-* Driver. The header filters are the FS's mandatory filter; KOART = 'K'
-* keeps customer withholding out, which the Vendor Code / Vendor Name /
-* Vendor PAN columns require.
-  SELECT w~bukrs, w~belnr, w~gjahr, w~buzei, w~witht, w~wt_withcd,
-         w~wt_acco, w~koart, w~wt_qsshh, w~wt_qbshh, w~qsatz
-    FROM with_item AS w
-    INNER JOIN bkpf AS h ON  h~bukrs = w~bukrs
-                         AND h~belnr = w~belnr
-                         AND h~gjahr = w~gjahr
-    WHERE h~bukrs      IN @s_bukrs
-      AND h~gjahr      =  @p_gjahr
-      AND h~budat      IN @s_budat
-      AND w~koart      =  @gc_koart_vendor
-      AND w~wt_acco    IN @s_lifnr
-      AND w~wt_withcd  <> @space
+* Driver. FS [B2]: inner join the two views, apply the mandatory filter
+* of company code, fiscal year and posting date, and take every
+* ACCOUNTINGDOCUMENT the join returns.
+*
+* The element list is in TY_WITEM component order - strict ABAP SQL
+* assigns by position, so the two must not drift apart.
+*
+* " ASSUMPTION: no account-type restriction is applied. The FS asks for
+* CUSTOMERSUPPLIERACCOUNT without qualifying it, so customer withholding
+* items are not excluded; where one occurs its Vendor Name and Vendor PAN
+* come back blank because LFA1 has no such account. Registered as a query.
+  SELECT w~companycode, w~accountingdocument, w~fiscalyear,
+         w~accountingdocumentitem, w~withholdingtaxtype,
+         w~withholdingtaxcode, w~customersupplieraccount,
+         w~whldgtaxbaseamtincocodecrcy, w~whldgtaxamtincocodecrcy,
+         w~withholdingtaxpercent
+    FROM i_withholdingtaxitem AS w
+    INNER JOIN i_journalentry AS h
+            ON  h~companycode        = w~companycode
+            AND h~accountingdocument = w~accountingdocument
+            AND h~fiscalyear         = w~fiscalyear
+    WHERE h~companycode             IN @s_bukrs
+      AND h~fiscalyear              =  @p_gjahr
+      AND h~postingdate             IN @s_budat
+      AND w~customersupplieraccount IN @s_lifnr
     INTO TABLE @gt_witem.
 
   IF gt_witem IS INITIAL.
@@ -288,6 +314,7 @@ FORM fetch_wt_items.
 * the WHERE clause - see the form comment above.
   SELECT bukrs, belnr, gjahr, buzei, koart, ktosl, lifnr, sgtxt,
          augbl, augdt, secco,
+         h_budat, h_bldat,        " FS [K2] / [M2] - header dates off the line item
          ghkon                     " ASSUMPTION: BSEG-GHKON is populated on the withholding line; the field exists (DD03L position 364) but its content on the Astral system is unverified
     FROM bseg
     FOR ALL ENTRIES IN @gt_dockey
@@ -563,10 +590,7 @@ FORM build_output.
                   gjahr = <ls_wi>-gjahr
          BINARY SEARCH.
     IF sy-subrc = 0.
-      lv_budat      = <ls_bkpf>-budat.
-      ls_out-budat  = <ls_bkpf>-budat.            " col K
-      ls_out-xblnr  = <ls_bkpf>-xblnr.            " col L
-      ls_out-bldat  = <ls_bkpf>-bldat.            " col M
+      ls_out-xblnr  = <ls_bkpf>-xblnr.            " col L  FS [L2] names BKPF for the reference
     ENDIF.
 
 *   Vendor line of this withholding item. FS [J2] and build contract D5
@@ -582,9 +606,21 @@ FORM build_output.
                              CHANGING ls_vline.
 
     ls_out-nature = ls_vline-sgtxt.               " col J  " ASSUMPTION: item text of the vendor line, not BKPF header text
+    ls_out-budat  = ls_vline-h_budat.             " col K  FS [K2] - BSEG-H_BUDAT, not BKPF-BUDAT
+    ls_out-bldat  = ls_vline-h_bldat.             " col M  FS [M2] - BSEG-H_BLDAT, not BKPF-BLDAT
     ls_out-augbl  = ls_vline-augbl.               " col N  blank while the item is open
     ls_out-augdt  = ls_vline-augdt.               " col O  blank while the item is open
     lv_secco      = ls_vline-secco.               " tie-break for columns U to X and column Y
+
+*   The posting date drives the exemption certificate validity test and
+*   the cumulative amount cut-off, so it comes from the same field the
+*   FS puts in column K.
+*   " ASSUMPTION: BSEG-H_BUDAT is populated. It is a propagated copy of
+*   BKPF-BUDAT and can be blank depending on how the document was
+*   posted; where it is blank column K is blank and columns U to Y fall
+*   away with it. If that happens, BKPF-BUDAT is already in GT_BKPF and
+*   this is a one-line change.
+    lv_budat      = ls_vline-h_budat.
 
 *   GL code and GL name.
     READ TABLE gt_glmap ASSIGNING FIELD-SYMBOL(<ls_glmap>)
@@ -596,9 +632,9 @@ FORM build_output.
       ls_out-gl_code = <ls_glmap>-gl_code.        " col F
     ENDIF.
 
-    IF ls_out-gl_code IS NOT INITIAL AND ls_t001-ktopl IS NOT INITIAL.
+    IF ls_out-gl_code IS NOT INITIAL.
       READ TABLE gt_skat ASSIGNING FIELD-SYMBOL(<ls_skat>)
-           WITH KEY ktopl = ls_t001-ktopl
+           WITH KEY ktopl = gc_ktopl_gl
                     saknr = ls_out-gl_code
            BINARY SEARCH.
       IF sy-subrc = 0.
@@ -616,18 +652,8 @@ FORM build_output.
            BINARY SEARCH.
       IF sy-subrc = 0.
         ls_out-section  = <ls_t059z>-qscod.       " col H
+        ls_out-sec_desc = <ls_t059z>-txt40.       " col I  FS [I2] - the same T059Z row, no second read
         ls_out-rate_sec = <ls_t059z>-qsatz.       " col R  zero is legitimate for a formula based code
-      ENDIF.
-
-      IF ls_out-section IS NOT INITIAL.
-        READ TABLE gt_t059ot ASSIGNING FIELD-SYMBOL(<ls_t059ot>)
-             WITH KEY spras    = sy-langu
-                      land1    = ls_t001-land1
-                      wt_qscod = ls_out-section
-             BINARY SEARCH.
-        IF sy-subrc = 0.
-          ls_out-sec_desc = <ls_t059ot>-text40.   " col I  " ASSUMPTION: T059OT is maintained; the field exists but the configuration content is unverified
-        ENDIF.
       ENDIF.
 
     ENDIF.
@@ -738,10 +764,9 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM fetch_tax_config.
 
-  DATA: lt_wtkey TYPE tt_t059z,
-        lt_otkey TYPE tt_t059ot.
+  DATA lt_wtkey TYPE tt_t059z.
 
-  CLEAR: gt_t059z, gt_t059ot.
+  CLEAR gt_t059z.
 
   LOOP AT gt_witem ASSIGNING FIELD-SYMBOL(<ls_wi>).
 
@@ -760,7 +785,7 @@ FORM fetch_tax_config.
   DELETE ADJACENT DUPLICATES FROM lt_wtkey COMPARING land1 witht wt_withcd.
 
   IF lt_wtkey IS NOT INITIAL.
-    SELECT land1, witht, wt_withcd, qscod, qsatz
+    SELECT land1, witht, wt_withcd, qscod, txt40, qsatz
       FROM t059z
       FOR ALL ENTRIES IN @lt_wtkey
       WHERE land1     = @lt_wtkey-land1
@@ -770,30 +795,6 @@ FORM fetch_tax_config.
   ENDIF.
 
   SORT gt_t059z BY land1 witht wt_withcd.
-
-* Text of the official withholding tax key, in the logon language.
-  LOOP AT gt_t059z ASSIGNING FIELD-SYMBOL(<ls_t059z>).
-    CHECK <ls_t059z>-qscod IS NOT INITIAL.
-    APPEND INITIAL LINE TO lt_otkey ASSIGNING FIELD-SYMBOL(<ls_ok>).
-    <ls_ok>-spras    = sy-langu.
-    <ls_ok>-land1    = <ls_t059z>-land1.
-    <ls_ok>-wt_qscod = <ls_t059z>-qscod.
-  ENDLOOP.
-
-  SORT lt_otkey BY spras land1 wt_qscod.
-  DELETE ADJACENT DUPLICATES FROM lt_otkey COMPARING spras land1 wt_qscod.
-
-  IF lt_otkey IS NOT INITIAL.
-    SELECT spras, land1, wt_qscod, text40
-      FROM t059ot
-      FOR ALL ENTRIES IN @lt_otkey
-      WHERE spras    = @lt_otkey-spras
-        AND land1    = @lt_otkey-land1
-        AND wt_qscod = @lt_otkey-wt_qscod
-      INTO TABLE @gt_t059ot.
-  ENDIF.
-
-  SORT gt_t059ot BY spras land1 wt_qscod.
 
 ENDFORM.
 
@@ -814,13 +815,10 @@ FORM fetch_gl_texts.
 
     CHECK <ls_glmap>-gl_code IS NOT INITIAL.
 
-    READ TABLE gt_t001 ASSIGNING FIELD-SYMBOL(<ls_t001>)
-         WITH KEY bukrs = <ls_glmap>-bukrs BINARY SEARCH.
-    CHECK sy-subrc = 0.
-    CHECK <ls_t001>-ktopl IS NOT INITIAL.
-
+*   FS [G2]: provide "ASTL" in KTOPL. The chart is not read from T001
+*   here - see the comment on GC_KTOPL_GL.
     APPEND INITIAL LINE TO lt_glkey ASSIGNING FIELD-SYMBOL(<ls_gk>).
-    <ls_gk>-ktopl = <ls_t001>-ktopl.
+    <ls_gk>-ktopl = gc_ktopl_gl.
     <ls_gk>-saknr = <ls_glmap>-gl_code.
 
   ENDLOOP.
@@ -1075,7 +1073,7 @@ FORM fetch_mm_data.
   ENDIF.
 
   SELECT belnr, gjahr, buzei, bukrs, ebeln, ebelp, zekkn, matnr,
-         bwkey, bwtar
+         werks, bwtar          " FS [H27]: the plant is the MBEW valuation area
     FROM rseg
     FOR ALL ENTRIES IN @lt_mmkey
     WHERE belnr = @lt_mmkey-belnr
@@ -1117,7 +1115,7 @@ FORM fetch_mm_data.
 * account assignment never reaches the material route.
   LOOP AT gt_rseg ASSIGNING <ls_rseg>.
 
-    CHECK <ls_rseg>-matnr IS NOT INITIAL AND <ls_rseg>-bwkey IS NOT INITIAL.
+    CHECK <ls_rseg>-matnr IS NOT INITIAL AND <ls_rseg>-werks IS NOT INITIAL.
 
     IF <ls_rseg>-ebeln IS NOT INITIAL.
       PERFORM read_ekkn_gl USING    <ls_rseg>-ebeln
@@ -1129,7 +1127,7 @@ FORM fetch_mm_data.
 
     APPEND INITIAL LINE TO lt_matkey ASSIGNING FIELD-SYMBOL(<ls_mt>).
     <ls_mt>-matnr = <ls_rseg>-matnr.
-    <ls_mt>-bwkey = <ls_rseg>-bwkey.
+    <ls_mt>-bwkey = <ls_rseg>-werks.
     <ls_mt>-bwtar = <ls_rseg>-bwtar.
 
 *   A split valuated item also needs the header segment, so the retry
@@ -1138,7 +1136,7 @@ FORM fetch_mm_data.
     IF <ls_rseg>-bwtar IS NOT INITIAL.
       APPEND INITIAL LINE TO lt_matkey ASSIGNING <ls_mt>.
       <ls_mt>-matnr = <ls_rseg>-matnr.
-      <ls_mt>-bwkey = <ls_rseg>-bwkey.
+      <ls_mt>-bwkey = <ls_rseg>-werks.
     ENDIF.
 
   ENDLOOP.
@@ -1363,7 +1361,7 @@ FORM derive_gl_rmrp USING    ps_bkpf   TYPE ty_bkpf
   ENDIF.
 
   PERFORM read_bklas USING    ls_item-matnr
-                              ls_item-bwkey
+                              ls_item-werks    " FS [H27]: BWKEY = RSEG-WERKS
                               ls_item-bwtar
                      CHANGING lv_bklas.
 

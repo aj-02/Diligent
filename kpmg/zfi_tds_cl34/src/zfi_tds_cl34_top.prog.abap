@@ -93,6 +93,33 @@ TYPES: BEGIN OF ty_dockey,
 *&
 *& The HH suffix is the company code currency, HB the transaction
 *& currency. The FS asks for company code currency, so HH is used.
+*&
+*& The buffer is FILLED FROM THE CDS VIEW I_WITHHOLDINGTAXITEM, which is
+*& what FS [B2] asks for, but it is TYPED from WITH_ITEM, the table that
+*& view reads. Typing from the view as well would put its element names
+*& in a second place and double the surface an activation error can come
+*& from; the underlying table's names are stable across releases. The
+*& component order below is the order FETCH_WT_ITEMS lists the view
+*& elements in - strict ABAP SQL assigns by POSITION, so the two must be
+*& kept aligned.
+*&
+*&   ty_witem-bukrs      <- CompanyCode
+*&   ty_witem-belnr      <- AccountingDocument        FS [B2]
+*&   ty_witem-gjahr      <- FiscalYear
+*&   ty_witem-buzei      <- AccountingDocumentItem
+*&   ty_witem-witht      <- WithholdingTaxType
+*&   ty_witem-wt_withcd  <- WithholdingTaxCode        FS [Q2]
+*&   ty_witem-wt_acco    <- CustomerSupplierAccount   FS [C2]
+*&   ty_witem-wt_qsshh   <- WhldgTaxBaseAmtInCoCodeCrcy  FS [P2]
+*&   ty_witem-wt_qbshh   <- WhldgTaxAmtInCoCodeCrcy      FS [T2]
+*&   ty_witem-qsatz      <- WithholdingTaxPercent        FS [S2]
+*&
+*& " ASSUMPTION: the six element names the FS spells out are correct and
+*& the four it does not spell out (CompanyCode, FiscalYear,
+*& AccountingDocumentItem, WithholdingTaxType) follow the standard
+*& naming. None of them can be verified without the target system. If
+*& the view rejects any of them, FETCH_WT_ITEMS is the only form to
+*& change - see its comment.
 *&---------------------------------------------------------------------*
 TYPES: BEGIN OF ty_witem,
          bukrs     TYPE with_item-bukrs,
@@ -102,7 +129,6 @@ TYPES: BEGIN OF ty_witem,
          witht     TYPE with_item-witht,
          wt_withcd TYPE with_item-wt_withcd,
          wt_acco   TYPE with_item-wt_acco,
-         koart     TYPE with_item-koart,
          wt_qsshh  TYPE with_item-wt_qsshh,
          wt_qbshh  TYPE with_item-wt_qbshh,
          qsatz     TYPE with_item-qsatz,
@@ -112,8 +138,20 @@ TYPES: BEGIN OF ty_witem,
 *&---------------------------------------------------------------------*
 *& Header buffer. AWTYP carries the reference transaction - 'RMRP' for a
 *& logistics invoice - and AWKEY the reference key from which the MM
-*& invoice number and year are cut. The FS calls this an AWKEY value; it
-*& is an AWTYP value.
+*& invoice number and year are cut.
+*&
+*& The GLCode Logic tab says "For records having AWKEY as RMRP". That is
+*& the ONE FS instruction implemented against its own words, and the FS
+*& itself is the evidence: two rows further down the same tab it says
+*& "Get AWKEY and provide first 10 digits of AWKEY in BELNR of RSEG and
+*& Fiscal year in GJAHR". A field cannot both equal 'RMRP' and hold a
+*& ten digit invoice number followed by a four digit year. RMRP is the
+*& reference TRANSACTION, which is AWTYP; AWKEY is the reference KEY the
+*& same tab then cuts the invoice number out of. Testing AWKEY = 'RMRP'
+*& would match no document at all, every purchase-order invoice would
+*& silently take the direct-FI branch, and column F would be wrong for
+*& most of the report without anything failing visibly. Registered as a
+*& query for Bhavin Suthar.
 *&---------------------------------------------------------------------*
 TYPES: BEGIN OF ty_bkpf,
          bukrs TYPE bkpf-bukrs,
@@ -155,6 +193,11 @@ TYPES: BEGIN OF ty_bseg,
          augdt TYPE bseg-augdt,
          secco TYPE bseg-secco,
          ghkon TYPE bseg-ghkon,
+*        Header dates propagated onto the line item. FS [K2] and [M2]
+*        name these two BSEG fields, not their BKPF originals, so they
+*        are read here and columns K and M come off the vendor line.
+         h_budat TYPE bseg-h_budat,
+         h_bldat TYPE bseg-h_bldat,
        END OF ty_bseg,
        tt_bseg TYPE STANDARD TABLE OF ty_bseg WITH DEFAULT KEY.
 
@@ -218,22 +261,31 @@ TYPES: BEGIN OF ty_skat,
 *& the official key and lives in T059OT, whose key field is WT_QSCOD -
 *& note the different field name on the two tables.
 *&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*& Withholding tax code configuration. One read of T059Z serves three
+*& columns, exactly as FS [H2] [I2] [R2] describe it: the official
+*& withholding tax key (QSCOD, col H), its 40 character text (TXT40,
+*& col I) and the configured rate (QSATZ, col R).
+*&
+*& " ASSUMPTION: T059Z carries TXT40. FS [I2] states it plainly. If the
+*& activation fails on that field, the text is held in a language
+*& dependent table instead and column I has to come from there - the
+*& candidates are T059ZT (text of the tax CODE, key SPRAS / LAND1 /
+*& WITHT / WT_WITHCD) and T059OT (text of the official KEY, key SPRAS /
+*& LAND1 / WT_QSCOD). Given column I is headed "Section Code
+*& Description" and column H is the official key, T059OT is the closer
+*& match of the two. FETCH_TAX_CONFIG and the col I read in
+*& BUILD_OUTPUT are the only two places to change.
+*&---------------------------------------------------------------------*
 TYPES: BEGIN OF ty_t059z,
          land1     TYPE t059z-land1,
          witht     TYPE t059z-witht,
          wt_withcd TYPE t059z-wt_withcd,
          qscod     TYPE t059z-qscod,
+         txt40     TYPE t059z-txt40,
          qsatz     TYPE t059z-qsatz,
        END OF ty_t059z,
        tt_t059z TYPE STANDARD TABLE OF ty_t059z WITH DEFAULT KEY.
-
-TYPES: BEGIN OF ty_t059ot,
-         spras     TYPE t059ot-spras,
-         land1     TYPE t059ot-land1,
-         wt_qscod  TYPE t059ot-wt_qscod,
-         text40    TYPE t059ot-text40,
-       END OF ty_t059ot,
-       tt_t059ot TYPE STANDARD TABLE OF ty_t059ot WITH DEFAULT KEY.
 
 *&---------------------------------------------------------------------*
 *& Exemption certificate key, built once and used as the FOR ALL ENTRIES
@@ -340,7 +392,15 @@ TYPES: BEGIN OF ty_rseg,
          ebelp TYPE rseg-ebelp,
          zekkn TYPE rseg-zekkn,
          matnr TYPE rseg-matnr,
-         bwkey TYPE rseg-bwkey,
+*        FS [H20] "get MATNR, WERKS and BWTAR provide the same in MBEW"
+*        and FS [H27] "where MATNR = RSEG-MATNR and BWKEY = RSEG_WERKS".
+*        The plant is therefore what is passed into the MBEW valuation
+*        area, which is correct wherever valuation is at plant level.
+*        " ASSUMPTION: company codes 1000 and 4000 are valuated at plant
+*        level, so BWKEY = WERKS. Under company-code-level valuation the
+*        MBEW read finds nothing and column F falls back to blank for
+*        stock purchase orders. Check OX14 / T001K.
+         werks TYPE rseg-werks,
          bwtar TYPE rseg-bwtar,
        END OF ty_rseg,
        tt_rseg TYPE STANDARD TABLE OF ty_rseg WITH DEFAULT KEY.
@@ -428,6 +488,23 @@ TYPES: BEGIN OF ty_glmsg,
 *& country constant - the FS names company codes 1000 and 4000 as
 *& applicability, not as a filter.
 *&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*& Chart of accounts for the GL description, column G.
+*&
+*& FS [G2] says verbatim: provide "ASTL" in KTOPL. It is the one place
+*& the FS asks for a hardcoded value, so it is honoured and named here
+*& rather than buried in FETCH_GL_TEXTS. Everywhere else the chart comes
+*& from T001 per company code, because the GLCode Logic tab asks for
+*& exactly that ("fetch KTOPL from T001 using BUKRS and provide the same
+*& in T030").
+*&
+*& " ASSUMPTION: every company code in scope, 1000 and 4000 included,
+*& runs chart of accounts ASTL. A company code on a different chart
+*& returns a blank column G, never a wrong description. Check with
+*& SE16 on T001, field KTOPL.
+*&---------------------------------------------------------------------*
+CONSTANTS: gc_ktopl_gl     TYPE skat-ktopl  VALUE 'ASTL'.   " FS [G2], hardcoded on instruction
+
 CONSTANTS: gc_koart_vendor TYPE bseg-koart  VALUE 'K',      " account type vendor
            gc_ktosl_wit    TYPE bseg-ktosl  VALUE 'WIT',    " transaction key of the withholding tax line
            gc_ktosl_bsx    TYPE t030-ktosl  VALUE 'BSX',    " transaction key of the inventory posting
@@ -480,8 +557,7 @@ DATA: gt_witem  TYPE tt_witem,                  " driver - withholding tax items
 DATA: gt_lfa1   TYPE tt_lfa1,                   " vendor master, name and PAN
       gt_t001   TYPE tt_t001,                   " company code - country, currency, chart of accounts
       gt_skat   TYPE tt_skat,                   " GL account texts in the logon language
-      gt_t059z  TYPE tt_t059z,                  " withholding tax code configuration
-      gt_t059ot TYPE tt_t059ot.                 " official withholding tax key texts
+      gt_t059z  TYPE tt_t059z.                  " withholding tax code configuration
 
 DATA: gt_tanex  TYPE tt_tanex,                  " exemption certificates
       gt_accex  TYPE tt_accex.                  " accumulated base amounts

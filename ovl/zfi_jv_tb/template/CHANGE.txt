@@ -1,35 +1,36 @@
-ZJVTB Excel template - what was changed
-=======================================
+ZJVTB Excel layout file - what was changed and why
+==================================================
 
-File in  : ZJVTB for Q1 FY27_SAP PR run date 04.08.2026.xlsx
-File out : ZJVTB_TEMPLATE_wide_2026-08-27.xlsx
-
-Only one part of the workbook was touched: the defined names (Excel Name Manager),
-stored in xl/workbook.xml. All 66 internal parts of the .xlsx are byte-identical
-except that one. No sheet, cell, formula, format or custom property was altered.
+Current file : ZJVTB_TEMPLATE_v2_2026-08-27.xlsx
+Based on     : ZJVTB for Q1 FY27_SAP PR run date 04.08.2026.xlsx
+Change       : two defined names only (Excel Name Manager, Ctrl+F3).
+               All 66 internal parts of the .xlsx are byte-identical except
+               xl/workbook.xml. No sheet, cell, formula or format altered.
 
 Name        Before                  After
 ----------  ----------------------  ----------------------
-RawData     RawData!$A$1:$BV$778    RawData!$A$1:$CZ$5000
-Header      Header!$A$11:$BV$788    Header!$A$11:$CZ$5000
+RawData     RawData!$A$1:$BV$778    RawData!$A$1:$BW$1000
+Header      Header!$A$11:$BV$788    Header!$A$11:$BW$1010
 RawHeader   RawHeader!$A$1:$C$9     unchanged
 
-BV is column 74. The report needs 75 columns (G/L account + G/L description +
-73 ventures), so the 75th - Closing Bal VN2012 - fell outside the range the
-template export writes into. CZ is column 104, leaving headroom for further
-ventures.
+WHY THIS SIZE - DO NOT JUST MAKE IT BIGGER
+------------------------------------------
+The template export writes at most as many COLUMNS as the RawData name declares,
+and it also appears to work to a total budget of roughly 90,000 cells, trimming
+columns to fit the declared row count. Rows are not capped - the export extends
+them past the declaration.
 
-To see it in Excel: open either file, Formulas -> Name Manager (Ctrl+F3), look at
-the RawData and Header rows.
+Observed:
+  74 cols x  778 rows =  57,572 cells  ->  74 columns written (1 short of 75)
+ 104 cols x 5000 rows = 520,000 cells  ->  18 columns written (90,000/5000 = 18)
+  75 cols x 1000 rows =  75,000 cells  ->  expected 75 columns
 
-Raw XML diff of the defined names:
+Rule of thumb: declared columns must be >= the number the report produces
+(2 + number of ventures), and declared columns x declared rows should stay
+under about 90,000. Widening the range without watching the row count is what
+cut the output to 16 ventures on 27/08/2026.
 
---- ORIGINAL (04.08.2026 output)
-+++ WIDENED  (test template)
-@@ -10,4 +10,4 @@
- <definedName name="Format">#REF!</definedName>
--<definedName name="Header">Header!$A$11:$BV$788</definedName>
--<definedName name="RawData">RawData!$A$1:$BV$778</definedName>
-+<definedName name="Header">Header!$A$11:$CZ$5000</definedName>
-+<definedName name="RawData">RawData!$A$1:$CZ$5000</definedName>
- <definedName name="RawHeader">RawHeader!$A$1:$C$9</definedName>
+If a 74th venture is added, extend RawData one column to BX and keep rows at
+1000 (76 x 1000 = 76,000, still within budget).
+
+To see it in Excel: Formulas -> Name Manager (Ctrl+F3), RawData and Header rows.

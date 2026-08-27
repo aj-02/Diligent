@@ -89,6 +89,60 @@ Every posting BAPI has a `_CHECK` twin that validates without posting.
 | `BAPI_ASSET_VALUE_ADJUST_POST` | **Post Depreciation** — replaces `ABAA` |
 | `BAPI_ASSET_WRITEUP_POST`      | **Post Write-Up** — replaces `ABZU` |
 
+### BAPI field mapping — confirmed from SE37, 27/08/26
+
+`BAPIFAPO_GEN_INFO` components (read off the SE37 test screen, not guessed):
+
+`USERNAME`, `DOC_TYPE`, `DOC_DATE`, `PSTNG_DATE`, `FIS_PERIOD`, `TRANS_DATE`,
+`COMP_CODE`, `ASSETMAINO`, `ASSETSUBNO`, `ASSETTRTYP`, `DEPR_AREA`,
+`LEDGER_GROUP`, `ACC_PRINCIPLE`.
+
+**The transaction type is `ASSETTRTYP` in GENERALPOSTINGDATA, not in
+VALUEADJUSTDATA.** Asset value date is `TRANS_DATE`, not a field with `BZDAT`
+in the name.
+
+| Current BDC field | BAPI target | Source in program |
+|---|---|---|
+| `ANBZ-BUKRS`  | `GENERALPOSTINGDATA-COMP_CODE`   | `P_BUKRS` |
+| `ANBZ-ANLN1`  | `GENERALPOSTINGDATA-ASSETMAINO`  | `IST_DISPLAY-ANLN1` |
+| `ANBZ-ANLN2`  | `GENERALPOSTINGDATA-ASSETSUBNO`  | `IST_DISPLAY-ANLN2` |
+| `ANEK-BLDAT`  | `GENERALPOSTINGDATA-DOC_DATE`    | `sy-datum` |
+| `ANEK-BUDAT`  | `GENERALPOSTINGDATA-PSTNG_DATE`  | `P_BUDAT` |
+| `ANBZ-PERID`  | `GENERALPOSTINGDATA-FIS_PERIOD`  | `P_MONAT` |
+| `ANBZ-BWASL`  | `GENERALPOSTINGDATA-ASSETTRTYP`  | `IST_DISPLAY-TTYPE` |
+| `ANBZ-BZDAT`  | `GENERALPOSTINGDATA-TRANS_DATE`  | `IST_DISPLAY-BZDAT` |
+| `RA01B-BLART` | `GENERALPOSTINGDATA-DOC_TYPE`    | `'AA'`, write-up legs only |
+| `ANBZ-DMBTR`  | `VALUEADJUSTDATA-...` | components not yet captured |
+| `ANEK-SGTXT`  | not yet located | `P_GJAHR` / literal text |
+| `ANBZ-SAFAV` / `ANBZ-NAFAV` | likely `WRITEUPAREAVALUES` | write-up legs |
+
+`LEDGER_GROUP` and `ACC_PRINCIPLE` are new-AA additions with no BDC equivalent —
+leave initial unless ledger-specific posting is required. `DEPR_AREA` initial
+(`00`) posts to all areas per configuration, matching current screen behaviour.
+
+### Data issue found while preparing the BAPI test — 27/08/26
+
+The run that produced the failed session used:
+
+| Parameter | Value |
+|---|---|
+| `P_BUDAT` posting date   | 31.03.2026 |
+| `P_BZDAT` asset value date | 12.08.2026 |
+| `P_MONAT` period         | 3 |
+
+Asset value date is **after** the posting date, and on an April–March fiscal
+year variant they fall in different fiscal years — FI-AA requires the asset
+value date to lie in the fiscal year of the posting date. 31.03.2026 would also
+be period 12, not period 3.
+
+This will be rejected independently of the `LEAVE TO TRANSACTION` problem.
+**Open question for functional:** were these test entries, or the real
+parameters? If real, there is a second defect behind the first.
+
+The report itself still selects and calculates correctly on S/4 (verified
+27/08/26 — ALV populated, Total NBV 44,120,688,927.03, Total Impairment
+1,221.00, sample asset 106009197/0000). Only the posting layer is broken.
+
 ### Mode -> screen -> transaction map (traced 27/08/26)
 
 `STATUS_0200` dispatches on the memory-ID `OK` value to one screen per mode.

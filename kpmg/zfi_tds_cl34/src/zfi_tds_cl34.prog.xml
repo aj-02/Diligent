@@ -4,9 +4,9 @@
   <asx:values>
    <PROGDIR>
     <NAME>ZFI_TDS_CL34</NAME>
+    <VARCL>X</VARCL>
     <SUBC>1</SUBC>
     <FIXPT>X</FIXPT>
-    <VARCL>X</VARCL>
     <UCCHECK>X</UCCHECK>
    </PROGDIR>
    <TPOOL>

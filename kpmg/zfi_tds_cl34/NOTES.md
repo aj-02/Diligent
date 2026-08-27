@@ -39,17 +39,28 @@ src/zfi_tds_cl34_scr.prog.abap    + .prog.xml   SUBC I
 src/zfi_tds_cl34_forms.prog.abap  + .prog.xml   SUBC I
 ```
 
-The layout deliberately mirrors `ovl/ztest_t001/ZTEST_T001.zip`, the only ZIP in this repo
-known to import cleanly here. Two things were stripped after an abapGit *"xml incorrect"*
-error on the first attempt, both of them deviations from that reference:
+### The `PROGDIR` element order is load-bearing — do not reshuffle it
 
-- **`package.devc.xml`** — the reference has none, and it is only needed if abapGit is
-  meant to create the package rather than import into an existing one.
-- **`TPOOL` entries carrying a `KEY`** — the five selection texts and text symbol `B01`.
-  The reference pool holds a title and nothing else, so that is all this one holds.
+abapGit deserialises with `CALL TRANSFORMATION id`, which walks
+`zif_abapgit_sap_report=>ty_progdir` component by component and **rejects any element that
+arrives out of sequence** with `CX_XSLT_FORMAT_ERROR` — a short dump in
+`ZABAPGIT_STANDALONE`, reported as an invalid XML format. The relevant positions are:
 
-Consequence: **the ZIP carries the title and the program attributes, not the selection
-texts.** Steps 3 and 4 below are manual on both paths. Arnav's decision, 27/08/26.
+    name(1) … varcl(5) … subc(11) … fixpt(23) … uccheck(30)
+
+so a report's `PROGDIR` must read `NAME, VARCL, SUBC, FIXPT, UCCHECK`. Writing `VARCL`
+after `FIXPT` — which reads perfectly naturally — dumps the import. Includes have no
+`VARCL`, so `NAME, SUBC, FIXPT, UCCHECK` is already in order for them.
+
+`ovl/ztest_t001` carried the same defect and has been corrected; do not copy an XML shape
+from another object without checking it against the 30-component order first.
+
+**`TPOOL` holds the report title only.** The five selection texts and text symbol `B01`
+are maintained by hand — Arnav's decision, 27/08/26, taken while the TPOOL `KEY` items
+were still a suspect. They turned out to be innocent, so they can be put back whenever
+that is preferred; `TEXTPOOL` order is `ID, KEY, ENTRY, LENGTH`. Steps 3 and 4 below are
+manual as things stand. `package.devc.xml` is likewise absent but was also innocent — it
+is only needed when abapGit is to create the package rather than import into one.
 
 Re-zip from `src/` rather than reusing the archive if the sources change, and check the
 four object names are free in the target before importing.

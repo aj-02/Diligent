@@ -1,0 +1,1964 @@
+----------------------------------------------------------------------------------------------------
+Main program     SAPMZAAIMP                                Level 0    Page 1
+Object           SAPMZAAIMP                                Lines 38
+System           OCQ / 500   User SAP_ABAP   27.08.2026 11:30:34
+----------------------------------------------------------------------------------------------------
+1      REPORT SAPMZAAIMP .
+2      **************************************************************
+3      *PROGRAM: SAPMZAAIMP
+4      *
+5      *TITLE:ALLOCATION AND POSTING OF IMPAIRMENT/WRITE BACK LOSS
+6      *
+7      *FS No: FS-FI-AA-OVL-004-IMPR
+8      *
+9      *Author: Madhukar   Date :01.09.2005
+10     *
+11     *Description:
+12     *THIS PROGRAM IS CALLED BY THE PROGRAM ZAA_IMPARMENTLOSS(ZFIIMPR) AFTER
+13     *FETCHING THE DATA TO SHOW THEM ON TABLE CONTROL(Refer
+14     *ZAA_IMPARMENTLOSS)
+15     *Tran Code :ZAAIMP
+16     **************************************************************
+17     *
+18     *Change History
+19     *
+20     *Mod Date     Changed By     Description      Chng ID
+21     *051005      Sudhir Sharma   bdc for abzu & f-02
+22     *
+23     ***************************************************************
+24     *  Date        Transport    USERID       Description          *
+25     * 08/09/2008   RD1K960036   SAB_SRIDHAR  Change in  INCLUDE   *
+26     *                                        1) MZAAIMPF01        *
+27     *                                        2) MZAAIMPI01        *
+28     *                                        3) MZAAIMPTOP        *
+29     ***************************************************************
+30     ***************************************************************
+31
+32     INCLUDE MZAAIMPTOP.
+33
+34     INCLUDE MZAAIMPO01.
+35
+36     INCLUDE MZAAIMPI01.
+37
+38     INCLUDE MZAAIMPF01.
+*--- End of SAPMZAAIMP - 38 lines ---
+
+----------------------------------------------------------------------------------------------------
+Include          MZAAIMPTOP                                Level 1    Page 2
+Object           SAPMZAAIMP                                Lines 101
+System           OCQ / 500   User SAP_ABAP   27.08.2026 11:30:34
+----------------------------------------------------------------------------------------------------
+1      *----------------------------------------------------------------------*
+2      *   INCLUDE MZMM_STOTOP                                                *
+3      *----------------------------------------------------------------------*
+4      *Change History
+5      ***************************************************************
+6      *  Date        Transport    USERID       Description          *
+7      * 17/09/2008   RD1K960036   SAB_SRIDHAR  Constant declared    *
+8      ***************************************************************
+9      TABLES:EKET,
+10            EKPO,
+11            EKKO,
+12            T001W,
+13            ANLA.
+14     *SELECTION-SCREEN BEGIN OF BLOCK blk WITH FRAME.
+15     *SELECT-OPTIONS:werks FOR t001w-werks OBLIGATORY.
+16     **parameters: matnr like ekpo-matnr.
+17     *SELECT-OPTIONS:ebeln FOR eket-ebeln. " obligatory.
+18     *PARAMETERS:days(3).
+19     *SELECTION-SCREEN END OF BLOCK blk.
+20     *
+21     *SELECTION-SCREEN BEGIN OF BLOCK blk1 WITH FRAME.
+22     *PARAMETERS: rad1 RADIOBUTTON GROUP rad,
+23     *            rad2 RADIOBUTTON GROUP rad.
+24     *SELECTION-SCREEN END OF BLOCK blk1.
+25     DATA:IST_PFSTATUS LIKE RSMPE OCCURS 0 WITH HEADER LINE.
+26
+27     DATA:   BDCDATA LIKE BDCDATA    OCCURS 0 WITH HEADER LINE.
+28     DATA:   MESSTAB LIKE BDCMSGCOLL OCCURS 0 WITH HEADER LINE.
+29     DATA:   E_GROUP_OPENED.
+30     DATA:BEGIN OF IST_DISPLAY OCCURS 1,
+31           ANLN1 LIKE ANLC-ANLN1,
+32           ANLN2 LIKE ANLC-ANLN2,
+33           AKTIV(10), " like anla-aktiv,
+34           BZDAT(10), " like anek-bzdat ,
+35           KOSTL LIKE ANLZ-KOSTL,
+36           GSBER LIKE ANLZ-GSBER,
+37           PRCTR LIKE CSKS-PRCTR,
+38           NBV1  LIKE ANLC-SAFAP,
+39           IMPAMT LIKE ANLC-SAFAP,
+40           NBV LIKE ANLC-SAFAP,
+41           GBV1 LIKE ANLC-SAFAP,
+42           GBV2 LIKE ANLC-SAFAP,
+43           ADEP1 LIKE ANLC-SAFAP,
+44           ADEP2 LIKE ANLC-SAFAP,
+45           DEPDIFF LIKE ANLC-SAFAP,
+46           DIFFIMPDEP LIKE ANLC-SAFAP,
+47           NBV2 LIKE ANLC-SAFAP,
+48           NBVDIFF LIKE ANLC-SAFAP,
+49           IMPRATIO LIKE ANLC-SAFAP,
+50           IMPWBRATIO LIKE ANLC-SAFAP,
+51           TTYPE(4),
+52           TXT50 LIKE ANLA-TXT50,
+53           ANLKL LIKE ANLA-ANLKL,
+54           SEL(1),
+55          END OF IST_DISPLAY.
+56
+57     DATA:P_BUKRS LIKE T093C-BUKRS,
+58          P_GJAHR LIKE ANEK-GJAHR,
+59          P_BUDAT LIKE BKPF-BUDAT,
+60          P_MONAT LIKE ANEK-MONAT,
+61          G_TOTNBV LIKE GLT0-HSLVT,
+62          G_TOTNBV1 LIKE ANLC-SAFAP,
+63          G_TOTIMP LIKE ANLC-SAFAP,
+64          G_TOTDEPDIFF LIKE GLT0-HSLVT,
+65          G_TOTDIFFIMPDEP LIKE GLT0-HSLVT,
+66          G_TOTALADEP1 LIKE GLT0-HSLVT,
+67          G_TOTALADEP2 LIKE GLT0-HSLVT,
+68          P_SAFAP LIKE ANLC-SAFAP.
+69
+70     *DATA:BEGIN OF ist_count OCCURS 1,
+71     *      ebeln LIKE eket-ebeln,
+72     *      lines(3),
+73     *     END OF ist_count.
+74     DATA:IST_DISPLAY1 LIKE IST_DISPLAY OCCURS 1 WITH HEADER LINE.
+75     DATA:G_DATE(10), " LIKE sy-datum,
+76          G_DMBTR(16),
+77          G_TEXT(65),
+78          G_ANSWER,
+79          GROUP LIKE APQI-GROUPID,
+80          GROUP1 LIKE APQI-GROUPID.
+81
+82     DATA:OKCODE LIKE SY-UCOMM,
+83          G_OKCODE LIKE SY-UCOMM.
+84     CONTROLS: TBC_200 TYPE  TABLEVIEW USING SCREEN '0200',
+85               TBC_300 TYPE  TABLEVIEW USING SCREEN '0300',
+86               TBC_400 TYPE  TABLEVIEW USING SCREEN '0400',
+87               TBC_500 TYPE  TABLEVIEW USING SCREEN '0500',
+88               TBC_600 TYPE  TABLEVIEW USING SCREEN '0600',
+89               TBC_700 TYPE  TABLEVIEW USING SCREEN '0700'.
+90
+91     DATA:SEL_FLAG.
+92     DATA:G_COUNT(4).
+93     DATA:G_TITLE(50).
+94     DATA:G_TEXT1(20),
+95     FLAG.
+96
+97     *Begin of <RD1K960036>
+98     CONSTANTS : G_C_ONE TYPE C VALUE '1',
+99                 g_c_dat type char10 value 'DAT'.
+100
+101    *End of <RD1K960036>
+*--- End of MZAAIMPTOP - 101 lines ---
+
+----------------------------------------------------------------------------------------------------
+Include          MZAAIMPO01                                Level 1    Page 3
+Object           SAPMZAAIMP                                Lines 118
+System           OCQ / 500   User SAP_ABAP   27.08.2026 11:30:34
+----------------------------------------------------------------------------------------------------
+1      *---------------------------------------------------------------------*
+2      *       MODULE STATUS_0200 OUTPUT                                     *
+3      *---------------------------------------------------------------------*
+4      *       ........                                                      *
+5      *---------------------------------------------------------------------*
+6      MODULE STATUS_0200 OUTPUT.
+7        REFRESH :IST_PFSTATUS.
+8        IF FLAG = ' '.
+9      "Code Remediation changes S4 2025_1_A Conversion **BEGIN OF CHANGE BY SAP_ABAP 11.06.2026 FOR ATC
+10     *    IMPORT IST_DISPLAY FROM MEMORY ID 'DISP'.
+11         IMPORT IST_DISPLAY FROM MEMORY ID 'DISP'.     "#EC CI_FLDEXT_OK[2610650]
+12     "Code Remediation changes S4 2025_1_A Conversion **END OF CHANGE BY SAP_ABAP 11.06.2026 FOR ATC
+13         IMPORT: OKCODE FROM MEMORY ID 'OK',
+14                 P_BUKRS FROM MEMORY ID 'BUKRS',
+15                 P_GJAHR FROM MEMORY ID 'GJAHR',
+16                 P_BUDAT FROM MEMORY ID 'BUDAT',
+17                 P_MONAT FROM MEMORY ID 'MONAT',
+18                 G_TOTNBV FROM MEMORY ID 'TOTNBV' accepting padding ,
+19                 G_TOTIMP FROM MEMORY ID 'TOTIMP' accepting padding ,
+20                 G_TOTDEPDIFF FROM MEMORY ID 'TOTDEPDIFF' accepting padding ,
+21                 G_TOTDIFFIMPDEP FROM MEMORY ID 'TOTDIFFIMPDEP' accepting padding ,
+22                 G_TOTALADEP1 FROM MEMORY ID 'TOTALADEP1' accepting padding ,
+23                 G_TOTALADEP2 FROM MEMORY ID 'TOTALADEP2' accepting padding ,
+24                 P_SAFAP  FROM MEMORY ID 'SAFAP' accepting padding.
+25         G_OKCODE = OKCODE.
+26         FLAG = 'X'.
+27       ENDIF.
+28       CASE G_OKCODE.
+29         WHEN 'IMPAIR'.
+30           SET PF-STATUS 'S200'.
+31           SET TITLEBAR 'T200' WITH TEXT-001.
+32           G_TITLE = TEXT-001.
+33         WHEN 'WBACK'.
+34           CALL SCREEN '0300'.
+35           CLEAR: G_OKCODE,
+36                 OKCODE.
+37           SET SCREEN 0.
+38           LEAVE SCREEN..
+39         WHEN 'DEPCOM'.
+40           CALL SCREEN '0400'.
+41           CLEAR: G_OKCODE,
+42                 OKCODE.
+43           SET SCREEN 0.
+44           LEAVE SCREEN.
+45         WHEN 'UNPDEP'.
+46           CALL SCREEN '0500'.
+47           CLEAR: G_OKCODE,
+48                 OKCODE.
+49           SET SCREEN 0.
+50           LEAVE SCREEN.
+51         WHEN 'PWBACK'.
+52           CALL SCREEN '0600'.
+53           CLEAR: G_OKCODE,
+54                 OKCODE.
+55           SET SCREEN 0.
+56           LEAVE SCREEN.
+57         WHEN 'WBACKGROSS'.
+58           CALL SCREEN '0700'.
+59           CLEAR: G_OKCODE,
+60                 OKCODE.
+61           SET SCREEN 0.
+62           LEAVE SCREEN.
+63       ENDCASE.
+64     ENDMODULE.                 " STATUS_0200  OUTPUT
+65     *&---------------------------------------------------------------------*
+66     *&      Module  STATUS_0300  OUTPUT
+67     *&---------------------------------------------------------------------*
+68     *       text
+69     *----------------------------------------------------------------------*
+70     MODULE STATUS_0300 OUTPUT.
+71       G_TITLE = TEXT-002.
+72       SET PF-STATUS 'S300'.
+73       SET TITLEBAR 'T300' WITH TEXT-002.
+74
+75     ENDMODULE.                 " STATUS_0300  OUTPUT
+76     *&---------------------------------------------------------------------*
+77     *&      Module  STATUS_0400  OUTPUT
+78     *&---------------------------------------------------------------------*
+79     *       text
+80     *----------------------------------------------------------------------*
+81     MODULE STATUS_0400 OUTPUT.
+82       G_TITLE = TEXT-003.
+83       SET PF-STATUS 'S400'.
+84       SET TITLEBAR 'T400' WITH TEXT-003.
+85
+86     ENDMODULE.                 " STATUS_0400  OUTPUT
+87     *&---------------------------------------------------------------------*
+88     *&      Module  STATUS_0500  OUTPUT
+89     *&---------------------------------------------------------------------*
+90     *       text
+91     *----------------------------------------------------------------------*
+92     MODULE STATUS_0500 OUTPUT.
+93       G_TITLE = TEXT-004.
+94       SET PF-STATUS 'S500'.
+95       SET TITLEBAR 'T500' WITH TEXT-004.
+96
+97     ENDMODULE.                 " STATUS_0500  OUTPUT
+98     *&---------------------------------------------------------------------*
+99     *&      Module  STATUS_0600  OUTPUT
+100    *&---------------------------------------------------------------------*
+101    *       text
+102    *----------------------------------------------------------------------*
+103    MODULE STATUS_0600 OUTPUT.
+104      G_TITLE = TEXT-005.
+105      SET PF-STATUS 'S600'.
+106      SET TITLEBAR 'T600' WITH TEXT-005.
+107    ENDMODULE.                 " STATUS_0600  OUTPUT
+108    *&---------------------------------------------------------------------*
+109    *&      Module  STATUS_0700  OUTPUT
+110    *&---------------------------------------------------------------------*
+111    *       text
+112    *----------------------------------------------------------------------*
+113    MODULE STATUS_0700 OUTPUT.
+114      G_TITLE = TEXT-002.
+115      SET PF-STATUS 'S700'.
+116      SET TITLEBAR 'T700' WITH TEXT-006.
+117
+118    ENDMODULE.                 " STATUS_0700  OUTPUT
+*--- End of MZAAIMPO01 - 118 lines ---
+
+----------------------------------------------------------------------------------------------------
+Include          MZAAIMPI01                                Level 1    Page 4
+Object           SAPMZAAIMP                                Lines 1436
+System           OCQ / 500   User SAP_ABAP   27.08.2026 11:30:34
+----------------------------------------------------------------------------------------------------
+1      *----------------------------------------------------------------------*
+2      ***INCLUDE MZMM_STOI01 .
+3      *----------------------------------------------------------------------*
+4      *Change History
+5      *******************************************************************
+6      *  Date        Transport    USERID       Description              *
+7      * 08/09/2008   RD1K960036   SAB_SRIDHAR  Obsolete FM  "DOWNLAOD"  *
+8      *                                        replaced  "GUI_DOWNLOAD" *
+9      *******************************************************************
+10
+11     *&---------------------------------------------------------------------*
+12     *&      Module  exit200  INPUT
+13     *&---------------------------------------------------------------------*
+14     *       text
+15     *----------------------------------------------------------------------*
+16     MODULE EXIT200 INPUT.
+17       CASE OKCODE.
+18         WHEN 'CANC' OR 'EXIT' OR 'BACK'.
+19           SET SCREEN 0.
+20           LEAVE SCREEN..
+21       ENDCASE.
+22     ENDMODULE.                 " exit200  INPUT
+23     *&---------------------------------------------------------------------*
+24     *&      Module  USER_COMMAND_0200  INPUT
+25     *&---------------------------------------------------------------------*
+26     *       text
+27     *----------------------------------------------------------------------*
+28     MODULE USER_COMMAND_0200 INPUT.
+29       DATA:L_TABIX LIKE SY-TABIX,
+30       VAR(22),
+31       L_REC,
+32       L_FIELD(20),
+33       L_VALUE LIKE IST_DISPLAY-ANLN1.
+34       CASE OKCODE.
+35         WHEN 'SEL'.
+36           LOOP AT IST_DISPLAY.
+37             IST_DISPLAY-SEL = 'X'.
+38             MODIFY IST_DISPLAY INDEX SY-TABIX.
+39           ENDLOOP.
+40           SEL_FLAG = 'X'.
+41         WHEN 'UNSEL'.
+42           LOOP AT IST_DISPLAY WHERE SEL = 'X'.
+43             IST_DISPLAY-SEL = ' '.
+44             MODIFY IST_DISPLAY INDEX SY-TABIX.
+45           ENDLOOP.
+46           LOOP AT IST_DISPLAY.
+47           ENDLOOP.
+48           SEL_FLAG = ' '.
+49         WHEN 'DISP'.
+50           GET CURSOR FIELD L_FIELD VALUE L_VALUE.
+51           SET PARAMETER ID 'AN1' FIELD L_VALUE.
+52           READ TABLE IST_DISPLAY WITH KEY ANLN1 = L_VALUE.
+53           SET PARAMETER ID 'AN2' FIELD IST_DISPLAY-ANLN2.
+54           SET PARAMETER ID 'BUK' FIELD P_BUKRS.
+55
+56           CALL TRANSACTION 'AW01' AND SKIP FIRST SCREEN.
+57
+58         WHEN 'EXEC'.
+59           PERFORM OPEN_GROUP.
+60           LOOP AT IST_DISPLAY WHERE IMPRATIO <> 0.
+61             L_TABIX = SY-TABIX.
+62             PERFORM BDC_DYNPRO      USING 'SAPMA01B' '0100'.
+63             PERFORM BDC_FIELD       USING 'BDC_CURSOR'
+64                                           'ANBZ-BWASL'.
+65             PERFORM BDC_FIELD       USING 'BDC_OKCODE'
+66                                           '/00'.
+67             PERFORM BDC_FIELD       USING 'ANBZ-BUKRS'
+68                                            P_BUKRS.
+69             PERFORM BDC_FIELD       USING 'ANBZ-ANLN1'
+70                                           IST_DISPLAY-ANLN1.
+71             PERFORM BDC_FIELD       USING 'ANBZ-ANLN2'
+72                                           IST_DISPLAY-ANLN2.
+73             CALL FUNCTION 'CONVERT_DATE_TO_EXTERNAL'
+74                  EXPORTING
+75                       DATE_INTERNAL = SY-DATUM
+76                  IMPORTING
+77                       DATE_EXTERNAL = G_DATE.
+78
+79             PERFORM BDC_FIELD       USING 'ANEK-BLDAT'
+80                                           G_DATE.
+81             CALL FUNCTION 'CONVERT_DATE_TO_EXTERNAL'
+82                  EXPORTING
+83                       DATE_INTERNAL = P_BUDAT
+84                  IMPORTING
+85                       DATE_EXTERNAL = G_DATE.
+86
+87             PERFORM BDC_FIELD       USING 'ANEK-BUDAT'
+88                                           G_DATE.
+89             PERFORM BDC_FIELD       USING 'ANBZ-PERID'
+90                                           P_MONAT.
+91             PERFORM BDC_FIELD       USING 'ANBZ-BWASL'
+92                                           IST_DISPLAY-TTYPE.
+93             PERFORM BDC_DYNPRO      USING 'SAPMA01B' '0110'.
+94             PERFORM BDC_FIELD       USING 'BDC_CURSOR'
+95                                           'ANEK-SGTXT'.
+96             PERFORM BDC_FIELD       USING 'BDC_OKCODE'
+97                                           '=UPDA'.
+98             G_DMBTR = IST_DISPLAY-IMPRATIO.
+99             PERFORM BDC_FIELD       USING 'ANBZ-DMBTR'
+100                                       G_DMBTR.
+101            PERFORM BDC_FIELD       USING 'ANBZ-BZDAT'
+102                                          IST_DISPLAY-BZDAT.
+103            PERFORM BDC_FIELD       USING 'ANEK-SGTXT'
+104                                          P_GJAHR.
+105            PERFORM BDC_TRANSACTION USING 'ABAA'.
+106            IF SY-SUBRC = 0.
+107              DELETE IST_DISPLAY INDEX L_TABIX.
+108            ENDIF.
+109          ENDLOOP.
+110          PERFORM CLOSE_GROUP.
+111        WHEN 'DOWN'.
+112
+113    *Begin of <RD1K960036>
+114
+115    *      CALL FUNCTION 'DOWNLOAD'
+116    *           EXPORTING
+117    *                FILENAME = ' '
+118    *                FILETYPE = 'DAT'
+119    *           TABLES
+120    *                DATA_TAB = IST_DISPLAY.
+121
+122    DATA:  l_filename    TYPE string,
+123           l_filen       TYPE string,
+124           l_path        TYPE string,
+125           l_fullpath    TYPE string,
+126           l_usr_act     TYPE I.
+127
+128    clear l_filename.
+129    l_filename = SPACE.
+130
+131    CALL METHOD CL_GUI_FRONTEND_SERVICES=>FILE_SAVE_DIALOG
+132      EXPORTING
+133        INITIAL_DIRECTORY    = l_filename
+134      CHANGING
+135        FILENAME             = l_filen
+136        PATH                 = l_path
+137        FULLPATH             = l_fullpath
+138        USER_ACTION          = l_usr_act
+139      EXCEPTIONS
+140        CNTL_ERROR           = 1
+141        ERROR_NO_GUI         = 2
+142        NOT_SUPPORTED_BY_GUI = 3
+143        others               = 4.
+144
+145        IF sy-subrc = 0
+146           AND l_usr_act NE
+147           CL_GUI_FRONTEND_SERVICES=>ACTION_CANCEL.
+148
+149    CALL FUNCTION 'GUI_DOWNLOAD'
+150      EXPORTING
+151        FILENAME                        = l_fullpath
+152       FILETYPE                         = g_c_dat
+153      TABLES
+154    "Code Remediation changes S4 2025_1_A Conversion **BEGIN OF CHANGE BY SAP_ABAP 11.06.2026 FOR ATC
+155    *    DATA_TAB                        = IST_DISPLAY
+156        DATA_TAB                        = IST_DISPLAY     "#EC CI_FLDEXT_OK[2610650]
+157    "Code Remediation changes S4 2025_1_A Conversion **END OF CHANGE BY SAP_ABAP 11.06.2026 FOR ATC
+158     EXCEPTIONS
+159       FILE_WRITE_ERROR                = 1
+160       NO_BATCH                        = 2
+161       GUI_REFUSE_FILETRANSFER         = 3
+162       INVALID_TYPE                    = 4
+163       NO_AUTHORITY                    = 5
+164       UNKNOWN_ERROR                   = 6
+165       HEADER_NOT_ALLOWED              = 7
+166       SEPARATOR_NOT_ALLOWED           = 8
+167       FILESIZE_NOT_ALLOWED            = 9
+168       HEADER_TOO_LONG                 = 10
+169       DP_ERROR_CREATE                 = 11
+170       DP_ERROR_SEND                   = 12
+171       DP_ERROR_WRITE                  = 13
+172       UNKNOWN_DP_ERROR                = 14
+173       ACCESS_DENIED                   = 15
+174       DP_OUT_OF_MEMORY                = 16
+175       DISK_FULL                       = 17
+176       DP_TIMEOUT                      = 18
+177       FILE_NOT_FOUND                  = 19
+178       DATAPROVIDER_EXCEPTION          = 20
+179       CONTROL_FLUSH_ERROR             = 21
+180       OTHERS                          = 22 .
+181
+182
+183    IF SY-SUBRC <> 0.
+184     MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+185             WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+186    ENDIF.
+187
+188       Endif.
+189    *      IF SY-SUBRC <> 0.
+190    *      ENDIF.
+191    *End of <RD1K960036>
+192
+193        WHEN 'BACK'.
+194          G_TEXT = 'Do You Want to quit the screen'.
+195          PERFORM POPUP_MESSAGE USING G_TEXT.
+196    *Begin of <RD1K960036>
+197    *      IF G_ANSWER = 'J'.
+198           IF G_ANSWER = g_c_one.
+199    *End of <RD1K960036>
+200            SET SCREEN 0.
+201            LEAVE SCREEN.
+202          ELSE.
+203            SET SCREEN '0200'.
+204          ENDIF.
+205      ENDCASE.
+206      CLEAR OKCODE.
+207
+208    ENDMODULE.                 " USER_COMMAND_0200  INPUT
+209    *&---------------------------------------------------------------------*
+210    *&      Module  move_selected_lines  INPUT
+211    *&---------------------------------------------------------------------*
+212    *       text
+213    *----------------------------------------------------------------------*
+214    MODULE MOVE_SELECTED_LINES INPUT.
+215      MODIFY IST_DISPLAY FROM IST_DISPLAY INDEX TBC_200-CURRENT_LINE.
+216      CLEAR G_COUNT.
+217      IF IST_DISPLAY-IMPRATIO > IST_DISPLAY-NBV.
+218        MESSAGE E052(ZAA).
+219      ENDIF.
+220      IF IST_DISPLAY-TTYPE = 'X20' OR
+221      IST_DISPLAY-TTYPE =  'X30' OR
+222      IST_DISPLAY-TTYPE =  '641' OR
+223      IST_DISPLAY-TTYPE =  '651'.
+224      ELSE.
+225        MESSAGE E055(ZAA).
+226      ENDIF.
+227    ENDMODULE.                 " move_selected_lines  INPUT
+228    *&---------------------------------------------------------------------*
+229    *&      Module  check_data  INPUT
+230    *&---------------------------------------------------------------------*
+231    *       text
+232    *----------------------------------------------------------------------*
+233    MODULE CHECK_DATA INPUT.
+234    *  if okcode = 'EXEC'.
+235    *    read table ist_display with key sel = 'X'.
+236    *    if sy-subrc <> '0'.
+237    *      message e260(zfi).
+238    *    endif.
+239    *  endif.
+240      IF OKCODE = 'ENTE'.
+241        CLEAR P_SAFAP.
+242        CLEAR IST_DISPLAY.
+243        LOOP AT IST_DISPLAY.
+244          P_SAFAP = P_SAFAP + IST_DISPLAY-IMPRATIO.
+245        ENDLOOP.
+246      ENDIF.
+247
+248
+249    ENDMODULE.                 " check_data  INPUT
+250    *&---------------------------------------------------------------------*
+251    *&      Module  exit300  INPUT
+252    *&---------------------------------------------------------------------*
+253    *       text
+254    *----------------------------------------------------------------------*
+255    MODULE EXIT300 INPUT.
+256      CASE OKCODE.
+257        WHEN 'CANC' OR 'EXIT'.
+258          SET SCREEN 0.
+259          LEAVE SCREEN..
+260      ENDCASE.
+261
+262    ENDMODULE.                 " exit300  INPUT
+263    *&---------------------------------------------------------------------*
+264    *&      Module  USER_COMMAND_0300  INPUT
+265    *&---------------------------------------------------------------------*
+266    *       text
+267    *----------------------------------------------------------------------*
+268    MODULE USER_COMMAND_0300 INPUT.
+269      CASE OKCODE.
+270        WHEN 'SEL'.
+271          LOOP AT IST_DISPLAY.
+272            IST_DISPLAY-SEL = 'X'.
+273            MODIFY IST_DISPLAY INDEX SY-TABIX.
+274          ENDLOOP.
+275          SEL_FLAG = 'X'.
+276        WHEN 'UNSEL'.
+277          LOOP AT IST_DISPLAY WHERE SEL = 'X'.
+278            IST_DISPLAY-SEL = ' '.
+279            MODIFY IST_DISPLAY INDEX SY-TABIX.
+280          ENDLOOP.
+281          LOOP AT IST_DISPLAY.
+282          ENDLOOP.
+283          SEL_FLAG = ' '.
+284        WHEN 'DISP'.
+285          GET CURSOR FIELD L_FIELD VALUE L_VALUE.
+286          SET PARAMETER ID 'AN1' FIELD L_VALUE.
+287          READ TABLE IST_DISPLAY WITH KEY ANLN1 = L_VALUE.
+288          SET PARAMETER ID 'AN2' FIELD IST_DISPLAY-ANLN2.
+289          SET PARAMETER ID 'BUK' FIELD P_BUKRS.
+290
+291          CALL TRANSACTION 'AW01' AND SKIP FIRST SCREEN.
+292
+293        WHEN 'EXEC'.
+294          PERFORM OPEN_GROUP.
+295          LOOP AT IST_DISPLAY WHERE IMPWBRATIO <> 0.
+296            L_TABIX = SY-TABIX.
+297            PERFORM BDC_DYNPRO      USING 'SAPMA01B' '0100'.
+298            PERFORM BDC_FIELD       USING 'BDC_CURSOR'
+299                                          'ANBZ-BWASL'.
+300            PERFORM BDC_FIELD       USING 'BDC_OKCODE'
+301                                          '/00'.
+302            PERFORM BDC_FIELD       USING 'ANBZ-BUKRS'
+303                                          P_BUKRS.
+304            PERFORM BDC_FIELD       USING 'ANBZ-ANLN1'
+305                                          IST_DISPLAY-ANLN1.
+306            PERFORM BDC_FIELD       USING 'ANBZ-ANLN2'
+307                                          IST_DISPLAY-ANLN2.
+308            CALL FUNCTION 'CONVERT_DATE_TO_EXTERNAL'
+309                 EXPORTING
+310                      DATE_INTERNAL = SY-DATUM
+311                 IMPORTING
+312                      DATE_EXTERNAL = G_DATE.
+313
+314            PERFORM BDC_FIELD       USING 'ANEK-BLDAT'
+315                                          G_DATE.
+316            CALL FUNCTION 'CONVERT_DATE_TO_EXTERNAL'
+317                 EXPORTING
+318                      DATE_INTERNAL = P_BUDAT
+319                 IMPORTING
+320                      DATE_EXTERNAL = G_DATE.
+321
+322            PERFORM BDC_FIELD       USING 'ANEK-BUDAT'
+323                                          G_DATE.
+324            PERFORM BDC_FIELD       USING 'ANBZ-PERID'
+325                                          P_MONAT.
+326            PERFORM BDC_FIELD       USING 'ANBZ-BWASL'
+327                                          IST_DISPLAY-TTYPE.
+328            PERFORM BDC_DYNPRO      USING 'SAPMA01B' '0140'.
+329            PERFORM BDC_FIELD       USING 'BDC_CURSOR'
+330                                          'ANEK-SGTXT'.
+331            PERFORM BDC_FIELD       USING 'BDC_OKCODE'
+332                                          '=UPDA'.
+333            PERFORM BDC_FIELD       USING 'ANBZ-BZDAT'
+334                                          IST_DISPLAY-BZDAT.
+335            G_DMBTR = IST_DISPLAY-IMPWBRATIO.
+336            IF IST_DISPLAY-TTYPE = 'X70'.
+337              PERFORM BDC_FIELD       USING 'ANBZ-SAFAV'
+338                                            G_DMBTR.
+339            ELSE.
+340              PERFORM BDC_FIELD       USING 'ANBZ-NAFAV'
+341                                            G_DMBTR.
+342            ENDIF.
+343            PERFORM BDC_FIELD       USING 'ANEK-SGTXT'
+344                                          P_GJAHR.
+345            PERFORM BDC_FIELD       USING 'RA01B-BLART'
+346                                          'AA'.
+347            PERFORM BDC_TRANSACTION USING 'ABZU'.
+348            IF SY-SUBRC = 0.
+349              DELETE IST_DISPLAY INDEX L_TABIX.
+350            ENDIF.
+351          ENDLOOP.
+352          PERFORM CLOSE_GROUP.
+353        WHEN 'DOWN'.
+354    *Begin of <RD1K960036>
+355
+356    *      CALL FUNCTION 'DOWNLOAD'
+357    *           EXPORTING
+358    *                FILENAME = ' '
+359    *                FILETYPE = 'DAT'
+360    *           TABLES
+361    *                DATA_TAB = IST_DISPLAY.
+362    CLEAR l_filename.
+363    l_filename = SPACE.
+364
+365    CALL METHOD CL_GUI_FRONTEND_SERVICES=>FILE_SAVE_DIALOG
+366      EXPORTING
+367        INITIAL_DIRECTORY    = l_filename
+368      CHANGING
+369        FILENAME             = l_filen
+370        PATH                 = l_path
+371        FULLPATH             = l_fullpath
+372        USER_ACTION          = l_usr_act
+373      EXCEPTIONS
+374        CNTL_ERROR           = 1
+375        ERROR_NO_GUI         = 2
+376        NOT_SUPPORTED_BY_GUI = 3
+377        others               = 4.
+378
+379        IF sy-subrc = 0
+380           AND l_usr_act NE
+381           CL_GUI_FRONTEND_SERVICES=>ACTION_CANCEL.
+382
+383    CALL FUNCTION 'GUI_DOWNLOAD'
+384      EXPORTING
+385        FILENAME                        = l_fullpath
+386       FILETYPE                         = g_c_dat
+387      TABLES
+388    "Code Remediation changes S4 2025_1_A Conversion **BEGIN OF CHANGE BY SAP_ABAP 11.06.2026 FOR ATC
+389    *    DATA_TAB                        = IST_DISPLAY
+390        DATA_TAB                        = IST_DISPLAY     "#EC CI_FLDEXT_OK[2610650]
+391    "Code Remediation changes S4 2025_1_A Conversion **END OF CHANGE BY SAP_ABAP 11.06.2026 FOR ATC
+392     EXCEPTIONS
+393       FILE_WRITE_ERROR                = 1
+394       NO_BATCH                        = 2
+395       GUI_REFUSE_FILETRANSFER         = 3
+396       INVALID_TYPE                    = 4
+397       NO_AUTHORITY                    = 5
+398       UNKNOWN_ERROR                   = 6
+399       HEADER_NOT_ALLOWED              = 7
+400       SEPARATOR_NOT_ALLOWED           = 8
+401       FILESIZE_NOT_ALLOWED            = 9
+402       HEADER_TOO_LONG                 = 10
+403       DP_ERROR_CREATE                 = 11
+404       DP_ERROR_SEND                   = 12
+405       DP_ERROR_WRITE                  = 13
+406       UNKNOWN_DP_ERROR                = 14
+407       ACCESS_DENIED                   = 15
+408       DP_OUT_OF_MEMORY                = 16
+409       DISK_FULL                       = 17
+410       DP_TIMEOUT                      = 18
+411       FILE_NOT_FOUND                  = 19
+412       DATAPROVIDER_EXCEPTION          = 20
+413       CONTROL_FLUSH_ERROR             = 21
+414       OTHERS                          = 22 .
+415
+416    IF SY-SUBRC <> 0.
+417     MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+418             WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+419    ENDIF.
+420
+421       Endif.
+422    *      IF SY-SUBRC <> 0.
+423    *      ENDIF.
+424    *End of <RD1K960036>
+425
+426        WHEN 'BACK'.
+427          G_TEXT = 'Do You Want to quit the screen'.
+428          PERFORM POPUP_MESSAGE USING G_TEXT.
+429    *Begin of <RD1K960036>
+430    *      IF G_ANSWER = 'J'.
+431          IF G_ANSWER = g_c_one.
+432    *End of <RD1K960036>
+433            SET SCREEN 0.
+434            LEAVE SCREEN.
+435          ELSE.
+436            SET SCREEN '0300'.
+437          ENDIF.
+438          CLEAR OKCODE.
+439      ENDCASE.
+440      CLEAR OKCODE.
+441    ENDMODULE.                 " USER_COMMAND_0300  INPUT
+442    *&---------------------------------------------------------------------*
+443    *&      Module  move_selected_lines1  INPUT
+444    *&---------------------------------------------------------------------*
+445    *       text
+446    *----------------------------------------------------------------------*
+447    MODULE MOVE_SELECTED_LINES1 INPUT.
+448      MODIFY IST_DISPLAY FROM IST_DISPLAY INDEX TBC_300-CURRENT_LINE.
+449      IF IST_DISPLAY-IMPWBRATIO > IST_DISPLAY-IMPAMT.
+450        MESSAGE E054(ZAA).
+451      ENDIF.
+452      IF IST_DISPLAY-TTYPE = 'X70' OR IST_DISPLAY-TTYPE =  '700' .
+453      ELSE.
+454        MESSAGE E056(ZAA).
+455      ENDIF.
+456    ENDMODULE.                 " move_selected_lines1  INPUT
+457    *&---------------------------------------------------------------------*
+458    *&      Module  USER_COMMAND_0400  INPUT
+459    *&---------------------------------------------------------------------*
+460    *       text
+461    *----------------------------------------------------------------------*
+462    MODULE USER_COMMAND_0400 INPUT.
+463      CASE OKCODE.
+464        WHEN 'SEL'.
+465          LOOP AT IST_DISPLAY.
+466            IST_DISPLAY-SEL = 'X'.
+467            MODIFY IST_DISPLAY INDEX SY-TABIX.
+468          ENDLOOP.
+469          SEL_FLAG = 'X'.
+470        WHEN 'UNSEL'.
+471          LOOP AT IST_DISPLAY WHERE SEL = 'X'.
+472            IST_DISPLAY-SEL = ' '.
+473            MODIFY IST_DISPLAY INDEX SY-TABIX.
+474          ENDLOOP.
+475          LOOP AT IST_DISPLAY.
+476          ENDLOOP.
+477          SEL_FLAG = ' '.
+478        WHEN 'DISP'.
+479          GET CURSOR FIELD L_FIELD VALUE L_VALUE.
+480          SET PARAMETER ID 'AN1' FIELD L_VALUE.
+481          READ TABLE IST_DISPLAY WITH KEY ANLN1 = L_VALUE.
+482          SET PARAMETER ID 'AN2' FIELD IST_DISPLAY-ANLN2.
+483          SET PARAMETER ID 'BUK' FIELD P_BUKRS.
+484
+485          CALL TRANSACTION 'AW01' AND SKIP FIRST SCREEN.
+486        WHEN 'EXEC'.
+487          PERFORM OPEN_GROUP.
+488          LOOP AT IST_DISPLAY where NBVDIFF > 0. " where sel = 'X'.
+489            L_TABIX = SY-TABIX.
+490            PERFORM BDC_DYNPRO      USING 'SAPMA01B' '0100'.
+491            PERFORM BDC_FIELD       USING 'BDC_CURSOR'
+492                                          'ANBZ-BWASL'.
+493            PERFORM BDC_FIELD       USING 'BDC_OKCODE'
+494                                          '/00'.
+495            PERFORM BDC_FIELD       USING 'ANBZ-BUKRS'
+496                                           P_BUKRS.
+497            PERFORM BDC_FIELD       USING 'ANBZ-ANLN1'
+498                                          IST_DISPLAY-ANLN1.
+499            PERFORM BDC_FIELD       USING 'ANBZ-ANLN2'
+500                                          IST_DISPLAY-ANLN2.
+501            CALL FUNCTION 'CONVERT_DATE_TO_EXTERNAL'
+502                 EXPORTING
+503                      DATE_INTERNAL = SY-DATUM
+504                 IMPORTING
+505                      DATE_EXTERNAL = G_DATE.
+506
+507            PERFORM BDC_FIELD       USING 'ANEK-BLDAT'
+508                                          G_DATE.
+509            CALL FUNCTION 'CONVERT_DATE_TO_EXTERNAL'
+510                 EXPORTING
+511                      DATE_INTERNAL = P_BUDAT
+512                 IMPORTING
+513                      DATE_EXTERNAL = G_DATE.
+514
+515            PERFORM BDC_FIELD       USING 'ANEK-BUDAT'
+516                                          G_DATE.
+517            PERFORM BDC_FIELD       USING 'ANBZ-PERID'
+518                                          P_MONAT.
+519            PERFORM BDC_FIELD       USING 'ANBZ-BWASL'
+520                                          IST_DISPLAY-TTYPE.
+521            PERFORM BDC_DYNPRO      USING 'SAPMA01B' '0110'.
+522            PERFORM BDC_FIELD       USING 'BDC_CURSOR'
+523                                          'ANEK-SGTXT'.
+524            PERFORM BDC_FIELD       USING 'BDC_OKCODE'
+525                                          '=UPDA'.
+526            G_DMBTR = IST_DISPLAY-NBVDIFF.
+527
+528            PERFORM BDC_FIELD       USING 'ANBZ-DMBTR'
+529                                          G_DMBTR.
+530            PERFORM BDC_FIELD       USING 'ANBZ-BZDAT'
+531                                          IST_DISPLAY-BZDAT.
+532            PERFORM BDC_FIELD       USING 'ANEK-SGTXT'
+533                     'DEP.ON IMPAIRMENT WRITTEN BACK'.
+534            PERFORM BDC_TRANSACTION USING 'ABAA'.
+535            IF SY-SUBRC = 0.
+536              DELETE IST_DISPLAY INDEX L_TABIX.
+537            ENDIF.
+538          ENDLOOP.
+539
+540          PERFORM CLOSE_GROUP.
+541        WHEN 'DOWN'.
+542    *Begin of <RD1K960036>
+543
+544    *      CALL FUNCTION 'DOWNLOAD'
+545    *           EXPORTING
+546    *                FILENAME = ' '
+547    *                FILETYPE = 'DAT'
+548    *           TABLES
+549    *                DATA_TAB = IST_DISPLAY.
+550
+551    clear l_filename.
+552    l_filename = SPACE.
+553
+554    CALL METHOD CL_GUI_FRONTEND_SERVICES=>FILE_SAVE_DIALOG
+555      EXPORTING
+556        DEFAULT_FILE_NAME    = l_filename
+557      CHANGING
+558        FILENAME             = l_filen
+559        PATH                 = l_path
+560        FULLPATH             = l_fullpath
+561        USER_ACTION          = l_usr_act
+562      EXCEPTIONS
+563        CNTL_ERROR           = 1
+564        ERROR_NO_GUI         = 2
+565        NOT_SUPPORTED_BY_GUI = 3
+566        others               = 4.
+567
+568        IF sy-subrc = 0
+569           AND l_usr_act NE
+570           CL_GUI_FRONTEND_SERVICES=>ACTION_CANCEL.
+571
+572    CALL FUNCTION 'GUI_DOWNLOAD'
+573      EXPORTING
+574        FILENAME                        = l_fullpath
+575       FILETYPE                         = g_c_dat
+576      TABLES
+577    "Code Remediation changes S4 2025_1_A Conversion **BEGIN OF CHANGE BY SAP_ABAP 11.06.2026 FOR ATC
+578    *    DATA_TAB                        = IST_DISPLAY
+579        DATA_TAB                        = IST_DISPLAY     "#EC CI_FLDEXT_OK[2610650]
+580    "Code Remediation changes S4 2025_1_A Conversion **END OF CHANGE BY SAP_ABAP 11.06.2026 FOR ATC
+581     EXCEPTIONS
+582       FILE_WRITE_ERROR                = 1
+583       NO_BATCH                        = 2
+584       GUI_REFUSE_FILETRANSFER         = 3
+585       INVALID_TYPE                    = 4
+586       NO_AUTHORITY                    = 5
+587       UNKNOWN_ERROR                   = 6
+588       HEADER_NOT_ALLOWED              = 7
+589       SEPARATOR_NOT_ALLOWED           = 8
+590       FILESIZE_NOT_ALLOWED            = 9
+591       HEADER_TOO_LONG                 = 10
+592       DP_ERROR_CREATE                 = 11
+593       DP_ERROR_SEND                   = 12
+594       DP_ERROR_WRITE                  = 13
+595       UNKNOWN_DP_ERROR                = 14
+596       ACCESS_DENIED                   = 15
+597       DP_OUT_OF_MEMORY                = 16
+598       DISK_FULL                       = 17
+599       DP_TIMEOUT                      = 18
+600       FILE_NOT_FOUND                  = 19
+601       DATAPROVIDER_EXCEPTION          = 20
+602       CONTROL_FLUSH_ERROR             = 21
+603       OTHERS                          = 22 .
+604
+605    IF SY-SUBRC <> 0.
+606     MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+607             WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+608    ENDIF.
+609
+610       Endif.
+611
+612    *      IF SY-SUBRC <> 0.
+613    *      ENDIF.
+614    *End of <RD1K960036>
+615
+616        WHEN 'BACK'.
+617          SET SCREEN 0.
+618          LEAVE SCREEN.
+619      ENDCASE.
+620      CLEAR OKCODE.
+621    ENDMODULE.                 " USER_COMMAND_0400  INPUT
+622    *&---------------------------------------------------------------------*
+623    *&      Module  move_selected_lines2  INPUT
+624    *&---------------------------------------------------------------------*
+625    *       text
+626    *----------------------------------------------------------------------*
+627    MODULE MOVE_SELECTED_LINES2 INPUT.
+628      MODIFY IST_DISPLAY FROM IST_DISPLAY INDEX TBC_400-CURRENT_LINE.
+629    ENDMODULE.                 " move_selected_lines2  INPUT
+630    *&---------------------------------------------------------------------*
+631    *&      Module  exit400  INPUT
+632    *&---------------------------------------------------------------------*
+633    *       text
+634    *----------------------------------------------------------------------*
+635    MODULE EXIT400 INPUT.
+636      CASE OKCODE.
+637        WHEN 'CANC' OR 'EXIT'.
+638          SET SCREEN 0.
+639          LEAVE SCREEN..
+640      ENDCASE.
+641    ENDMODULE.                 " exit400  INPUT
+642    *&---------------------------------------------------------------------*
+643    *&      Module  check_data1  INPUT
+644    *&---------------------------------------------------------------------*
+645    *       text
+646    *----------------------------------------------------------------------*
+647    MODULE CHECK_DATA1 INPUT.
+648      IF OKCODE = 'ENTE'.
+649        CLEAR P_SAFAP.
+650        CLEAR IST_DISPLAY.
+651        LOOP AT IST_DISPLAY.
+652          P_SAFAP = P_SAFAP + IST_DISPLAY-IMPWBRATIO.
+653        ENDLOOP.
+654      ENDIF.
+655    ENDMODULE.                 " check_data1  INPUT
+656    *&---------------------------------------------------------------------*
+657    *&      Module  USER_COMMAND_0500  INPUT
+658    *&---------------------------------------------------------------------*
+659    *       text
+660    *----------------------------------------------------------------------*
+661    MODULE USER_COMMAND_0500 INPUT.
+662      CASE OKCODE.
+663        WHEN 'DISP'.
+664          GET CURSOR FIELD L_FIELD VALUE L_VALUE.
+665          SET PARAMETER ID 'AN1' FIELD L_VALUE.
+666          READ TABLE IST_DISPLAY WITH KEY ANLN1 = L_VALUE.
+667          SET PARAMETER ID 'AN2' FIELD IST_DISPLAY-ANLN2.
+668          SET PARAMETER ID 'BUK' FIELD P_BUKRS.
+669
+670          CALL TRANSACTION 'AW01' AND SKIP FIRST SCREEN.
+671
+672        WHEN 'EXEC'.
+673          PERFORM OPEN_GROUP.
+674          LOOP AT IST_DISPLAY WHERE IMPRATIO <> 0.
+675            L_TABIX = SY-TABIX.
+676            PERFORM BDC_DYNPRO      USING 'SAPMA01B' '0100'.
+677            PERFORM BDC_FIELD       USING 'BDC_CURSOR'
+678                                          'ANBZ-BWASL'.
+679            PERFORM BDC_FIELD       USING 'BDC_OKCODE'
+680                                          '/00'.
+681            PERFORM BDC_FIELD       USING 'ANBZ-BUKRS'
+682                                           P_BUKRS.
+683            PERFORM BDC_FIELD       USING 'ANBZ-ANLN1'
+684                                          IST_DISPLAY-ANLN1.
+685            PERFORM BDC_FIELD       USING 'ANBZ-ANLN2'
+686                                          IST_DISPLAY-ANLN2.
+687            CALL FUNCTION 'CONVERT_DATE_TO_EXTERNAL'
+688                 EXPORTING
+689                      DATE_INTERNAL = SY-DATUM
+690                 IMPORTING
+691                      DATE_EXTERNAL = G_DATE.
+692
+693            PERFORM BDC_FIELD       USING 'ANEK-BLDAT'
+694                                          G_DATE.
+695            CALL FUNCTION 'CONVERT_DATE_TO_EXTERNAL'
+696                 EXPORTING
+697                      DATE_INTERNAL = P_BUDAT
+698                 IMPORTING
+699                      DATE_EXTERNAL = G_DATE.
+700
+701            PERFORM BDC_FIELD       USING 'ANEK-BUDAT'
+702                                          G_DATE.
+703            PERFORM BDC_FIELD       USING 'ANBZ-PERID'
+704                                          P_MONAT.
+705            PERFORM BDC_FIELD       USING 'ANBZ-BWASL'
+706                                          IST_DISPLAY-TTYPE.
+707            PERFORM BDC_DYNPRO      USING 'SAPMA01B' '0110'.
+708            PERFORM BDC_FIELD       USING 'BDC_CURSOR'
+709                                          'ANEK-SGTXT'.
+710            PERFORM BDC_FIELD       USING 'BDC_OKCODE'
+711                                          '=UPDA'.
+712            G_DMBTR = IST_DISPLAY-IMPRATIO.
+713            PERFORM BDC_FIELD       USING 'ANBZ-DMBTR'
+714                                       G_DMBTR.
+715            PERFORM BDC_FIELD       USING 'ANBZ-BZDAT'
+716                                          IST_DISPLAY-BZDAT.
+717            PERFORM BDC_FIELD       USING 'ANEK-SGTXT'
+718                                          P_GJAHR.
+719            PERFORM BDC_TRANSACTION USING 'ABAA'.
+720            IF SY-SUBRC = 0.
+721              DELETE IST_DISPLAY INDEX L_TABIX.
+722            ENDIF.
+723          ENDLOOP.
+724          PERFORM CLOSE_GROUP.
+725        WHEN 'DOWN'.
+726    *Begin of <RD1K960036>
+727
+728    *      CALL FUNCTION 'DOWNLOAD'
+729    *           EXPORTING
+730    *                FILENAME = ' '
+731    *                FILETYPE = 'DAT'
+732    *           TABLES
+733    *                DATA_TAB = IST_DISPLAY.
+734
+735    clear l_filename.
+736    l_filename = SPACE.
+737
+738    CALL METHOD CL_GUI_FRONTEND_SERVICES=>FILE_SAVE_DIALOG
+739      EXPORTING
+740        DEFAULT_FILE_NAME    = l_filename
+741      CHANGING
+742        FILENAME             = l_filen
+743        PATH                 = l_path
+744        FULLPATH             = l_fullpath
+745        USER_ACTION          = l_usr_act
+746      EXCEPTIONS
+747        CNTL_ERROR           = 1
+748        ERROR_NO_GUI         = 2
+749        NOT_SUPPORTED_BY_GUI = 3
+750        others               = 4.
+751
+752        IF sy-subrc = 0
+753           AND l_usr_act NE
+754           CL_GUI_FRONTEND_SERVICES=>ACTION_CANCEL.
+755
+756    CALL FUNCTION 'GUI_DOWNLOAD'
+757      EXPORTING
+758        FILENAME                        = l_fullpath
+759       FILETYPE                         = g_c_dat
+760      TABLES
+761    "Code Remediation changes S4 2025_1_A Conversion **BEGIN OF CHANGE BY SAP_ABAP 11.06.2026 FOR ATC
+762    *    DATA_TAB                        = IST_DISPLAY
+763        DATA_TAB                        = IST_DISPLAY     "#EC CI_FLDEXT_OK[2610650]
+764    "Code Remediation changes S4 2025_1_A Conversion **END OF CHANGE BY SAP_ABAP 11.06.2026 FOR ATC
+765     EXCEPTIONS
+766       FILE_WRITE_ERROR                = 1
+767       NO_BATCH                        = 2
+768       GUI_REFUSE_FILETRANSFER         = 3
+769       INVALID_TYPE                    = 4
+770       NO_AUTHORITY                    = 5
+771       UNKNOWN_ERROR                   = 6
+772       HEADER_NOT_ALLOWED              = 7
+773       SEPARATOR_NOT_ALLOWED           = 8
+774       FILESIZE_NOT_ALLOWED            = 9
+775       HEADER_TOO_LONG                 = 10
+776       DP_ERROR_CREATE                 = 11
+777       DP_ERROR_SEND                   = 12
+778       DP_ERROR_WRITE                  = 13
+779       UNKNOWN_DP_ERROR                = 14
+780       ACCESS_DENIED                   = 15
+781       DP_OUT_OF_MEMORY                = 16
+782       DISK_FULL                       = 17
+783       DP_TIMEOUT                      = 18
+784       FILE_NOT_FOUND                  = 19
+785       DATAPROVIDER_EXCEPTION          = 20
+786       CONTROL_FLUSH_ERROR             = 21
+787       OTHERS                          = 22 .
+788
+789      IF SY-SUBRC <> 0.
+790         MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+791             WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+792      ENDIF.
+793
+794       Endif.
+795    *      IF SY-SUBRC <> 0.
+796    *      ENDIF.
+797    *End of <RD1K960036>
+798
+799        WHEN 'BACK'.
+800          G_TEXT = 'Do You Want to quit the screen'.
+801          PERFORM POPUP_MESSAGE USING G_TEXT.
+802    *Begin of <RD1K960036>
+803    *      IF G_ANSWER = 'J'.
+804          IF G_ANSWER = g_c_one.
+805    *End of <RD1K960036>
+806            SET SCREEN 0.
+807            LEAVE SCREEN.
+808          ELSE.
+809            SET SCREEN '0500'.
+810          ENDIF.
+811      ENDCASE.
+812      CLEAR OKCODE.
+813
+814
+815    ENDMODULE.                 " USER_COMMAND_0500  INPUT
+816    *&---------------------------------------------------------------------*
+817    *&      Module  move_selected_lines3  INPUT
+818    *&---------------------------------------------------------------------*
+819    *       text
+820    *----------------------------------------------------------------------*
+821    MODULE MOVE_SELECTED_LINES3 INPUT.
+822      MODIFY IST_DISPLAY FROM IST_DISPLAY INDEX TBC_500-CURRENT_LINE.
+823      CLEAR G_COUNT.
+824      IF IST_DISPLAY-IMPRATIO > IST_DISPLAY-NBV.
+825        MESSAGE E052(ZAA).
+826      ENDIF.
+827    *  if ist_display-ttype = 'X20' or
+828    *  ist_display-ttype =  'X30' or
+829    *  ist_display-ttype =  '641' or
+830    *  ist_display-ttype =  '651'.
+831    *  else.
+832    *    message e055(ZAA).
+833    *  endif.
+834
+835    ENDMODULE.                 " move_selected_lines3  INPUT
+836    *&---------------------------------------------------------------------*
+837    *&      Module  check_data2  INPUT
+838    *&---------------------------------------------------------------------*
+839    *       text
+840    *----------------------------------------------------------------------*
+841    MODULE CHECK_DATA2 INPUT.
+842      IF OKCODE = 'ENTE'.
+843        CLEAR P_SAFAP.
+844        CLEAR IST_DISPLAY.
+845        LOOP AT IST_DISPLAY.
+846          P_SAFAP = P_SAFAP + IST_DISPLAY-IMPRATIO.
+847        ENDLOOP.
+848      ENDIF.
+849    ENDMODULE.                 " check_data2  INPUT
+850    *&---------------------------------------------------------------------*
+851    *&      Module  exit500  INPUT
+852    *&---------------------------------------------------------------------*
+853    *       text
+854    *----------------------------------------------------------------------*
+855    MODULE EXIT500 INPUT.
+856      CASE OKCODE.
+857        WHEN 'CANC' OR 'EXIT' OR 'BACK'.
+858          SET SCREEN 0.
+859          LEAVE SCREEN.
+860      ENDCASE.
+861
+862    ENDMODULE.                 " exit500  INPUT
+863    *&---------------------------------------------------------------------*
+864    *&      Module  check_data3  INPUT
+865    *&---------------------------------------------------------------------*
+866    *       text
+867    *----------------------------------------------------------------------*
+868    MODULE CHECK_DATA3 INPUT.
+869      IF OKCODE = 'ENTE'.
+870        CLEAR P_SAFAP.
+871        CLEAR IST_DISPLAY.
+872        LOOP AT IST_DISPLAY.
+873          P_SAFAP = P_SAFAP + IST_DISPLAY-IMPRATIO.
+874        ENDLOOP.
+875      ENDIF.
+876
+877    ENDMODULE.                 " check_data3  INPUT
+878    *&---------------------------------------------------------------------*
+879    *&      Module  USER_COMMAND_0600  INPUT
+880    *&---------------------------------------------------------------------*
+881    *       text
+882    *----------------------------------------------------------------------*
+883    MODULE USER_COMMAND_0600 INPUT.
+884      DATA : L_BZDAT LIKE SY-DATUM.
+885      CASE OKCODE.
+886        WHEN 'DISP'.
+887          GET CURSOR FIELD L_FIELD VALUE L_VALUE.
+888          SET PARAMETER ID 'AN1' FIELD L_VALUE.
+889          READ TABLE IST_DISPLAY WITH KEY ANLN1 = L_VALUE.
+890          SET PARAMETER ID 'AN2' FIELD IST_DISPLAY-ANLN2.
+891          SET PARAMETER ID 'BUK' FIELD P_BUKRS.
+892
+893          CALL TRANSACTION 'AW01' AND SKIP FIRST SCREEN.
+894        WHEN 'EXEC'.
+895          PERFORM OPEN_GROUP.
+896          LOOP AT IST_DISPLAY WHERE IMPRATIO <> 0.
+897            L_TABIX = SY-TABIX.
+898            PERFORM BDC_DYNPRO      USING 'SAPMA01B' '0100'.
+899            PERFORM BDC_FIELD       USING 'BDC_CURSOR'
+900                                          'ANBZ-BWASL'.
+901            PERFORM BDC_FIELD       USING 'BDC_OKCODE'
+902                                          '/00'.
+903            PERFORM BDC_FIELD       USING 'ANBZ-BUKRS'
+904                                           P_BUKRS.
+905            PERFORM BDC_FIELD       USING 'ANBZ-ANLN1'
+906                                          IST_DISPLAY-ANLN1.
+907            PERFORM BDC_FIELD       USING 'ANBZ-ANLN2'
+908                                          IST_DISPLAY-ANLN2.
+909
+910            CALL FUNCTION 'CONVERT_DATE_TO_EXTERNAL'
+911                 EXPORTING
+912                      DATE_INTERNAL = SY-DATUM
+913                 IMPORTING
+914                      DATE_EXTERNAL = G_DATE.
+915
+916            PERFORM BDC_FIELD       USING 'ANEK-BLDAT'
+917                                          G_DATE.
+918
+919            CALL FUNCTION 'CONVERT_DATE_TO_EXTERNAL'
+920                 EXPORTING
+921                      DATE_INTERNAL = P_BUDAT
+922                 IMPORTING
+923                      DATE_EXTERNAL = G_DATE.
+924
+925            PERFORM BDC_FIELD       USING 'ANEK-BUDAT'
+926                                          G_DATE.
+927            PERFORM BDC_FIELD       USING 'ANBZ-PERID'
+928                                          P_MONAT.
+929            PERFORM BDC_FIELD       USING 'ANBZ-BWASL'
+930                                          IST_DISPLAY-TTYPE.
+931            PERFORM BDC_DYNPRO      USING 'SAPMA01B' '0140'.
+932            PERFORM BDC_FIELD       USING 'BDC_CURSOR'
+933                                          'ANEK-SGTXT'.
+934            PERFORM BDC_FIELD       USING 'BDC_OKCODE'
+935                                          '=UPDA'.
+936            PERFORM BDC_FIELD       USING 'ANBZ-BZDAT'
+937                                          IST_DISPLAY-BZDAT.
+938            G_DMBTR = IST_DISPLAY-IMPRATIO.
+939            PERFORM BDC_FIELD       USING 'ANBZ-SAFAV'
+940                                          G_DMBTR.
+941            PERFORM BDC_FIELD       USING 'ANEK-SGTXT'
+942                                           P_GJAHR.
+943            PERFORM BDC_TRANSACTION USING 'ABZU'.
+944
+945    *        IF SY-SUBRC = 0.
+946    *          DELETE IST_DISPLAY INDEX L_TABIX.
+947    *        ENDIF.
+948          ENDLOOP.
+949    *      PERFORM CLOSE_GROUP.
+950    *      PERFORM OPEN_GROUP.
+951
+952    *      LOOP AT IST_DISPLAY WHERE IMPRATIO <> 0.
+953    *        L_TABIX = SY-TABIX.
+954    *        PERFORM BDC_DYNPRO      USING 'SAPMF05A' '0100'.
+955    *        PERFORM BDC_FIELD       USING 'BDC_CURSOR'
+956    *                                      'BKPF-MONAT'.
+957    *        PERFORM BDC_FIELD       USING 'BDC_OKCODE'
+958    *                                      '/00'.
+959    *        CALL FUNCTION 'CONVERT_DATE_TO_EXTERNAL'
+960    *             EXPORTING
+961    *                  DATE_INTERNAL = SY-DATUM
+962    *             IMPORTING
+963    *                  DATE_EXTERNAL = G_DATE.
+964    *
+965    *
+966    *        PERFORM BDC_FIELD       USING 'BKPF-BLDAT'
+967    *                                      G_DATE.
+968    *        PERFORM BDC_FIELD       USING 'BKPF-BLART'
+969    *                                    'AA'.
+970    *
+971    *        PERFORM BDC_FIELD       USING 'BKPF-BUKRS'
+972    *                                      P_BUKRS.
+973    *        CALL FUNCTION 'CONVERT_DATE_TO_EXTERNAL'
+974    *             EXPORTING
+975    *                  DATE_INTERNAL = P_BUDAT
+976    *             IMPORTING
+977    *                  DATE_EXTERNAL = G_DATE.
+978    *
+979    *        PERFORM BDC_FIELD       USING 'BKPF-BUDAT'
+980    *                                      G_DATE.
+981    *        PERFORM BDC_FIELD       USING 'BKPF-MONAT'
+982    *                                      P_MONAT.
+983    *        PERFORM BDC_FIELD       USING 'BKPF-WAERS'
+984    *                                      'INR'.
+985    *        PERFORM BDC_FIELD       USING 'BKPF-XBLNR'
+986    *                                      'IMPR WRITE BACK'.
+987    **        PERFORM BDC_FIELD       USING 'FS006-DOCID'
+988    **                                      RECORD-DOCID_008.
+989    *        PERFORM BDC_FIELD       USING 'RF05A-NEWBS'
+990    *                                      '40'.
+991    *        IF IST_DISPLAY-ANLKL = '70101'.
+992    *          PERFORM BDC_FIELD       USING 'RF05A-NEWKO'
+993    *                                        '70131'.
+994    *        ELSEIF IST_DISPLAY-ANLKL = '70102'.
+995    *          PERFORM BDC_FIELD       USING 'RF05A-NEWKO'
+996    *                                        '70132'.
+997    *        ELSEIF IST_DISPLAY-ANLKL = '70103'.
+998    *          PERFORM BDC_FIELD       USING 'RF05A-NEWKO'
+999    *                                        '70133'.
+1000   *        ELSEIF IST_DISPLAY-ANLKL = '70104'.
+1001   *          PERFORM BDC_FIELD       USING 'RF05A-NEWKO'
+1002   *                                        '70134'.
+1003   *        ENDIF.
+1004   *        PERFORM BDC_DYNPRO      USING 'SAPMF05A' '0300'.
+1005   *        PERFORM BDC_FIELD       USING 'BDC_CURSOR'
+1006   *                                      'BSEG-SGTXT'.
+1007   *        PERFORM BDC_FIELD       USING 'BDC_OKCODE'
+1008   *                                      '=ZK'.
+1009   *        G_DMBTR = IST_DISPLAY-IMPRATIO.
+1010   *
+1011   *        PERFORM BDC_FIELD       USING 'BSEG-WRBTR'
+1012   *                                      G_DMBTR.
+1013   *        PERFORM BDC_FIELD       USING 'BSEG-SGTXT'
+1014   *                                      'IMPR WRITE BACK'.
+1015   *        PERFORM BDC_DYNPRO      USING 'SAPLKACB' '0002'.
+1016   *        PERFORM BDC_FIELD       USING 'BDC_CURSOR'
+1017   *                                      'COBL-PRCTR'.
+1018   *        PERFORM BDC_FIELD       USING 'BDC_OKCODE'
+1019   *                                      '=ENTE'.
+1020   *        PERFORM BDC_FIELD       USING 'COBL-GSBER'
+1021   *                                      IST_DISPLAY-GSBER.
+1022   *        PERFORM BDC_FIELD       USING 'COBL-PRCTR'
+1023   *                                      IST_DISPLAY-PRCTR.
+1024   **        PERFORM BDC_FIELD       USING 'COBL-FIPOS'
+1025   **                                      RECORD-FIPOS_015.
+1026   *        PERFORM BDC_DYNPRO      USING 'SAPMF05A' '0330'.
+1027   *        PERFORM BDC_FIELD       USING 'BDC_CURSOR'
+1028   *                                      'RF05A-NEWKO'.
+1029   *        PERFORM BDC_FIELD       USING 'BDC_OKCODE'
+1030   *                                      '/00'.
+1031   *        PERFORM BDC_FIELD       USING 'RF05A-NEWBS'
+1032   *                                      '50'.
+1033   *        PERFORM BDC_FIELD       USING 'RF05A-NEWKO'
+1034   *                                      '209123'.
+1035   *        PERFORM BDC_DYNPRO      USING 'SAPMF05A' '0300'.
+1036   *        PERFORM BDC_FIELD       USING 'BDC_CURSOR'
+1037   *                                      'BSEG-SGTXT'.
+1038   *        PERFORM BDC_FIELD       USING 'BDC_OKCODE'
+1039   *                                      '=ZK'.
+1040   *        G_DMBTR = IST_DISPLAY-IMPRATIO.
+1041   *
+1042   *        PERFORM BDC_FIELD       USING 'BSEG-WRBTR'
+1043   *                                      G_DMBTR.
+1044   *        PERFORM BDC_FIELD       USING 'BSEG-SGTXT'
+1045   *                                      'IMPR WRITE BACK'.
+1046   *        PERFORM BDC_DYNPRO      USING 'SAPLKACB' '0002'.
+1047   *        PERFORM BDC_FIELD       USING 'BDC_CURSOR'
+1048   *                                      'COBL-KOSTL'.
+1049   *        PERFORM BDC_FIELD       USING 'BDC_OKCODE'
+1050   *                                      '=ENTE'.
+1051   *        PERFORM BDC_FIELD       USING 'COBL-GSBER'
+1052   *                                      IST_DISPLAY-GSBER.
+1053   *        PERFORM BDC_FIELD       USING 'COBL-KOSTL'
+1054   *                                      IST_DISPLAY-KOSTL.
+1055   **        PERFORM BDC_FIELD       USING 'COBL-FIPOS'
+1056   **                                      RECORD-FIPOS_022.
+1057   *        PERFORM BDC_DYNPRO      USING 'SAPMF05A' '0330'.
+1058   *        PERFORM BDC_FIELD       USING 'BDC_CURSOR'
+1059   *                                      'BSEG-XREF1'.
+1060   *        PERFORM BDC_FIELD       USING 'BDC_OKCODE'
+1061   *                                      '=BU'.
+1062   *        PERFORM BDC_TRANSACTION USING 'F-02'.
+1063   *
+1064   *      ENDLOOP.
+1065         PERFORM CLOSE_GROUP1.
+1066
+1067       WHEN 'DOWN'.
+1068   *Begin of <RD1K960036>
+1069
+1070   *      CALL FUNCTION 'DOWNLOAD'
+1071   *           EXPORTING
+1072   *                FILENAME = ' '
+1073   *                FILETYPE = 'DAT'
+1074   *           TABLES
+1075   *                DATA_TAB = IST_DISPLAY.
+1076
+1077   clear l_filename.
+1078   l_filename = SPACE.
+1079
+1080   CALL METHOD CL_GUI_FRONTEND_SERVICES=>FILE_SAVE_DIALOG
+1081     EXPORTING
+1082       DEFAULT_FILE_NAME    = l_filename
+1083     CHANGING
+1084       FILENAME             = l_filen
+1085       PATH                 = l_path
+1086       FULLPATH             = l_fullpath
+1087       USER_ACTION          = l_usr_act
+1088     EXCEPTIONS
+1089       CNTL_ERROR           = 1
+1090       ERROR_NO_GUI         = 2
+1091       NOT_SUPPORTED_BY_GUI = 3
+1092       others               = 4.
+1093
+1094       IF sy-subrc = 0
+1095          AND l_usr_act NE
+1096          CL_GUI_FRONTEND_SERVICES=>ACTION_CANCEL.
+1097
+1098   CALL FUNCTION 'GUI_DOWNLOAD'
+1099     EXPORTING
+1100       FILENAME                        = l_fullpath
+1101      FILETYPE                         = g_c_dat
+1102     TABLES
+1103   "Code Remediation changes S4 2025_1_A Conversion **BEGIN OF CHANGE BY SAP_ABAP 11.06.2026 FOR ATC
+1104   *    DATA_TAB                        = IST_DISPLAY
+1105       DATA_TAB                        = IST_DISPLAY     "#EC CI_FLDEXT_OK[2610650]
+1106   "Code Remediation changes S4 2025_1_A Conversion **END OF CHANGE BY SAP_ABAP 11.06.2026 FOR ATC
+1107    EXCEPTIONS
+1108      FILE_WRITE_ERROR                = 1
+1109      NO_BATCH                        = 2
+1110      GUI_REFUSE_FILETRANSFER         = 3
+1111      INVALID_TYPE                    = 4
+1112      NO_AUTHORITY                    = 5
+1113      UNKNOWN_ERROR                   = 6
+1114      HEADER_NOT_ALLOWED              = 7
+1115      SEPARATOR_NOT_ALLOWED           = 8
+1116      FILESIZE_NOT_ALLOWED            = 9
+1117      HEADER_TOO_LONG                 = 10
+1118      DP_ERROR_CREATE                 = 11
+1119      DP_ERROR_SEND                   = 12
+1120      DP_ERROR_WRITE                  = 13
+1121      UNKNOWN_DP_ERROR                = 14
+1122      ACCESS_DENIED                   = 15
+1123      DP_OUT_OF_MEMORY                = 16
+1124      DISK_FULL                       = 17
+1125      DP_TIMEOUT                      = 18
+1126      FILE_NOT_FOUND                  = 19
+1127      DATAPROVIDER_EXCEPTION          = 20
+1128      CONTROL_FLUSH_ERROR             = 21
+1129      OTHERS                          = 22 .
+1130
+1131      IF SY-SUBRC <> 0.
+1132         MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+1133            WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+1134      ENDIF.
+1135
+1136      Endif.
+1137
+1138   *      IF SY-SUBRC <> 0.
+1139   *      ENDIF.
+1140
+1141   *End of <RD1K960036>
+1142
+1143
+1144       WHEN 'BACK'.
+1145         G_TEXT = 'Do You Want to quit the screen'.
+1146         PERFORM POPUP_MESSAGE USING G_TEXT.
+1147   *Begin of <RD1K960036>
+1148   *      IF G_ANSWER = 'J'.
+1149         IF G_ANSWER = g_c_one.
+1150   *End of <RD1K960036>
+1151           SET SCREEN 0.
+1152           LEAVE SCREEN.
+1153         ELSE.
+1154           SET SCREEN '0600'.
+1155         ENDIF.
+1156     ENDCASE.
+1157     CLEAR OKCODE.
+1158
+1159   ENDMODULE.                 " USER_COMMAND_0600  INPUT
+1160   *&---------------------------------------------------------------------*
+1161   *&      Module  exit600  INPUT
+1162   *&---------------------------------------------------------------------*
+1163   *       text
+1164   *----------------------------------------------------------------------*
+1165   MODULE EXIT600 INPUT.
+1166     CASE OKCODE.
+1167       WHEN 'CANC' OR 'EXIT' OR 'BACK'.
+1168         SET SCREEN 0.
+1169         LEAVE SCREEN.
+1170     ENDCASE.
+1171
+1172   ENDMODULE.                 " exit600  INPUT
+1173   *&---------------------------------------------------------------------*
+1174   *&      Module  move_selected_lines4  INPUT
+1175   *&---------------------------------------------------------------------*
+1176   *       text
+1177   *----------------------------------------------------------------------*
+1178   MODULE MOVE_SELECTED_LINES4 INPUT.
+1179     MODIFY IST_DISPLAY FROM IST_DISPLAY INDEX TBC_600-CURRENT_LINE.
+1180     IF IST_DISPLAY-IMPRATIO > IST_DISPLAY-IMPAMT.
+1181       MESSAGE E054(ZAA).
+1182     ENDIF.
+1183
+1184
+1185   ENDMODULE.                 " move_selected_lines4  INPUT
+1186   *&---------------------------------------------------------------------*
+1187   *&      Module  USER_COMMAND_0700  INPUT
+1188   *&---------------------------------------------------------------------*
+1189   *       text
+1190   *----------------------------------------------------------------------*
+1191   MODULE USER_COMMAND_0700 INPUT.
+1192     CASE OKCODE.
+1193       WHEN 'SEL'.
+1194         LOOP AT IST_DISPLAY.
+1195           IST_DISPLAY-SEL = 'X'.
+1196           MODIFY IST_DISPLAY INDEX SY-TABIX.
+1197         ENDLOOP.
+1198         SEL_FLAG = 'X'.
+1199       WHEN 'UNSEL'.
+1200         LOOP AT IST_DISPLAY WHERE SEL = 'X'.
+1201           IST_DISPLAY-SEL = ' '.
+1202           MODIFY IST_DISPLAY INDEX SY-TABIX.
+1203         ENDLOOP.
+1204         LOOP AT IST_DISPLAY.
+1205         ENDLOOP.
+1206         SEL_FLAG = ' '.
+1207       WHEN 'DISP'.
+1208         GET CURSOR FIELD L_FIELD VALUE L_VALUE.
+1209         SET PARAMETER ID 'AN1' FIELD L_VALUE.
+1210         READ TABLE IST_DISPLAY WITH KEY ANLN1 = L_VALUE.
+1211         SET PARAMETER ID 'AN2' FIELD IST_DISPLAY-ANLN2.
+1212         SET PARAMETER ID 'BUK' FIELD P_BUKRS.
+1213
+1214         CALL TRANSACTION 'AW01' AND SKIP FIRST SCREEN.
+1215
+1216       WHEN 'EXEC'.
+1217         PERFORM OPEN_GROUP.
+1218         LOOP AT IST_DISPLAY WHERE IMPWBRATIO <> 0.
+1219           L_TABIX = SY-TABIX.
+1220           PERFORM BDC_DYNPRO      USING 'SAPMA01B' '0100'.
+1221           PERFORM BDC_FIELD       USING 'BDC_CURSOR'
+1222                                         'ANBZ-BWASL'.
+1223           PERFORM BDC_FIELD       USING 'BDC_OKCODE'
+1224                                         '/00'.
+1225           PERFORM BDC_FIELD       USING 'ANBZ-BUKRS'
+1226                                         P_BUKRS.
+1227           PERFORM BDC_FIELD       USING 'ANBZ-ANLN1'
+1228                                         IST_DISPLAY-ANLN1.
+1229           PERFORM BDC_FIELD       USING 'ANBZ-ANLN2'
+1230                                         IST_DISPLAY-ANLN2.
+1231           CALL FUNCTION 'CONVERT_DATE_TO_EXTERNAL'
+1232                EXPORTING
+1233                     DATE_INTERNAL = SY-DATUM
+1234                IMPORTING
+1235                     DATE_EXTERNAL = G_DATE.
+1236
+1237           PERFORM BDC_FIELD       USING 'ANEK-BLDAT'
+1238                                         G_DATE.
+1239           CALL FUNCTION 'CONVERT_DATE_TO_EXTERNAL'
+1240                EXPORTING
+1241                     DATE_INTERNAL = P_BUDAT
+1242                IMPORTING
+1243                     DATE_EXTERNAL = G_DATE.
+1244
+1245           PERFORM BDC_FIELD       USING 'ANEK-BUDAT'
+1246                                         G_DATE.
+1247           PERFORM BDC_FIELD       USING 'ANBZ-PERID'
+1248                                         P_MONAT.
+1249           PERFORM BDC_FIELD       USING 'ANBZ-BWASL'
+1250                                         IST_DISPLAY-TTYPE.
+1251           PERFORM BDC_DYNPRO      USING 'SAPMA01B' '0140'.
+1252           PERFORM BDC_FIELD       USING 'BDC_CURSOR'
+1253                                         'ANEK-SGTXT'.
+1254           PERFORM BDC_FIELD       USING 'BDC_OKCODE'
+1255                                         '=UPDA'.
+1256           PERFORM BDC_FIELD       USING 'ANBZ-BZDAT'
+1257                                         IST_DISPLAY-BZDAT.
+1258           G_DMBTR = IST_DISPLAY-IMPWBRATIO.
+1259           IF IST_DISPLAY-TTYPE = 'X70'.
+1260             PERFORM BDC_FIELD       USING 'ANBZ-SAFAV'
+1261                                           G_DMBTR.
+1262           ELSE.
+1263             PERFORM BDC_FIELD       USING 'ANBZ-NAFAV'
+1264                                           G_DMBTR.
+1265           ENDIF.
+1266           PERFORM BDC_FIELD       USING 'ANEK-SGTXT'
+1267                                         P_GJAHR.
+1268           PERFORM BDC_FIELD       USING 'RA01B-BLART'
+1269                                         'AA'.
+1270           PERFORM BDC_TRANSACTION USING 'ABZU'.
+1271   *        IF SY-SUBRC = 0.
+1272   **          DELETE IST_DISPLAY INDEX L_TABIX.
+1273   *        ENDIF.
+1274         ENDLOOP.
+1275         PERFORM CLOSE_GROUP.
+1276         PERFORM OPEN_GROUP1.
+1277         LOOP AT IST_DISPLAY WHERE DEPDIFF <> 0.
+1278           L_TABIX = SY-TABIX.
+1279           PERFORM BDC_DYNPRO      USING 'SAPMA01B' '0100'.
+1280           PERFORM BDC_FIELD       USING 'BDC_CURSOR'
+1281                                         'ANBZ-BWASL'.
+1282           PERFORM BDC_FIELD       USING 'BDC_OKCODE'
+1283                                         '/00'.
+1284           PERFORM BDC_FIELD       USING 'ANBZ-BUKRS'
+1285                                          P_BUKRS.
+1286           PERFORM BDC_FIELD       USING 'ANBZ-ANLN1'
+1287                                         IST_DISPLAY-ANLN1.
+1288           PERFORM BDC_FIELD       USING 'ANBZ-ANLN2'
+1289                                         IST_DISPLAY-ANLN2.
+1290           CALL FUNCTION 'CONVERT_DATE_TO_EXTERNAL'
+1291                EXPORTING
+1292                     DATE_INTERNAL = SY-DATUM
+1293                IMPORTING
+1294                     DATE_EXTERNAL = G_DATE.
+1295
+1296           PERFORM BDC_FIELD       USING 'ANEK-BLDAT'
+1297                                         G_DATE.
+1298           CALL FUNCTION 'CONVERT_DATE_TO_EXTERNAL'
+1299                EXPORTING
+1300                     DATE_INTERNAL = P_BUDAT
+1301                IMPORTING
+1302                     DATE_EXTERNAL = G_DATE.
+1303
+1304           PERFORM BDC_FIELD       USING 'ANEK-BUDAT'
+1305                                         G_DATE.
+1306           PERFORM BDC_FIELD       USING 'ANBZ-PERID'
+1307                                         P_MONAT.
+1308           PERFORM BDC_FIELD       USING 'ANBZ-BWASL'
+1309                                         '641'.
+1310           PERFORM BDC_DYNPRO      USING 'SAPMA01B' '0110'.
+1311           PERFORM BDC_FIELD       USING 'BDC_CURSOR'
+1312                                         'ANEK-SGTXT'.
+1313           PERFORM BDC_FIELD       USING 'BDC_OKCODE'
+1314                                         '=UPDA'.
+1315           G_DMBTR = IST_DISPLAY-DEPDIFF.
+1316           PERFORM BDC_FIELD       USING 'ANBZ-DMBTR'
+1317                                      G_DMBTR.
+1318           PERFORM BDC_FIELD       USING 'ANBZ-BZDAT'
+1319                                         IST_DISPLAY-BZDAT.
+1320           PERFORM BDC_FIELD       USING 'ANEK-SGTXT'
+1321                        'DEP.ON IMPAIRMENT WRITTEN BACK'.
+1322           PERFORM BDC_TRANSACTION USING 'ABAA'.
+1323           IF SY-SUBRC = 0.
+1324             DELETE IST_DISPLAY INDEX L_TABIX.
+1325           ENDIF.
+1326         ENDLOOP.
+1327         PERFORM CLOSE_GROUP1.
+1328
+1329       WHEN 'DOWN'.
+1330
+1331   *Begin of <RD1K960036>
+1332
+1333   *      CALL FUNCTION 'DOWNLOAD'
+1334   *           EXPORTING
+1335   *                FILENAME = ' '
+1336   *                FILETYPE = 'DAT'
+1337   *           TABLES
+1338   *                DATA_TAB = IST_DISPLAY.
+1339
+1340   clear l_filename.
+1341   l_filename = SPACE.
+1342
+1343   CALL METHOD CL_GUI_FRONTEND_SERVICES=>FILE_SAVE_DIALOG
+1344     EXPORTING
+1345       DEFAULT_FILE_NAME    = l_filename
+1346     CHANGING
+1347       FILENAME             = l_filen
+1348       PATH                 = l_path
+1349       FULLPATH             = l_fullpath
+1350       USER_ACTION          = l_usr_act
+1351     EXCEPTIONS
+1352       CNTL_ERROR           = 1
+1353       ERROR_NO_GUI         = 2
+1354       NOT_SUPPORTED_BY_GUI = 3
+1355       others               = 4.
+1356
+1357       IF sy-subrc = 0
+1358          AND l_usr_act NE
+1359          CL_GUI_FRONTEND_SERVICES=>ACTION_CANCEL.
+1360
+1361   CALL FUNCTION 'GUI_DOWNLOAD'
+1362     EXPORTING
+1363       FILENAME                        = l_fullpath
+1364      FILETYPE                         = g_c_dat
+1365     TABLES
+1366   "Code Remediation changes S4 2025_1_A Conversion **BEGIN OF CHANGE BY SAP_ABAP 11.06.2026 FOR ATC
+1367   *    DATA_TAB                        = IST_DISPLAY
+1368       DATA_TAB                        = IST_DISPLAY     "#EC CI_FLDEXT_OK[2610650]
+1369   "Code Remediation changes S4 2025_1_A Conversion **END OF CHANGE BY SAP_ABAP 11.06.2026 FOR ATC
+1370    EXCEPTIONS
+1371      FILE_WRITE_ERROR                = 1
+1372      NO_BATCH                        = 2
+1373      GUI_REFUSE_FILETRANSFER         = 3
+1374      INVALID_TYPE                    = 4
+1375      NO_AUTHORITY                    = 5
+1376      UNKNOWN_ERROR                   = 6
+1377      HEADER_NOT_ALLOWED              = 7
+1378      SEPARATOR_NOT_ALLOWED           = 8
+1379      FILESIZE_NOT_ALLOWED            = 9
+1380      HEADER_TOO_LONG                 = 10
+1381      DP_ERROR_CREATE                 = 11
+1382      DP_ERROR_SEND                   = 12
+1383      DP_ERROR_WRITE                  = 13
+1384      UNKNOWN_DP_ERROR                = 14
+1385      ACCESS_DENIED                   = 15
+1386      DP_OUT_OF_MEMORY                = 16
+1387      DISK_FULL                       = 17
+1388      DP_TIMEOUT                      = 18
+1389      FILE_NOT_FOUND                  = 19
+1390      DATAPROVIDER_EXCEPTION          = 20
+1391      CONTROL_FLUSH_ERROR             = 21
+1392      OTHERS                          = 22 .
+1393
+1394      IF SY-SUBRC <> 0.
+1395         MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+1396            WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+1397      ENDIF.
+1398
+1399      Endif.
+1400
+1401   *      IF SY-SUBRC <> 0.
+1402   *      ENDIF.
+1403
+1404   *End of <RD1K960036>
+1405
+1406       WHEN 'BACK'.
+1407         G_TEXT = 'Do You Want to quit the screen'.
+1408         PERFORM POPUP_MESSAGE USING G_TEXT.
+1409   *Begin of <RD1K960036>
+1410   *      IF G_ANSWER = 'J'.
+1411         IF G_ANSWER = g_c_one.
+1412   *End of <RD1K960036>
+1413           SET SCREEN 0.
+1414           LEAVE SCREEN.
+1415         ELSE.
+1416           SET SCREEN '0700'.
+1417         ENDIF.
+1418         CLEAR OKCODE.
+1419     ENDCASE.
+1420     CLEAR OKCODE.
+1421   ENDMODULE.                 " USER_COMMAND_0700  INPUT
+1422   *&---------------------------------------------------------------------*
+1423   *&      Module  move_selected_lines5  INPUT
+1424   *&---------------------------------------------------------------------*
+1425   *       text
+1426   *----------------------------------------------------------------------*
+1427   MODULE move_selected_lines5 INPUT.
+1428     MODIFY IST_DISPLAY FROM IST_DISPLAY INDEX TBC_700-CURRENT_LINE.
+1429     IF IST_DISPLAY-IMPWBRATIO > IST_DISPLAY-IMPAMT.
+1430       MESSAGE E054(ZAA).
+1431     ENDIF.
+1432     IF IST_DISPLAY-TTYPE = 'X70' OR IST_DISPLAY-TTYPE =  '700' .
+1433     ELSE.
+1434       MESSAGE E056(ZAA).
+1435     ENDIF.
+1436   ENDMODULE.                 " move_selected_lines5  INPUT
+*--- End of MZAAIMPI01 - 1436 lines ---
+
+----------------------------------------------------------------------------------------------------
+Include          MZAAIMPF01                                Level 1    Page 5
+Object           SAPMZAAIMP                                Lines 237
+System           OCQ / 500   User SAP_ABAP   27.08.2026 11:30:34
+----------------------------------------------------------------------------------------------------
+1      *----------------------------------------------------------------------*
+2      ***INCLUDE MZMM_STOF01 .
+3      *----------------------------------------------------------------------*
+4      *Change History
+5      ***********************************************************************
+6      *  Date        Transport   USERID      Description                    *
+7      * 08/09/2008   RD1K960036  SAB_SRIDHAR Obsolete FM "POPUP_TO_CONFIRM_ *
+8      *                                      STEP replaced "POPUP_TO_CONFIRM*
+9      ***********************************************************************
+10
+11     *&---------------------------------------------------------------------*
+12     *&      Form  GET_DATA
+13     *&---------------------------------------------------------------------*
+14     *       text
+15     *----------------------------------------------------------------------*
+16     *  -->  p1        text
+17     *  <--  p2        text
+18     *----------------------------------------------------------------------*
+19     *&      Form  bdc_dynpro
+20     *&---------------------------------------------------------------------*
+21     *       text
+22     *----------------------------------------------------------------------*
+23     *      -->P_0211   text
+24     *      -->P_0212   text
+25     *----------------------------------------------------------------------*
+26     FORM BDC_DYNPRO USING PROGRAM DYNPRO.
+27       CLEAR BDCDATA.
+28       BDCDATA-PROGRAM  = PROGRAM.
+29       BDCDATA-DYNPRO   = DYNPRO.
+30       BDCDATA-DYNBEGIN = 'X'.
+31       APPEND BDCDATA.
+32     ENDFORM.
+33
+34     *----------------------------------------------------------------------*
+35     *        Insert field                                                  *
+36     *----------------------------------------------------------------------*
+37     FORM BDC_FIELD USING FNAM FVAL.
+38       CLEAR BDCDATA.
+39       BDCDATA-FNAM = FNAM.
+40       BDCDATA-FVAL = FVAL.
+41       APPEND BDCDATA.
+42     ENDFORM.                    " bdc_dynpro
+43     *&---------------------------------------------------------------------*
+44     *&      Form  bdc_transaction
+45     *&---------------------------------------------------------------------*
+46     *       text
+47     *----------------------------------------------------------------------*
+48     *      -->P_0336   text
+49     *----------------------------------------------------------------------*
+50     FORM BDC_TRANSACTION USING TCODE.
+51       REFRESH MESSTAB.
+52       CALL FUNCTION 'BDC_INSERT'
+53            EXPORTING
+54                 TCODE     = TCODE
+55            TABLES
+56                 DYNPROTAB = BDCDATA.
+57       REFRESH BDCDATA.
+58     ENDFORM.                    " bdc_transaction
+59     *&---------------------------------------------------------------------*
+60     *&      Form  open_group
+61     *&---------------------------------------------------------------------*
+62     *       text
+63     *----------------------------------------------------------------------*
+64     *  -->  p1        text
+65     *  <--  p2        text
+66     *----------------------------------------------------------------------*
+67     FORM OPEN_GROUP.
+68       DATA:UNAME LIKE APQI-USERID,
+69            KEEP,
+70            HOLDDATE LIKE SY-DATUM.
+71       CASE G_OKCODE.
+72         WHEN 'IMPAIR' OR 'DEPCOM'.
+73           CONCATENATE P_BUKRS P_GJAHR P_MONAT 'BAA' INTO GROUP.
+74         WHEN 'WBACK'.
+75           CONCATENATE P_BUKRS P_GJAHR P_MONAT 'BZU' INTO GROUP.
+76         WHEN 'UNPDEP'.
+77           CONCATENATE P_BUKRS P_GJAHR P_MONAT 'PPA' INTO GROUP.
+78         WHEN 'PWBACK'.
+79           CONCATENATE P_BUKRS P_GJAHR P_MONAT 'PPU' INTO GROUP.
+80     *      CONCATENATE P_BUKRS P_GJAHR P_MONAT 'FPU' INTO GROUP1.
+81         WHEN 'WBACKGROSS'.
+82           CONCATENATE P_BUKRS P_GJAHR P_MONAT 'BZU' INTO GROUP.
+83       ENDCASE.
+84
+85       UNAME = SY-UNAME.
+86       KEEP = 'X'.
+87       HOLDDATE = SY-DATUM.
+88       CALL FUNCTION 'BDC_OPEN_GROUP'
+89            EXPORTING
+90                 CLIENT   = SY-MANDT
+91                 GROUP    = GROUP
+92                 USER     = UNAME
+93                 KEEP     = KEEP
+94                 HOLDDATE = HOLDDATE.
+95     *    CALL FUNCTION 'BDC_OPEN_GROUP'
+96     *         EXPORTING
+97     *              CLIENT   = SY-MANDT
+98     *              GROUP    = GROUP1
+99     *              USER     = UNAME
+100    *              KEEP     = KEEP
+101    *              HOLDDATE = HOLDDATE.
+102    *    CALL FUNCTION 'BDC_OPEN_GROUP'
+103    *         EXPORTING
+104    *              CLIENT   = SY-MANDT
+105    *              GROUP    = GROUP1
+106    *              USER     = UNAME
+107    *              KEEP     = KEEP
+108    *              HOLDDATE = HOLDDATE.
+109
+110    ENDFORM.                    " open_group
+111    *&---------------------------------------------------------------------*
+112    *&      Form  close_group
+113    *&---------------------------------------------------------------------*
+114    *       text
+115    *----------------------------------------------------------------------*
+116    *  -->  p1        text
+117    *  <--  p2        text
+118    *----------------------------------------------------------------------*
+119    FORM CLOSE_GROUP.
+120      IF G_OKCODE <> 'PWBACK' and G_OKCODE <> 'WBACKGROSS'.
+121    * Begin of change on 17-Jun-2013
+122        CALL FUNCTION 'BDC_CLOSE_GROUP'
+123         EXCEPTIONS
+124           NOT_OPEN          = 1
+125           QUEUE_ERROR       = 2
+126           OTHERS            = 3
+127                  .
+128    * End of change on 17-Jun-2013
+129        IF SY-SUBRC <> 0.
+130    * Implement suitable error handling here
+131        ENDIF.
+132
+133        IF SY-SUBRC = 0.
+134          MESSAGE I053(ZAA) WITH GROUP.
+135          CALL TRANSACTION 'SESSION_MANAGER'.
+136        ENDIF.
+137      ELSE.
+138        CALL FUNCTION 'BDC_CLOSE_GROUP'.
+139      ENDIF.
+140
+141    ENDFORM.                    " close_group
+142
+143    *&---------------------------------------------------------------------*
+144    *&      Form  close_group1
+145    *&---------------------------------------------------------------------*
+146    *       text
+147    *----------------------------------------------------------------------*
+148    *  -->  p1        text
+149    *  <--  p2        text
+150    *----------------------------------------------------------------------*
+151    FORM CLOSE_GROUP1.
+152    * Begin of change on 17-Jun-2013
+153      CALL FUNCTION 'BDC_CLOSE_GROUP'
+154       EXCEPTIONS
+155         NOT_OPEN          = 1
+156         QUEUE_ERROR       = 2
+157         OTHERS            = 3
+158                .
+159    * End of change on 17-Jun-2013
+160      IF SY-SUBRC <> 0.
+161    * Implement suitable error handling here
+162      ENDIF.
+163
+164
+165      IF SY-SUBRC = 0.
+166        if G_OKCODE = 'WBACKGROSS'.
+167          MESSAGE I053(ZAA) WITH GROUP.
+168          MESSAGE I053(ZAA) WITH GROUP1.
+169        else .
+170          MESSAGE I053(ZAA) WITH GROUP.
+171        endif.
+172        CALL TRANSACTION 'SESSION_MANAGER'.
+173      ENDIF.
+174    ENDFORM.                    " close_group
+175
+176    *&---------------------------------------------------------------------*
+177    *&      Form  popup_message
+178    *&---------------------------------------------------------------------*
+179    *       text
+180    *----------------------------------------------------------------------*
+181    *      -->P_G_TEXT  text
+182    *----------------------------------------------------------------------*
+183    FORM POPUP_MESSAGE USING G_TEXT.
+184    *Begin of <RD1K960036>
+185
+186    *  CALL FUNCTION 'POPUP_TO_CONFIRM_STEP'
+187    *       EXPORTING
+188    *            DEFAULTOPTION = 'Y'
+189    *            TEXTLINE1     = G_TEXT
+190    *            TITEL         = 'Geo well data maintenance'
+191    *       IMPORTING
+192    *            ANSWER        = G_ANSWER.
+193
+194    CALL FUNCTION 'POPUP_TO_CONFIRM'
+195      EXPORTING
+196       TITLEBAR                    = 'Geo well data maintenance'(T01)
+197       TEXT_QUESTION               = G_TEXT
+198       TEXT_BUTTON_1               = 'Yes'(T03)
+199       TEXT_BUTTON_2               = 'No'(T04)
+200     IMPORTING
+201       ANSWER                      = G_ANSWER
+202    EXCEPTIONS
+203       TEXT_NOT_FOUND              = 1
+204       OTHERS                      = 2.
+205
+206    IF SY-SUBRC <> 0.
+207     MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+208             WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+209    ENDIF.
+210    *End of <RD1K960036>
+211
+212    ENDFORM.                    " popup_message
+213    *&---------------------------------------------------------------------*
+214    *&      Form  OPEN_GROUP1
+215    *&---------------------------------------------------------------------*
+216    *       text
+217    *----------------------------------------------------------------------*
+218    *  -->  p1        text
+219    *  <--  p2        text
+220    *----------------------------------------------------------------------*
+221    FORM OPEN_GROUP1.
+222      DATA:UNAME LIKE APQI-USERID,
+223           KEEP,
+224           HOLDDATE LIKE SY-DATUM.
+225      UNAME = SY-UNAME.
+226      KEEP = 'X'.
+227      HOLDDATE = SY-DATUM.
+228      CONCATENATE P_BUKRS P_GJAHR P_MONAT 'BAA' INTO GROUP1.
+229      CALL FUNCTION 'BDC_OPEN_GROUP'
+230           EXPORTING
+231                CLIENT   = SY-MANDT
+232                GROUP    = GROUP1
+233                USER     = UNAME
+234                KEEP     = KEEP
+235                HOLDDATE = HOLDDATE.
+236
+237    ENDFORM.                    " OPEN_GROUP1
+*--- End of MZAAIMPF01 - 237 lines ---

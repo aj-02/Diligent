@@ -1,0 +1,1244 @@
+----------------------------------------------------------------------------------------------------
+Main program     ZAA_IMPARMENTLOSS                         Level 0    Page 1
+Object           ZAA_IMPARMENTLOSS                         Lines 1238
+System           OCQ / 500   User SAP_ABAP   27.08.2026 11:26:15
+----------------------------------------------------------------------------------------------------
+1      REPORT ZAA_IMPARMENTLOSS .
+2      **************************************************************
+3      *PROGRAM: ZAA_IMPARMENTLOSS
+4      *
+5      *TITLE:ALLOCATION AND POSTING OF IMPAIRMENT/WRITE BACK LOSS
+6      *
+7      *FS No: FS-FI-AA-OVL-004-IMPR
+8      *
+9      *Author: Madhukar   Date :01.09.2005
+10     *
+11     *Description:
+12     *TO MEET THE LEGAL REQUIREMENT OF ACCOUNTING STANDARD AS-28,
+13     *Tran Code :ZFIIMPR
+14     **************************************************************
+15     *
+16     *Change History
+17     *
+18     *Mod Date     Changed By     Description      Chng ID
+19     *06.10.2005   Sudhir Sharma
+20     *
+21     **************************************************************
+22
+23     ***************************************************************
+24     *EXTERNAL TABLE DECLARATION
+25     ************************************************************
+26
+27     TABLES:ANLA,
+28            ANLC,
+29            ANLZ,
+30            CSKS.
+31     TYPE-POOLS: SLIS.
+32
+33
+34     **************************************************************
+35     *INPUT DATA DECLARATION
+36     **************************************************************
+37     SELECTION-SCREEN BEGIN OF BLOCK BLK WITH FRAME.
+38     PARAMETERS:P_BUKRS LIKE T093C-BUKRS OBLIGATORY,
+39                P_GJAHR LIKE ANEK-GJAHR OBLIGATORY,
+40                P_BUDAT LIKE BKPF-BUDAT OBLIGATORY,
+41                P_BZDAT LIKE ANEK-BZDAT OBLIGATORY,
+42                P_MONAT LIKE ANEK-MONAT OBLIGATORY.
+43     SELECT-OPTIONS:S_ANLKL FOR ANLA-ANLKL DEFAULT 10101 TO 10604
+44     OBLIGATORY .
+45     PARAMETERS:P_SAFAP LIKE ANLC-SAFAP OBLIGATORY.
+46     SELECT-OPTIONS:S_ANLN1 FOR ANLA-ANLN1.
+47     PARAMETERS:P_RAUMN LIKE ANLZ-RAUMN.
+48     *SELECT-OPTIONS:S_KOSTL FOR ANLZ-KOSTL.
+49     *SELECT-OPTIONS:S_GSBER FOR ANLZ-GSBER.
+50     SELECTION-SCREEN END OF BLOCK BLK.
+51
+52     SELECTION-SCREEN BEGIN OF BLOCK BLK1 WITH FRAME.
+53     PARAMETERS:RAD1 RADIOBUTTON GROUP RAD,
+54                RAD2 RADIOBUTTON GROUP RAD,
+55                RAD3 RADIOBUTTON GROUP RAD,
+56                RAD4 RADIOBUTTON GROUP RAD,
+57                RAD5 RADIOBUTTON GROUP RAD,
+58                RAD6 RADIOBUTTON GROUP RAD.
+59     SELECTION-SCREEN END OF BLOCK BLK1.
+60
+61     **************************************************************
+62     *INTERNAL TABLE DECLARATION
+63     **************************************************************
+64     DATA:IST_ANLC LIKE ANLC OCCURS 1 WITH HEADER LINE.
+65     DATA:IST_ANLA LIKE ANLA OCCURS 1 WITH HEADER LINE.
+66     DATA:IST_ANLZ LIKE ANLZ OCCURS 1 WITH HEADER LINE.
+67     DATA:BEGIN OF IST_FINAL OCCURS 1,
+68           ANLN1 LIKE ANLC-ANLN1,
+69           ANLN2 LIKE ANLC-ANLN2,
+70           AKTIV(10), " like anla-aktiv,
+71           BZDAT(10), " like anek-bzdat ,
+72           KOSTL LIKE ANLZ-KOSTL,
+73           GSBER LIKE ANLZ-GSBER,
+74           PRCTR LIKE CSKS-PRCTR,
+75           NBV1  LIKE ANLC-SAFAP,
+76           IMPAMT LIKE ANLC-SAFAP,
+77           NBV LIKE ANLC-SAFAP,
+78           GBV1 LIKE ANLC-SAFAP,
+79           GBV2 LIKE ANLC-SAFAP,
+80           ADEP1 LIKE ANLC-SAFAP,
+81           ADEP2 LIKE ANLC-SAFAP,
+82           DEPDIFF LIKE ANLC-SAFAP,
+83           DIFFIMPDEP LIKE ANLC-SAFAP,
+84           NBV2 LIKE ANLC-SAFAP,
+85           NBVDIFF LIKE ANLC-SAFAP,
+86           IMPRATIO LIKE ANLC-SAFAP,
+87           IMPWBRATIO LIKE ANLC-SAFAP,
+88           TTYPE(4),
+89           TXT50 LIKE ANLA-TXT50,
+90           ANLKL LIKE ANLA-ANLKL,
+91          END OF IST_FINAL.
+92     DATA:IST_DISPLAY LIKE IST_FINAL OCCURS 1 WITH HEADER LINE.
+93
+94     **********************************************************************
+95     *TYPES
+96     **********************************************************************
+97     DATA:G_NBV1 LIKE ANLC-SAFAP,
+98          G_NBV2 LIKE ANLC-SAFAP,
+99          G_GBV1 LIKE ANLC-SAFAP,
+100         G_GBV2 LIKE ANLC-SAFAP,
+101         G_ADEP1 LIKE ANLC-SAFAP,
+102         G_ADEP2 LIKE ANLC-SAFAP,
+103         G_TOTALADEP1 LIKE GLT0-HSLVT,
+104         G_TOTALADEP2 LIKE GLT0-HSLVT,
+105         G_DEPDIFF LIKE ANLC-SAFAP,
+106         G_TOTNBV LIKE GLT0-HSLVT,
+107         G_TOTIMP  LIKE ANLC-SAFAP,
+108         G_TOTDEPDIFF LIKE GLT0-HSLVT,
+109         G_DIFFIMPDEP LIKE ANLC-SAFAP,
+110         G_TOTDIFFIMPDEP LIKE GLT0-HSLVT,
+111         G_IMPAMT LIKE ANLC-SAFAP,
+112         G_IMPRATIO LIKE ANLC-SAFAP,
+113         G_NBV LIKE ANLC-SAFAP,
+114         G_GV LIKE ANLC-SAFAP,
+115         G_OD LIKE ANLC-SAFAP,
+116         G_UD LIKE ANLC-SAFAP,
+117         G_SD LIKE ANLC-SAFAP,
+118         G_SDTOTAL LIKE ANLC-SAFAP,
+119         OKCODE LIKE SY-UCOMM,
+120         G_LINES(5),
+121         G_RES.
+122
+123
+124
+125    AT SELECTION-SCREEN.
+126      IF RAD4 = 'X' OR RAD5 = 'X'.
+127        IF S_ANLKL-LOW < '00070101' OR S_ANLKL-HIGH > '00070103'.
+128          MESSAGE E057(ZAA).
+129        ENDIF.
+130      ENDIF.
+131
+132
+133    START-OF-SELECTION.
+134      IF RAD1 = 'X'.
+135        PERFORM POST_ADDITIONAL_IMPAIRMENT.
+136      ELSEIF RAD2 = 'X'.
+137        PERFORM POST_WRITEBACKGROSS_IMPAIRMENT.
+138      ELSEIF RAD3 = 'X'.
+139        PERFORM DEPRICIATION_COMPARISON.
+140      ELSEIF RAD4 = 'X'.
+141        PERFORM UNPLANNED_DEPRICIATION.
+142        PERFORM POST_DOCUMENT.
+143      ELSEIF RAD5 = 'X'.
+144        PERFORM WRITEBACK_IMPAIRMENT_PP.
+145      ELSEIF RAD6 = 'X'.
+146        PERFORM POST_WRITEBACK_IMPAIRMENT.
+147      ENDIF.
+148
+149      IF RAD4 <> 'X'.
+150        PERFORM POST_DOCUMENT.
+151      ENDIF.
+152
+153    END-OF-SELECTION.
+154
+155    *&---------------------------------------------------------------------*
+156    *&      Form  post_additional_impairment
+157    *&---------------------------------------------------------------------*
+158    *       text
+159    *----------------------------------------------------------------------*
+160    *  -->  p1        text
+161    *  <--  p2        text
+162    *----------------------------------------------------------------------*
+163    FORM POST_ADDITIONAL_IMPAIRMENT.
+164      DATA:L_TABIX LIKE SY-TABIX,
+165           L_GJAHR LIKE BKPF-GJAHR,
+166           L_DATE LIKE SY-DATUM,
+167           L_DATE1 LIKE SY-DATUM VALUE '99991231'.
+168      SELECT * FROM ANLC INTO TABLE IST_ANLC WHERE BUKRS = P_BUKRS
+169                                               AND ANLN1 IN S_ANLN1
+170                                               AND GJAHR = P_GJAHR
+171                                               AND AFABE = '01'.
+172      LOOP AT IST_ANLC.
+173        L_TABIX = SY-TABIX.
+174        CLEAR:G_NBV,
+175              G_NBV1,
+176              G_IMPAMT,
+177              G_IMPRATIO.
+178        G_NBV1 = IST_ANLC-KANSW + IST_ANLC-ANSWL + IST_ANLC-KNAFA +
+179                 IST_ANLC-KAAFA + IST_ANLC-ZUSNA + IST_ANLC-ZUSAA +
+180                 IST_ANLC-NAFAV + IST_ANLC-AAFAV + IST_ANLC-NAFAL +
+181                 IST_ANLC-AAFAL + IST_ANLC-NAFAP + IST_ANLC-AAFAP.
+182        G_IMPAMT = IST_ANLC-KSAFA  + IST_ANLC-SAFAP + IST_ANLC-ZUSSA +
+183    IST_ANLC-SAFAV + IST_ANLC-SAFAL .
+184        G_NBV = G_NBV1 + G_IMPAMT.
+185        G_IMPAMT = ABS( G_IMPAMT ).
+186        IF G_NBV > 0.
+187         SELECT SINGLE ANLKL AKTIV INTO (ANLA-ANLKL, ANLA-AKTIV ) FROM ANLA
+188                                               WHERE BUKRS = IST_ANLC-BUKRS
+189                                                 AND ANLN1 = IST_ANLC-ANLN1
+190                                                 AND ANLN2 = IST_ANLC-ANLN2.
+191          IF NOT ANLA-ANLKL IN S_ANLKL.
+192            DELETE IST_ANLC INDEX L_TABIX.
+193          ELSEIF NOT P_RAUMN IS INITIAL.
+194
+195            SELECT SINGLE RAUMN INTO (ANLZ-RAUMN) FROM ANLZ
+196                                               WHERE BUKRS = IST_ANLC-BUKRS
+197                                                 AND ANLN1 = IST_ANLC-ANLN1
+198                                                 AND ANLN2 = IST_ANLC-ANLN2
+199    *                                             AND KOSTL IN S_KOSTL
+200    *                                             AND GSBER IN S_GSBER
+201                                                 AND BDATU = L_DATE1.
+202            IF ANLZ-RAUMN <> P_RAUMN.
+203              DELETE IST_ANLC INDEX L_TABIX.
+204            ELSE.
+205              MOVE: IST_ANLC-ANLN1 TO IST_FINAL-ANLN1,
+206                    IST_ANLC-ANLN2 TO IST_FINAL-ANLN2,
+207                    ANLA-AKTIV TO IST_FINAL-AKTIV,
+208                    P_BZDAT TO IST_FINAL-BZDAT,
+209                    G_NBV1 TO IST_FINAL-NBV1,
+210             G_IMPAMT TO IST_FINAL-IMPAMT,
+211              G_NBV TO IST_FINAL-NBV.
+212              APPEND IST_FINAL.
+213              CLEAR IST_FINAL.
+214              G_TOTNBV = G_TOTNBV + G_NBV.
+215              G_TOTIMP = G_TOTIMP + G_IMPAMT.
+216            ENDIF.
+217          ELSE.
+218            MOVE: IST_ANLC-ANLN1 TO IST_FINAL-ANLN1,
+219                  IST_ANLC-ANLN2 TO IST_FINAL-ANLN2,
+220                  ANLA-AKTIV TO IST_FINAL-AKTIV,
+221                  P_BZDAT TO IST_FINAL-BZDAT,
+222                  G_NBV1 TO IST_FINAL-NBV1,
+223           G_IMPAMT TO IST_FINAL-IMPAMT,
+224            G_NBV TO IST_FINAL-NBV.
+225            APPEND IST_FINAL.
+226            CLEAR IST_FINAL.
+227            G_TOTNBV = G_TOTNBV + G_NBV.
+228            G_TOTIMP = G_TOTIMP + G_IMPAMT.
+229          ENDIF.
+230        ELSE.
+231          DELETE IST_ANLC INDEX L_TABIX.
+232        ENDIF.
+233      ENDLOOP.
+234      CLEAR L_TABIX.
+235
+236      LOOP AT IST_FINAL.
+237        L_TABIX = SY-TABIX.
+238        SHIFT IST_FINAL-ANLN1 LEFT DELETING LEADING '0'.
+239        G_IMPRATIO = P_SAFAP / G_TOTNBV * IST_FINAL-NBV.
+240        IST_FINAL-IMPRATIO = G_IMPRATIO.
+241        L_DATE = IST_FINAL-AKTIV.
+242        CALL FUNCTION 'GET_CURRENT_YEAR'
+243             EXPORTING
+244                  BUKRS = P_BUKRS
+245                  DATE  = L_DATE
+246             IMPORTING
+247                  CURRY = L_GJAHR.
+248
+249        IF L_GJAHR = P_GJAHR.
+250          IST_FINAL-TTYPE = 'X30'.
+251        ELSE.
+252          IST_FINAL-TTYPE = 'X20'.
+253        ENDIF.
+254        MODIFY IST_FINAL INDEX L_TABIX.
+255        CLEAR G_IMPRATIO.
+256      ENDLOOP.
+257    ENDFORM.                    " post_additional_impairment
+258
+259
+260    *&---------------------------------------------------------------------*
+261    *&      Form  post_document
+262    *&---------------------------------------------------------------------*
+263    *       text
+264    *----------------------------------------------------------------------*
+265    *  -->  p1        text
+266    *  <--  p2        text
+267    *----------------------------------------------------------------------*
+268    FORM POST_DOCUMENT.
+269      IF RAD1 = 'X' .
+270        OKCODE = 'IMPAIR'.
+271      ELSEIF RAD2 = 'X'.
+272        OKCODE = 'WBACKGROSS'.
+273      ELSEIF RAD3 = 'X'.
+274        OKCODE = 'DEPCOM'.
+275      ELSEIF RAD4 = 'X'.
+276        OKCODE = 'UNPDEP'.
+277      ELSEIF RAD5 = 'X'.
+278        OKCODE = 'PWBACK'.
+279      ELSEIF RAD6 = 'X'.
+280        OKCODE = 'WBACK'.
+281      ENDIF.
+282      DATA:L_DATUM LIKE SY-DATUM.
+283      LOOP AT IST_FINAL.
+284        L_DATUM = IST_FINAL-BZDAT.
+285        CALL FUNCTION 'CONVERT_DATE_TO_EXTERNAL'
+286             EXPORTING
+287                  DATE_INTERNAL = L_DATUM
+288             IMPORTING
+289                  DATE_EXTERNAL = IST_FINAL-BZDAT.
+290
+291        L_DATUM = IST_FINAL-AKTIV.
+292        CALL FUNCTION 'CONVERT_DATE_TO_EXTERNAL'
+293             EXPORTING
+294                  DATE_INTERNAL = L_DATUM
+295             IMPORTING
+296                  DATE_EXTERNAL = IST_FINAL-AKTIV.
+297
+298        MODIFY IST_FINAL INDEX SY-TABIX.
+299      ENDLOOP.
+300      IST_DISPLAY[] = IST_FINAL[].
+301
+302      DESCRIBE TABLE IST_DISPLAY LINES G_LINES.
+303      IF G_LINES > 0.
+304        EXPORT IST_DISPLAY TO MEMORY ID 'DISP'.        "#EC CI_FLDEXT_OK[2610650]
+305        EXPORT: OKCODE TO MEMORY ID 'OK',
+306                P_BUKRS TO MEMORY ID 'BUKRS',
+307                P_GJAHR TO MEMORY ID 'GJAHR',
+308                P_BUDAT TO MEMORY ID 'BUDAT',
+309                P_MONAT TO MEMORY ID 'MONAT',
+310    "Code Remediation changes S4 2025_1_A Conversion **BEGIN OF CHANGE BY SAP_ABAP 05.06.2026  FOR ATC
+311                G_TOTNBV TO MEMORY ID 'TOTNBV',           "#EC CI_FLDEXT_OK[2610650]
+312                G_TOTIMP TO MEMORY ID 'TOTIMP',           "#EC CI_FLDEXT_OK[2610650]
+313                G_TOTDEPDIFF TO MEMORY ID 'TOTDEPDIFF',    "#EC CI_FLDEXT_OK[2610650]
+314                G_TOTDIFFIMPDEP TO MEMORY ID 'TOTDIFFIMPDEP', "#EC CI_FLDEXT_OK[2610650]
+315                G_TOTALADEP1 TO MEMORY ID 'TOTALADEP1',   "#EC CI_FLDEXT_OK[2610650]
+316                G_TOTALADEP2 TO MEMORY ID 'TOTALADEP2', "#EC CI_FLDEXT_OK[2610650]
+317                P_SAFAP TO MEMORY ID 'SAFAP'.           "#EC CI_FLDEXT_OK[2610650]
+318    "Code Remediation changes S4 2025_1_A Conversion **END OF CHANGE BY SAP_ABAP 05.06.2026  FOR ATC
+319
+320
+321        CALL TRANSACTION 'ZAAIMP'.
+322      ELSE.
+323        WRITE:/'No data Available for the given input'.
+324      ENDIF.
+325
+326    ENDFORM.                    " post_document
+327    *
+328    *&---------------------------------------------------------------------*
+329    *&      Form  post_writeback_impairment
+330    *&---------------------------------------------------------------------*
+331    *       text
+332    *----------------------------------------------------------------------*
+333    *  -->  p1        text
+334    *  <--  p2        text
+335    *----------------------------------------------------------------------*
+336    FORM POST_WRITEBACK_IMPAIRMENT.
+337      DATA:L_TABIX LIKE SY-TABIX,
+338           L_GJAHR LIKE BKPF-GJAHR,
+339           L_DATE LIKE SY-DATUM,
+340           L_DATE1 LIKE SY-DATUM VALUE '99991231',
+341           L_TEMP(20),
+342           L_LEN(2),
+343           L_FRACTION(2) TYPE P DECIMALS 2 VALUE '0.50'.
+344      SELECT * FROM ANLC INTO TABLE IST_ANLC WHERE BUKRS = P_BUKRS
+345                                               AND ANLN1 IN S_ANLN1
+346                                               AND GJAHR = P_GJAHR
+347                                        AND ( AFABE = '01' OR AFABE ='20' ).
+348      LOOP AT IST_ANLC WHERE AFABE = '01'.
+349        L_TABIX = SY-TABIX.
+350        CLEAR:G_NBV,
+351              G_NBV1,
+352              G_IMPAMT,
+353              G_ADEP1,
+354              G_ADEP2,
+355              G_DEPDIFF,
+356              G_DIFFIMPDEP.
+357    *    IF IST_ANLC-AFABE = '01'.
+358    *      G_ADEP1 = IST_ANLC-KNAFA + IST_ANLC-KAAFA + IST_ANLC-ZUSNA +
+359    *                IST_ANLC-ZUSAA + IST_ANLC-NAFAV + IST_ANLC-AAFAV +
+360    *                IST_ANLC-NAFAL + IST_ANLC-AAFAL + IST_ANLC-NAFAP +
+361    *                          IST_ANLC-AAFAP.
+362    *    ELSEIF IST_ANLC-AFABE = '20'.
+363    *      G_ADEP2 = IST_ANLC-KNAFA + IST_ANLC-KAAFA + IST_ANLC-ZUSNA +
+364    *                IST_ANLC-ZUSAA + IST_ANLC-NAFAV + IST_ANLC-AAFAV +
+365    *                IST_ANLC-NAFAL + IST_ANLC-AAFAL + IST_ANLC-NAFAP +
+366    *                          IST_ANLC-AAFAP.
+367    *    ENDIF.
+368    *    IF G_ADEP2 >= G_ADEP1.
+369    *      G_DEPDIFF =  G_ADEP2 - G_ADEP1.
+370    *    ELSE.
+371    *      G_DEPDIFF = 0.
+372    *    ENDIF.
+373
+374
+375
+376        G_IMPAMT = IST_ANLC-KSAFA + IST_ANLC-ZUSSA + IST_ANLC-SAFAV .
+377        IF  G_IMPAMT < 0.
+378          G_NBV1 = IST_ANLC-KANSW + IST_ANLC-ANSWL + IST_ANLC-KNAFA +
+379                   IST_ANLC-KAAFA + IST_ANLC-ZUSNA + IST_ANLC-ZUSAA +
+380                   IST_ANLC-NAFAV + IST_ANLC-AAFAV + IST_ANLC-NAFAL +
+381                   IST_ANLC-AAFAL + IST_ANLC-NAFAP + IST_ANLC-AAFAP.
+382          G_NBV = G_NBV1 + G_IMPAMT.
+383          G_NBV1 = ABS( G_NBV1 ).
+384          G_IMPAMT = ABS( G_IMPAMT ).
+385
+386         SELECT SINGLE ANLKL AKTIV INTO (ANLA-ANLKL, ANLA-AKTIV ) FROM ANLA
+387                                               WHERE BUKRS = IST_ANLC-BUKRS
+388                                                 AND ANLN1 = IST_ANLC-ANLN1
+389                                                 AND ANLN2 = IST_ANLC-ANLN2.
+390          IF NOT ANLA-ANLKL IN S_ANLKL.
+391            DELETE IST_ANLC INDEX L_TABIX.
+392
+393          ELSEIF NOT P_RAUMN IS INITIAL .
+394
+395            SELECT SINGLE RAUMN INTO (ANLZ-RAUMN) FROM ANLZ
+396                                             WHERE BUKRS = IST_ANLC-BUKRS
+397                                               AND ANLN1 = IST_ANLC-ANLN1
+398                                               AND ANLN2 = IST_ANLC-ANLN2
+399    *                                           AND KOSTL IN S_KOSTL
+400    *                                           AND GSBER IN S_GSBER
+401                                               AND BDATU = L_DATE1.
+402            IF ANLZ-RAUMN <> P_RAUMN.
+403              DELETE IST_ANLC INDEX L_TABIX.
+404            ELSE.
+405
+406              MOVE: IST_ANLC-ANLN1 TO IST_FINAL-ANLN1,
+407                    IST_ANLC-ANLN2 TO IST_FINAL-ANLN2,
+408                    ANLA-AKTIV TO IST_FINAL-AKTIV,
+409                    ANLA-ANLKL TO IST_FINAL-ANLKL,
+410                    P_BZDAT TO IST_FINAL-BZDAT,
+411                    G_NBV1 TO IST_FINAL-NBV1,
+412                    G_IMPAMT TO IST_FINAL-IMPAMT,
+413                    G_NBV TO IST_FINAL-NBV,
+414                   'X70' TO IST_FINAL-TTYPE.
+415              APPEND IST_FINAL.
+416              CLEAR IST_FINAL.
+417              CLEAR IST_FINAL.
+418            ENDIF.
+419          ELSE.
+420            MOVE: IST_ANLC-ANLN1 TO IST_FINAL-ANLN1,
+421                  IST_ANLC-ANLN2 TO IST_FINAL-ANLN2,
+422                  ANLA-AKTIV TO IST_FINAL-AKTIV,
+423                  ANLA-ANLKL TO IST_FINAL-ANLKL,
+424                  P_BZDAT TO IST_FINAL-BZDAT,
+425                  G_NBV1 TO IST_FINAL-NBV1,
+426                  G_IMPAMT TO IST_FINAL-IMPAMT,
+427            G_NBV TO IST_FINAL-NBV,
+428            G_NBV1 TO IST_FINAL-IMPWBRATIO,
+429            'X70' TO IST_FINAL-TTYPE.
+430            APPEND IST_FINAL.
+431            CLEAR IST_FINAL.
+432            CLEAR IST_FINAL.
+433          ENDIF.
+434        ELSE.
+435          DELETE IST_ANLC INDEX L_TABIX.
+436        ENDIF.
+437
+438      ENDLOOP.
+439
+440
+441      LOOP AT IST_FINAL.
+442        CLEAR :G_ADEP1,
+443               G_ADEP2,
+444               G_DEPDIFF,
+445               G_DIFFIMPDEP.
+446        L_TABIX = SY-TABIX.
+447        LOOP AT IST_ANLC WHERE ANLN1 = IST_FINAL-ANLN1.
+448          IF IST_ANLC-AFABE = '01'.
+449            G_ADEP1 = IST_ANLC-KNAFA + IST_ANLC-KAAFA + IST_ANLC-ZUSNA +
+450                      IST_ANLC-ZUSAA + IST_ANLC-NAFAV + IST_ANLC-AAFAV +
+451                      IST_ANLC-NAFAL + IST_ANLC-AAFAL + IST_ANLC-NAFAP +
+452                                IST_ANLC-AAFAP.
+453          ELSEIF IST_ANLC-AFABE = '20'.
+454            G_ADEP2 = IST_ANLC-KNAFA + IST_ANLC-KAAFA + IST_ANLC-ZUSNA +
+455                      IST_ANLC-ZUSAA + IST_ANLC-NAFAV + IST_ANLC-AAFAV +
+456                      IST_ANLC-NAFAL + IST_ANLC-AAFAL + IST_ANLC-NAFAP +
+457                                IST_ANLC-AAFAP.
+458          ENDIF.
+459        ENDLOOP.
+460        G_ADEP1 = ABS( G_ADEP1 ).
+461        G_ADEP2 = ABS( G_ADEP2 ).
+462        IF G_ADEP2 >= G_ADEP1.
+463          G_DEPDIFF =  G_ADEP2 - G_ADEP1.
+464        ELSE.
+465          G_DEPDIFF = 0.
+466        ENDIF.
+467
+468        G_DIFFIMPDEP = IST_FINAL-IMPAMT - G_DEPDIFF.
+469        G_DIFFIMPDEP = ABS( G_DIFFIMPDEP ).
+470        IF IST_FINAL-IMPAMT < G_DEPDIFF.
+471          DELETE IST_FINAL INDEX L_TABIX.
+472        ELSE.
+473          MOVE G_DEPDIFF TO IST_FINAL-DEPDIFF.
+474          MOVE G_DIFFIMPDEP TO IST_FINAL-DIFFIMPDEP.
+475          MODIFY IST_FINAL INDEX L_TABIX.
+476          G_TOTNBV = G_TOTNBV + IST_FINAL-NBV.
+477          G_TOTIMP = G_TOTIMP + IST_FINAL-IMPAMT.
+478          G_TOTDEPDIFF = G_TOTDEPDIFF + IST_FINAL-DEPDIFF.
+479          CLEAR IST_FINAL.
+480        ENDIF.
+481      ENDLOOP.
+482      G_TOTDIFFIMPDEP = G_TOTIMP - G_TOTDEPDIFF.
+483      LOOP AT IST_FINAL.
+484        L_TABIX = SY-TABIX.
+485        SHIFT IST_FINAL-ANLN1 LEFT DELETING LEADING '0'.
+486        SHIFT IST_FINAL-ANLKL LEFT DELETING LEADING '0'.
+487        G_IMPRATIO = P_SAFAP / G_TOTDIFFIMPDEP * IST_FINAL-DIFFIMPDEP.
+488        IF G_IMPRATIO > 0.
+489          L_TEMP = G_IMPRATIO.
+490          CONDENSE L_TEMP.
+491          L_LEN = STRLEN( L_TEMP ).
+492          L_LEN = L_LEN - 3.
+493          IF L_TEMP+L_LEN(3) >= L_FRACTION.
+494            L_TEMP = L_TEMP - L_TEMP+L_LEN(3) + 1.
+495            G_IMPRATIO = L_TEMP.
+496          ELSE.
+497            L_TEMP = L_TEMP - L_TEMP+L_LEN(3).
+498            G_IMPRATIO = L_TEMP.
+499          ENDIF.
+500        ENDIF.
+501        IST_FINAL-IMPWBRATIO = G_IMPRATIO.
+502        MODIFY IST_FINAL INDEX L_TABIX.
+503        CLEAR: G_IMPRATIO,
+504              L_LEN,
+505              L_TEMP.
+506
+507      ENDLOOP.
+508
+509    ENDFORM.                    " post_writeback_impairment
+510    *&---------------------------------------------------------------------*
+511    *&      Form  depriciation_comparison
+512    *&---------------------------------------------------------------------*
+513    *       text
+514    *----------------------------------------------------------------------*
+515    *  -->  p1        text
+516    *  <--  p2        text
+517    *----------------------------------------------------------------------*
+518    FORM DEPRICIATION_COMPARISON.
+519      DATA:L_TABIX LIKE SY-TABIX,
+520           L_ANLN1 LIKE ANLC-ANLN1,
+521           L_ANLN2 LIKE ANLC-ANLN2,
+522           L_GJAHR LIKE BKPF-GJAHR,
+523           L_DATE LIKE SY-DATUM,
+524           L_DATE1 LIKE SY-DATUM VALUE '99991231'.
+525      SELECT * FROM ANLC INTO TABLE IST_ANLC WHERE BUKRS = P_BUKRS
+526                                        AND ANLN1 IN S_ANLN1
+527                                        AND GJAHR = P_GJAHR
+528                                        AND ( AFABE = '01' OR AFABE ='20' ).
+529      SORT IST_ANLC BY ANLN1 ANLN2 AFABE.
+530      LOOP AT IST_ANLC.
+531        L_TABIX = SY-TABIX.
+532        ON CHANGE OF IST_ANLC-ANLN1 OR IST_ANLC-ANLN2.
+533          IF L_TABIX <> 1.
+534            IF G_NBV2 < G_NBV1 and G_NBV2 >= 0.
+535              SELECT SINGLE ANLKL AKTIV DEAKT INTO (ANLA-ANLKL, ANLA-AKTIV,
+536         ANLA-DEAKT ) FROM ANLA WHERE BUKRS = IST_ANLC-BUKRS
+537                                AND ANLN1 = L_ANLN1
+538                                and anln2 = L_ANLN2.
+539    *.
+540              IF NOT ANLA-ANLKL IN S_ANLKL.
+541    *            DELETE IST_ANLC INDEX L_TABIX.
+542              ELSEIF NOT ANLA-DEAKT IS INITIAL .
+543    *            delete ist_anlc index l_tabix.
+544              ELSEIF NOT P_RAUMN IS INITIAL.
+545                SELECT SINGLE RAUMN INTO (ANLZ-RAUMN) FROM ANLZ
+546                                               WHERE BUKRS = IST_ANLC-BUKRS
+547                                                 AND ANLN1 = L_ANLN1
+548                                                 and anln2 = L_ANLN2
+549                                                 AND BDATU = L_DATE1.
+550                IF ANLZ-RAUMN <> P_RAUMN.
+551    *              delete ist_anlc index l_tabix.
+552                ELSE.
+553
+554                  G_GBV1 = ABS( G_GBV1 ).
+555                  G_ADEP1 = ABS( G_ADEP1 ).
+556                  G_NBV1 = ABS( G_NBV1 ).
+557                  G_GBV2 = ABS( G_GBV2 ).
+558                  G_ADEP2 = ABS( G_ADEP2 ).
+559                  G_NBV2 = ABS( G_NBV2 ).
+560
+561                  MOVE: L_ANLN1 TO IST_FINAL-ANLN1,
+562                        L_ANLN2 TO IST_FINAL-ANLN2,
+563                        ANLA-AKTIV TO IST_FINAL-AKTIV,
+564                        ANLA-ANLKL TO IST_FINAL-ANLKL,
+565                        P_BZDAT TO IST_FINAL-BZDAT,
+566                        G_GBV1 TO IST_FINAL-GBV1,
+567                        G_ADEP1 TO IST_FINAL-ADEP1,
+568                        G_NBV1 TO IST_FINAL-NBV1,
+569                        G_GBV2 TO IST_FINAL-GBV2,
+570                        G_ADEP2 TO IST_FINAL-ADEP2,
+571                        G_NBV2 TO IST_FINAL-NBV2 .
+572                  IST_FINAL-NBVDIFF =  ABS( G_NBV1 - G_NBV2 ).
+573                  APPEND IST_FINAL.
+574                  CLEAR IST_FINAL.
+575                ENDIF.
+576              ELSE.
+577                G_GBV1 = ABS( G_GBV1 ).
+578                G_ADEP1 = ABS( G_ADEP1 ).
+579                G_NBV1 = ABS( G_NBV1 ).
+580                G_GBV2 = ABS( G_GBV2 ).
+581                G_ADEP2 = ABS( G_ADEP2 ).
+582                G_NBV2 = ABS( G_NBV2 ).
+583                MOVE: L_ANLN1 TO IST_FINAL-ANLN1,
+584                      L_ANLN2 TO IST_FINAL-ANLN2,
+585                      ANLA-AKTIV TO IST_FINAL-AKTIV,
+586                      ANLA-ANLKL TO IST_FINAL-ANLKL,
+587                      P_BZDAT TO IST_FINAL-BZDAT,
+588                      G_GBV1 TO IST_FINAL-GBV1,
+589                      G_ADEP1 TO IST_FINAL-ADEP1,
+590                      G_NBV1 TO IST_FINAL-NBV1,
+591                      G_GBV2 TO IST_FINAL-GBV2,
+592                      G_ADEP2 TO IST_FINAL-ADEP2,
+593                      G_NBV2 TO IST_FINAL-NBV2 .
+594                IST_FINAL-NBVDIFF =  ABS( G_NBV1 - G_NBV2 ).
+595                APPEND IST_FINAL.
+596                CLEAR IST_FINAL.
+597              ENDIF.
+598    *        else.
+599    *          delete ist_anlc index l_tabix.
+600            ENDIF.
+601            CLEAR:G_GBV1,
+602              G_NBV1,
+603              G_ADEP1,
+604              G_GBV2,
+605              G_ADEP2,
+606              G_NBV2,
+607              L_ANLN1,
+608              L_ANLN2.
+609          ENDIF.
+610        ENDON.
+611        IF IST_ANLC-AFABE = 01.
+612          G_GBV1 = IST_ANLC-KANSW + IST_ANLC-ANSWL.
+613          G_ADEP1 = IST_ANLC-KNAFA + IST_ANLC-KAAFA + IST_ANLC-ZUSNA +
+614                    IST_ANLC-ZUSAA + IST_ANLC-NAFAV + IST_ANLC-AAFAV +
+615                    IST_ANLC-NAFAL + IST_ANLC-AAFAL + IST_ANLC-NAFAP +
+616                    IST_ANLC-AAFAP + IST_ANLC-ksafa +  IST_ANLC-SAFAL +
+617                    IST_ANLC-SAFAV +  IST_ANLC-ZUSSA +  IST_ANLC-SAFAG.
+618
+619          G_NBV1 =  G_GBV1 + G_ADEP1.
+620        ELSEIF IST_ANLC-AFABE = 20.
+621          G_GBV2 = IST_ANLC-KANSW + IST_ANLC-ANSWL.
+622          G_ADEP2 = IST_ANLC-KNAFA + IST_ANLC-KAAFA + IST_ANLC-ZUSNA +
+623                    IST_ANLC-ZUSAA + IST_ANLC-NAFAV + IST_ANLC-AAFAV +
+624                    IST_ANLC-NAFAL + IST_ANLC-AAFAL + IST_ANLC-NAFAP +
+625                    IST_ANLC-AAFAP.
+626          G_NBV2 =  G_GBV2 + G_ADEP2.
+627
+628        ENDIF.
+629        L_ANLN1 = IST_ANLC-ANLN1.
+630        L_ANLN2 = IST_ANLC-ANLN2.
+631      ENDLOOP.
+632
+633      IF G_NBV2 < G_NBV1 and G_NBV2 >= 0.
+634        SELECT SINGLE ANLKL AKTIV DEAKT INTO (ANLA-ANLKL, ANLA-AKTIV,
+635    ANLA-DEAKT ) FROM ANLA
+636                                              WHERE BUKRS = IST_ANLC-BUKRS
+637                                                       AND ANLN1 = L_ANLN1
+638                                                 and anln2 = L_ANLN2.
+639    *.
+640        IF NOT ANLA-ANLKL IN S_ANLKL.
+641    *      delete ist_anlc index l_tabix.
+642        ELSEIF NOT ANLA-DEAKT IS INITIAL .
+643    *      delete ist_anlc index l_tabix.
+644        ELSEIF NOT P_RAUMN IS INITIAL.
+645          SELECT SINGLE RAUMN INTO (ANLZ-RAUMN) FROM ANLZ
+646                                         WHERE BUKRS = IST_ANLC-BUKRS
+647                                           AND ANLN1 = L_ANLN1
+648                                                 and anln2 = L_ANLN2
+649                                           AND BDATU = L_DATE1.
+650          IF ANLZ-RAUMN <> P_RAUMN.
+651    *              delete ist_anlc index l_tabix.
+652          ELSE.
+653            G_GBV1 = ABS( G_GBV1 ).
+654            G_ADEP1 = ABS( G_ADEP1 ).
+655            G_NBV1 = ABS( G_NBV1 ).
+656            G_GBV2 = ABS( G_GBV2 ).
+657            G_ADEP2 = ABS( G_ADEP2 ).
+658            G_NBV2 = ABS( G_NBV2 ).
+659
+660
+661            MOVE: L_ANLN1 TO IST_FINAL-ANLN1,
+662                  L_ANLN2 TO IST_FINAL-ANLN2,
+663                  ANLA-AKTIV TO IST_FINAL-AKTIV,
+664                  ANLA-ANLKL TO IST_FINAL-ANLKL,
+665                  P_BZDAT TO IST_FINAL-BZDAT,
+666                  G_GBV1 TO IST_FINAL-GBV1,
+667                  G_ADEP1 TO IST_FINAL-ADEP1,
+668                  G_NBV1 TO IST_FINAL-NBV1,
+669                  G_GBV2 TO IST_FINAL-GBV2,
+670                  G_ADEP2 TO IST_FINAL-ADEP2,
+671                  G_NBV2 TO IST_FINAL-NBV2 .
+672            IST_FINAL-NBVDIFF =  ABS( G_NBV1 - G_NBV2 ).
+673            APPEND IST_FINAL.
+674            CLEAR IST_FINAL.
+675          ENDIF.
+676        ELSE.
+677          G_GBV1 = ABS( G_GBV1 ).
+678          G_ADEP1 = ABS( G_ADEP1 ).
+679          G_NBV1 = ABS( G_NBV1 ).
+680          G_GBV2 = ABS( G_GBV2 ).
+681          G_ADEP2 = ABS( G_ADEP2 ).
+682          G_NBV2 = ABS( G_NBV2 ).
+683
+684          MOVE: L_ANLN1 TO IST_FINAL-ANLN1,
+685                L_ANLN2 TO IST_FINAL-ANLN2,
+686                ANLA-AKTIV TO IST_FINAL-AKTIV,
+687                ANLA-ANLKL TO IST_FINAL-ANLKL,
+688                P_BZDAT TO IST_FINAL-BZDAT,
+689                G_GBV1 TO IST_FINAL-GBV1,
+690                G_ADEP1 TO IST_FINAL-ADEP1,
+691                G_NBV1 TO IST_FINAL-NBV1,
+692                G_GBV2 TO IST_FINAL-GBV2,
+693                G_ADEP2 TO IST_FINAL-ADEP2,
+694                G_NBV2 TO IST_FINAL-NBV2 .
+695          IST_FINAL-NBVDIFF =  ABS( G_NBV1 - G_NBV2 ).
+696          APPEND IST_FINAL.
+697          CLEAR IST_FINAL.
+698        ENDIF.
+699    *        else.
+700    *          delete ist_anlc index l_tabix.
+701      ENDIF.
+702      CLEAR:G_GBV1,
+703        G_NBV1,
+704        G_ADEP1,
+705        G_GBV2,
+706        G_ADEP2,
+707        G_NBV2,
+708        L_ANLN1,
+709        L_ANLN2.
+710
+711      CLEAR L_TABIX.
+712      LOOP AT IST_FINAL.
+713        G_TOTALADEP1 = G_TOTALADEP1 + IST_FINAL-NBV1.
+714        G_TOTALADEP2 = G_TOTALADEP2 + IST_FINAL-NBV2.
+715
+716        SHIFT IST_FINAL-ANLN1 LEFT DELETING LEADING '0'.
+717        SHIFT IST_FINAL-ANLKL LEFT DELETING LEADING '0'.
+718        L_TABIX = SY-TABIX.
+719        L_DATE = IST_FINAL-AKTIV.
+720        CALL FUNCTION 'GET_CURRENT_YEAR'
+721             EXPORTING
+722                  BUKRS = P_BUKRS
+723                  DATE  = L_DATE
+724             IMPORTING
+725                  CURRY = L_GJAHR.
+726
+727        IF L_GJAHR = P_GJAHR.
+728          IST_FINAL-TTYPE = '651'.
+729        ELSE.
+730          IST_FINAL-TTYPE = '641'.
+731        ENDIF.
+732        MODIFY IST_FINAL INDEX L_TABIX.
+733      ENDLOOP.
+734
+735    ENDFORM.                    " depriciation_comparison
+736    *&---------------------------------------------------------------------*
+737    *&      Form  unplanned_depriciation
+738    *&---------------------------------------------------------------------*
+739    *       text
+740    *----------------------------------------------------------------------*
+741    *  -->  p1        text
+742    *  <--  p2        text
+743    *----------------------------------------------------------------------*
+744    FORM UNPLANNED_DEPRICIATION.
+745      DATA:L_TABIX LIKE SY-TABIX,
+746           L_GJAHR LIKE BKPF-GJAHR,
+747           L_DATE LIKE SY-DATUM,
+748           L_DATE1 LIKE SY-DATUM VALUE '99991231'.
+749      IF S_ANLKL IS INITIAL.
+750        SELECT * FROM ANLA INTO TABLE IST_ANLA WHERE BUKRS = P_BUKRS
+751                        AND ANLN1 in S_ANLN1
+752                        AND ( ANLKL >= '00070101' AND ANLKL <= '00070103' ).
+753    *                    AND XANLGR = 'X'.
+754      ELSE.
+755        SELECT * FROM ANLA INTO TABLE IST_ANLA WHERE BUKRS = P_BUKRS
+756                        AND ANLN1 in S_ANLN1
+757                        AND  ANLKL IN S_ANLKL.
+758    *                    AND XANLGR = 'X'.
+759      ENDIF.
+760
+761       CHECK sy-subrc = 0.
+762      SORT IST_ANLA BY ANLN1.
+763
+764      SELECT * FROM ANLC INTO TABLE IST_ANLC WHERE BUKRS = P_BUKRS
+765                                               AND GJAHR = P_GJAHR
+766                                               AND AFABE = '70'.
+767
+768      LOOP AT IST_ANLA.
+769        L_TABIX = SY-TABIX.
+770        READ TABLE IST_ANLC WITH KEY ANLN1 = IST_ANLA-ANLN1.
+771
+772        IF SY-SUBRC = 0..
+773          CLEAR:G_NBV1,
+774                G_NBV1,
+775                G_GV,
+776                G_OD,
+777                G_UD,
+778                G_SD.
+779          G_GV = IST_ANLC-KANSW + IST_ANLC-ANSWL .
+780          G_OD = IST_ANLC-KNAFA +  IST_ANLC-NAFAP + IST_ANLC-ZUSNA +
+781                 IST_ANLC-NAFAV + IST_ANLC-NAFAL.
+782          G_UD = IST_ANLC-KAAFA  + IST_ANLC-ZUSAA + IST_ANLC-AAFAV  +
+783                 IST_ANLC-AAFAL  + IST_ANLC-AAFAP.
+784          G_SD = IST_ANLC-KSAFA  + IST_ANLC-SAFAP + IST_ANLC-ZUSSA +
+785                     IST_ANLC-SAFAV + IST_ANLC-SAFAL .
+786          G_NBV1 = G_GV + G_OD + G_UD.
+787          G_NBV2 = G_NBV1 + G_SD.
+788
+789          IF NOT P_RAUMN IS INITIAL.
+790            SELECT SINGLE RAUMN INTO (ANLZ-RAUMN) FROM ANLZ
+791                                               WHERE BUKRS = IST_ANLC-BUKRS
+792                                                 AND ANLN1 = IST_ANLC-ANLN1
+793                                                 AND ANLN2 = IST_ANLC-ANLN2
+794                                                 AND BDATU = L_DATE1.
+795            IF ANLZ-RAUMN <> P_RAUMN.
+796    " Code Remediation changes S4 2025_1_A Conversion **BEGIN OF CHANGE BY SAP_ABAP 06.06.2026  FOR ATC
+797              DELETE IST_ANLC INDEX L_TABIX. "#EC CI_NOORDER
+798    " Code Remediation changes S4 2025_1_A Conversion * *END OF CHANGE BY SAP_ABAP 06.06.2026  FOR ATC
+799            ELSE.
+800
+801              IF G_NBV2 > 0.
+802                G_TOTNBV = G_TOTNBV + G_NBV2.
+803                G_GV = ABS( G_GV ).
+804                G_OD = ABS( G_OD ).
+805                G_UD = ABS( G_UD ).
+806                G_SD = ABS( G_SD ).
+807                G_NBV1 = ABS( G_NBV2 ).
+808                G_NBV2 = ABS( G_NBV1 ).
+809
+810                MOVE: IST_ANLC-ANLN1 TO IST_FINAL-ANLN1,
+811                      IST_ANLC-ANLN2 TO IST_FINAL-ANLN2,
+812                      IST_ANLA-ANLKL TO IST_FINAL-ANLKL,
+813                      IST_ANLA-TXT50 TO IST_FINAL-TXT50,
+814                      P_BZDAT TO IST_FINAL-BZDAT,
+815                      G_NBV1 TO IST_FINAL-NBV1,
+816                      G_SD TO IST_FINAL-IMPAMT,
+817                      G_NBV2 TO IST_FINAL-NBV.
+818
+819                APPEND IST_FINAL.
+820                CLEAR IST_FINAL.
+821
+822              ENDIF.
+823            ENDIF.
+824          ELSE.
+825            IF G_NBV2 > 0.
+826              G_TOTNBV = G_TOTNBV + G_NBV2.
+827
+828              G_GV = ABS( G_GV ).
+829              G_OD = ABS( G_OD ).
+830              G_UD = ABS( G_UD ).
+831              G_SD = ABS( G_SD ).
+832              G_NBV1 = ABS( G_NBV2 ).
+833              G_NBV2 = ABS( G_NBV1 ).
+834
+835              MOVE: IST_ANLC-ANLN1 TO IST_FINAL-ANLN1,
+836                    IST_ANLC-ANLN2 TO IST_FINAL-ANLN2,
+837                    IST_ANLA-ANLKL TO IST_FINAL-ANLKL,
+838                    IST_ANLA-TXT50 TO IST_FINAL-TXT50,
+839                    P_BZDAT TO IST_FINAL-BZDAT,
+840                    G_NBV1 TO IST_FINAL-NBV1,
+841                    G_SD TO IST_FINAL-IMPAMT,
+842                    G_NBV2 TO IST_FINAL-NBV.
+843
+844              APPEND IST_FINAL.
+845              CLEAR IST_FINAL.
+846
+847            ENDIF.
+848          ENDIF.
+849        ELSE.
+850          CLEAR IST_ANLC.
+851        ENDIF.
+852
+853      ENDLOOP.
+854      CLEAR L_TABIX.
+855    *  IF G_RES = 1.
+856    *  LOOP AT IST_FINAL.
+857    *    L_TABIX = SY-TABIX.
+858    *    SHIFT IST_FINAL-ANLN1 LEFT DELETING LEADING '0'.
+859    *    SHIFT IST_FINAL-ANLKL LEFT DELETING LEADING '0'.
+860    *    G_IMPRATIO = P_SAFAP / G_TOTNBV * IST_FINAL-NBV.
+861    *    IST_FINAL-IMPRATIO = G_IMPRATIO.
+862    *    L_DATE = IST_FINAL-AKTIV.
+863    *    CALL FUNCTION 'GET_CURRENT_YEAR'
+864    *         EXPORTING
+865    *              BUKRS = P_BUKRS
+866    *              DATE  = L_DATE
+867    *         IMPORTING
+868    *              CURRY = L_GJAHR.
+869    *
+870    *    IF P_BUKRS <> 'JVA' AND P_BUKRS <> 'OVL'.
+871    *      IF L_GJAHR = P_GJAHR.
+872    *        IST_FINAL-TTYPE = '65D'.
+873    *      ELSE.
+874    *        IST_FINAL-TTYPE = '64D'.
+875    *      ENDIF.
+876    *    ELSEIF P_BUKRS = 'JVA' OR P_BUKRS = 'OVL'.
+877    *      IF L_GJAHR = P_GJAHR.
+878    *        IST_FINAL-TTYPE = '65J'.
+879    *      ELSE.
+880    *        IST_FINAL-TTYPE = '64J'.
+881    *      ENDIF.
+882    *    ENDIF.
+883    *    MODIFY IST_FINAL INDEX L_TABIX.
+884    *    CLEAR G_IMPRATIO.
+885    *  ENDLOOP.
+886    *  ELSE
+887    *  IF G_RES = 2.
+888      LOOP AT IST_FINAL.
+889        L_TABIX = SY-TABIX.
+890        SHIFT IST_FINAL-ANLN1 LEFT DELETING LEADING '0'.
+891        G_IMPRATIO = P_SAFAP / G_TOTNBV * IST_FINAL-NBV.
+892        IST_FINAL-IMPRATIO = G_IMPRATIO.
+893        L_DATE = IST_FINAL-AKTIV.
+894        CALL FUNCTION 'GET_CURRENT_YEAR'
+895             EXPORTING
+896                  BUKRS = P_BUKRS
+897                  DATE  = L_DATE
+898             IMPORTING
+899                  CURRY = L_GJAHR.
+900
+901        IF L_GJAHR = P_GJAHR.
+902          IST_FINAL-TTYPE = 'X32'.
+903        ELSE.
+904          IST_FINAL-TTYPE = 'X21'.
+905        ENDIF.
+906        MODIFY IST_FINAL INDEX L_TABIX.
+907        CLEAR G_IMPRATIO.
+908      ENDLOOP.
+909    *  ENDIF.
+910
+911
+912    ENDFORM.                    " unplanned_depriciation
+913    *&---------------------------------------------------------------------*
+914    *&      Form  WRITEBACK_IMPAIRMENT_PP
+915    *&---------------------------------------------------------------------*
+916    *       text
+917    *----------------------------------------------------------------------*
+918    *  -->  p1        text
+919    *  <--  p2        text
+920    *----------------------------------------------------------------------*
+921    FORM WRITEBACK_IMPAIRMENT_PP.
+922      DATA:L_TABIX LIKE SY-TABIX,
+923           L_ANLN1 LIKE ANLC-ANLN1,
+924           L_ANLN2 LIKE ANLC-ANLN2,
+925           L_GJAHR LIKE BKPF-GJAHR,
+926           L_DATE LIKE SY-DATUM,
+927           L_DATE1 LIKE SY-DATUM VALUE '99991231'.
+928      IF S_ANLKL IS INITIAL.
+929        SELECT * FROM ANLA INTO TABLE IST_ANLA WHERE BUKRS = P_BUKRS
+930                        AND ANLN1 in S_ANLN1
+931                        AND ( ANLKL >= '00070101' AND ANLKL <= '00070103' ).
+932    *                     AND XANLGR = 'X'.
+933      ELSE.
+934        SELECT * FROM ANLA INTO TABLE IST_ANLA WHERE BUKRS = P_BUKRS
+935                        AND ANLN1 in S_ANLN1
+936                        AND  ANLKL IN S_ANLKL.
+937    *                    AND XANLGR = 'X'.
+938      ENDIF.
+939
+940      CHECK sy-subrc = 0.
+941
+942      SORT IST_ANLA BY ANLN1.
+943
+944      SELECT * FROM ANLZ  APPENDING CORRESPONDING FIELDS OF TABLE IST_ANLZ
+945      FOR ALL ENTRIES IN IST_ANLA WHERE BUKRS = IST_ANLA-BUKRS
+946                                    AND ANLN1 = IST_ANLA-ANLN1
+947                                    AND ANLN2 = IST_ANLA-ANLN2
+948    *                                AND RAUMN = P_RAUMN
+949    *                                AND KOSTL IN S_KOSTL
+950    *                                AND GSBER IN S_GSBER
+951                                    AND BDATU = L_DATE1.
+952
+953      SELECT * FROM ANLC APPENDING CORRESPONDING FIELDS OF TABLE IST_ANLC
+954      FOR ALL ENTRIES IN IST_ANLZ   WHERE BUKRS = P_BUKRS
+955                                     AND ANLN1 = IST_ANLZ-ANLN1
+956                                     AND GJAHR = P_GJAHR
+957                                     AND AFABE = '01'.
+958      SORT IST_ANLC BY ANLN1 AFABE.
+959
+960      LOOP AT IST_ANLC .
+961        L_TABIX = SY-TABIX.
+962
+963        ON CHANGE OF IST_ANLC-ANLN1.
+964          IF L_TABIX <> 1.
+965            IF G_SD < 0.
+966              G_SD = ABS( G_SD ).
+967
+968
+969              READ TABLE IST_ANLA WITH KEY ANLN1 = L_ANLN1.
+970              READ TABLE IST_ANLZ WITH KEY ANLN1 = L_ANLN1 bdatu = l_date1.
+971              if sy-subrc = 0.
+972    " Code Remediation changes S4 2025_1_A Conversion **BEGIN OF CHANGE BY SAP_ABAP 06.06.2026  FOR ATC
+973    *            SELECT SINGLE PRCTR INTO (CSKS-PRCTR) FROM CSKS
+974    *                                      WHERE KOSTL = IST_ANLZ-KOSTL.
+975     SELECT PRCTR FROM CSKS   UP TO 1 ROWS INTO (CSKS-PRCTR) WHERE KOSTL =
+976    IST_ANLZ-KOSTL  ORDER BY  KOKRS KOSTL DATBI .   ENDSELECT.
+977    " Code Remediation changes S4 2025_1_A Conversion * *END OF CHANGE BY SAP_ABAP 06.06.2026 FOR ATC
+978              endif.
+979              IST_FINAL-ANLN1 = L_ANLN1.
+980              IST_FINAL-ANLN1 = L_ANLN2.
+981              MOVE: L_ANLN1 TO IST_FINAL-ANLN1,
+982                    L_ANLN2 TO IST_FINAL-ANLN2,
+983              IST_ANLA-ANLKL TO IST_FINAL-ANLKL,
+984              IST_ANLA-TXT50 TO IST_FINAL-TXT50,
+985              P_BZDAT TO IST_FINAL-BZDAT,
+986              G_SD TO IST_FINAL-IMPAMT,
+987              'X71' TO IST_FINAL-TTYPE,
+988              IST_ANLZ-KOSTL TO IST_FINAL-KOSTL,
+989              IST_ANLZ-GSBER TO IST_FINAL-GSBER,
+990              CSKS-PRCTR TO IST_FINAL-PRCTR.
+991              APPEND IST_FINAL.
+992              CLEAR IST_FINAL.
+993              G_TOTIMP = G_TOTIMP + G_SD.
+994            ENDIF.
+995          ENDIF.
+996          CLEAR:G_SD,
+997                L_ANLN1,
+998                L_ANLN2.
+999
+1000       ENDON.
+1001       G_SD = IST_ANLC-KSAFA + IST_ANLC-ZUSSA + IST_ANLC-SAFAV .
+1002       L_ANLN1 = IST_ANLC-ANLN1.
+1003       L_ANLN2 = IST_ANLC-ANLN2.
+1004     ENDLOOP.
+1005     IF G_SD < 0.
+1006       G_SD = ABS( G_SD ).
+1007       READ TABLE IST_ANLA WITH KEY ANLN1 = IST_ANLC-ANLN1.
+1008       READ TABLE IST_ANLZ WITH KEY ANLN1 = IST_ANLC-ANLN1.
+1009
+1010   " Code Remediation changes S4 2025_1_A Conversion **BEGIN OF CHANGE BY SAP_ABAP 06.06.2026  FOR ATC
+1011   *    SELECT SINGLE PRCTR INTO (CSKS-PRCTR) FROM CSKS
+1012   *                              WHERE KOSTL = IST_ANLZ-KOSTL.
+1013    SELECT PRCTR FROM CSKS   UP TO 1 ROWS INTO (CSKS-PRCTR) WHERE KOSTL =
+1014   IST_ANLZ-KOSTL  ORDER BY  KOKRS KOSTL DATBI .   ENDSELECT.
+1015   " Code Remediation changes S4 2025_1_A Conversion * *END OF CHANGE BY SAP_ABAP 06.06.2026 FOR ATC
+1016
+1017       MOVE: IST_ANLC-ANLN1 TO IST_FINAL-ANLN1,
+1018             IST_ANLC-ANLN2 TO IST_FINAL-ANLN2,
+1019       IST_ANLA-ANLKL TO IST_FINAL-ANLKL,
+1020       IST_ANLA-TXT50 TO IST_FINAL-TXT50,
+1021       P_BZDAT TO IST_FINAL-BZDAT,
+1022       G_SD TO IST_FINAL-IMPAMT,
+1023       'X71' TO IST_FINAL-TTYPE,
+1024       IST_ANLZ-KOSTL TO IST_FINAL-KOSTL,
+1025       IST_ANLZ-GSBER TO IST_FINAL-GSBER,
+1026       CSKS-PRCTR TO IST_FINAL-PRCTR.
+1027       APPEND IST_FINAL.
+1028       CLEAR IST_FINAL.
+1029       G_TOTIMP = G_TOTIMP + G_SD.
+1030     ENDIF.
+1031
+1032
+1033
+1034     LOOP AT IST_FINAL.
+1035       L_TABIX = SY-TABIX.
+1036       SHIFT IST_FINAL-ANLN1 LEFT DELETING LEADING '0'.
+1037       SHIFT IST_FINAL-ANLKL LEFT DELETING LEADING '0'.
+1038       IF G_TOTIMP <> 0.
+1039         G_IMPRATIO = P_SAFAP / G_TOTIMP * IST_FINAL-IMPAMT.
+1040       ENDIF.
+1041
+1042       IST_FINAL-IMPRATIO = G_IMPRATIO.
+1043       IST_FINAL-TTYPE = 'X71'.
+1044
+1045   *    L_DATE = IST_FINAL-AKTIV.
+1046   *    CALL FUNCTION 'GET_CURRENT_YEAR'
+1047   *         EXPORTING
+1048   *              BUKRS = P_BUKRS
+1049   *              DATE  = L_DATE
+1050   *         IMPORTING
+1051   *              CURRY = L_GJAHR.
+1052
+1053   *    IF P_BUKRS <> 'JVA' AND P_BUKRS <> 'OVL'.
+1054   *      IF L_GJAHR = P_GJAHR.
+1055   *        IST_FINAL-TTYPE = '65D'.
+1056   *      ELSE.
+1057   *        IST_FINAL-TTYPE = '64D'.
+1058   *      ENDIF.
+1059   *    ELSEIF P_BUKRS = 'JVA' OR P_BUKRS = 'OVL'.
+1060   *      IF L_GJAHR = P_GJAHR.
+1061   *        IST_FINAL-TTYPE = '65J'.
+1062   *      ELSE.
+1063   *        IST_FINAL-TTYPE = '64J'.
+1064   *      ENDIF.
+1065   *    ENDIF.
+1066       MODIFY IST_FINAL INDEX L_TABIX.
+1067       CLEAR G_IMPRATIO.
+1068     ENDLOOP.
+1069
+1070
+1071   ENDFORM.                    " WRITEBACK_IMPAIRMENT_PP
+1072   *&---------------------------------------------------------------------*
+1073   *&      Form  POST_WRITEBACKGROSS_IMPAIRMENT
+1074   *&---------------------------------------------------------------------*
+1075   *       text
+1076   *----------------------------------------------------------------------*
+1077   *  -->  p1        text
+1078   *  <--  p2        text
+1079   *----------------------------------------------------------------------*
+1080   FORM POST_WRITEBACKGROSS_IMPAIRMENT.
+1081     DATA:L_TABIX LIKE SY-TABIX,
+1082          L_GJAHR LIKE BKPF-GJAHR,
+1083          L_DATE LIKE SY-DATUM,
+1084          L_DATE1 LIKE SY-DATUM VALUE '99991231',
+1085          L_TEMP(20),
+1086          L_LEN(2),
+1087          L_FRACTION(2) TYPE P DECIMALS 2 VALUE '0.50'.
+1088     SELECT * FROM ANLC INTO TABLE IST_ANLC WHERE BUKRS = P_BUKRS
+1089                                              AND ANLN1 IN S_ANLN1
+1090                                              AND GJAHR = P_GJAHR
+1091                                       AND ( AFABE = '01' OR AFABE ='20' ).
+1092     LOOP AT IST_ANLC WHERE AFABE = '01'.
+1093       L_TABIX = SY-TABIX.
+1094       CLEAR:G_NBV,
+1095             G_NBV1,
+1096             G_IMPAMT,
+1097             G_ADEP1,
+1098             G_ADEP2,
+1099             G_DEPDIFF,
+1100             G_DIFFIMPDEP.
+1101
+1102
+1103       G_IMPAMT = IST_ANLC-KSAFA + IST_ANLC-ZUSSA + IST_ANLC-SAFAV .
+1104       IF  G_IMPAMT < 0.
+1105         G_NBV1 = IST_ANLC-KANSW + IST_ANLC-ANSWL + IST_ANLC-KNAFA +
+1106                  IST_ANLC-KAAFA + IST_ANLC-ZUSNA + IST_ANLC-ZUSAA +
+1107                  IST_ANLC-NAFAV + IST_ANLC-AAFAV + IST_ANLC-NAFAL +
+1108                  IST_ANLC-AAFAL + IST_ANLC-NAFAP + IST_ANLC-AAFAP.
+1109         G_NBV = G_NBV1 + G_IMPAMT.
+1110         G_NBV1 = ABS( G_NBV1 ).
+1111         G_IMPAMT = ABS( G_IMPAMT ).
+1112
+1113         SELECT SINGLE ANLKL AKTIV DEAKT INTO (ANLA-ANLKL, ANLA-AKTIV,
+1114    ANLA-DEAKT
+1115      ) FROM ANLA
+1116                                              WHERE BUKRS = IST_ANLC-BUKRS
+1117                                                AND ANLN1 = IST_ANLC-ANLN1
+1118                                                AND ANLN2 = IST_ANLC-ANLN2.
+1119         IF NOT ANLA-ANLKL IN S_ANLKL.
+1120           DELETE IST_ANLC INDEX L_TABIX.
+1121         ELSEIF NOT ANLA-DEAKT IS INITIAL .
+1122           DELETE IST_ANLC INDEX L_TABIX.
+1123         ELSEIF NOT P_RAUMN IS INITIAL .
+1124
+1125           SELECT SINGLE RAUMN INTO (ANLZ-RAUMN) FROM ANLZ
+1126                                            WHERE BUKRS = IST_ANLC-BUKRS
+1127                                              AND ANLN1 = IST_ANLC-ANLN1
+1128                                              AND ANLN2 = IST_ANLC-ANLN2
+1129   *                                           AND KOSTL IN S_KOSTL
+1130   *                                           AND GSBER IN S_GSBER
+1131                                              AND BDATU = L_DATE1.
+1132           IF ANLZ-RAUMN <> P_RAUMN.
+1133             DELETE IST_ANLC INDEX L_TABIX.
+1134           ELSE.
+1135
+1136             MOVE: IST_ANLC-ANLN1 TO IST_FINAL-ANLN1,
+1137                   IST_ANLC-ANLN2 TO IST_FINAL-ANLN2,
+1138                   ANLA-AKTIV TO IST_FINAL-AKTIV,
+1139                   ANLA-ANLKL TO IST_FINAL-ANLKL,
+1140                   P_BZDAT TO IST_FINAL-BZDAT,
+1141                   G_NBV1 TO IST_FINAL-NBV1,
+1142                   G_IMPAMT TO IST_FINAL-IMPAMT,
+1143                   G_NBV TO IST_FINAL-NBV,
+1144                  'X70' TO IST_FINAL-TTYPE.
+1145             APPEND IST_FINAL.
+1146             CLEAR IST_FINAL.
+1147             CLEAR IST_FINAL.
+1148           ENDIF.
+1149         ELSE.
+1150           MOVE: IST_ANLC-ANLN1 TO IST_FINAL-ANLN1,
+1151                 IST_ANLC-ANLN2 TO IST_FINAL-ANLN2,
+1152                 ANLA-AKTIV TO IST_FINAL-AKTIV,
+1153                 ANLA-ANLKL TO IST_FINAL-ANLKL,
+1154                 P_BZDAT TO IST_FINAL-BZDAT,
+1155                 G_NBV1 TO IST_FINAL-NBV1,
+1156                 G_IMPAMT TO IST_FINAL-IMPAMT,
+1157           G_NBV TO IST_FINAL-NBV,
+1158           G_NBV1 TO IST_FINAL-IMPWBRATIO,
+1159           'X70' TO IST_FINAL-TTYPE.
+1160           APPEND IST_FINAL.
+1161           CLEAR IST_FINAL.
+1162           CLEAR IST_FINAL.
+1163         ENDIF.
+1164       ELSE.
+1165         DELETE IST_ANLC INDEX L_TABIX.
+1166       ENDIF.
+1167
+1168     ENDLOOP.
+1169
+1170
+1171     LOOP AT IST_FINAL.
+1172       CLEAR :G_ADEP1,
+1173              G_ADEP2,
+1174              G_DEPDIFF,
+1175              G_DIFFIMPDEP.
+1176       L_TABIX = SY-TABIX.
+1177       LOOP AT IST_ANLC WHERE ANLN1 = IST_FINAL-ANLN1.
+1178         IF IST_ANLC-AFABE = '01'.
+1179           G_ADEP1 = IST_ANLC-KNAFA + IST_ANLC-KAAFA + IST_ANLC-ZUSNA +
+1180                     IST_ANLC-ZUSAA + IST_ANLC-NAFAV + IST_ANLC-AAFAV +
+1181                     IST_ANLC-NAFAL + IST_ANLC-AAFAL + IST_ANLC-NAFAP +
+1182                               IST_ANLC-AAFAP.
+1183         ELSEIF IST_ANLC-AFABE = '20'.
+1184           G_ADEP2 = IST_ANLC-KNAFA + IST_ANLC-KAAFA + IST_ANLC-ZUSNA +
+1185                     IST_ANLC-ZUSAA + IST_ANLC-NAFAV + IST_ANLC-AAFAV +
+1186                     IST_ANLC-NAFAL + IST_ANLC-AAFAL + IST_ANLC-NAFAP +
+1187                               IST_ANLC-AAFAP.
+1188         ENDIF.
+1189       ENDLOOP.
+1190       G_ADEP1 = ABS( G_ADEP1 ).
+1191       G_ADEP2 = ABS( G_ADEP2 ).
+1192       IF G_ADEP2 >= G_ADEP1.
+1193         G_DEPDIFF =  G_ADEP2 - G_ADEP1.
+1194       ELSE.
+1195         G_DEPDIFF = 0.
+1196       ENDIF.
+1197
+1198       G_DIFFIMPDEP = IST_FINAL-IMPAMT - G_DEPDIFF.
+1199       G_DIFFIMPDEP = ABS( G_DIFFIMPDEP ).
+1200       IF IST_FINAL-IMPAMT < G_DEPDIFF.
+1201         DELETE IST_FINAL INDEX L_TABIX.
+1202       ELSE.
+1203         MOVE G_DEPDIFF TO IST_FINAL-DEPDIFF.
+1204         MOVE G_DIFFIMPDEP TO IST_FINAL-DIFFIMPDEP.
+1205         MODIFY IST_FINAL INDEX L_TABIX.
+1206         G_TOTNBV = G_TOTNBV + IST_FINAL-NBV.
+1207         G_TOTIMP = G_TOTIMP + IST_FINAL-IMPAMT.
+1208         G_TOTDEPDIFF = G_TOTDEPDIFF + IST_FINAL-DEPDIFF.
+1209         CLEAR IST_FINAL.
+1210       ENDIF.
+1211     ENDLOOP.
+1212     G_TOTDIFFIMPDEP = G_TOTIMP - G_TOTDEPDIFF.
+1213     LOOP AT IST_FINAL.
+1214       L_TABIX = SY-TABIX.
+1215       SHIFT IST_FINAL-ANLN1 LEFT DELETING LEADING '0'.
+1216       SHIFT IST_FINAL-ANLKL LEFT DELETING LEADING '0'.
+1217       G_IMPRATIO = P_SAFAP * IST_FINAL-IMPAMT / G_TOTIMP.
+1218   *    IF G_IMPRATIO > 0.
+1219   *      L_TEMP = G_IMPRATIO.
+1220   *      CONDENSE L_TEMP.
+1221   *      L_LEN = STRLEN( L_TEMP ).
+1222   *      L_LEN = L_LEN - 3.
+1223   *      IF L_TEMP+L_LEN(3) >= L_FRACTION.
+1224   *        L_TEMP = L_TEMP - L_TEMP+L_LEN(3) + 1.
+1225   *        G_IMPRATIO = L_TEMP.
+1226   *      ELSE.
+1227   *        L_TEMP = L_TEMP - L_TEMP+L_LEN(3).
+1228   *        G_IMPRATIO = L_TEMP.
+1229   *      ENDIF.
+1230   *    ENDIF.
+1231       IST_FINAL-IMPWBRATIO = G_IMPRATIO.
+1232       MODIFY IST_FINAL INDEX L_TABIX.
+1233       CLEAR: G_IMPRATIO,
+1234             L_LEN,
+1235             L_TEMP.
+1236
+1237     ENDLOOP.
+1238   ENDFORM.                    " POST_WRITEBACKGROSS_IMPAIRMENT
+*--- End of ZAA_IMPARMENTLOSS - 1238 lines ---

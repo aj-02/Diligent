@@ -192,9 +192,17 @@ In this repo:
 - **ZIP:** `kpmg/zpp_forecast_v2/` (screen-free *by design* — that is why it ships; adding
   `CALL SCREEN` or `cl_gui_custom_container` reverts it to paste-only), `kpmg/abapgit_pilot/`,
   `ovl/ztest_t001/`, `kpmg/zfi_tds_cl34/` (also screen-free by design; its `.prog.xml`
-  `TPOOL` carries the report title only — `TPOOL` items with a `KEY` and a
-  `package.devc.xml` both drew an abapGit "xml incorrect" error, so selection texts and
-  text symbols are maintained by hand after import).
+  `TPOOL` carries the report title only, selection texts by hand).
+- **Hand-written abapGit XML: element order is load-bearing.** abapGit deserialises with
+  `CALL TRANSFORMATION id`, which walks the target structure component by component and
+  raises `CX_XSLT_FORMAT_ERROR` — a short dump in `ZABAPGIT_STANDALONE` reported as
+  "invalid XML format" — on the first element that arrives out of sequence. For a report's
+  `PROGDIR` the order is `NAME, VARCL, SUBC, FIXPT, UCCHECK`
+  (`varcl` is component 5, `subc` 11, `fixpt` 23, `uccheck` 30 of
+  `zif_abapgit_sap_report=>ty_progdir`); for `TPOOL` items it is `ID, KEY, ENTRY, LENGTH`.
+  Check any hand-written XML against the real structure order before zipping, and do not
+  copy a shape from another object on the assumption that it imported — `ovl/ztest_t001`
+  was advertised as the pilot and carried this exact defect unnoticed.
 - **Hybrid:** `kpmg/zmm_po_budget/` — DDIC + message class by ZIP; BAdI insert, SE54 event,
   screen module, TMG and SE93 by hand.
 - **Paste-only:** `kpmg/zmb5b/` (Z copy of RM07MLBD), `kpmg/zmmims/` (module-pool includes),

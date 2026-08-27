@@ -167,7 +167,7 @@ One folder per object. Every folder has:
 
 **Only ZIP-shippable objects have `src/` and `.abapgit.xml`** — today that is
 `kpmg/zpp_forecast_v2/`, `kpmg/zmm_po_budget/`, `kpmg/abapgit_pilot/`,
-`ovl/ztest_t001/`. The rest hold loose `.abap` files and are paste-only. Never assume
+`ovl/ztest_t001/`, `kpmg/zfi_tds_cl34/`. The rest hold loose `.abap` files and are paste-only. Never assume
 `<object>/src/` exists; check.
 
 `incoming/` is the drop folder for fresh SE80 downloads awaiting triage.
@@ -191,7 +191,9 @@ In this repo:
 
 - **ZIP:** `kpmg/zpp_forecast_v2/` (screen-free *by design* — that is why it ships; adding
   `CALL SCREEN` or `cl_gui_custom_container` reverts it to paste-only), `kpmg/abapgit_pilot/`,
-  `ovl/ztest_t001/`.
+  `ovl/ztest_t001/`, `kpmg/zfi_tds_cl34/` (also screen-free by design; its `.prog.xml`
+  `TPOOL` carries the title, selection texts and text symbols, so an import needs no
+  manual text maintenance).
 - **Hybrid:** `kpmg/zmm_po_budget/` — DDIC + message class by ZIP; BAdI insert, SE54 event,
   screen module, TMG and SE93 by hand.
 - **Paste-only:** `kpmg/zmb5b/` (Z copy of RM07MLBD), `kpmg/zmmims/` (module-pool includes),

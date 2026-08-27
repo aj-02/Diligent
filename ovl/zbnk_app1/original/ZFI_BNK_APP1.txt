@@ -1,0 +1,2236 @@
+----------------------------------------------------------------------------------------------------
+Main program     ZFI_BNK_APP1                              Level 0    Page 1
+Object           ZFI_BNK_APP1                              Lines 20
+System           OCQ / 500   User SAP_ABAP   27.08.2026 09:40:30
+----------------------------------------------------------------------------------------------------
+1
+2      *&---------------------------------------------------------------------*
+3      *& Module Pool       ZFI_BNK_APP1
+4      *&
+5      *&---------------------------------------------------------------------*
+6      *&
+7      *&
+8      *&---------------------------------------------------------------------*
+9
+10
+11
+12
+13      INCLUDE zfi_bnk_app1_top                        .    " global Data
+14
+15      INCLUDE zbcm_class.
+16      INCLUDE zbcm_class_declare.
+17
+18      INCLUDE zfi_bnk_app1_o01                        .  " PBO-Modules
+19      INCLUDE zfi_bnk_app1_i01                        .  " PAI-Modules
+20      INCLUDE zfi_bnk_app1_f01                        .  " FORM-Routines
+*--- End of ZFI_BNK_APP1 - 20 lines ---
+
+----------------------------------------------------------------------------------------------------
+Include          ZFI_BNK_APP1_TOP                          Level 1    Page 2
+Object           ZFI_BNK_APP1                              Lines 108
+System           OCQ / 500   User SAP_ABAP   27.08.2026 09:40:30
+----------------------------------------------------------------------------------------------------
+1      *&---------------------------------------------------------------------*
+2      *& Include ZFI_BNK_APP1_TOP                                  Module Pool      ZFI_BNK_APP1
+3      *&
+4      *&---------------------------------------------------------------------*
+5
+6      PROGRAM ZFI_BNK_APP1.
+7
+8      TYPES : BEGIN OF ty_final,
+9                sel              type c,
+10               guid             TYPE c LENGTH 45,        "Holds concatenated REGUT primary key (ZBUKR+BANKS+LAUFD+LAUFI+XVORL+DTKEY+LFDNR = 41 chars) - unique key in place of BATCH_NO
+11               batch_no         TYPE bnk_com_btch_no,
+12               rule_id          TYPE bnk_com_btch_rule_id,
+13               item_cnt         TYPE bnk_com_btch_ctr,
+14               laufd            TYPE bnk_com_btch_mrge_dat,
+15               laufi            TYPE bnk_com_btch_mrge_id,
+16               xvorl            TYPE xvorl,
+17               laufd_f          TYPE bnk_com_btch_file_dat,
+18               laufi_f          TYPE bnk_com_btch_file_id,
+19               Error_flag       type c,
+20               batch_sum        TYPE bnk_com_btch_amount,
+21               batch_curr       TYPE bnk_com_btch_curr,
+22               max_pay_amt      TYPE bnk_com_max_paymnt_amount,
+23               status           TYPE epic_regut_status,   "REGUT-STATUS(CHAR3) - avoids MOVE-CORRESPONDING type clash
+24               crusr            TYPE bnk_com_create_user,
+25               crtime           TYPE bnk_com_create_time,
+26               crdate           TYPE bnk_com_create_date,
+27               chusr            TYPE bnk_com_change_user,
+28               chtime           TYPE bnk_com_change_time,
+29               chdate           TYPE bnk_com_change_date,
+30               cur_processor    TYPE bnk_com_cur_processor,
+31               archive_status   TYPE bnk_com_archive_status,
+32               zbukr            TYPE dzbukr,
+33               hbkid            TYPE hbkid,
+34               tot_btch_amt     TYPE bnk_com_btch_amt_in_rule_curr,
+35               maxpayamt_rulecu TYPE bnk_com_max_pymntamt_in_rulcur,
+36               grp_field1_value TYPE bnk_com_grp_fld_val1,
+37               grp_field2_value TYPE bnk_com_grp_fld_val2,
+38               raw_data         TYPE XSTRING,
+39               file_data_sent   TYPE XSTRING,
+40
+41             end of ty_final.
+42
+43     DATA : gt_paym          TYPE STANDARD TABLE OF zfi_paym_file,
+44            gt_batch_header  TYPE STANDARD TABLE OF regut,   "Replaced BNK_BATCH_HEADER with REGUT
+45            gt_batch_sign    TYPE STANDARD TABLE OF zfi_batch_sign ,
+46            gt_paym2         TYPE STANDARD TABLE OF zfi_paym_file,
+47            gt_batch_header2 TYPE STANDARD TABLE OF regut,   "Replaced BNK_BATCH_HEADER with REGUT
+48            gt_batch_sign2   TYPE STANDARD TABLE OF zfi_batch_sign ,
+49            gt_paym3         TYPE STANDARD TABLE OF zfi_paym_file,
+50            gt_batch_header3 TYPE STANDARD TABLE OF regut,   "Replaced BNK_BATCH_HEADER with REGUT
+51            gt_batch_sign3   TYPE STANDARD TABLE OF zfi_batch_sign ,
+52            gt_final         TYPE STANDARD TABLE OF ty_final,
+53            gt_final2        TYPE STANDARD TABLE OF ty_final,
+54            gt_final3        type STANDARD TABLE OF ty_final,
+55            gt_reguhm        TYPE STANDARD TABLE OF reguhm.    "for BATCHNO exclusion check
+56
+57     DATA: gs_paym          LIKE LINE OF gt_paym,
+58           gs_batch_header  LIKE LINE OF gt_batch_header,
+59           gs_batch_sign    LIKE LINE OF gt_batch_sign,
+60           gs_final         LIKE LINE OF gt_final,
+61           gs_paym2         LIKE LINE OF gt_paym2,
+62           gs_batch_header2 LIKE LINE OF gt_batch_header2,
+63           gs_batch_sign2   LIKE LINE OF gt_batch_sign2,
+64           gs_final2        LIKE LINE OF gt_final2,
+65           gs_paym3         LIKE LINE OF gt_paym3,
+66           gs_batch_header3 LIKE LINE OF gt_batch_header3,
+67           gs_batch_sign3   LIKE LINE OF gt_batch_sign3,
+68           gs_final3        type ty_final.
+69
+70
+71     *&SPWIZARD: FUNCTION CODES FOR TABSTRIP 'TABSTRIP'
+72     CONSTANTS: BEGIN OF C_TABSTRIP,
+73                  TAB1 LIKE SY-UCOMM VALUE 'TABSTRIP_FC1',
+74                  TAB2 LIKE SY-UCOMM VALUE 'TABSTRIP_FC2',
+75                  TAB3 LIKE SY-UCOMM VALUE 'TABSTRIP_FC3',
+76                END OF C_TABSTRIP.
+77     *&SPWIZARD: DATA FOR TABSTRIP 'TABSTRIP'
+78     CONTROLS:  TABSTRIP TYPE TABSTRIP.
+79     DATA:      BEGIN OF G_TABSTRIP,
+80                  SUBSCREEN   LIKE SY-DYNNR,
+81                  PROG        LIKE SY-REPID VALUE 'ZFI_BNK_APP1',
+82                  PRESSED_TAB LIKE SY-UCOMM VALUE C_TABSTRIP-TAB1,
+83                END OF G_TABSTRIP.
+84     DATA:      OK_CODE LIKE SY-UCOMM.
+85
+86     DATA: c_ccont1   TYPE REF TO cl_gui_custom_container,  "Custom cont
+87           c_alvgd1   TYPE REF TO cl_gui_alv_grid,          "ALV grid
+88           it_fcat1   TYPE lvc_t_fcat,                      " Fieldcat
+89           it_layout1 TYPE lvc_s_layo.                      "Layout
+90
+91     DATA: c_ccont2   TYPE REF TO cl_gui_custom_container,  "Custom cont
+92           c_alvgd2   TYPE REF TO cl_gui_alv_grid,          "ALV grid
+93           it_fcat2   TYPE lvc_t_fcat,                      " Fieldcat
+94           it_layout2 TYPE lvc_s_layo.
+95
+96     DATA: c_ccont3   TYPE REF TO cl_gui_custom_container,  "Custom cont
+97           c_alvgd3   TYPE REF TO cl_gui_alv_grid,          "ALV grid
+98           it_fcat3   TYPE lvc_t_fcat,                      " Fieldcat
+99           it_layout3 TYPE lvc_s_layo.
+100
+101    data: gt_selected_rows1 type lvc_t_row,"Selected Rows
+102          gs_selected_rows1 type lvc_s_row.
+103
+104    data: gt_selected_rows2 type lvc_t_row,"Selected Rows
+105          gs_selected_rows2 type lvc_s_row.
+106
+107    data: gt_selected_rows3 type lvc_t_row,"Selected Rows
+108          gs_selected_rows3 type lvc_s_row.
+*--- End of ZFI_BNK_APP1_TOP - 108 lines ---
+
+----------------------------------------------------------------------------------------------------
+Include          ZBCM_CLASS                                Level 1    Page 3
+Object           ZFI_BNK_APP1                              Lines 60
+System           OCQ / 500   User SAP_ABAP   27.08.2026 09:40:30
+----------------------------------------------------------------------------------------------------
+1      *&---------------------------------------------------------------------*
+2      *&  Include           ZBCM_CLASS
+3      *&---------------------------------------------------------------------*
+4      CLASS lcl_file_verifier DEFINITION CREATE PRIVATE FINAL.
+5
+6        PUBLIC SECTION.
+7
+8          CLASS-METHODS:
+9            get_instance
+10             RETURNING
+11             value(ro_obj) TYPE REF TO lcl_file_verifier.
+12
+13     *    METHODS:
+14     *      get_file_info " get the file data, type and other information
+15     *        IMPORTING
+16     *          value(iv_filename) TYPE string
+17     *        EXPORTING
+18     *          value(ev_signature) TYPE xstring.
+19
+20         METHODS:
+21           verify_signature
+22             IMPORTING
+23               value(iv_signature)       TYPE xstring
+24             EXPORTING
+25               value(ev_owner)           TYPE string
+26               value(ev_email)           TYPE string
+27               value(ev_serial)          TYPE string
+28               value(ev_thumbprint)      TYPE string
+29               value(ev_validfrom)       TYPE string
+30               value(ev_validto)         TYPE string
+31               value(ev_issuer)          TYPE string
+32               value(ev_bindocument_out) TYPE xstring,
+33
+34               get_filename
+35                 EXPORTING
+36                   value(ev_filename_save) TYPE string
+37                   value(ev_file_type)     TYPE char10.
+38
+39     *  PRIVATE SECTION.
+40
+41         CLASS-DATA: go_object TYPE REF TO lcl_file_verifier.
+42
+43         METHODS:
+44           get_signer_info
+45             IMPORTING
+46               value(is_signerlist) TYPE ssfsigner
+47               EXPORTING
+48                 value(ev_owner)       TYPE string
+49                 value(ev_email)       TYPE string
+50                 value(ev_serial)      TYPE string
+51                 value(ev_thumbprint)  TYPE string
+52                 value(ev_validfrom)   TYPE string
+53                 value(ev_validto)     TYPE string
+54                 value(ev_issuer)      TYPE string
+55                 value(e_int) type i.
+56
+57         DATA: mv_filename_save  TYPE string,
+58               mv_file_type      TYPE char10.
+59
+60     ENDCLASS.                    "lcl_file_verifier DEFINITION
+*--- End of ZBCM_CLASS - 60 lines ---
+
+----------------------------------------------------------------------------------------------------
+Include          ZBCM_CLASS_DECLARE                        Level 1    Page 4
+Object           ZFI_BNK_APP1                              Lines 301
+System           OCQ / 500   User SAP_ABAP   27.08.2026 09:40:30
+----------------------------------------------------------------------------------------------------
+1      *&---------------------------------------------------------------------*
+2      *&  Include           ZBCM_CLASS_DECLARE
+3      *&---------------------------------------------------------------------*
+4
+5
+6      CLASS lcl_file_verifier IMPLEMENTATION.
+7
+8        METHOD get_instance.
+9          IF lcl_file_verifier=>go_object IS INITIAL.
+10           CREATE OBJECT lcl_file_verifier=>go_object.
+11         ENDIF.
+12
+13         ro_obj = lcl_file_verifier=>go_object.
+14       ENDMETHOD.                    "get_instance
+15
+16     *  METHOD get_file_info.
+17     *
+18     *    TYPES : BEGIN OF ty_file,
+19     *              content TYPE sdok_sdatx,
+20     *            END OF ty_file.
+21     *
+22     *    DATA: lv_filename_save  TYPE          string,
+23     *          lv_filename       TYPE          string,
+24     *          lv_temp           TYPE          string,
+25     *          lv_temp1          TYPE          string,
+26     *          lv_extn           TYPE          string,
+27     *          lv_invalid_file   TYPE          xfeld,
+28     *          lv_length         TYPE          i,
+29     *          lt_data_tab       TYPE TABLE OF ty_file,
+30     *          lv_signature      TYPE          xstring.
+31     *
+32     *    CLEAR lv_invalid_file.
+33     *
+34     *    lv_filename = iv_filename.
+35     *    TRANSLATE lv_filename TO LOWER CASE.
+36     *    MOVE lv_filename TO lv_temp1.
+37     *
+38     *    DO.
+39     *      SPLIT lv_temp1 AT '.'
+40     *        INTO lv_temp
+41     *             lv_temp1.
+42     *
+43     *      IF lv_temp1 IS INITIAL.
+44     *        "invalid file.
+45     *        lv_invalid_file = abap_true.
+46     *        EXIT.
+47     *      ELSEIF lv_temp1 EQ 'sig'.
+48     *        lv_extn = lv_temp.
+49     *        EXIT.
+50     *      ENDIF.
+51     *    ENDDO.
+52     *
+53     *    IF lv_invalid_file EQ abap_true.
+54     **       Message: Invalid file type, only signed files can be verified
+55     *      MESSAGE text-017 TYPE 'E'.
+56     *      RETURN.
+57     *    ELSE.
+58     *      " get the original filename inorder to save the data later.
+59     *      SPLIT lv_filename AT '.sig'
+60     *        INTO lv_filename_save lv_temp.
+61     *
+62     *      SPLIT lv_filename_save AT '.' INTO lv_file_down lv_dummy .
+63     *      CONCATENATE lv_file_down '_verified.' lv_extn INTO lv_file_down.
+64     **      MOVE lv_filename_save TO me->mv_filename_save.
+65     *      MOVE lv_file_down TO me->mv_filename_save.
+66     *
+67     *      TRANSLATE lv_extn TO UPPER CASE.
+68     *
+69     *      CASE lv_extn.
+70     *        WHEN 'PDF'.
+71     *          me->mv_file_type = 'BIN'.
+72     *        WHEN 'TXT'.
+73     *          me->mv_file_type = 'BIN'."'ASC'.
+74     *        WHEN OTHERS.
+75     *          me->mv_file_type = 'BIN'.
+76     *      ENDCASE.
+77     *
+78     ***    Incase of signed file the GUI_UPLOAD file type would always be BIN.
+79     *      CALL FUNCTION 'GUI_UPLOAD'
+80     *        EXPORTING
+81     *          filename                = lv_filename
+82     *          filetype                = me->mv_file_type "'BIN'
+83     *        IMPORTING
+84     *          filelength              = lv_length
+85     *        TABLES
+86     *          data_tab                = lt_data_tab
+87     *        EXCEPTIONS
+88     *          file_open_error         = 1
+89     *          file_read_error         = 2
+90     *          no_batch                = 3
+91     *          gui_refuse_filetransfer = 4
+92     *          invalid_type            = 5
+93     *          no_authority            = 6
+94     *          unknown_error           = 7
+95     *          bad_data_format         = 8
+96     *          header_not_allowed      = 9
+97     *          separator_not_allowed   = 10
+98     *          header_too_long         = 11
+99     *          unknown_dp_error        = 12
+100    *          access_denied           = 13
+101    *          dp_out_of_memory        = 14
+102    *          disk_full               = 15
+103    *          dp_timeout              = 16
+104    *          OTHERS                  = 17.
+105    *
+106    *      IF sy-subrc <> 0.
+107    **       Message: Error while uploading the file, please contact system administrator
+108    *        MESSAGE text-014 TYPE 'E'.
+109    *      ELSE.
+110    *        " convert data into xstring.
+111    *        IF me->mv_file_type EQ 'BIN'.
+112    *          CALL FUNCTION 'SCMS_BINARY_TO_XSTRING'
+113    *            EXPORTING
+114    *              input_length = lv_length
+115    *            IMPORTING
+116    *              buffer       = lv_signature
+117    *            TABLES
+118    *              binary_tab   = lt_data_tab
+119    *            EXCEPTIONS
+120    *              failed       = 1
+121    *              OTHERS       = 2.
+122    *        ELSE.
+123    *          CALL FUNCTION 'SCMS_TEXT_TO_XSTRING'
+124    *            IMPORTING
+125    *              buffer   = lv_signature
+126    *            TABLES
+127    *              text_tab = lt_data_tab
+128    *            EXCEPTIONS
+129    *              failed   = 1
+130    *              OTHERS   = 2.
+131    *        ENDIF.
+132    *
+133    *
+134    *        IF sy-subrc <> 0.
+135    **         Message: Data conversion error, please contact system administrator
+136    *          MESSAGE text-015 TYPE 'E'.
+137    *        ELSE.
+138    *          ev_signature = lv_signature.
+139    *        ENDIF.
+140    *
+141    *      ENDIF.
+142    *
+143    *    ENDIF.
+144    *
+145    *  ENDMETHOD.                    "get_file_info
+146
+147      METHOD verify_signature.
+148
+149        DATA: lv_crc                TYPE          i,
+150              lv_bindocument_out    TYPE          xstring,
+151              lt_signerlist         TYPE          ssfsignertab,
+152              ls_signerlist         TYPE          ssfsigner.
+153
+154        CALL FUNCTION 'SSFS_SERVER_VERIFY'
+155          EXPORTING
+156            signature        = iv_signature
+157          IMPORTING
+158            crc              = lv_crc
+159            signerlist       = lt_signerlist
+160            bindocument_out  = lv_bindocument_out
+161          EXCEPTIONS
+162            kernel_error     = 1
+163            parameter_error  = 2
+164            conversion_error = 3
+165            OTHERS           = 4.
+166
+167        IF sy-subrc <> 0.
+168    *     Message: Verification failed.
+169          MESSAGE text-016 TYPE 'E'.
+170        ELSE.
+171          IF lv_crc <> 0 AND lv_crc <> 5.
+172    *       Message: Verification failed.
+173            MESSAGE text-016 TYPE 'E'.
+174          ELSE.
+175    *       Message: Verification Successful.
+176            MESSAGE text-004 TYPE 'S'.
+177            " get signer info.
+178            READ TABLE lt_signerlist INTO ls_signerlist INDEX 1.
+179
+180            CALL METHOD get_signer_info
+181              EXPORTING
+182                is_signerlist = ls_signerlist
+183              IMPORTING
+184                ev_owner      = ev_owner
+185                ev_email      = ev_email
+186                ev_serial     = ev_serial
+187                ev_thumbprint = ev_thumbprint
+188                ev_validfrom  = ev_validfrom
+189                ev_validto    = ev_validto
+190                ev_issuer     = ev_issuer.
+191
+192            ev_bindocument_out = lv_bindocument_out.
+193
+194          ENDIF.
+195        ENDIF.
+196
+197      ENDMETHOD.                    "verify_signature
+198
+199      METHOD get_signer_info.
+200
+201        DATA: lo_pdo_dig_sig  TYPE REF TO cl_abap_x509_certificate,
+202              lv_text         TYPE c LENGTH 200,
+203              ls_email        TYPE sx_address.
+204
+205        lo_pdo_dig_sig = cl_abap_x509_certificate=>get_instance( is_signerlist-cert ).
+206
+207        TRY.
+208            CALL METHOD lo_pdo_dig_sig->get_subject_issuer
+209              IMPORTING
+210                ef_subject = ev_owner
+211                ef_issuer  = ev_issuer.
+212          CATCH cx_abap_x509_certificate .
+213        ENDTRY.
+214
+215        TRY.
+216            CALL METHOD lo_pdo_dig_sig->get_serial_hex
+217              RECEIVING
+218                rf_value = ev_serial.
+219          CATCH cx_abap_x509_certificate .
+220        ENDTRY.
+221
+222        TRY.
+223            CALL METHOD lo_pdo_dig_sig->get_pk_finger_print
+224              RECEIVING
+225                rf_value = ev_thumbprint.
+226          CATCH cx_abap_x509_certificate .
+227        ENDTRY.
+228
+229        TRY.
+230            CALL METHOD lo_pdo_dig_sig->get_valid_from
+231              IMPORTING
+232                ef_gmt_string = ev_validfrom.
+233          CATCH cx_abap_x509_certificate .
+234        ENDTRY.
+235
+236        TRY.
+237            CALL METHOD lo_pdo_dig_sig->get_valid_to
+238              IMPORTING
+239                ef_gmt_string = ev_validto.
+240          CATCH cx_abap_x509_certificate .
+241        ENDTRY.
+242
+243
+244    try.
+245
+246    *  TRY.
+247      CALL METHOD lo_pdo_dig_sig->get_version
+248        RECEIVING
+249          rf_int = e_int
+250          .
+251    *   CATCH cx_abap_x509_certificate .
+252      ENDTRY.
+253
+254
+255    *CALL METHOD lo_pdo_dig_sig->GET_VERSION
+256    *returning
+257    *  rf_int = e_int.
+258    *endtry.
+259
+260        TRY.
+261            CALL METHOD lo_pdo_dig_sig->get_subject_alt_string
+262              RECEIVING
+263                rf_string = ev_email.
+264
+265            IF ev_email IS NOT INITIAL.
+266              CLEAR lv_text.
+267              SPLIT ev_email AT '=' INTO ev_email lv_text.
+268
+269              ls_email-type = 'INT'.
+270              ls_email-address = lv_text.
+271
+272              CALL FUNCTION 'SX_INTERNET_ADDRESS_TO_NORMAL'
+273                EXPORTING
+274                  address_unstruct    = ls_email
+275                EXCEPTIONS
+276                  error_address_type  = 1
+277                  error_address       = 2
+278                  error_group_address = 3
+279                  OTHERS              = 4.
+280              IF sy-subrc = 0.
+281                ev_email = lv_text.
+282              ELSE.
+283                CLEAR ev_email.
+284              ENDIF.
+285            ENDIF.
+286
+287          CATCH cx_abap_x509_certificate .
+288        ENDTRY.
+289
+290
+291      ENDMETHOD.                    "get_signer_info
+292
+293
+294      METHOD get_filename.
+295
+296        ev_filename_save = mv_filename_save.
+297        ev_file_type = mv_file_type.
+298
+299      ENDMETHOD.                    "get_filename
+300
+301    ENDCLASS.                    "lcl_utility IMPLEMENTATION
+*--- End of ZBCM_CLASS_DECLARE - 301 lines ---
+
+----------------------------------------------------------------------------------------------------
+Include          ZFI_BNK_APP1_O01                          Level 1    Page 5
+Object           ZFI_BNK_APP1                              Lines 161
+System           OCQ / 500   User SAP_ABAP   27.08.2026 09:40:30
+----------------------------------------------------------------------------------------------------
+1      *&---------------------------------------------------------------------*
+2      *&  Include           ZFI_BNK_APP1_O01
+3      *&---------------------------------------------------------------------*
+4
+5      *&SPWIZARD: OUTPUT MODULE FOR TS 'TABSTRIP'. DO NOT CHANGE THIS LINE!
+6      *&SPWIZARD: SETS ACTIVE TAB
+7      MODULE tabstrip_active_tab_set OUTPUT.
+8      *  tabstrip-activetab = g_tabstrip-pressed_tab.
+9      *  CASE g_tabstrip-pressed_tab.
+10     *    WHEN c_tabstrip-tab1.
+11     *      g_tabstrip-subscreen = '0101'.
+12     *    WHEN c_tabstrip-tab2.
+13     *      g_tabstrip-subscreen = '0102'.
+14     *    WHEN c_tabstrip-tab3.
+15     *      g_tabstrip-subscreen = '0103'.
+16     *    WHEN OTHERS.
+17     **&SPWIZARD:      DO NOTHING
+18     *  ENDCASE.
+19     ENDMODULE.                    "TABSTRIP_ACTIVE_TAB_SET OUTPUT
+20     *&---------------------------------------------------------------------*
+21     *&      Module  OUTPUT_TAB1  OUTPUT
+22     *&---------------------------------------------------------------------*
+23     *       text
+24     *----------------------------------------------------------------------*
+25     MODULE output_tab1 OUTPUT.
+26       PERFORM f_prepare_op_tab1.
+27     ***
+28       CREATE OBJECT c_ccont1
+29         EXPORTING
+30           container_name = 'CONTROL1'.
+31
+32       CREATE OBJECT c_alvgd1
+33         EXPORTING
+34           i_parent = c_ccont1.
+35
+36     **Set field for ALV
+37       PERFORM f_alv_build_fieldcat1.
+38
+39     **Set ALV attributes FOR LAYOUT
+40       PERFORM f_alv_report_layout1.
+41
+42       CHECK NOT c_alvgd1 IS INITIAL.
+43
+44     **Call ALV GRID
+45       CALL METHOD c_alvgd1->set_table_for_first_display
+46         EXPORTING
+47           is_layout                     = it_layout1
+48         CHANGING
+49           it_outtab                     = gt_final
+50           it_fieldcatalog               = it_fcat1
+51         EXCEPTIONS
+52           invalid_parameter_combination = 1
+53           program_error                 = 2
+54           too_many_lines                = 3
+55           OTHERS                        = 4.
+56       IF sy-subrc <> 0.
+57         MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+58                    WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+59       ENDIF.
+60
+61     ENDMODULE.                 " OUTPUT_TAB1  OUTPUT
+62     *&---------------------------------------------------------------------*
+63     *&      Module  OUTPUT_TAB2  OUTPUT
+64     *&---------------------------------------------------------------------*
+65     *       text
+66     *----------------------------------------------------------------------*
+67     MODULE output_tab2 OUTPUT.
+68       PERFORM f_prepare_op_tab2.
+69     ***
+70       CREATE OBJECT c_ccont2
+71         EXPORTING
+72           container_name = 'CONTROL2'.
+73
+74       CREATE OBJECT c_alvgd2
+75         EXPORTING
+76           i_parent = c_ccont2.
+77
+78     *  **Set field for ALV
+79       PERFORM f_alv_build_fieldcat2.
+80
+81     **Set ALV attributes FOR LAYOUT
+82       PERFORM f_alv_report_layout2.
+83
+84       CHECK NOT c_alvgd2 IS INITIAL.
+85
+86     **Call ALV GRID
+87       CALL METHOD c_alvgd2->set_table_for_first_display
+88         EXPORTING
+89           is_layout                     = it_layout2
+90         CHANGING
+91           it_outtab                     = gt_final2
+92           it_fieldcatalog               = it_fcat2
+93         EXCEPTIONS
+94           invalid_parameter_combination = 1
+95           program_error                 = 2
+96           too_many_lines                = 3
+97           OTHERS                        = 4.
+98       IF sy-subrc <> 0.
+99         MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+100                   WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+101      ENDIF.
+102
+103    ENDMODULE.                 " OUTPUT_TAB2  OUTPUT
+104    *&---------------------------------------------------------------------*
+105    *&      Module  STATUS_0100  OUTPUT
+106    *&---------------------------------------------------------------------*
+107    *       text
+108    *----------------------------------------------------------------------*
+109    MODULE status_0100 OUTPUT.
+110
+111      SET PF-STATUS 'ZPF_FI_BNK_APP1'.
+112      SET TITLEBAR 'ZTITLE_FI_BNK_APP1'.
+113
+114    ENDMODULE.                 " STATUS_0100  OUTPUT
+115
+116
+117    *&---------------------------------------------------------------------*
+118    *&      Module  OUTPUT_TAB3  OUTPUT
+119    *&---------------------------------------------------------------------*
+120    *       text
+121    *----------------------------------------------------------------------*
+122    MODULE output_tab3 OUTPUT.
+123      PERFORM f_prepare_op_tab3.
+124    ***
+125      IF  c_ccont3 IS INITIAL.
+126
+127        CREATE OBJECT c_ccont3
+128          EXPORTING
+129            container_name = 'CONTROL3'.
+130      ENDIF.
+131
+132      IF c_alvgd3 IS INITIAL.
+133        CREATE OBJECT c_alvgd3
+134          EXPORTING
+135            i_parent = c_ccont3.
+136      ENDIF.
+137    *  **Set field for ALV
+138      PERFORM f_alv_build_fieldcat3.
+139
+140    **Set ALV attributes FOR LAYOUT
+141      PERFORM f_alv_report_layout3.
+142
+143      CHECK NOT c_alvgd3 IS INITIAL.
+144
+145    **Call ALV GRID
+146      CALL METHOD c_alvgd3->set_table_for_first_display
+147        EXPORTING
+148          is_layout                     = it_layout3
+149        CHANGING
+150          it_outtab                     = gt_final3
+151          it_fieldcatalog               = it_fcat3
+152        EXCEPTIONS
+153          invalid_parameter_combination = 1
+154          program_error                 = 2
+155          too_many_lines                = 3
+156          OTHERS                        = 4.
+157      IF sy-subrc EQ 0.
+158    *    CALL METHOD c_alvgd3->refresh_table_display.
+159
+160      ENDIF.
+161    ENDMODULE.                 " OUTPUT_TAB3  OUTPUT
+*--- End of ZFI_BNK_APP1_O01 - 161 lines ---
+
+----------------------------------------------------------------------------------------------------
+Include          ZFI_BNK_APP1_I01                          Level 1    Page 6
+Object           ZFI_BNK_APP1                              Lines 465
+System           OCQ / 500   User SAP_ABAP   27.08.2026 09:40:30
+----------------------------------------------------------------------------------------------------
+1      *&---------------------------------------------------------------------*
+2      *& Include          ZFI_BNK_APP1_I01
+3      *&---------------------------------------------------------------------*
+4
+5      *&SPWIZARD: INPUT MODULE FOR TS 'TABSTRIP'. DO NOT CHANGE THIS LINE!
+6      *&SPWIZARD: GETS ACTIVE TAB
+7      MODULE tabstrip_active_tab_get INPUT.
+8      *  ok_code = sy-ucomm.
+9      *  CASE ok_code.
+10     *    WHEN c_tabstrip-tab1.
+11     *      g_tabstrip-pressed_tab = c_tabstrip-tab1.
+12     *    WHEN c_tabstrip-tab2.
+13     *      g_tabstrip-pressed_tab = c_tabstrip-tab2.
+14     *    WHEN c_tabstrip-tab3.
+15     *      g_tabstrip-pressed_tab = c_tabstrip-tab3.
+16     *    WHEN OTHERS.
+17     **&SPWIZARD:      DO NOTHING
+18     *  ENDCASE.
+19     ENDMODULE.                    "TABSTRIP_ACTIVE_TAB_GET INPUT
+20     *&---------------------------------------------------------------------*
+21     *&      Module  GET_SELECTED_ROW_TAB1  INPUT
+22     *&---------------------------------------------------------------------*
+23     *       text
+24     *----------------------------------------------------------------------*
+25     MODULE get_selected_row_tab1 INPUT.
+26       DATA : ok_code1 TYPE sy-ucomm.
+27       ok_code1 = sy-ucomm.
+28       DATA: crc       TYPE i.
+29       DATA: doc_sig   TYPE xstring.
+30       DATA: lv_filename TYPE string.
+31
+32       DATA: sig_list TYPE ssfsignertab.
+33       DATA: signer   TYPE ssfsigner.
+34       DATA: doc_ver  TYPE xstring.
+35       DATA: doc_line TYPE string.
+36       DATA: doc_tab  TYPE ssftxttab.
+37       DATA l_sign TYPE ssfsigner.
+38       DATA it_zuser_signer TYPE TABLE OF zuser_signer.
+39       DATA wa_zuser_signer TYPE zuser_signer.
+40
+41       DATA: ev_owner         TYPE string,
+42             ev_email         TYPE string,
+43             ev_serial        TYPE string,
+44             ev_thumbprint    TYPE string,
+45             ev_validfrom     TYPE string,
+46             ev_validto       TYPE string,
+47             ev_issuer        TYPE string,
+48             ev_bindocument_out TYPE xstring,
+49             e_int            TYPE i.
+50
+51       DATA : lv_lines TYPE i.
+52
+53       DATA: go_file_verifier         TYPE REF TO lcl_file_verifier.
+54
+55       IF ok_code1 = 'APPROVE1'.
+56
+57     ***        Getting the selected rows index
+58         CALL METHOD c_alvgd1->get_selected_rows
+59           IMPORTING
+60             et_index_rows = gt_selected_rows1.
+61
+62         CLEAR : lv_lines.
+63         DESCRIBE TABLE gt_selected_rows1 LINES lv_lines.
+64         IF lv_lines EQ 0.
+65           MESSAGE 'Please select one record' TYPE 'I'.
+66           EXIT.
+67         ELSEIF lv_lines > 1.
+68           MESSAGE 'Please select only single record' TYPE 'I'.
+69           EXIT.
+70         ENDIF.
+71
+72         IF gt_selected_rows1 IS NOT INITIAL.
+73           READ TABLE gt_selected_rows1 INTO gs_selected_rows1 INDEX 1.
+74           IF sy-subrc = 0.
+75     " Code Remediation changes S4 2025_1_A Conversion **BEGIN OF CHANGE BY SAP_ABAP 06.06.2026  FOR ATC
+76             READ TABLE gt_final INTO gs_final INDEX gs_selected_rows1-index.   "#EC CI_NOORDER
+77     " Code Remediation changes S4 2025_1_A Conversion * *END OF CHANGE BY SAP_ABAP 06.06.2026  FOR ATC
+78             IF sy-subrc = 0.
+79               CALL FUNCTION 'SSFS_CALL_CONTROL'
+80                 EXPORTING
+81     *             TXTDOCUMENT     = doc_tab
+82                   bindocument     = gs_final-raw_data "doc_bin
+83                   doc_type        = 'TXT'
+84     *             ssf_id          = 'CN=Kashyap Banaam Bhushan, SP=Delhi, postalCode=110092, OU=CID - 2923089, O=Oil and Natural Gas Corporation Ltd., C=IN'
+85                 IMPORTING
+86                   crc             = crc
+87                   signature       = doc_sig
+88                 EXCEPTIONS
+89                   parameter_error = 1
+90                   conversion_error = 2
+91                   control_error   = 3
+92                   frontend_error  = 4
+93                   OTHERS          = 5.
+94
+95
+96               IF crc = 0.
+97                 REFRESH sig_list.
+98                 CALL FUNCTION 'SSFS_SERVER_VERIFY'
+99                   EXPORTING
+100    *               SSFAPPLIC       =
+101                    signature       = doc_sig
+102                  IMPORTING
+103                    crc             = crc
+104                    signerlist      = sig_list
+105                    txtdocument_out = doc_tab
+106                    bindocument_out = doc_ver
+107                  EXCEPTIONS
+108                    kernel_error    = 1
+109                    parameter_error = 2
+110                    OTHERS          = 3.
+111                IF crc = 0.
+112                  go_file_verifier = lcl_file_verifier=>get_instance( ).
+113                  READ TABLE sig_list INTO l_sign INDEX 1.
+114                  IF sy-subrc = 0.
+115                    CALL METHOD go_file_verifier->get_signer_info
+116                      EXPORTING
+117                        is_signerlist = l_sign
+118                      IMPORTING
+119                        ev_owner      = ev_owner
+120                        ev_email      = ev_email
+121                        ev_serial     = ev_serial
+122                        ev_thumbprint = ev_thumbprint
+123                        ev_validfrom  = ev_validfrom
+124                        ev_validto    = ev_validto
+125                        ev_issuer     = ev_issuer
+126                        e_int         = e_int.
+127                  ENDIF.
+128                  SELECT * INTO TABLE it_zuser_signer
+129                    FROM zuser_signer WHERE uname = sy-uname
+130                                      AND   active = 'X'.
+131                  IF sy-subrc = 0.
+132                    READ TABLE it_zuser_signer INTO wa_zuser_signer WITH KEY thumbprin = ev_thumbprint.
+133                    IF sy-subrc <> 0.
+134                      MESSAGE 'Wrong Signature used for signing' TYPE 'I'.
+135                      EXIT.
+136                    ENDIF.
+137                  ELSE.
+138                    MESSAGE 'No Signature Maintained for user' TYPE 'I'.
+139                    EXIT.
+140                  ENDIF.
+141                ENDIF.
+142
+143                CLEAR gs_paym.
+144                READ TABLE gt_paym INTO gs_paym WITH KEY laufi = gs_final-laufi
+145                                                         laufd = gs_final-laufd.
+146                IF sy-subrc = 0.
+147                  gs_paym-file_data_sent = doc_sig.
+148                  MODIFY zfi_paym_file FROM gs_paym.
+149                ENDIF.
+150
+151
+152    ***** modify record in table ZFI_BATCH_SIGN
+153                CLEAR : gs_batch_sign.
+154                READ TABLE gt_batch_sign INTO gs_batch_sign WITH KEY batch_no = gs_final-guid
+155                                                                     signer = sy-uname.
+156                IF sy-subrc = 0.
+157                  gs_batch_sign-batch_no    = gs_final-guid.   "BATCH_NO widened to hold REGUT-GUID
+158                  gs_batch_sign-signer      = sy-uname.
+159                  gs_batch_sign-digitl_sign = 'X'.
+160                  gs_batch_sign-cdate1      = sy-datum.
+161                  gs_batch_sign-ctime1      = sy-uzeit.
+162                  MODIFY zfi_batch_sign FROM gs_batch_sign.
+163                  REFRESH : gt_selected_rows1.
+164                ENDIF.
+165              ELSE.
+166                CASE crc.
+167                  WHEN '2'.
+168                    MESSAGE 'Please insert E-token' TYPE 'I'.
+169                    EXIT.
+170                ENDCASE.
+171              ENDIF.
+172
+173            ENDIF.
+174          ENDIF.
+175        ENDIF.
+176      ENDIF.
+177    ENDMODULE.                 " GET_SELECTED_ROW_TAB1  INPUT
+178    *&---------------------------------------------------------------------*
+179    *&      Module  GET_SELECTED_ROW_TAB2  INPUT
+180    *&---------------------------------------------------------------------*
+181    *       text
+182    *----------------------------------------------------------------------*
+183    MODULE get_selected_row_tab2 INPUT.
+184      REFRESH : gt_selected_rows2.
+185      DATA: ok_code2  TYPE sy-ucomm,
+186            lv_lines1 TYPE i.
+187
+188      ok_code2 = sy-ucomm.
+189      DATA: lv_crc     TYPE i.
+190      DATA: lv_doc_sig TYPE xstring.
+191
+192      DATA: lo_bnk_detail    TYPE REF TO zco_sios_bank_interface_encryp, "zco_sios_sbiwebservice_encrypt, "zfi_bnk_sbi_in_encco_si_sbiweb, 14.07.2016
+193            proxy_data       TYPE zfile_upload2,                         "zfi_bnk_sbi_in_encfile_upload2, 14.07.2016
+194            lt_input         TYPE zfile_upload_response2,                "zfi_bnk_sbi_in_encfile_upload1, 14.07.2016
+195            lo_sys_exception TYPE REF TO cx_ai_system_fault.
+196      DATA: err_string       TYPE string.
+197
+198      DATA: sig_list1 TYPE ssfsignertab.
+199      DATA: signer1   TYPE ssfsigner.
+200      DATA: doc_ver1  TYPE xstring.
+201      DATA: doc_line1 TYPE string.
+202      DATA: doc_tab1  TYPE ssftxttab.
+203      DATA l_sign1 TYPE ssfsigner.
+204      DATA it_zuser_signer1 TYPE TABLE OF zuser_signer.
+205      DATA wa_zuser_signer1 TYPE zuser_signer.
+206
+207      DATA: ev_owner1         TYPE string,
+208            ev_email1         TYPE string,
+209            ev_serial1        TYPE string,
+210            ev_thumbprint1    TYPE string,
+211            ev_validfrom1     TYPE string,
+212            ev_validto1       TYPE string,
+213            ev_issuer1        TYPE string,
+214            ev_bindocument_out1 TYPE xstring,
+215            e_int1            TYPE i.
+216
+217      DATA: go_file_verifier1        TYPE REF TO lcl_file_verifier.
+218
+219      CREATE OBJECT lo_bnk_detail.
+220
+221
+222      IF ok_code2 = 'APPROVE2'.
+223        CALL METHOD c_alvgd2->get_selected_rows
+224          IMPORTING
+225            et_index_rows = gt_selected_rows2.
+226
+227        CLEAR : lv_lines1.
+228        DESCRIBE TABLE gt_selected_rows2 LINES lv_lines1.
+229        IF lv_lines1 EQ 0.
+230          MESSAGE 'Please select one record' TYPE 'I'.
+231          EXIT.
+232        ELSEIF lv_lines1 > 1.
+233          MESSAGE 'Please select only single record' TYPE 'I'.
+234          EXIT.
+235        ENDIF.
+236
+237        IF gt_selected_rows2 IS NOT INITIAL.
+238          READ TABLE gt_selected_rows2 INTO gs_selected_rows2 INDEX 1.
+239          IF sy-subrc = 0.
+240            READ TABLE gt_final2 INTO gs_final2 INDEX gs_selected_rows2-index.
+241            IF sy-subrc = 0.
+242              CALL FUNCTION 'SSFS_CALL_CONTROL'
+243                EXPORTING
+244    *             TXTDOCUMENT     = doc_tab
+245                  bindocument     = gs_final2-file_data_sent "doc_bin
+246                  doc_type        = 'TXT'
+247    *             ssf_id          = 'CN=Kashyap Banaam Bhushan, SP=Delhi, postalCode=110092, OU=CID - 2923089, O=Oil and Natural Gas Corporation Ltd., C=IN'
+248                IMPORTING
+249                  crc             = lv_crc
+250                  signature       = lv_doc_sig
+251                EXCEPTIONS
+252                  parameter_error = 1
+253                  conversion_error = 2
+254                  control_error   = 3
+255                  frontend_error  = 4
+256                  OTHERS          = 5.
+257
+258
+259              IF lv_crc = 0.
+260                REFRESH sig_list1.
+261                CALL FUNCTION 'SSFS_SERVER_VERIFY'
+262                  EXPORTING
+263    *               SSFAPPLIC       =
+264                    signature       = lv_doc_sig
+265                  IMPORTING
+266                    crc             = lv_crc
+267                    signerlist      = sig_list1
+268                    txtdocument_out = doc_tab1
+269                    bindocument_out = doc_ver1
+270                  EXCEPTIONS
+271                    kernel_error    = 1
+272                    parameter_error = 2
+273                    OTHERS          = 3.
+274    *BREAK-POINT.
+275                IF lv_crc = 0.
+276                  go_file_verifier1 = lcl_file_verifier=>get_instance( ).
+277
+278                  READ TABLE sig_list1 INTO l_sign1 INDEX 1.
+279                  IF sy-subrc = 0.
+280                    CALL METHOD go_file_verifier1->get_signer_info
+281                      EXPORTING
+282                        is_signerlist = l_sign1
+283                      IMPORTING
+284                        ev_owner      = ev_owner1
+285                        ev_email      = ev_email1
+286                        ev_serial     = ev_serial1
+287                        ev_thumbprint = ev_thumbprint1
+288                        ev_validfrom  = ev_validfrom1
+289                        ev_validto    = ev_validto1
+290                        ev_issuer     = ev_issuer1
+291                        e_int         = e_int1.
+292                  ENDIF.
+293
+294                  SELECT * INTO TABLE it_zuser_signer1
+295                    FROM zuser_signer WHERE  uname = sy-uname
+296                                      AND    active = 'X'.
+297                  IF sy-subrc = 0.
+298                    READ TABLE it_zuser_signer1 INTO wa_zuser_signer1 WITH KEY thumbprin = ev_thumbprint1.
+299                    IF sy-subrc <> 0.
+300                      MESSAGE 'Wrong Signature used for signing' TYPE 'I'.
+301                      EXIT.
+302                    ENDIF.
+303                  ELSE.
+304                    MESSAGE 'No Signature Maintained for user' TYPE 'I'.
+305                    EXIT.
+306                  ENDIF.
+307                ENDIF.
+308
+309                CLEAR gs_paym2.
+310                READ TABLE gt_paym2 INTO gs_paym2 WITH KEY laufi = gs_final2-laufi
+311                                                           laufd = gs_final2-laufd.
+312                IF sy-subrc = 0.
+313                  IF gs_paym2-sent <> ' '.
+314                    MESSAGE 'Can not be sent' TYPE 'I'.
+315                    EXIT.
+316                  ELSE.
+317                    proxy_data-parameters-arg0  = gs_paym2-file_name.
+318                    proxy_data-parameters-arg1  = lv_doc_sig.
+319                    TRY.
+320                        CALL METHOD lo_bnk_detail->sios_bank_interface_encryption "sios_sbiwebservice_encryption "si_sbiwebservice_enc
+321                          EXPORTING
+322                            output = proxy_data
+323                          IMPORTING
+324                            input  = lt_input.
+325                      CATCH cx_ai_system_fault INTO lo_sys_exception.
+326                        err_string = lo_sys_exception->get_text( ).
+327
+328                      CATCH cx_ai_application_fault .
+329                    ENDTRY.
+330                    IF err_string IS NOT INITIAL.
+331                      gs_paym2-file_data_sent = lv_doc_sig.
+332                      gs_paym2-sent_error     = 'X'.
+333                      gs_paym2-sent           = 'X'.
+334                      gs_paym2-sent_date      = sy-datum.
+335                      gs_paym2-sent_time      = sy-uzeit.
+336                      MODIFY zfi_paym_file FROM gs_paym2.
+337                      MESSAGE 'Error in sending' TYPE 'I'.
+338                    ELSE.
+339                      gs_paym2-file_data_sent = lv_doc_sig.
+340                      gs_paym2-sent           = 'X'.
+341                      gs_paym2-sent_date      = sy-datum.
+342                      gs_paym2-sent_time      = sy-uzeit.
+343                      MODIFY zfi_paym_file FROM gs_paym2.
+344                    ENDIF.
+345    ***** insert record in table ZFI_BATCH_SIGN
+346                    CLEAR : gs_batch_sign2.
+347                    READ TABLE gt_batch_sign2 INTO gs_batch_sign2 WITH KEY batch_no = gs_final2-guid
+348                                                                           signer   = sy-uname.
+349                    IF sy-subrc = 0.
+350                      gs_batch_sign2-batch_no    = gs_final2-guid.   "BATCH_NO widened to hold REGUT-GUID
+351                      gs_batch_sign2-signer      = sy-uname.
+352                      gs_batch_sign2-digitl_sign = 'X'.
+353                      gs_batch_sign2-cdate1      = sy-datum.
+354                      gs_batch_sign2-ctime1      = sy-uzeit.
+355                      MODIFY zfi_batch_sign FROM gs_batch_sign2.
+356                      CLEAR : proxy_data.
+357                    ENDIF.
+358                  ENDIF.
+359                ENDIF.
+360              ENDIF.
+361            ENDIF.
+362          ENDIF.
+363        ENDIF.
+364      ENDIF.
+365    ENDMODULE.                 " GET_SELECTED_ROW_TAB2  INPUT
+366    *&---------------------------------------------------------------------*
+367    *&      Module  USER_COMMAND_0110  INPUT
+368    *&---------------------------------------------------------------------*
+369    *       text
+370    *----------------------------------------------------------------------*
+371    MODULE user_command_0101 INPUT.
+372      DATA lv_ucomm TYPE sy-ucomm.
+373      lv_ucomm = sy-ucomm.
+374      CASE lv_ucomm.
+375        WHEN 'APPROVE1'.
+376          PERFORM free_objects1.
+377        WHEN 'CANCEL' OR 'EXIT'.
+378          PERFORM free_objects1.
+379          LEAVE PROGRAM.
+380        WHEN 'BACK'.
+381          PERFORM free_objects1.
+382    *      SET SCREEN '0'.
+383          LEAVE PROGRAM.
+384      ENDCASE.
+385
+386
+387    ENDMODULE.                 " USER_COMMAND_0110  INPUT
+388    *&---------------------------------------------------------------------*
+389    *&      Module  USER_COMMAND_0102  INPUT
+390    *&---------------------------------------------------------------------*
+391    *       text
+392    *----------------------------------------------------------------------*
+393    MODULE user_command_0102 INPUT.
+394      DATA lv_ucomm1 TYPE sy-ucomm.
+395      lv_ucomm1 = sy-ucomm.
+396      CASE lv_ucomm1.
+397        WHEN 'APPROVE2'.
+398          PERFORM free_objects2.
+399        WHEN 'CANCEL' OR 'EXIT'.
+400          PERFORM free_objects2.
+401          LEAVE PROGRAM.
+402        WHEN 'BACK'.
+403          PERFORM free_objects2.
+404    *      SET SCREEN '0'.
+405          LEAVE PROGRAM.
+406      ENDCASE.
+407    ENDMODULE.                 " USER_COMMAND_0102  INPUT
+408    *&---------------------------------------------------------------------*
+409    *&      Module  USER_COMMAND_0100  INPUT
+410    *&---------------------------------------------------------------------*
+411    *       text
+412    *----------------------------------------------------------------------*
+413    MODULE user_command_0100 INPUT.
+414    *DATA lv_ucomm2 TYPE sy-ucomm.
+415    *  lv_ucomm2 = sy-ucomm.
+416    *  CASE lv_ucomm2.
+417    *    WHEN 'CANCEL' OR 'EXIT'.
+418    *      PERFORM free_objects2.
+419    *      LEAVE PROGRAM.
+420    *    WHEN 'BACK'.
+421    *      PERFORM free_objects2.
+422    *      SET SCREEN '0'.
+423    *      LEAVE SCREEN.
+424    *  ENDCASE.
+425    ENDMODULE.                 " USER_COMMAND_0100  INPUT
+426
+427    *&---------------------------------------------------------------------*
+428    *&      Module  GET_SELECTED_ROW_TAB3  INPUT
+429    *&---------------------------------------------------------------------*
+430    *       text
+431    *----------------------------------------------------------------------*
+432    MODULE get_selected_row_tab3 INPUT.
+433      DATA : lv_code TYPE sy-ucomm.
+434      lv_code = sy-ucomm.
+435
+436      DATA: fileleng                      TYPE i,
+437            flen                          TYPE i,
+438            enh_version_management_hex_tb TYPE enh_version_management_hex_tb.
+439
+440      IF lv_code = 'DOWNLOAD1'.
+441        PERFORM download_sent_data.
+442      ELSEIF lv_code = 'DOWNLOAD2'.
+443        PERFORM download_raw_data.
+444      ENDIF.
+445
+446    ENDMODULE.                 " GET_SELECTED_ROW_TAB3  INPUT
+447    *&---------------------------------------------------------------------*
+448    *&      Module  USER_COMMAND_0103  INPUT
+449    *&---------------------------------------------------------------------*
+450    *       text
+451    *----------------------------------------------------------------------*
+452    MODULE user_command_0103 INPUT.
+453      DATA lv_ucomm3 TYPE sy-ucomm.
+454      lv_ucomm3 = sy-ucomm.
+455      CASE lv_ucomm3.
+456        WHEN 'DOWNLOAD1' OR 'DOWNLOAD2'.
+457    *      PERFORM free_objects3.
+458        WHEN 'CANCEL' OR 'EXIT'.
+459    *      PERFORM free_objects3.
+460          LEAVE PROGRAM.
+461        WHEN 'BACK'.
+462    *      PERFORM free_objects3.
+463          LEAVE PROGRAM.
+464      ENDCASE.
+465    ENDMODULE.                 " USER_COMMAND_0103  INPUT
+*--- End of ZFI_BNK_APP1_I01 - 465 lines ---
+
+----------------------------------------------------------------------------------------------------
+Include          ZFI_BNK_APP1_F01                          Level 1    Page 7
+Object           ZFI_BNK_APP1                              Lines 1073
+System           OCQ / 500   User SAP_ABAP   27.08.2026 09:40:30
+----------------------------------------------------------------------------------------------------
+1      *&---------------------------------------------------------------------*
+2      *& Include          ZFI_BNK_APP1_F01
+3      *&---------------------------------------------------------------------*
+4      *& Data source changed from BNK_BATCH_HEADER to REGUT.
+5      *& REGUT-GUID is not populated, so the new unique key is the concatenated
+6      *& REGUT primary key:
+7      *&   ZBUKR + BANKS + LAUFD + LAUFI + XVORL + DTKEY + LFDNR  (41 chars,
+8      *&   built with RESPECTING BLANKS so field positions are fixed/unique).
+9      *& This concatenated key is carried in GT_FINAL-GUID and stored in
+10     *& ZFI_BATCH_SIGN-BATCH_NO (which must be widened to CHAR 45).
+11     *& REGUT is joined to ZFI_PAYM_FILE on LAUFD / LAUFI.
+12     *& REGUT field mapping used for the output structure GT_FINAL:
+13     *&   RBETR -> BATCH_SUM   WAERS -> BATCH_CURR
+14     *&   TSUSR -> CRUSR       TSDAT -> CRDATE      TSTIM -> CRTIME
+15     *&   DWUSR -> CHUSR       DWDAT -> CHDATE      DWTIM -> CHTIME
+16     *&---------------------------------------------------------------------*
+17
+18     *&---------------------------------------------------------------------*
+19     *&      Form  F_PREPARE_OP_TAB1
+20     *&---------------------------------------------------------------------*
+21     FORM f_prepare_op_tab1 .
+22       DATA: lv_key  TYPE c LENGTH 45,
+23             lv_skip TYPE abap_bool.
+24
+25       REFRESH : gt_paym, gt_batch_header,gt_batch_sign,gt_final.
+26       SELECT * FROM zfi_paym_file INTO TABLE gt_paym.
+27
+28     * Do NOT hide on the file-level flag: one file holds many batches, so this
+29     * would drop every batch of the file after only one batch is approved.
+30     * Approved batches are excluded per-batch via DIGITL_SIGN below instead.
+31     *  DELETE gt_paym WHERE file_data_sent IS NOT INITIAL.
+32       DELETE gt_paym WHERE raw_data IS INITIAL.
+33
+34       IF gt_paym IS NOT INITIAL.
+35         SELECT * FROM regut INTO TABLE gt_batch_header
+36           FOR ALL ENTRIES IN gt_paym
+37           WHERE laufi = gt_paym-laufi
+38           AND   laufd = gt_paym-laufd.
+39
+40     *   Self-heal: make sure every REGUT batch has its approver rows. The DMEE
+41     *   format module predicts LFDNR (MAX+1) before REGUT is committed, so a
+42     *   batch created later in the same run can be left with no ZFI_BATCH_SIGN
+43     *   rows and would silently drop out of the worklist below.
+44         PERFORM f_ensure_batch_sign USING gt_batch_header.
+45
+46     *   Load REGUHM so batches that already carry a BATCHNO can be excluded.
+47         PERFORM f_load_reguhm USING gt_batch_header.
+48
+49         IF gt_batch_header IS NOT INITIAL.
+50     *     Read this user's level-1 signature assignments
+51           SELECT * FROM  zfi_batch_sign INTO TABLE gt_batch_sign
+52             WHERE signer = sy-uname
+53             AND   digitl_sign = ' '    "only batches not yet approved by this user (level 1)
+54             and   snro   = '1'.
+55
+56
+57           sort gt_batch_sign by CDATE1 CTIME1.
+58           LOOP AT gt_batch_header INTO gs_batch_header.
+59     *       Skip batches that already have a BATCHNO in REGUHM
+60             PERFORM f_skip_batchno USING gs_batch_header CHANGING lv_skip.
+61             IF lv_skip = abap_true.
+62               CLEAR gs_batch_header.
+63               CONTINUE.
+64             ENDIF.
+65     *       Build unique key from the REGUT primary key fields
+66             CLEAR lv_key.
+67             CONCATENATE gs_batch_header-zbukr gs_batch_header-banks
+68                         gs_batch_header-laufd gs_batch_header-laufi
+69                         gs_batch_header-xvorl gs_batch_header-dtkey
+70                         gs_batch_header-lfdnr
+71                    INTO lv_key RESPECTING BLANKS.
+72
+73             READ TABLE gt_batch_sign INTO gs_batch_sign WITH KEY batch_no = lv_key
+74                                                                  signer = sy-uname
+75                                                                  snro = '1'.
+76             IF sy-subrc EQ 0 .
+77     *    if gs_batch_sign-signer = sy-uname   and gs_batch_sign-digitl_sign = ' '.
+78               MOVE-CORRESPONDING gs_batch_header TO gs_final.
+79               gs_final-guid       = lv_key.
+80               gs_final-batch_sum  = gs_batch_header-rbetr.
+81               gs_final-batch_curr = gs_batch_header-waers.
+82               gs_final-crusr      = gs_batch_header-tsusr.
+83               gs_final-crdate     = gs_batch_header-tsdat.
+84               gs_final-crtime     = gs_batch_header-tstim.
+85               gs_final-chusr      = gs_batch_header-dwusr.
+86               gs_final-chdate     = gs_batch_header-dwdat.
+87               gs_final-chtime     = gs_batch_header-dwtim.
+88               READ TABLE gt_paym INTO gs_paym WITH KEY laufd = gs_batch_header-laufd
+89                                                        laufi = gs_batch_header-laufi.
+90               IF sy-subrc = 0.
+91                 gs_final-raw_data = gs_paym-raw_data.
+92               ENDIF.
+93               APPEND gs_final TO gt_final.
+94             ENDIF.
+95     *    endif.
+96             CLEAR : gs_batch_header,gs_batch_sign,gs_final.
+97           ENDLOOP.
+98         ENDIF.
+99       ENDIF.
+100
+101    ENDFORM.                    " F_PREPARE_OP_TAB1
+102
+103    *&---------------------------------------------------------------------*
+104    *&      Form  F_ENSURE_BATCH_SIGN
+105    *&---------------------------------------------------------------------*
+106    *  Guarantee every REGUT batch in gt_batch_header has its approver rows
+107    *  in ZFI_BATCH_SIGN, keyed to the ACTUAL REGUT key.
+108    *
+109    *  Why: the DMEE format module ZFI_PAYMEDIUM_DMEE_20 creates the approver
+110    *  rows using a PREDICTED LFDNR (SELECT MAX( lfdnr ) + 1) while REGUT is
+111    *  not yet committed. When several batches are created in one run the
+112    *  prediction repeats, so a later batch's MODIFY overwrites an earlier
+113    *  key instead of creating its own - leaving that REGUT batch with no
+114    *  approver rows, and it drops out of every worklist. Here we re-create
+115    *  any missing rows from ZFI_BNK_RULE against the real REGUT key, so no
+116    *  batch can be orphaned. Existing (incl. already-signed) rows are left
+117    *  untouched.
+118    *----------------------------------------------------------------------*
+119    FORM f_ensure_batch_sign USING it_hdr LIKE gt_batch_header.
+120      DATA: lt_rule TYPE STANDARD TABLE OF zfi_bnk_rule,
+121            ls_rule TYPE zfi_bnk_rule,
+122            ls_hdr  TYPE regut,
+123            ls_sign TYPE zfi_batch_sign,
+124            lt_new  TYPE STANDARD TABLE OF zfi_batch_sign,
+125            lv_key  TYPE zfi_batch_sign-batch_no,
+126            lv_cnt  TYPE i.
+127
+128      CHECK it_hdr IS NOT INITIAL.
+129
+130    * Configured approvers: rule 90700005 = level 1, 90700006 = level 2
+131      SELECT * FROM zfi_bnk_rule INTO TABLE lt_rule
+132        WHERE zrule = '90700005' OR zrule = '90700006'.
+133      IF lt_rule IS INITIAL.
+134        RETURN.
+135      ENDIF.
+136
+137      LOOP AT it_hdr INTO ls_hdr.
+138        CLEAR lv_key.
+139        CONCATENATE ls_hdr-zbukr ls_hdr-banks
+140                    ls_hdr-laufd ls_hdr-laufi
+141                    ls_hdr-xvorl ls_hdr-dtkey
+142                    ls_hdr-lfdnr
+143               INTO lv_key RESPECTING BLANKS.
+144
+145    *   already has approver rows -> leave as is
+146        SELECT COUNT(*) INTO lv_cnt FROM zfi_batch_sign WHERE batch_no = lv_key.
+147        IF lv_cnt > 0.
+148          CONTINUE.
+149        ENDIF.
+150
+151    *   create the approver rows for this batch's paying company code
+152        LOOP AT lt_rule INTO ls_rule WHERE zrule_id = ls_hdr-zbukr.
+153          CLEAR ls_sign.
+154          ls_sign-batch_no = lv_key.
+155          ls_sign-signer   = ls_rule-zuser.
+156          CASE ls_rule-zrule.
+157            WHEN '90700005'. ls_sign-snro = '1'.
+158            WHEN '90700006'. ls_sign-snro = '2'.
+159            WHEN OTHERS.     CONTINUE.
+160          ENDCASE.
+161          ls_sign-cdate = sy-datum.
+162          ls_sign-ctime = sy-uzeit.
+163          APPEND ls_sign TO lt_new.
+164        ENDLOOP.
+165      ENDLOOP.
+166
+167      IF lt_new IS NOT INITIAL.
+168        INSERT zfi_batch_sign FROM TABLE lt_new ACCEPTING DUPLICATE KEYS.
+169        COMMIT WORK.
+170      ENDIF.
+171    ENDFORM.                    " F_ENSURE_BATCH_SIGN
+172
+173    *&---------------------------------------------------------------------*
+174    *&      Form  F_LOAD_REGUHM
+175    *&---------------------------------------------------------------------*
+176    *  Load REGUHM for the batches in scope so BATCHNO can be checked. The
+177    *  REGUT batch (LAUFD/LAUFI = medium run) links to REGUHM on
+178    *  LAUFD_M / LAUFI_M (+ ZBUKR).
+179    *----------------------------------------------------------------------*
+180    FORM f_load_reguhm USING it_hdr LIKE gt_batch_header.
+181      REFRESH gt_reguhm.
+182      CHECK it_hdr IS NOT INITIAL.
+183      SELECT * FROM reguhm INTO TABLE gt_reguhm
+184        FOR ALL ENTRIES IN it_hdr
+185        WHERE zbukr   = it_hdr-zbukr
+186          AND laufd_m = it_hdr-laufd
+187          AND laufi_m = it_hdr-laufi.
+188    ENDFORM.                    " F_LOAD_REGUHM
+189
+190    *&---------------------------------------------------------------------*
+191    *&      Form  F_SKIP_BATCHNO
+192    *&---------------------------------------------------------------------*
+193    *  Returns 'X' when the given REGUT batch has a REGUHM record whose
+194    *  BATCHNO is filled. Such batches must NOT be processed or shown in the
+195    *  ALV. Match: REGUT-ZBUKR/LAUFD/LAUFI = REGUHM-ZBUKR/LAUFD_M/LAUFI_M.
+196    *----------------------------------------------------------------------*
+197    FORM f_skip_batchno USING    is_hdr  TYPE regut
+198                        CHANGING cv_skip TYPE abap_bool.
+199      DATA ls_hm TYPE reguhm.
+200      cv_skip = abap_false.
+201      LOOP AT gt_reguhm INTO ls_hm
+202           WHERE zbukr   = is_hdr-zbukr
+203             AND laufd_m = is_hdr-laufd
+204             AND laufi_m = is_hdr-laufi.
+205        IF ls_hm-batchno IS NOT INITIAL.
+206          cv_skip = abap_true.
+207          EXIT.
+208        ENDIF.
+209      ENDLOOP.
+210    ENDFORM.                    " F_SKIP_BATCHNO
+211
+212    *&---------------------------------------------------------------------*
+213    *&      Form  F_ALV_BUILD_FIELDCAT1
+214    *&---------------------------------------------------------------------*
+215    *       text
+216    *----------------------------------------------------------------------*
+217    *      -->P1        text
+218    *      <--P2        text
+219    *----------------------------------------------------------------------*
+220    FORM f_alv_build_fieldcat1 .
+221      DATA lv_fldcat1 TYPE lvc_s_fcat.
+222      DATA: lv_index1 TYPE sy-index.
+223      REFRESH : it_fcat1.
+224      CLEAR lv_fldcat1.
+225      lv_fldcat1-tabname   = 'GT_FINAL'.
+226      lv_fldcat1-fieldname = 'GUID'.
+227      lv_fldcat1-scrtext_m = 'Batch Key'.
+228      lv_fldcat1-outputlen = '45'.
+229    *  lv_fldcat1-row_pos   = '1'.
+230      lv_fldcat1-col_pos   = lv_index1.
+231      APPEND lv_fldcat1 TO it_fcat1.
+232
+233    * RULE_ID / ITEM_CNT not available in REGUT - column removed
+234
+235      lv_index1 = lv_index1 + 1.
+236      CLEAR lv_fldcat1.
+237      lv_fldcat1-tabname   = 'GT_FINAL'.
+238      lv_fldcat1-fieldname = 'LAUFD'.
+239      lv_fldcat1-scrtext_m = 'Run Date'.
+240      lv_fldcat1-outputlen = '11'.
+241    *  lv_fldcat1-row_pos   = '1'.
+242      lv_fldcat1-col_pos   = lv_index1.
+243      APPEND lv_fldcat1 TO it_fcat1.
+244
+245      lv_index1 = lv_index1 + 1.
+246      CLEAR lv_fldcat1.
+247      lv_fldcat1-tabname   = 'GT_FINAL'.
+248      lv_fldcat1-fieldname = 'LAUFI'.
+249      lv_fldcat1-scrtext_m = 'Run Id'.
+250      lv_fldcat1-outputlen = '8'.
+251    *  lv_fldcat1-row_pos   = '1'.
+252      lv_fldcat1-col_pos   = lv_index1.
+253      APPEND lv_fldcat1 TO it_fcat1.
+254
+255    * LAUFD_F / LAUFI_F (file date/id) not available in REGUT - column removed
+256
+257      lv_index1 = lv_index1 + 1.
+258      CLEAR lv_fldcat1.
+259      lv_fldcat1-tabname   = 'GT_FINAL'.
+260      lv_fldcat1-fieldname = 'BATCH_SUM'.
+261      lv_fldcat1-scrtext_m = 'Batch Amount'.
+262      lv_fldcat1-outputlen = '15'.
+263    *  lv_fldcat1-row_pos   = '1'.
+264      lv_fldcat1-col_pos   = lv_index1.
+265      APPEND lv_fldcat1 TO it_fcat1.
+266
+267      lv_index1 = lv_index1 + 1.
+268      CLEAR lv_fldcat1.
+269      lv_fldcat1-tabname   = 'GT_FINAL'.
+270      lv_fldcat1-fieldname = 'CRUSR'.
+271      lv_fldcat1-scrtext_m = 'Create User'.
+272      lv_fldcat1-outputlen = '12'.
+273    *  lv_fldcat1-row_pos   = '1'.
+274      lv_fldcat1-col_pos   = lv_index1.
+275      APPEND lv_fldcat1 TO it_fcat1.
+276
+277      lv_index1 = lv_index1 + 1.
+278      CLEAR lv_fldcat1.
+279      lv_fldcat1-tabname   = 'GT_FINAL'.
+280      lv_fldcat1-fieldname = 'CRTIME'.
+281      lv_fldcat1-scrtext_m = 'Create Time'.
+282      lv_fldcat1-outputlen = '11'.
+283      lv_fldcat1-row_pos   = '1'.
+284      lv_fldcat1-col_pos   = lv_index1.
+285      APPEND lv_fldcat1 TO it_fcat1.
+286
+287      lv_index1 = lv_index1 + 1.
+288      CLEAR lv_fldcat1.
+289      lv_fldcat1-tabname   = 'GT_FINAL'.
+290      lv_fldcat1-fieldname = 'CRDATE'.
+291      lv_fldcat1-scrtext_m = 'Create Date'.
+292      lv_fldcat1-outputlen = '11'.
+293    *  lv_fldcat1-row_pos   = '1'.
+294      lv_fldcat1-col_pos   = lv_index1.
+295      APPEND lv_fldcat1 TO it_fcat1.
+296
+297      lv_index1 = lv_index1 + 1.
+298      CLEAR lv_fldcat1.
+299      lv_fldcat1-tabname   = 'GT_FINAL'.
+300      lv_fldcat1-fieldname = 'CHUSR'.
+301      lv_fldcat1-scrtext_m = 'Change User'.
+302      lv_fldcat1-outputlen = '12'.
+303    *  lv_fldcat1-row_pos   = '1'.
+304      lv_fldcat1-col_pos   = lv_index1.
+305      APPEND lv_fldcat1 TO it_fcat1.
+306
+307      lv_index1 = lv_index1 + 1.
+308      CLEAR lv_fldcat1.
+309      lv_fldcat1-tabname   = 'GT_FINAL'.
+310      lv_fldcat1-fieldname = 'CHTIME'.
+311      lv_fldcat1-scrtext_m = 'Change Time'.
+312      lv_fldcat1-outputlen = '11'.
+313    *  lv_fldcat1-row_pos   = '1'.
+314      lv_fldcat1-col_pos   = lv_index1.
+315      APPEND lv_fldcat1 TO it_fcat1.
+316
+317      lv_index1 = lv_index1 + 1.
+318      CLEAR lv_fldcat1.
+319      lv_fldcat1-tabname   = 'GT_FINAL'.
+320      lv_fldcat1-fieldname = 'CHDATE'.
+321      lv_fldcat1-scrtext_m = 'Change Date'.
+322      lv_fldcat1-outputlen = '11'.
+323    *  lv_fldcat1-row_pos   = '1'.
+324      lv_fldcat1-col_pos   = lv_index1.
+325      APPEND lv_fldcat1 TO it_fcat1.
+326
+327      lv_index1 = lv_index1 + 1.
+328      CLEAR lv_fldcat1.
+329      lv_fldcat1-tabname   = 'GT_FINAL'.
+330      lv_fldcat1-fieldname = 'ZBUKR'.
+331      lv_fldcat1-scrtext_m = 'Paying company code'.
+332      lv_fldcat1-outputlen = '19'.
+333    *  lv_fldcat1-row_pos   = '1'.
+334      lv_fldcat1-col_pos   = lv_index1.
+335      APPEND lv_fldcat1 TO it_fcat1.
+336
+337    * TOT_BTCH_AMT not available in REGUT - column removed
+338
+339    ENDFORM.                    " F_ALV_BUILD_FIELDCAT1
+340    *&---------------------------------------------------------------------*
+341    *&      Form  F_ALV_REPORT_LAYOUT1
+342    *&---------------------------------------------------------------------*
+343    *       text
+344    *----------------------------------------------------------------------*
+345    *      -->P1        text
+346    *      <--P2        text
+347    *----------------------------------------------------------------------*
+348    FORM f_alv_report_layout1 .
+349      CLEAR : it_layout1.
+350      it_layout1-cwidth_opt = 'X'.
+351      it_layout1-sel_mode   = 'A'.
+352    ENDFORM.                    " F_ALV_REPORT_LAYOUT1
+353    *&---------------------------------------------------------------------*
+354    *&      Form  F_PREPARE_OP_TAB2
+355    *&---------------------------------------------------------------------*
+356    *       text
+357    *----------------------------------------------------------------------*
+358    *      -->P1        text
+359    *      <--P2        text
+360    *----------------------------------------------------------------------*
+361    FORM f_prepare_op_tab2 .
+362      DATA: lv_key  TYPE c LENGTH 45,
+363            lv_skip TYPE abap_bool.
+364    *  BREAK sab_vaibhav.
+365      REFRESH : gt_paym2, gt_batch_header2,gt_final2, gt_batch_sign2.
+366      SELECT * FROM zfi_paym_file INTO TABLE gt_paym2 WHERE sent = ' '.
+367
+368      DELETE gt_paym2 WHERE file_data_sent IS INITIAL.
+369
+370      IF gt_paym2 IS NOT INITIAL.
+371        SELECT * FROM regut INTO TABLE gt_batch_header2
+372          FOR ALL ENTRIES IN gt_paym2
+373          WHERE laufi = gt_paym2-laufi
+374          AND   laufd = gt_paym2-laufd.
+375
+376    *   Self-heal missing approver rows (see F_ENSURE_BATCH_SIGN) so no batch
+377    *   drops out of the level-2 worklist either.
+378        PERFORM f_ensure_batch_sign USING gt_batch_header2.
+379
+380    *   Load REGUHM so batches that already carry a BATCHNO can be excluded.
+381        PERFORM f_load_reguhm USING gt_batch_header2.
+382
+383        IF gt_batch_header2 IS NOT INITIAL.
+384    *     Read this user's open level-2 signature assignments
+385          SELECT * FROM  zfi_batch_sign INTO TABLE gt_batch_sign2
+386            WHERE DIGITL_SIGN = ' '
+387            AND   signer eq sy-uname
+388            and   snro = '2'.
+389
+390          LOOP AT gt_batch_header2 INTO gs_batch_header2.
+391    *       Skip batches that already have a BATCHNO in REGUHM
+392            PERFORM f_skip_batchno USING gs_batch_header2 CHANGING lv_skip.
+393            IF lv_skip = abap_true.
+394              CLEAR gs_batch_header2.
+395              CONTINUE.
+396            ENDIF.
+397            CLEAR lv_key.
+398            CONCATENATE gs_batch_header2-zbukr gs_batch_header2-banks
+399                        gs_batch_header2-laufd gs_batch_header2-laufi
+400                        gs_batch_header2-xvorl gs_batch_header2-dtkey
+401                        gs_batch_header2-lfdnr
+402                   INTO lv_key RESPECTING BLANKS.
+403
+404            READ TABLE gt_batch_sign2 INTO gs_batch_sign2 WITH KEY batch_no = lv_key
+405                                                                  signer = sy-uname
+406                                                                  snro = '2'.
+407    *       IF sy-subrc <> 0.
+408            IF sy-subrc EQ 0.
+409              MOVE-CORRESPONDING gs_batch_header2 TO gs_final2.
+410              gs_final2-guid       = lv_key.
+411              gs_final2-batch_sum  = gs_batch_header2-rbetr.
+412              gs_final2-batch_curr = gs_batch_header2-waers.
+413              gs_final2-crusr      = gs_batch_header2-tsusr.
+414              gs_final2-crdate     = gs_batch_header2-tsdat.
+415              gs_final2-crtime     = gs_batch_header2-tstim.
+416              gs_final2-chusr      = gs_batch_header2-dwusr.
+417              gs_final2-chdate     = gs_batch_header2-dwdat.
+418              gs_final2-chtime     = gs_batch_header2-dwtim.
+419              READ TABLE gt_paym2 INTO gs_paym2 WITH KEY laufd = gs_batch_header2-laufd
+420                                                         laufi = gs_batch_header2-laufi.
+421              IF sy-subrc = 0.
+422                gs_final2-raw_data = gs_paym2-raw_data.
+423                gs_final2-file_data_sent = gs_paym2-file_data_sent.
+424              ENDIF.
+425              APPEND gs_final2 TO gt_final2.
+426            ENDIF.
+427    *    endif.
+428            CLEAR : gs_batch_header2,gs_batch_sign2,gs_final2.
+429          ENDLOOP.
+430        ENDIF.
+431      ENDIF.
+432    ENDFORM.                    " F_PREPARE_OP_TAB2
+433    *&---------------------------------------------------------------------*
+434    *&      Form  F_ALV_BUILD_FIELDCAT2
+435    *&---------------------------------------------------------------------*
+436    *       text
+437    *----------------------------------------------------------------------*
+438    *      -->P1        text
+439    *      <--P2        text
+440    *----------------------------------------------------------------------*
+441    FORM f_alv_build_fieldcat2 .
+442      DATA lv_fldcat2 TYPE lvc_s_fcat.
+443      DATA: lv_index2 TYPE sy-index.
+444      REFRESH : it_fcat2.
+445      CLEAR lv_fldcat2.
+446      lv_fldcat2-tabname   = 'GT_FINAL2'.
+447      lv_fldcat2-fieldname = 'GUID'.
+448      lv_fldcat2-scrtext_m = 'Batch Key'.
+449      lv_fldcat2-outputlen = '45'.
+450    *  lv_fldcat2-row_pos   = '1'.
+451      lv_fldcat2-col_pos   = lv_index2.
+452      APPEND lv_fldcat2 TO it_fcat2.
+453
+454    * RULE_ID / ITEM_CNT not available in REGUT - column removed
+455
+456      lv_index2 = lv_index2 + 1.
+457      CLEAR lv_fldcat2.
+458      lv_fldcat2-tabname   = 'GT_FINAL2'.
+459      lv_fldcat2-fieldname = 'LAUFD'.
+460      lv_fldcat2-scrtext_m = 'Run Date'.
+461      lv_fldcat2-outputlen = '11'.
+462    *  lv_fldcat2-row_pos   = '1'.
+463      lv_fldcat2-col_pos   = lv_index2.
+464      APPEND lv_fldcat2 TO it_fcat2.
+465
+466      lv_index2 = lv_index2 + 1.
+467      CLEAR lv_fldcat2.
+468      lv_fldcat2-tabname   = 'GT_FINAL2'.
+469      lv_fldcat2-fieldname = 'LAUFI'.
+470      lv_fldcat2-scrtext_m = 'Run Id'.
+471      lv_fldcat2-outputlen = '8'.
+472    *  lv_fldcat2-row_pos   = '1'.
+473      lv_fldcat2-col_pos   = lv_index2.
+474      APPEND lv_fldcat2 TO it_fcat2.
+475
+476    * LAUFD_F / LAUFI_F (file date/id) not available in REGUT - column removed
+477
+478      lv_index2 = lv_index2 + 1.
+479      CLEAR lv_fldcat2.
+480      lv_fldcat2-tabname   = 'GT_FINAL2'.
+481      lv_fldcat2-fieldname = 'BATCH_SUM'.
+482      lv_fldcat2-scrtext_m = 'Batch Amount'.
+483      lv_fldcat2-outputlen = '15'.
+484    *  lv_fldcat2-row_pos   = '1'.
+485      lv_fldcat2-col_pos   = lv_index2.
+486      APPEND lv_fldcat2 TO it_fcat2.
+487
+488      lv_index2 = lv_index2 + 1.
+489      CLEAR lv_fldcat2.
+490      lv_fldcat2-tabname   = 'GT_FINAL2'.
+491      lv_fldcat2-fieldname = 'CRUSR'.
+492      lv_fldcat2-scrtext_m = 'Create User'.
+493      lv_fldcat2-outputlen = '12'.
+494    *  lv_fldcat2-row_pos   = '1'.
+495      lv_fldcat2-col_pos   = lv_index2.
+496      APPEND lv_fldcat2 TO it_fcat2.
+497
+498      lv_index2 = lv_index2 + 1.
+499      CLEAR lv_fldcat2.
+500      lv_fldcat2-tabname   = 'GT_FINAL2'.
+501      lv_fldcat2-fieldname = 'CRTIME'.
+502      lv_fldcat2-scrtext_m = 'Create Time'.
+503      lv_fldcat2-outputlen = '11'.
+504      lv_fldcat2-row_pos   = '1'.
+505      lv_fldcat2-col_pos   = lv_index2.
+506      APPEND lv_fldcat2 TO it_fcat2.
+507
+508      lv_index2 = lv_index2 + 1.
+509      CLEAR lv_fldcat2.
+510      lv_fldcat2-tabname   = 'GT_FINAL2'.
+511      lv_fldcat2-fieldname = 'CRDATE'.
+512      lv_fldcat2-scrtext_m = 'Create Date'.
+513      lv_fldcat2-outputlen = '11'.
+514    *  lv_fldcat2-row_pos   = '1'.
+515      lv_fldcat2-col_pos   = lv_index2.
+516      APPEND lv_fldcat2 TO it_fcat2.
+517
+518      lv_index2 = lv_index2 + 1.
+519      CLEAR lv_fldcat2.
+520      lv_fldcat2-tabname   = 'GT_FINAL2'.
+521      lv_fldcat2-fieldname = 'CHUSR'.
+522      lv_fldcat2-scrtext_m = 'Change User'.
+523      lv_fldcat2-outputlen = '12'.
+524    *  lv_fldcat2-row_pos   = '1'.
+525      lv_fldcat2-col_pos   = lv_index2.
+526      APPEND lv_fldcat2 TO it_fcat2.
+527
+528      lv_index2 = lv_index2 + 1.
+529      CLEAR lv_fldcat2.
+530      lv_fldcat2-tabname   = 'GT_FINAL2'.
+531      lv_fldcat2-fieldname = 'CHTIME'.
+532      lv_fldcat2-scrtext_m = 'Change Time'.
+533      lv_fldcat2-outputlen = '11'.
+534    *  lv_fldcat2-row_pos   = '1'.
+535      lv_fldcat2-col_pos   = lv_index2.
+536      APPEND lv_fldcat2 TO it_fcat2.
+537
+538      lv_index2 = lv_index2 + 1.
+539      CLEAR lv_fldcat2.
+540      lv_fldcat2-tabname   = 'GT_FINAL2'.
+541      lv_fldcat2-fieldname = 'CHDATE'.
+542      lv_fldcat2-scrtext_m = 'Change Date'.
+543      lv_fldcat2-outputlen = '11'.
+544    *  lv_fldcat2-row_pos   = '1'.
+545      lv_fldcat2-col_pos   = lv_index2.
+546      APPEND lv_fldcat2 TO it_fcat2.
+547
+548      lv_index2 = lv_index2 + 1.
+549      CLEAR lv_fldcat2.
+550      lv_fldcat2-tabname   = 'GT_FINAL2'.
+551      lv_fldcat2-fieldname = 'ZBUKR'.
+552      lv_fldcat2-scrtext_m = 'Paying company code'.
+553      lv_fldcat2-outputlen = '19'.
+554    *  lv_fldcat2-row_pos   = '1'.
+555      lv_fldcat2-col_pos   = lv_index2.
+556      APPEND lv_fldcat2 TO it_fcat2.
+557
+558    * TOT_BTCH_AMT not available in REGUT - column removed
+559
+560    ENDFORM.                    " F_ALV_BUILD_FIELDCAT2
+561    *&---------------------------------------------------------------------*
+562    *&      Form  F_ALV_REPORT_LAYOUT2
+563    *&---------------------------------------------------------------------*
+564    *       text
+565    *----------------------------------------------------------------------*
+566    *      -->P1        text
+567    *      <--P2        text
+568    *----------------------------------------------------------------------*
+569    FORM f_alv_report_layout2 .
+570      CLEAR: it_layout2.
+571      it_layout2-cwidth_opt = 'X'.
+572      it_layout2-sel_mode   = 'A'.
+573
+574    ENDFORM.                    " F_ALV_REPORT_LAYOUT2
+575    *&---------------------------------------------------------------------*
+576    *&      Form  FREE_OBJECTS
+577    *&---------------------------------------------------------------------*
+578    *       text
+579    *----------------------------------------------------------------------*
+580    *      -->P1        text
+581    *      <--P2        text
+582    *----------------------------------------------------------------------*
+583    FORM free_objects1 .
+584
+585      CALL METHOD c_alvgd1->free
+586        EXCEPTIONS
+587          cntl_error        = 1
+588          cntl_system_error = 2
+589          OTHERS            = 3.
+590      IF sy-subrc <> 0.
+591        MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+592                WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+593      ENDIF.
+594      CALL METHOD c_ccont1->free
+595        EXCEPTIONS
+596          cntl_error        = 1
+597          cntl_system_error = 2
+598          OTHERS            = 3.
+599      IF sy-subrc <> 0.
+600        MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+601                WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+602      ENDIF.
+603
+604    ENDFORM.                    " FREE_OBJECTS
+605    *&---------------------------------------------------------------------*
+606    *&      Form  FREE_OBJECTS2
+607    *&---------------------------------------------------------------------*
+608    *       text
+609    *----------------------------------------------------------------------*
+610    *      -->P1        text
+611    *      <--P2        text
+612    *----------------------------------------------------------------------*
+613    FORM free_objects2 .
+614      CALL METHOD c_alvgd2->free
+615        EXCEPTIONS
+616          cntl_error        = 1
+617          cntl_system_error = 2
+618          OTHERS            = 3.
+619      IF sy-subrc <> 0.
+620        MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+621                WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+622      ENDIF.
+623      CALL METHOD c_ccont2->free
+624        EXCEPTIONS
+625          cntl_error        = 1
+626          cntl_system_error = 2
+627          OTHERS            = 3.
+628      IF sy-subrc <> 0.
+629        MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+630                WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+631      ENDIF.
+632
+633
+634    ENDFORM.                    " FREE_OBJECTS2
+635    *&---------------------------------------------------------------------*
+636    *&      Form  F_PREPARE_OP_TAB3
+637    *&---------------------------------------------------------------------*
+638    *       text
+639    *----------------------------------------------------------------------*
+640    *      -->P1        text
+641    *      <--P2        text
+642    *----------------------------------------------------------------------*
+643    FORM f_prepare_op_tab3 .
+644      DATA: lv_key  TYPE c LENGTH 45,
+645            lv_skip TYPE abap_bool.
+646      REFRESH : gt_paym3, gt_batch_header3,gt_final3, gt_batch_sign3.
+647    *break sab_vaibhav.
+648      SELECT * FROM zfi_paym_file INTO TABLE gt_paym3 WHERE sent = 'X'.
+649
+650    *DELETE gt_paym3 WHERE file_data_sent IS INITIAL.
+651
+652      IF gt_paym3 IS NOT INITIAL.
+653        SELECT * FROM regut INTO TABLE gt_batch_header3
+654          FOR ALL ENTRIES IN gt_paym3
+655          WHERE laufi = gt_paym3-laufi
+656          AND   laufd = gt_paym3-laufd.
+657
+658        IF gt_batch_header3 IS NOT INITIAL.
+659          SELECT * FROM  zfi_batch_sign INTO TABLE gt_batch_sign3
+660            WHERE signer EQ sy-uname.
+661        ENDIF.
+662      ENDIF.
+663
+664    * Load REGUHM so batches that already carry a BATCHNO can be excluded.
+665      PERFORM f_load_reguhm USING gt_batch_header3.
+666
+667      LOOP AT gt_batch_header3 INTO gs_batch_header3.
+668    *   Skip batches that already have a BATCHNO in REGUHM
+669        PERFORM f_skip_batchno USING gs_batch_header3 CHANGING lv_skip.
+670        IF lv_skip = abap_true.
+671          CLEAR gs_batch_header3.
+672          CONTINUE.
+673        ENDIF.
+674        CLEAR lv_key.
+675        CONCATENATE gs_batch_header3-zbukr gs_batch_header3-banks
+676                    gs_batch_header3-laufd gs_batch_header3-laufi
+677                    gs_batch_header3-xvorl gs_batch_header3-dtkey
+678                    gs_batch_header3-lfdnr
+679               INTO lv_key RESPECTING BLANKS.
+680
+681        READ TABLE gt_batch_sign3 INTO gs_batch_sign3 WITH KEY batch_no = lv_key
+682                                                              signer = sy-uname.
+683        IF sy-subrc EQ 0.
+684          MOVE-CORRESPONDING gs_batch_header3 TO gs_final3.
+685          gs_final3-guid       = lv_key.
+686          gs_final3-batch_sum  = gs_batch_header3-rbetr.
+687          gs_final3-batch_curr = gs_batch_header3-waers.
+688          gs_final3-crusr      = gs_batch_header3-tsusr.
+689          gs_final3-crdate     = gs_batch_header3-tsdat.
+690          gs_final3-crtime     = gs_batch_header3-tstim.
+691          gs_final3-chusr      = gs_batch_header3-dwusr.
+692          gs_final3-chdate     = gs_batch_header3-dwdat.
+693          gs_final3-chtime     = gs_batch_header3-dwtim.
+694          READ TABLE gt_paym3 INTO gs_paym3 WITH KEY laufd = gs_batch_header3-laufd
+695                                                     laufi = gs_batch_header3-laufi.
+696          IF sy-subrc = 0.
+697            gs_final3-raw_data       = gs_paym3-raw_data.
+698            gs_final3-file_data_sent = gs_paym3-file_data_sent.
+699            gs_final3-error_flag     = gs_paym3-sent_error.
+700          ENDIF.
+701          APPEND gs_final3 TO gt_final3.
+702        ENDIF.
+703    *    endif.
+704        CLEAR : gs_batch_header3,gs_batch_sign3,gs_final3.
+705      ENDLOOP.
+706
+707    ENDFORM.                    " F_PREPARE_OP_TAB3
+708
+709    *&---------------------------------------------------------------------*
+710    *&      Form  F_ALV_BUILD_FIELDCAT3
+711    *&---------------------------------------------------------------------*
+712    *       text
+713    *----------------------------------------------------------------------*
+714    *      -->P1        text
+715    *      <--P2        text
+716    *----------------------------------------------------------------------*
+717    FORM f_alv_build_fieldcat3 .
+718      DATA lv_fldcat3 TYPE lvc_s_fcat.
+719      DATA: lv_index3 TYPE sy-index.
+720      REFRESH : it_fcat3.
+721      CLEAR lv_fldcat3.
+722      lv_fldcat3-tabname   = 'GT_FINAL3'.
+723      lv_fldcat3-fieldname = 'GUID'.
+724      lv_fldcat3-scrtext_m = 'Batch Key'.
+725      lv_fldcat3-outputlen = '45'.
+726    *  lv_fldcat3-row_pos   = '1'.
+727      lv_fldcat3-col_pos   = lv_index3.
+728      APPEND lv_fldcat3 TO it_fcat3.
+729
+730    * RULE_ID / ITEM_CNT not available in REGUT - column removed
+731
+732      lv_index3 = lv_index3 + 1.
+733      CLEAR lv_fldcat3.
+734      lv_fldcat3-tabname   = 'GT_FINAL3'.
+735      lv_fldcat3-fieldname = 'LAUFD'.
+736      lv_fldcat3-scrtext_m = 'Run Date'.
+737      lv_fldcat3-outputlen = '11'.
+738    *  lv_fldcat3-row_pos   = '1'.
+739      lv_fldcat3-col_pos   = lv_index3.
+740      APPEND lv_fldcat3 TO it_fcat3.
+741
+742      lv_index3 = lv_index3 + 1.
+743      CLEAR lv_fldcat3.
+744      lv_fldcat3-tabname   = 'GT_FINAL3'.
+745      lv_fldcat3-fieldname = 'LAUFI'.
+746      lv_fldcat3-scrtext_m = 'Run Id'.
+747      lv_fldcat3-outputlen = '8'.
+748    *  lv_fldcat3-row_pos   = '1'.
+749      lv_fldcat3-col_pos   = lv_index3.
+750      APPEND lv_fldcat3 TO it_fcat3.
+751
+752    * LAUFD_F / LAUFI_F (file date/id) not available in REGUT - column removed
+753
+754      lv_index3 = lv_index3 + 1.
+755      CLEAR lv_fldcat3.
+756      lv_fldcat3-tabname   = 'GT_FINAL3'.
+757      lv_fldcat3-fieldname = 'ERROR_FLAG'.
+758      lv_fldcat3-scrtext_m = 'Error Flag'.
+759      lv_fldcat3-outputlen = '10'.
+760    *  lv_fldcat1-row_pos   = '1'.
+761      lv_fldcat3-col_pos   = lv_index3.
+762      APPEND lv_fldcat3 TO it_fcat3.
+763
+764      lv_index3 = lv_index3 + 1.
+765      CLEAR lv_fldcat3.
+766      lv_fldcat3-tabname   = 'GT_FINAL3'.
+767      lv_fldcat3-fieldname = 'BATCH_SUM'.
+768      lv_fldcat3-scrtext_m = 'Batch Amount'.
+769      lv_fldcat3-outputlen = '15'.
+770    *  lv_fldcat3-row_pos   = '1'.
+771      lv_fldcat3-col_pos   = lv_index3.
+772      APPEND lv_fldcat3 TO it_fcat3.
+773
+774      lv_index3 = lv_index3 + 1.
+775      CLEAR lv_fldcat3.
+776      lv_fldcat3-tabname   = 'GT_FINAL3'.
+777      lv_fldcat3-fieldname = 'CRUSR'.
+778      lv_fldcat3-scrtext_m = 'Create User'.
+779      lv_fldcat3-outputlen = '12'.
+780    *  lv_fldcat3-row_pos   = '1'.
+781      lv_fldcat3-col_pos   = lv_index3.
+782      APPEND lv_fldcat3 TO it_fcat3.
+783
+784      lv_index3 = lv_index3 + 1.
+785      CLEAR lv_fldcat3.
+786      lv_fldcat3-tabname   = 'GT_FINAL3'.
+787      lv_fldcat3-fieldname = 'CRTIME'.
+788      lv_fldcat3-scrtext_m = 'Create Time'.
+789      lv_fldcat3-outputlen = '11'.
+790      lv_fldcat3-row_pos   = '1'.
+791      lv_fldcat3-col_pos   = lv_index3.
+792      APPEND lv_fldcat3 TO it_fcat3.
+793
+794      lv_index3 = lv_index3 + 1.
+795      CLEAR lv_fldcat3.
+796      lv_fldcat3-tabname   = 'GT_FINAL3'.
+797      lv_fldcat3-fieldname = 'CRDATE'.
+798      lv_fldcat3-scrtext_m = 'Create Date'.
+799      lv_fldcat3-outputlen = '11'.
+800    *  lv_fldcat3-row_pos   = '1'.
+801      lv_fldcat3-col_pos   = lv_index3.
+802      APPEND lv_fldcat3 TO it_fcat3.
+803
+804      lv_index3 = lv_index3 + 1.
+805      CLEAR lv_fldcat3.
+806      lv_fldcat3-tabname   = 'GT_FINAL3'.
+807      lv_fldcat3-fieldname = 'CHUSR'.
+808      lv_fldcat3-scrtext_m = 'Change User'.
+809      lv_fldcat3-outputlen = '12'.
+810    *  lv_fldcat3-row_pos   = '1'.
+811      lv_fldcat3-col_pos   = lv_index3.
+812      APPEND lv_fldcat3 TO it_fcat3.
+813
+814      lv_index3 = lv_index3 + 1.
+815      CLEAR lv_fldcat3.
+816      lv_fldcat3-tabname   = 'GT_FINAL3'.
+817      lv_fldcat3-fieldname = 'CHTIME'.
+818      lv_fldcat3-scrtext_m = 'Change Time'.
+819      lv_fldcat3-outputlen = '11'.
+820    *  lv_fldcat3-row_pos   = '1'.
+821      lv_fldcat3-col_pos   = lv_index3.
+822      APPEND lv_fldcat3 TO it_fcat3.
+823
+824      lv_index3 = lv_index3 + 1.
+825      CLEAR lv_fldcat3.
+826      lv_fldcat3-tabname   = 'GT_FINAL3'.
+827      lv_fldcat3-fieldname = 'CHDATE'.
+828      lv_fldcat3-scrtext_m = 'Change Date'.
+829      lv_fldcat3-outputlen = '11'.
+830    *  lv_fldcat3-row_pos   = '1'.
+831      lv_fldcat3-col_pos   = lv_index3.
+832      APPEND lv_fldcat3 TO it_fcat3.
+833
+834      lv_index3 = lv_index3 + 1.
+835      CLEAR lv_fldcat3.
+836      lv_fldcat3-tabname   = 'GT_FINAL3'.
+837      lv_fldcat3-fieldname = 'ZBUKR'.
+838      lv_fldcat3-scrtext_m = 'Paying company code'.
+839      lv_fldcat3-outputlen = '19'.
+840    *  lv_fldcat3-row_pos   = '1'.
+841      lv_fldcat3-col_pos   = lv_index3.
+842      APPEND lv_fldcat3 TO it_fcat3.
+843
+844    * TOT_BTCH_AMT not available in REGUT - column removed
+845
+846    ENDFORM.                    " F_ALV_BUILD_FIELDCAT3
+847
+848    *&---------------------------------------------------------------------*
+849    *&      Form  F_ALV_REPORT_LAYOUT3
+850    *&---------------------------------------------------------------------*
+851    *       text
+852    *----------------------------------------------------------------------*
+853    *      -->P1        text
+854    *      <--P2        text
+855    *----------------------------------------------------------------------*
+856    FORM f_alv_report_layout3 .
+857      CLEAR: it_layout3.
+858      it_layout3-cwidth_opt = 'X'.
+859      it_layout3-sel_mode   = 'A'.
+860    ENDFORM.                    " F_ALV_REPORT_LAYOUT3
+861    *&---------------------------------------------------------------------*
+862    *&      Form  DOWNLOAD_SENT_DATA
+863    *&---------------------------------------------------------------------*
+864    *       text
+865    *----------------------------------------------------------------------*
+866    *      -->P1        text
+867    *      <--P2        text
+868    *----------------------------------------------------------------------*
+869    FORM download_sent_data .
+870      DATA: lv_lines TYPE i.
+871      DATA: fileleng TYPE i,
+872            flen     TYPE i,
+873            lv_filename TYPE string,
+874            enh_version_management_hex_tb TYPE enh_version_management_hex_tb.
+875
+876      CALL METHOD c_alvgd3->get_selected_rows
+877        IMPORTING
+878          et_index_rows = gt_selected_rows3.
+879
+880      CLEAR : lv_lines.
+881      DESCRIBE TABLE gt_selected_rows3 LINES lv_lines.
+882      IF lv_lines EQ 0.
+883        MESSAGE 'Please select one record' TYPE 'E'.
+884      ELSEIF lv_lines > 1.
+885        MESSAGE 'Please select only single record' TYPE 'E'.
+886      ENDIF.
+887
+888      IF gt_selected_rows3 IS NOT INITIAL.
+889        READ TABLE gt_selected_rows3 INTO gs_selected_rows3 INDEX 1.
+890        IF sy-subrc = 0.
+891          READ TABLE gt_final3 INTO gs_final3 INDEX gs_selected_rows3-index.
+892          IF sy-subrc = 0.
+893            CLEAR gs_paym3.
+894            READ TABLE gt_paym3 INTO gs_paym3 WITH KEY laufi = gs_final3-laufi
+895                                                       laufd = gs_final3-laufd.
+896            IF sy-subrc EQ 0.
+897              CLEAR lv_filename.
+898              CONCATENATE 'C:\BCM\' gs_paym3-file_name '.TXT' INTO lv_filename.
+899
+900              CALL FUNCTION 'ENH_XSTRING_TO_TAB'
+901                EXPORTING
+902                  im_xstring = gs_final3-file_data_sent
+903                IMPORTING
+904                  ex_data    = enh_version_management_hex_tb
+905                  ex_leng    = flen.
+906
+907              CALL FUNCTION 'GUI_DOWNLOAD'
+908                EXPORTING
+909                  bin_filesize            = flen          "ostr_updated_signed_data_l
+910                  filename                = lv_filename    "'C:\TEST\TESTV1.TXT'
+911                  filetype                = 'BIN'
+912    *             APPEND                  = ' '
+913    *             WRITE_FIELD_SEPARATOR   = ' '
+914    *             HEADER                  = '00'
+915    *             TRUNC_TRAILING_BLANKS   = ' '
+916                IMPORTING
+917                  filelength              = fileleng
+918                TABLES
+919                  data_tab                = enh_version_management_hex_tb "OUT_DATA_TABLE
+920                EXCEPTIONS
+921                  file_write_error        = 1
+922                  no_batch                = 2
+923                  gui_refuse_filetransfer = 3
+924                  invalid_type            = 4
+925                  no_authority            = 5
+926                  unknown_error           = 6
+927                  header_not_allowed      = 7
+928                  separator_not_allowed   = 8
+929                  filesize_not_allowed    = 9
+930                  header_too_long         = 10
+931                  dp_error_create         = 11
+932                  dp_error_send           = 12
+933                  dp_error_write          = 13
+934                  unknown_dp_error        = 14
+935                  access_denied           = 15
+936                  dp_out_of_memory        = 16
+937                  disk_full               = 17
+938                  dp_timeout              = 18
+939                  file_not_found          = 19
+940                  dataprovider_exception  = 20
+941                  control_flush_error     = 21
+942                  OTHERS                  = 22.
+943              IF sy-subrc NE 0.
+944    *            MESSAGE E206(1S) WITH FILE.
+945              ENDIF.
+946              CLEAR :fileleng,flen.
+947              REFRESH : enh_version_management_hex_tb.
+948            ENDIF.
+949          ENDIF.
+950        ENDIF.
+951      ENDIF.
+952
+953    ENDFORM.                    " DOWNLOAD_SENT_DATA
+954
+955    *&---------------------------------------------------------------------*
+956    *&      Form  DOWNLOAD_RAW_DATA
+957    *&---------------------------------------------------------------------*
+958
+959    FORM download_raw_data .
+960      DATA : lv_lines TYPE i.
+961      DATA: fileleng TYPE i,
+962            flen     TYPE i,
+963            lv_filename TYPE string,
+964            enh_version_management_hex_tb TYPE enh_version_management_hex_tb.
+965
+966      CALL METHOD c_alvgd3->get_selected_rows
+967        IMPORTING
+968          et_index_rows = gt_selected_rows3.
+969
+970      CLEAR : lv_lines.
+971      DESCRIBE TABLE gt_selected_rows3 LINES lv_lines.
+972      IF lv_lines EQ 0.
+973        MESSAGE 'Please select one record' TYPE 'E'.
+974      ELSEIF lv_lines > 1.
+975        MESSAGE 'Please select only single record' TYPE 'E'.
+976      ENDIF.
+977
+978      IF gt_selected_rows3 IS NOT INITIAL.
+979        READ TABLE gt_selected_rows3 INTO gs_selected_rows3 INDEX 1.
+980        IF sy-subrc = 0.
+981          READ TABLE gt_final3 INTO gs_final3 INDEX gs_selected_rows3-index.
+982          IF sy-subrc = 0.
+983            CLEAR gs_paym3.
+984            READ TABLE gt_paym3 INTO gs_paym3 WITH KEY laufi = gs_final3-laufi
+985                                                       laufd = gs_final3-laufd.
+986            IF sy-subrc EQ 0.
+987              CLEAR lv_filename.
+988              CONCATENATE 'C:\BCM\' gs_paym3-file_name '.TXT' INTO lv_filename.
+989
+990              CALL FUNCTION 'ENH_XSTRING_TO_TAB'
+991                EXPORTING
+992                  im_xstring = gs_final3-raw_data
+993                IMPORTING
+994                  ex_data    = enh_version_management_hex_tb
+995                  ex_leng    = flen.
+996
+997              CALL FUNCTION 'GUI_DOWNLOAD'
+998                EXPORTING
+999                  bin_filesize            = flen          "ostr_updated_signed_data_l
+1000                 filename                = lv_filename    "'C:\TEST\TESTV1.TXT'
+1001                 filetype                = 'BIN'
+1002   *             APPEND                  = ' '
+1003   *             WRITE_FIELD_SEPARATOR   = ' '
+1004   *             HEADER                  = '00'
+1005   *             TRUNC_TRAILING_BLANKS   = ' '
+1006               IMPORTING
+1007                 filelength              = fileleng
+1008               TABLES
+1009                 data_tab                = enh_version_management_hex_tb "OUT_DATA_TABLE
+1010               EXCEPTIONS
+1011                 file_write_error        = 1
+1012                 no_batch                = 2
+1013                 gui_refuse_filetransfer = 3
+1014                 invalid_type            = 4
+1015                 no_authority            = 5
+1016                 unknown_error           = 6
+1017                 header_not_allowed      = 7
+1018                 separator_not_allowed   = 8
+1019                 filesize_not_allowed    = 9
+1020                 header_too_long         = 10
+1021                 dp_error_create         = 11
+1022                 dp_error_send           = 12
+1023                 dp_error_write          = 13
+1024                 unknown_dp_error        = 14
+1025                 access_denied           = 15
+1026                 dp_out_of_memory        = 16
+1027                 disk_full               = 17
+1028                 dp_timeout              = 18
+1029                 file_not_found          = 19
+1030                 dataprovider_exception  = 20
+1031                 control_flush_error     = 21
+1032                 OTHERS                  = 22.
+1033             IF sy-subrc NE 0.
+1034   *            MESSAGE E206(1S) WITH FILE.
+1035             ENDIF.
+1036             CLEAR : fileleng,flen.
+1037             REFRESH : enh_version_management_hex_tb.
+1038           ENDIF.
+1039         ENDIF.
+1040       ENDIF.
+1041     ENDIF.
+1042
+1043   ENDFORM.                    " DOWNLOAD_RAW_DATA
+1044   *&---------------------------------------------------------------------*
+1045   *&      Form  FREE_OBJECTS3
+1046   *&---------------------------------------------------------------------*
+1047   *       text
+1048   *----------------------------------------------------------------------*
+1049   *      -->P1        text
+1050   *      <--P2        text
+1051   *----------------------------------------------------------------------*
+1052   FORM free_objects3 .
+1053     CALL METHOD c_alvgd3->free
+1054       EXCEPTIONS
+1055         cntl_error        = 1
+1056         cntl_system_error = 2
+1057         OTHERS            = 3.
+1058     IF sy-subrc <> 0.
+1059       MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+1060               WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+1061     ENDIF.
+1062     CALL METHOD c_ccont3->free
+1063       EXCEPTIONS
+1064         cntl_error        = 1
+1065         cntl_system_error = 2
+1066         OTHERS            = 3.
+1067     IF sy-subrc <> 0.
+1068       MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+1069               WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+1070     ENDIF.
+1071
+1072
+1073   ENDFORM.                    " FREE_OBJECTS3
+*--- End of ZFI_BNK_APP1_F01 - 1073 lines ---

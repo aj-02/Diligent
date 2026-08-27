@@ -89,6 +89,56 @@ Every posting BAPI has a `_CHECK` twin that validates without posting.
 | `BAPI_ASSET_VALUE_ADJUST_POST` | **Post Depreciation** — replaces `ABAA` |
 | `BAPI_ASSET_WRITEUP_POST`      | **Post Write-Up** — replaces `ABZU` |
 
+### Mode -> screen -> transaction map (traced 27/08/26)
+
+`STATUS_0200` dispatches on the memory-ID `OK` value to one screen per mode.
+Each screen has its own `USER_COMMAND` module with its own `EXEC` branch, so
+the seven BDC sites are not interchangeable — each belongs to one mode.
+
+| Mode | Screen | BDC site (file line) | Tcode | Transaction types |
+|------|--------|----------------------|-------|-------------------|
+| `IMPAIR`     | 0200 | 388  | `ABAA` | `X20` / `X30` |
+| `WBACK`      | 0300 | 630  | `ABZU` | |
+| `DEPCOM`     | 0400 | 817  | `ABAA` | |
+| `UNPDEP`     | 0500 | 1002 | `ABAA` | `641` / `651` |
+| `PWBACK`     | 0600 | 1226 | `ABZU` | `X21` / `X32` |
+| `WBACKGROSS` | 0700 | 1553 **and** 1605 | `ABZU` **then** `ABAA` | `X70` / `X71` |
+
+**`WBACKGROSS` posts twice per run and is the awkward one.** It loops
+`IMPWBRATIO <> 0` into an `ABZU` session, calls `CLOSE_GROUP`, then
+`OPEN_GROUP1` and loops `DEPDIFF <> 0` into a *second* session for `ABAA`
+("DEP.ON IMPAIRMENT WRITTEN BACK"). Two sessions, two transactions, one user
+action. In the BAPI rewrite this becomes two BAPI calls per asset that must
+succeed or fail as a unit — decide the commit boundary deliberately.
+
+Note also that the `WBACKGROSS`/`ABZU` leg does **not** use `ANBZ-DMBTR`. It
+switches on the transaction type:
+
+```
+IF IST_DISPLAY-TTYPE = 'X70'.  ANBZ-SAFAV = amount.   " special depreciation
+ELSE.                          ANBZ-NAFAV = amount.   " ordinary depreciation
+ENDIF.
+```
+
+plus `RA01B-BLART = 'AA'` (document type). So the write-up legs carry
+area-specific amounts, which is what `WRITEUPAREAVALUES` in the BAPI is for.
+Do not assume a single amount field across all six modes.
+
+### Transaction types in use
+
+Set in `ZAA_IMPARMENTLOSS`: `X20`, `X21`, `X30`, `X32`, `X70`, `X71`, `641`,
+`651`. (`65D`/`64D`/`65J`/`64J` appear only in commented-out code.)
+
+TABW confirmed 27/08/26:
+
+| Type | Group | Text |
+|------|-------|------|
+| `X20` | 62 | Impairment on prior-yr acquis. - Fixed Asset |
+| `X30` | 63 | Impairment on curr.-yr acquis - Fixed Asset |
+
+Groups 62 / 63 are the unplanned-depreciation groups, consistent with
+`BAPI_ASSET_VALUE_ADJUST_POST`. **Not yet confirmed for the other six types.**
+
 ### Mapping
 
 | Current BDC | Replacement |

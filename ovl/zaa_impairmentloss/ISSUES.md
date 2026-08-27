@@ -261,6 +261,38 @@ proposal with this evidence, not as an open question. Still worth their yes,
 because reading from an area is not strictly the same as posting to it and the
 old screen posted more broadly.
 
+### RESOLVED — how to scope the posting. 27/08/26
+
+Functional's "04" meant **accounting principle 0004**, not depreciation area 04.
+`ACC_PRINCIPLE` is a field in `BAPIFAPO_GEN_INFO`, next to `LEDGER_GROUP`.
+
+| Test | `DEPR_AREA` | `ACC_PRINCIPLE` | Result |
+|------|-------------|-----------------|--------|
+| A | `01`   | blank  | clean (`AU 176` warning only) |
+| B | blank  | `0004` | **clean** |
+
+**Adopt B.** The accounting principle scopes which depreciation areas are
+posted, so SAP derives the areas exactly as `ABAAL` does in dialog. No hardcoded
+area in the new code, and the per-mode 01 / 70 problem disappears.
+
+`DEPR_AREA` stays initial. Do not set it.
+
+#### Carry-forward caveats
+
+1. **Classic AA had no accounting principle on this posting** — the ECC BDC
+   could not pass one. Leaving it blank posts across all valuations; `0004`
+   restricts to that principle. This is therefore a **behaviour change from
+   ECC**, not a like-for-like port. Get functional's confirmation in writing
+   that impairment is meant to post under accounting principle 0004 only.
+2. **Do not hardcode `'0004'` inline at each call site.** Single constant, one
+   place, with an `" ASSUMPTION:` comment naming the source of the value. The FS
+   predates S/4 and says nothing about accounting principles. A selection-screen
+   parameter would be more flexible but adds a user-visible field the issue did
+   not ask for — constant preferred unless functional wants it changeable.
+3. **Only verified on the `IMPAIR` path** (asset 106009197, `X20`). The other
+   five modes, and particularly `UNPDEP` with its area 70 read, still need their
+   own `_CHECK` run before go-live.
+
 ### Depreciation areas — chart ONGC, confirmed 27/08/26
 
 Company code OVL uses chart of depreciation **ONGC**. Valid real areas:

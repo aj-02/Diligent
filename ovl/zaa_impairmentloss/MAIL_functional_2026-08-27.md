@@ -4,7 +4,7 @@ Not sent. Sending stays manual.
 
 ---
 
-**Subject:** ZFIIMPR — impairment posting corrected for S/4, three confirmations needed
+**Subject:** ZFIIMPR — impairment posting corrected for S/4
 
 ---
 
@@ -12,17 +12,17 @@ Hi <name>,
 
 ZFIIMPR was failing in SM35. On S/4, ABAA and ABZU are no longer posting
 transactions — they redirect via RADISPATCH_AB01, and batch input cannot follow
-a redirect. The posting has been moved to the standard FI-AA BAPIs and the
-program is ready for your testing.
+a redirect.
 
-Please confirm:
+The posting has been moved to the standard FI-AA BAPIs:
 
-1. Which period the impairment should post to. Asset Accounting fiscal year
-   2026 is closed for OVL, so nothing posts at present.
-2. That impairment should post under accounting principle 0004 only. ECC had no
-   accounting principle on this posting.
-3. That transaction types X20 / X30, and X21 / X32 / X70 / X71 / 641 / 651,
-   remain correct under new Asset Accounting.
+- BAPI_ASSET_VALUE_ADJUST — impairment and unplanned depreciation, replacing ABAA
+- BAPI_ASSET_WRITEUP — write-back, replacing ABZU
+
+Accounting principle 0004 is passed on both, as advised.
+
+The program is ready for your testing. Please note Asset Accounting fiscal year
+2026 is closed for OVL, so nothing will post until the period is confirmed.
 
 Thanks & Regards,
 Arnav Johri | Associate Consultant | Diligent Global

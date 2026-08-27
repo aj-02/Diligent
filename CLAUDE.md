@@ -192,8 +192,9 @@ In this repo:
 - **ZIP:** `kpmg/zpp_forecast_v2/` (screen-free *by design* — that is why it ships; adding
   `CALL SCREEN` or `cl_gui_custom_container` reverts it to paste-only), `kpmg/abapgit_pilot/`,
   `ovl/ztest_t001/`, `kpmg/zfi_tds_cl34/` (also screen-free by design; its `.prog.xml`
-  `TPOOL` carries the title, selection texts and text symbols, so an import needs no
-  manual text maintenance).
+  `TPOOL` carries the report title only — `TPOOL` items with a `KEY` and a
+  `package.devc.xml` both drew an abapGit "xml incorrect" error, so selection texts and
+  text symbols are maintained by hand after import).
 - **Hybrid:** `kpmg/zmm_po_budget/` — DDIC + message class by ZIP; BAdI insert, SE54 event,
   screen module, TMG and SE93 by hand.
 - **Paste-only:** `kpmg/zmb5b/` (Z copy of RM07MLBD), `kpmg/zmmims/` (module-pool includes),

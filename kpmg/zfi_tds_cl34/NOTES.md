@@ -33,18 +33,26 @@ reverts it to paste-only.
 
 ```
 .abapgit.xml
-src/package.devc.xml
-src/zfi_tds_cl34.prog.abap        + .prog.xml   SUBC 1, FIXPT, VARCL, UCCHECK, TPOOL
+src/zfi_tds_cl34.prog.abap        + .prog.xml   SUBC 1, FIXPT, VARCL, UCCHECK, TPOOL (title only)
 src/zfi_tds_cl34_top.prog.abap    + .prog.xml   SUBC I
 src/zfi_tds_cl34_scr.prog.abap    + .prog.xml   SUBC I
 src/zfi_tds_cl34_forms.prog.abap  + .prog.xml   SUBC I
 ```
 
-The main program's `TPOOL` carries the **title, all five selection texts and text symbol
-`B01`**, and its `PROGDIR` carries `FIXPT` and `UCCHECK`. So on the ZIP path steps 1–4
-below are done by the import — check step 2 anyway, attributes are worth eyeing after any
-import. Re-zip from `src/` rather than reusing the archive if the sources change, and
-check the four object names are free in the target before importing.
+The layout deliberately mirrors `ovl/ztest_t001/ZTEST_T001.zip`, the only ZIP in this repo
+known to import cleanly here. Two things were stripped after an abapGit *"xml incorrect"*
+error on the first attempt, both of them deviations from that reference:
+
+- **`package.devc.xml`** — the reference has none, and it is only needed if abapGit is
+  meant to create the package rather than import into an existing one.
+- **`TPOOL` entries carrying a `KEY`** — the five selection texts and text symbol `B01`.
+  The reference pool holds a title and nothing else, so that is all this one holds.
+
+Consequence: **the ZIP carries the title and the program attributes, not the selection
+texts.** Steps 3 and 4 below are manual on both paths. Arnav's decision, 27/08/26.
+
+Re-zip from `src/` rather than reusing the archive if the sources change, and check the
+four object names are free in the target before importing.
 
 The steps below apply **when pasting**. Nothing travels with a paste. The same list is the
 trailer comment of `ZFI_TDS_CL34_SCR`, so it is in front of whoever pastes the object:

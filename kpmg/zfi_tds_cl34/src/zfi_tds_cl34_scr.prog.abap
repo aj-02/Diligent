@@ -53,11 +53,13 @@ SELECTION-SCREEN END OF BLOCK b1.
 *& WHICH OF THESE APPLY DEPENDS ON HOW THE OBJECT ARRIVES.
 *&
 *&   abapGit ZIP (ZFI_TDS_CL34.zip in the object folder)
-*&     Steps 2, 3 and 4 are already carried in zfi_tds_cl34.prog.xml -
-*&     the title, the five selection texts, the text symbol and the
-*&     Fixed point arithmetic / Unicode attributes are all serialised in
-*&     its PROGDIR and TPOOL sections, so the import creates the four
-*&     programs with the texts already in place, and step 1 with them.
+*&     Steps 1 and 2 are carried: the import creates the four programs,
+*&     and zfi_tds_cl34.prog.xml holds the title plus the Fixed point
+*&     arithmetic and Unicode attributes in its PROGDIR and TPOOL.
+*&     STEPS 3 AND 4 STILL HAVE TO BE DONE BY HAND. The selection texts
+*&     and the text symbol are deliberately NOT in the text pool: TPOOL
+*&     entries carrying a KEY were a suspect in an abapGit import error,
+*&     so the pool holds the report title and nothing else.
 *&     Verify step 2 regardless: attributes are the one thing worth
 *&     eyeing after any import.
 *&
@@ -106,7 +108,6 @@ SELECTION-SCREEN END OF BLOCK b1.
 *& 4. Goto -> Text elements -> Text symbols
 *&     b01       Selection
 *&
-*& Until steps 3 and 4 are done - by hand after a paste, or by the
-*& import after a ZIP - the block frame is blank and the fields show
-*& their technical names.
+*& Until steps 3 and 4 are done - by hand either way, ZIP or paste - the
+*& block frame is blank and the fields show their technical names.
 *&---------------------------------------------------------------------*

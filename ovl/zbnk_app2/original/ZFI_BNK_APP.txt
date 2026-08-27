@@ -1,0 +1,1019 @@
+----------------------------------------------------------------------------------------------------
+Main program     ZFI_BNK_APP                               Level 0    Page 1
+Object           ZFI_BNK_APP                               Lines 23
+System           OCQ / 500   User SAP_ABAP   27.08.2026 09:15:06
+----------------------------------------------------------------------------------------------------
+1      *&---------------------------------------------------------------------*
+2      *& Report  ZFI_BNK_APP
+3      *&
+4      *&---------------------------------------------------------------------*
+5      *&
+6      *&
+7      *&---------------------------------------------------------------------*
+8
+9      REPORT zfi_bnk_app.
+10
+11     * Top Include
+12     INCLUDE zfi_bnk_app_top.
+13     * Selection Screen
+14     INCLUDE zfi_bnk_app_s01.
+15     * Include for sub routines
+16     INCLUDE zfi_bnk_app_f.
+17     ** Include for output
+18     INCLUDE zfi_bnk_app_outputo01.
+19     ** Include for input
+20     INCLUDE zfi_bnk_app_i01.
+21
+22     START-OF-SELECTION.
+23       CALL SCREEN 100.
+*--- End of ZFI_BNK_APP - 23 lines ---
+
+----------------------------------------------------------------------------------------------------
+Include          ZFI_BNK_APP_TOP                           Level 1    Page 2
+Object           ZFI_BNK_APP                               Lines 70
+System           OCQ / 500   User SAP_ABAP   27.08.2026 09:15:06
+----------------------------------------------------------------------------------------------------
+1      *&---------------------------------------------------------------------*
+2      *& Include          ZFI_BNK_APP_TOP
+3      *&---------------------------------------------------------------------*
+4
+5
+6      TYPES : BEGIN OF ty_final,
+7                sel              TYPE c,
+8                guid             TYPE c LENGTH 45,        "Holds concatenated REGUT primary key (ZBUKR+BANKS+LAUFD+LAUFI+XVORL+DTKEY+LFDNR = 41 chars) - unique key in place of BATCH_NO
+9                batch_no         TYPE bnk_com_btch_no,
+10               rule_id          TYPE bnk_com_btch_rule_id,
+11               item_cnt         TYPE bnk_com_btch_ctr,
+12               laufd            TYPE bnk_com_btch_mrge_dat,
+13               laufi            TYPE bnk_com_btch_mrge_id,
+14               xvorl            TYPE xvorl,
+15               laufd_f          TYPE bnk_com_btch_file_dat,
+16               laufi_f          TYPE bnk_com_btch_file_id,
+17               sent_flag        TYPE c,
+18               error_flag       TYPE c,
+19               rec_flag         TYPE c,
+20               batch_sum        TYPE bnk_com_btch_amount,
+21               batch_curr       TYPE bnk_com_btch_curr,
+22               max_pay_amt      TYPE bnk_com_max_paymnt_amount,
+23               status           TYPE epic_regut_status,   "REGUT-STATUS(CHAR3) - avoids MOVE-CORRESPONDING type clash
+24               crusr            TYPE bnk_com_create_user,
+25               crtime           TYPE bnk_com_create_time,
+26               crdate           TYPE bnk_com_create_date,
+27               chusr            TYPE bnk_com_change_user,
+28               chtime           TYPE bnk_com_change_time,
+29               chdate           TYPE bnk_com_change_date,
+30               cur_processor    TYPE bnk_com_cur_processor,
+31               archive_status   TYPE bnk_com_archive_status,
+32               zbukr            TYPE dzbukr,
+33               hbkid            TYPE hbkid,
+34               tot_btch_amt     TYPE bnk_com_btch_amt_in_rule_curr,
+35               maxpayamt_rulecu TYPE bnk_com_max_pymntamt_in_rulcur,
+36               grp_field1_value TYPE bnk_com_grp_fld_val1,
+37               grp_field2_value TYPE bnk_com_grp_fld_val2,
+38               raw_data         TYPE xstring,
+39               file_data_sent   TYPE xstring,
+40               file_data_received TYPE xstring,
+41               pending_with     TYPE sy-uname,
+42               file_name        TYPE zfi_paym_file-file_name ,
+43               received_filename TYPE zfi_paym_file-received_filename,
+44
+45             END OF ty_final.
+46
+47     DATA : gt_paym          TYPE STANDARD TABLE OF zfi_paym_file,
+48            gt_batch_header  TYPE STANDARD TABLE OF regut,   "Replaced BNK_BATCH_HEADER with REGUT
+49            gt_batch_sign    TYPE STANDARD TABLE OF zfi_batch_sign ,
+50            gt_final         TYPE STANDARD TABLE OF ty_final,
+51
+52
+53            gs_paym          TYPE zfi_paym_file,
+54            gs_batch_header  TYPE regut,   "Replaced BNK_BATCH_HEADER with REGUT
+55            gs_batch_sign    TYPE zfi_batch_sign ,
+56            gs_final         TYPE ty_final,
+57
+58            c_ccont          TYPE REF TO cl_gui_custom_container, "Custom cont
+59            c_alvgd          TYPE REF TO cl_gui_alv_grid,         "ALV grid
+60            it_fcat          TYPE lvc_t_fcat,                     " Fieldcat
+61            it_layout        TYPE lvc_s_layo,                     "Layout
+62            c_dwnld          TYPE REF TO cl_gui_frontend_services.
+63
+64
+65     DATA: gt_selected_rows TYPE lvc_t_row,                       "Selected Rows
+66           gs_selected_rows TYPE lvc_s_row.
+67
+68     DATA : gv_laufd     TYPE zfi_paym_file-laufd,
+69            gv_laufi     TYPE zfi_paym_file-laufi,
+70            gv_sent_date TYPE zfi_paym_file-sent_date.
+*--- End of ZFI_BNK_APP_TOP - 70 lines ---
+
+----------------------------------------------------------------------------------------------------
+Include          ZFI_BNK_APP_S01                           Level 1    Page 3
+Object           ZFI_BNK_APP                               Lines 8
+System           OCQ / 500   User SAP_ABAP   27.08.2026 09:15:06
+----------------------------------------------------------------------------------------------------
+1      *&---------------------------------------------------------------------*
+2      *&  Include           ZFI_BNK_APP_S01
+3      *&---------------------------------------------------------------------*
+4      SELECT-OPTIONS : so_laufd     FOR gv_laufd,
+5                       so_laufi     FOR gv_laufi,
+6                       so_sent      FOR gv_sent_date.
+7
+8      CREATE OBJECT c_dwnld.
+*--- End of ZFI_BNK_APP_S01 - 8 lines ---
+
+----------------------------------------------------------------------------------------------------
+Include          ZFI_BNK_APP_F                             Level 1    Page 4
+Object           ZFI_BNK_APP                               Lines 779
+System           OCQ / 500   User SAP_ABAP   27.08.2026 09:15:06
+----------------------------------------------------------------------------------------------------
+1      *----------------------------------------------------------------------*
+2      ***INCLUDE ZFI_BNK_APP_F.
+3      *----------------------------------------------------------------------*
+4      *&---------------------------------------------------------------------*
+5      *&      Form  F_PREPARE_OP_TAB
+6      *&---------------------------------------------------------------------*
+7      *       text
+8      *----------------------------------------------------------------------*
+9      *      -->P1        text
+10     *      <--P2        text
+11     *----------------------------------------------------------------------*
+12     FORM f_prepare_op_tab .
+13     * Data source changed from BNK_BATCH_HEADER to REGUT. As REGUT-GUID is not
+14     * populated, BATCH_NO holds the concatenated REGUT primary key:
+15     *   ZBUKR + BANKS + LAUFD + LAUFI + XVORL + DTKEY + LFDNR (RESPECTING BLANKS)
+16       DATA: lv_key  TYPE zfi_batch_sign-batch_no.
+17       DATA: lt_keys TYPE STANDARD TABLE OF zfi_batch_sign-batch_no,
+18             lv_k    TYPE zfi_batch_sign-batch_no.
+19
+20       REFRESH : gt_paym, gt_batch_header,gt_final, gt_batch_sign.
+21     *break sab_vaibhav.
+22       SELECT * FROM zfi_paym_file INTO TABLE gt_paym
+23                       WHERE laufd IN so_laufd
+24                       AND   laufi IN so_laufi
+25                       AND   sent_date IN so_sent.
+26       "                AND   sent = 'X'.
+27
+28       IF gt_paym IS NOT INITIAL.
+29         SELECT * FROM regut INTO TABLE gt_batch_header
+30                             FOR ALL ENTRIES IN gt_paym
+31                             WHERE laufi = gt_paym-laufi
+32                             AND   laufd = gt_paym-laufd.
+33
+34         IF gt_batch_header IS NOT INITIAL.
+35     *     Build the concatenated REGUT key for every row, then read the
+36     *     matching signature records (ZFI_BATCH_SIGN-BATCH_NO holds that key).
+37           REFRESH lt_keys.
+38           LOOP AT gt_batch_header INTO gs_batch_header.
+39             CLEAR lv_k.
+40             CONCATENATE gs_batch_header-zbukr gs_batch_header-banks
+41                         gs_batch_header-laufd gs_batch_header-laufi
+42                         gs_batch_header-xvorl gs_batch_header-dtkey
+43                         gs_batch_header-lfdnr
+44                    INTO lv_k RESPECTING BLANKS.
+45             APPEND lv_k TO lt_keys.
+46             CLEAR gs_batch_header.
+47           ENDLOOP.
+48           SORT lt_keys.
+49           DELETE ADJACENT DUPLICATES FROM lt_keys.
+50           IF lt_keys IS NOT INITIAL.
+51             SELECT * FROM  zfi_batch_sign INTO TABLE gt_batch_sign
+52                             FOR ALL ENTRIES IN lt_keys
+53                             WHERE batch_no = lt_keys-table_line.
+54           ENDIF.
+55         ENDIF.
+56       ENDIF.
+57
+58       LOOP AT gt_batch_header INTO gs_batch_header.
+59
+60         CLEAR lv_key.
+61         CONCATENATE gs_batch_header-zbukr gs_batch_header-banks
+62                     gs_batch_header-laufd gs_batch_header-laufi
+63                     gs_batch_header-xvorl gs_batch_header-dtkey
+64                     gs_batch_header-lfdnr
+65                INTO lv_key RESPECTING BLANKS.
+66
+67         READ TABLE gt_batch_sign INTO gs_batch_sign WITH KEY batch_no = lv_key.
+68
+69         IF sy-subrc EQ 0.
+70           IF gs_batch_sign-digitl_sign = ' '.
+71             gs_final-pending_with = gs_batch_sign-signer.
+72           ENDIF.
+73           MOVE-CORRESPONDING gs_batch_header TO gs_final.
+74           gs_final-guid       = lv_key.
+75           gs_final-batch_sum  = gs_batch_header-rbetr.
+76           gs_final-batch_curr = gs_batch_header-waers.
+77           gs_final-crusr      = gs_batch_header-tsusr.
+78           gs_final-crdate     = gs_batch_header-tsdat.
+79           gs_final-crtime     = gs_batch_header-tstim.
+80           gs_final-chusr      = gs_batch_header-dwusr.
+81           gs_final-chdate     = gs_batch_header-dwdat.
+82           gs_final-chtime     = gs_batch_header-dwtim.
+83           READ TABLE gt_paym INTO gs_paym WITH KEY laufd = gs_batch_header-laufd
+84                                                    laufi = gs_batch_header-laufi.
+85           IF sy-subrc = 0.
+86             gs_final-raw_data           = gs_paym-raw_data.
+87             gs_final-file_data_sent     = gs_paym-file_data_sent.
+88             gs_final-error_flag         = gs_paym-sent_error.
+89             gs_final-sent_flag          = gs_paym-sent.
+90             gs_final-rec_flag           = gs_paym-received.               "28.07.2014
+91             gs_final-file_data_received = gs_paym-file_data_received.     "28.07.2014
+92             gs_final-file_name          = gs_paym-file_name.              "28.07.2014
+93             gs_final-received_filename  = gs_paym-received_filename.      "28.07.2014
+94           ENDIF.
+95           APPEND gs_final TO gt_final.
+96         ENDIF.
+97     *    endif.
+98         CLEAR : gs_batch_header,gs_batch_sign,gs_final.
+99       ENDLOOP.
+100      SORT gt_final BY guid.
+101    ENDFORM.                    " F_PREPARE_OP_TAB
+102    *&---------------------------------------------------------------------*
+103    *&      Form  F_ALV_BUILD_FIELDCAT
+104    *&---------------------------------------------------------------------*
+105    *       text
+106    *----------------------------------------------------------------------*
+107    *      -->P1        text
+108    *      <--P2        text
+109    *----------------------------------------------------------------------*
+110    FORM f_alv_build_fieldcat .
+111      DATA lv_fldcat TYPE lvc_s_fcat.
+112      DATA: lv_index TYPE sy-index.
+113      REFRESH : it_fcat.
+114      CLEAR lv_fldcat.
+115      lv_fldcat-tabname   = 'GT_FINAL'.
+116      lv_fldcat-fieldname = 'GUID'.
+117      lv_fldcat-scrtext_m = 'Batch Key'.
+118      lv_fldcat-outputlen = '45'.
+119    *  lv_fldcat-row_pos   = '1'.
+120      lv_fldcat-col_pos   = lv_index.
+121      APPEND lv_fldcat TO it_fcat.
+122
+123    * RULE_ID / ITEM_CNT not available in REGUT - columns removed
+124
+125      lv_index  = lv_index + 1.
+126      CLEAR lv_fldcat.
+127      lv_fldcat-tabname   = 'GT_FINAL'.
+128      lv_fldcat-fieldname = 'LAUFD'.
+129      lv_fldcat-scrtext_m = 'Run Date'.
+130      lv_fldcat-outputlen = '11'.
+131    *  lv_fldcat-row_pos   = '1'.
+132      lv_fldcat-col_pos   = lv_index.
+133      APPEND lv_fldcat TO it_fcat.
+134
+135      lv_index  = lv_index + 1.
+136      CLEAR lv_fldcat.
+137      lv_fldcat-tabname   = 'GT_FINAL'.
+138      lv_fldcat-fieldname = 'LAUFI'.
+139      lv_fldcat-scrtext_m = 'Run Id'.
+140      lv_fldcat-outputlen = '8'.
+141    *  lv_fldcat-row_pos   = '1'.
+142      lv_fldcat-col_pos   = lv_index.
+143      APPEND lv_fldcat TO it_fcat.
+144
+145    * LAUFD_F / LAUFI_F (file date/id) not available in REGUT - columns removed
+146
+147      lv_index  = lv_index + 1.
+148      CLEAR lv_fldcat.
+149      lv_fldcat-tabname   = 'GT_FINAL'.
+150      lv_fldcat-fieldname = 'SENT_FLAG'.
+151      lv_fldcat-scrtext_m = 'Sent'.
+152      lv_fldcat-outputlen = '4'.
+153    *  lv_fldcat-row_pos   = '1'.
+154      lv_fldcat-col_pos   = lv_index.
+155      APPEND lv_fldcat TO it_fcat.
+156
+157      lv_index  = lv_index + 1.
+158      CLEAR lv_fldcat.
+159      lv_fldcat-tabname   = 'GT_FINAL'.
+160      lv_fldcat-fieldname = 'ERROR_FLAG'.
+161      lv_fldcat-scrtext_m = 'Error'.
+162      lv_fldcat-outputlen = '5'.
+163    *  lv_fldcat-row_pos   = '1'.
+164      lv_fldcat-col_pos   = lv_index.
+165      APPEND lv_fldcat TO it_fcat.
+166
+167      lv_index  = lv_index + 1.
+168      CLEAR lv_fldcat.
+169      lv_fldcat-tabname   = 'GT_FINAL'.
+170      lv_fldcat-fieldname = 'REC_FLAG'.
+171      lv_fldcat-scrtext_m = 'Rec.'.
+172      lv_fldcat-outputlen = '4'.
+173    *  lv_fldcat-row_pos   = '1'.
+174      lv_fldcat-col_pos   = lv_index.
+175      APPEND lv_fldcat TO it_fcat.
+176
+177      lv_index  = lv_index + 1.
+178      CLEAR lv_fldcat.
+179      lv_fldcat-tabname   = 'GT_FINAL'.
+180      lv_fldcat-fieldname = 'BATCH_SUM'.
+181      lv_fldcat-scrtext_m = 'Batch Amount'.
+182      lv_fldcat-outputlen = '15'.
+183    *  lv_fldcat-row_pos   = '1'.
+184      lv_fldcat-col_pos   = lv_index.
+185      APPEND lv_fldcat TO it_fcat.
+186
+187    *  lv_index  = lv_index + 1.
+188    *  CLEAR lv_fldcat.
+189    *  lv_fldcat-tabname   = 'GT_FINAL'.
+190    *  lv_fldcat-fieldname = 'MAX_PAY_AMT'.
+191    *  lv_fldcat-scrtext_m = 'Maximum payment'.
+192    *  lv_fldcat-outputlen = '15'.
+193    **  lv_fldcat-row_pos   = '1'.
+194    *  lv_fldcat-col_pos   = lv_index.
+195    *  APPEND lv_fldcat TO it_fcat.
+196
+197      lv_index  = lv_index + 1.
+198      CLEAR lv_fldcat.
+199      lv_fldcat-tabname   = 'GT_FINAL'.
+200      lv_fldcat-fieldname = 'CRUSR'.
+201      lv_fldcat-scrtext_m = 'Create User'.
+202      lv_fldcat-outputlen = '12'.
+203    *  lv_fldcat-row_pos   = '1'.
+204      lv_fldcat-col_pos   = lv_index.
+205      APPEND lv_fldcat TO it_fcat.
+206
+207      lv_index  = lv_index + 1.
+208      CLEAR lv_fldcat.
+209      lv_fldcat-tabname   = 'GT_FINAL'.
+210      lv_fldcat-fieldname = 'CRTIME'.
+211      lv_fldcat-scrtext_m = 'Create Time'.
+212      lv_fldcat-outputlen = '11'.
+213      lv_fldcat-row_pos   = '1'.
+214      lv_fldcat-col_pos   = lv_index.
+215      APPEND lv_fldcat TO it_fcat.
+216
+217      lv_index  = lv_index + 1.
+218      CLEAR lv_fldcat.
+219      lv_fldcat-tabname   = 'GT_FINAL'.
+220      lv_fldcat-fieldname = 'CRDATE'.
+221      lv_fldcat-scrtext_m = 'Create Date'.
+222      lv_fldcat-outputlen = '11'.
+223    *  lv_fldcat-row_pos   = '1'.
+224      lv_fldcat-col_pos   = lv_index.
+225      APPEND lv_fldcat TO it_fcat.
+226
+227      lv_index  = lv_index + 1.
+228      CLEAR lv_fldcat.
+229      lv_fldcat-tabname   = 'GT_FINAL'.
+230      lv_fldcat-fieldname = 'CHUSR'.
+231      lv_fldcat-scrtext_m = 'Change User'.
+232      lv_fldcat-outputlen = '12'.
+233    *  lv_fldcat-row_pos   = '1'.
+234      lv_fldcat-col_pos   = lv_index.
+235      APPEND lv_fldcat TO it_fcat.
+236
+237      lv_index  = lv_index + 1.
+238      CLEAR lv_fldcat.
+239      lv_fldcat-tabname   = 'GT_FINAL'.
+240      lv_fldcat-fieldname = 'CHTIME'.
+241      lv_fldcat-scrtext_m = 'Change Time'.
+242      lv_fldcat-outputlen = '11'.
+243    *  lv_fldcat-row_pos   = '1'.
+244      lv_fldcat-col_pos   = lv_index.
+245      APPEND lv_fldcat TO it_fcat.
+246
+247      lv_index  = lv_index + 1.
+248      CLEAR lv_fldcat.
+249      lv_fldcat-tabname   = 'GT_FINAL'.
+250      lv_fldcat-fieldname = 'CHDATE'.
+251      lv_fldcat-scrtext_m = 'Change Date'.
+252      lv_fldcat-outputlen = '11'.
+253    *  lv_fldcat-row_pos   = '1'.
+254      lv_fldcat-col_pos   = lv_index.
+255      APPEND lv_fldcat TO it_fcat.
+256
+257      lv_index  = lv_index + 1.
+258      CLEAR lv_fldcat.
+259      lv_fldcat-tabname   = 'GT_FINAL'.
+260      lv_fldcat-fieldname = 'ZBUKR'.
+261      lv_fldcat-scrtext_m = 'Paying company code'.
+262      lv_fldcat-outputlen = '19'.
+263    *  lv_fldcat-row_pos   = '1'.
+264      lv_fldcat-col_pos   = lv_index.
+265      APPEND lv_fldcat TO it_fcat.
+266
+267    *  lv_index  = lv_index + 1.
+268    *   CLEAR lv_fldcat.
+269    *  lv_fldcat-tabname   = 'GT_FINAL'.
+270    *  lv_fldcat-fieldname = 'HBKID'.
+271    *  lv_fldcat-scrtext_m = 'Short Key for a House Bank'.
+272    *  lv_fldcat-outputlen = '26'.
+273    **  lv_fldcat-row_pos   = '1'.
+274    *  lv_fldcat-col_pos   = lv_index.
+275    *  APPEND lv_fldcat TO it_fcat.
+276
+277    * TOT_BTCH_AMT not available in REGUT - column removed
+278
+279      lv_index  = lv_index + 1.
+280      CLEAR lv_fldcat.
+281      lv_fldcat-tabname   = 'GT_FINAL'.
+282      lv_fldcat-fieldname = 'PENDING_WITH'.
+283      lv_fldcat-scrtext_m = 'Pending With'.
+284      lv_fldcat-outputlen = '12'.
+285    *  lv_fldcat-row_pos   = '1'.
+286      lv_fldcat-col_pos   = lv_index.
+287      APPEND lv_fldcat TO it_fcat.
+288    *  lv_index  = lv_index + 1.
+289    *   CLEAR lv_fldcat.
+290    *  lv_fldcat-tabname   = 'GT_FINAL'.
+291    *  lv_fldcat-fieldname = 'MAXPAYAMT_RULECU'.
+292    *  lv_fldcat-scrtext_m = 'Maximum payment Amount'.
+293    *  lv_fldcat-outputlen = '22'.
+294    *  lv_fldcat-row_pos   = '1'.
+295    *  lv_fldcat-col_pos   = lv_index.
+296    *  APPEND lv_fldcat TO it_fcat.
+297
+298    *   lv_index  = lv_index + 1.
+299    *   CLEAR lv_fldcat.
+300    *  lv_fldcat-tabname   = 'GT_FINAL'.
+301    *  lv_fldcat-fieldname = 'GRP_FIELD1_VALUE'.
+302    *  lv_fldcat-scrtext_m = 'Grouping field val1'.
+303    *  lv_fldcat-outputlen = '30'.
+304    *  lv_fldcat-row_pos   = '1'.
+305    *  lv_fldcat-col_pos   = lv_index.
+306    *  APPEND lv_fldcat TO it_fcat.
+307    *
+308    *   lv_index  = lv_index + 1.
+309    *   CLEAR lv_fldcat.
+310    *  lv_fldcat-tabname   = 'GT_FINAL'.
+311    *  lv_fldcat-fieldname = 'GRP_FIELD2_VALUE'.
+312    *  lv_fldcat-scrtext_m = 'Grouping field val2'.
+313    *  lv_fldcat-outputlen = '30'.
+314    *  lv_fldcat-row_pos   = '1'.
+315    *  lv_fldcat-col_pos   = lv_index.
+316    *  APPEND lv_fldcat TO it_fcat.
+317
+318    ENDFORM.                    " F_ALV_BUILD_FIELDCAT
+319    *&---------------------------------------------------------------------*
+320    *&      Form  F_ALV_REPORT_LAYOUT
+321    *&---------------------------------------------------------------------*
+322    *       text
+323    *----------------------------------------------------------------------*
+324    *      -->P1        text
+325    *      <--P2        text
+326    *----------------------------------------------------------------------*
+327    FORM f_alv_report_layout .
+328      CLEAR: it_layout.
+329      it_layout-cwidth_opt = 'X'.
+330      it_layout-sel_mode   = 'A'.
+331
+332    ENDFORM.                    " F_ALV_REPORT_LAYOUT
+333    *&---------------------------------------------------------------------*
+334    *&      Form  DOWNLOAD_SENT_DATA
+335    *&---------------------------------------------------------------------*
+336    *       text
+337    *----------------------------------------------------------------------*
+338
+339    FORM download_sent_data .
+340
+341      DATA:   lv_lines TYPE i.
+342      DATA: fileleng TYPE i,
+343            flen     TYPE i,
+344            lv_filename TYPE string,
+345            enh_version_management_hex_tb TYPE enh_version_management_hex_tb.
+346
+347
+348      DATA: window_title TYPE string,
+349            def_ext      TYPE string VALUE '.TXT',
+350            file_name    TYPE string,
+351            file_path    TYPE string,
+352            full_path    TYPE string.
+353
+354      REFRESH : gt_selected_rows.
+355      CALL METHOD c_alvgd->get_selected_rows
+356        IMPORTING
+357          et_index_rows = gt_selected_rows.
+358
+359      CLEAR : lv_lines.
+360      DESCRIBE TABLE gt_selected_rows LINES lv_lines.
+361      IF lv_lines EQ 0.
+362        MESSAGE 'Please select one record' TYPE 'I'.
+363        EXIT.
+364      ELSEIF lv_lines > 1.
+365        MESSAGE 'Please select only single record' TYPE 'I'.
+366        EXIT.
+367      ENDIF.
+368
+369      IF gt_selected_rows IS NOT INITIAL.
+370        READ TABLE gt_selected_rows INTO gs_selected_rows INDEX 1.
+371        IF sy-subrc = 0.
+372          READ TABLE gt_final INTO gs_final INDEX gs_selected_rows-index.
+373          IF sy-subrc = 0.
+374            IF gs_final-sent_flag = ' '.
+375              MESSAGE 'Download can not be performed' TYPE 'I'.
+376              EXIT.
+377            ELSE.
+378              CLEAR gs_paym.
+379              READ TABLE gt_paym INTO gs_paym WITH KEY laufi = gs_final-laufi
+380                                                       laufd = gs_final-laufd.
+381              IF sy-subrc EQ 0.
+382                CLEAR file_name.
+383                file_name = gs_paym-file_name.
+384
+385                CALL FUNCTION 'ENH_XSTRING_TO_TAB'
+386                  EXPORTING
+387                    im_xstring = gs_final-file_data_sent
+388                  IMPORTING
+389                    ex_data    = enh_version_management_hex_tb
+390                    ex_leng    = flen.
+391
+392                window_title = 'Enter File Name and File Path'.
+393                CALL METHOD cl_gui_frontend_services=>file_save_dialog
+394                  EXPORTING
+395                    window_title      = window_title
+396                    default_extension = def_ext
+397                    default_file_name = file_name
+398                  CHANGING
+399                    filename          = file_name
+400                    path              = file_path
+401                    fullpath          = full_path.
+402                IF full_path IS INITIAL.
+403                  MESSAGE 'Enter File name and File Path' TYPE 'I'.
+404                ELSE.
+405                  CALL FUNCTION 'GUI_DOWNLOAD'
+406                    EXPORTING
+407                      bin_filesize            = flen          "ostr_updated_signed_data_l
+408                      filename                = full_path      "lv_filename "'C:\TEST\TESTV1.TXT'
+409                      filetype                = 'BIN'
+410    *                 APPEND                  = ' '
+411    *                 WRITE_FIELD_SEPARATOR   = ' '
+412    *                 HEADER                  = '00'
+413    *                 TRUNC_TRAILING_BLANKS   = ' '
+414                    IMPORTING
+415                      filelength              = fileleng
+416                    TABLES
+417                      data_tab                = enh_version_management_hex_tb "OUT_DATA_TABLE
+418                    EXCEPTIONS
+419                      file_write_error        = 1
+420                      no_batch                = 2
+421                      gui_refuse_filetransfer = 3
+422                      invalid_type            = 4
+423                      no_authority            = 5
+424                      unknown_error           = 6
+425                      header_not_allowed      = 7
+426                      separator_not_allowed   = 8
+427                      filesize_not_allowed    = 9
+428                      header_too_long         = 10
+429                      dp_error_create         = 11
+430                      dp_error_send           = 12
+431                      dp_error_write          = 13
+432                      unknown_dp_error        = 14
+433                      access_denied           = 15
+434                      dp_out_of_memory        = 16
+435                      disk_full               = 17
+436                      dp_timeout              = 18
+437                      file_not_found          = 19
+438                      dataprovider_exception  = 20
+439                      control_flush_error     = 21
+440                      OTHERS                  = 22.
+441                  IF sy-subrc EQ 0.
+442                    MESSAGE 'File Downloaded Succesfully' TYPE 'I'.
+443                  ENDIF.
+444                  CLEAR :fileleng,flen,file_name,file_path,full_path.
+445                  REFRESH : enh_version_management_hex_tb.
+446                ENDIF.
+447              ENDIF.
+448            ENDIF.
+449          ENDIF.
+450        ENDIF.
+451      ENDIF.
+452    ENDFORM.                    " DOWNLOAD_SENT_DATA
+453    *&---------------------------------------------------------------------*
+454    *&      Form  DOWNLOAD_RAW_DATA
+455    *&---------------------------------------------------------------------*
+456    *       text
+457    *----------------------------------------------------------------------*
+458    FORM download_raw_data .
+459      DATA: lv_lines TYPE i.
+460      DATA: fileleng TYPE i,
+461            flen     TYPE i,
+462            lv_filename TYPE string,
+463            enh_version_management_hex_tb TYPE enh_version_management_hex_tb.
+464
+465      DATA: window_title TYPE string,
+466            def_ext      TYPE string VALUE '.TXT',
+467            file_name    TYPE string,
+468            file_path    TYPE string,
+469            full_path    TYPE string.
+470
+471      REFRESH : gt_selected_rows.
+472      CALL METHOD c_alvgd->get_selected_rows
+473        IMPORTING
+474          et_index_rows = gt_selected_rows.
+475
+476      CLEAR : lv_lines.
+477      DESCRIBE TABLE gt_selected_rows LINES lv_lines.
+478      IF lv_lines EQ 0.
+479        MESSAGE 'Please select one record' TYPE 'I'.
+480        EXIT.
+481      ELSEIF lv_lines > 1.
+482        MESSAGE 'Please select only single record' TYPE 'I'.
+483        EXIT.
+484      ENDIF.
+485
+486      IF gt_selected_rows IS NOT INITIAL.
+487        READ TABLE gt_selected_rows INTO gs_selected_rows INDEX 1.
+488        IF sy-subrc = 0.
+489          READ TABLE gt_final INTO gs_final INDEX gs_selected_rows-index.
+490          IF sy-subrc = 0.
+491            CLEAR gs_paym.
+492            READ TABLE gt_paym INTO gs_paym WITH KEY laufi = gs_final-laufi
+493                                                     laufd = gs_final-laufd.
+494            IF sy-subrc EQ 0.
+495              CLEAR file_name.
+496              CONCATENATE 'R' gs_paym-file_name INTO file_name.
+497
+498              CALL FUNCTION 'ENH_XSTRING_TO_TAB'
+499                EXPORTING
+500                  im_xstring = gs_final-raw_data
+501                IMPORTING
+502                  ex_data    = enh_version_management_hex_tb
+503                  ex_leng    = flen.
+504
+505              window_title = 'Enter File Name and File Path'.
+506              CALL METHOD cl_gui_frontend_services=>file_save_dialog
+507                EXPORTING
+508                  window_title      = window_title
+509                  default_extension = def_ext
+510                  default_file_name = file_name
+511                CHANGING
+512                  filename          = file_name
+513                  path              = file_path
+514                  fullpath          = full_path.
+515              IF full_path IS INITIAL.
+516                MESSAGE 'Enter File name and File Path' TYPE 'I'.
+517              ELSE.
+518                CALL FUNCTION 'GUI_DOWNLOAD'
+519                  EXPORTING
+520                    bin_filesize            = flen          "ostr_updated_signed_data_l
+521                    filename                = full_path      "lv_filename "'C:\TEST\TESTV1.TXT'
+522                    filetype                = 'BIN'
+523    *               APPEND                  = ' '
+524    *               WRITE_FIELD_SEPARATOR   = ' '
+525    *               HEADER                  = '00'
+526    *               TRUNC_TRAILING_BLANKS   = ' '
+527                  IMPORTING
+528                    filelength              = fileleng
+529                  TABLES
+530                    data_tab                = enh_version_management_hex_tb "OUT_DATA_TABLE
+531                  EXCEPTIONS
+532                    file_write_error        = 1
+533                    no_batch                = 2
+534                    gui_refuse_filetransfer = 3
+535                    invalid_type            = 4
+536                    no_authority            = 5
+537                    unknown_error           = 6
+538                    header_not_allowed      = 7
+539                    separator_not_allowed   = 8
+540                    filesize_not_allowed    = 9
+541                    header_too_long         = 10
+542                    dp_error_create         = 11
+543                    dp_error_send           = 12
+544                    dp_error_write          = 13
+545                    unknown_dp_error        = 14
+546                    access_denied           = 15
+547                    dp_out_of_memory        = 16
+548                    disk_full               = 17
+549                    dp_timeout              = 18
+550                    file_not_found          = 19
+551                    dataprovider_exception  = 20
+552                    control_flush_error     = 21
+553                    OTHERS                  = 22.
+554                IF sy-subrc EQ 0.
+555                  MESSAGE 'File Downloaded Succesfully' TYPE 'I'.
+556                ENDIF.
+557                CLEAR :fileleng,flen,file_name,file_path,full_path.
+558                REFRESH : enh_version_management_hex_tb.
+559              ENDIF.
+560            ENDIF.
+561          ENDIF.
+562        ENDIF.
+563      ENDIF.
+564
+565    ENDFORM.                    " DOWNLOAD_RAW_DATA
+566
+567    *&---------------------------------------------------------------------*
+568    *&      Form  DOWNLOAD_REC_DATA
+569    *&---------------------------------------------------------------------*
+570    *       text
+571    *----------------------------------------------------------------------*
+572    *      -->P1        text
+573    *      <--P2        text
+574    *----------------------------------------------------------------------*
+575    FORM download_rec_data .
+576      DATA: lv_lines TYPE i.
+577      DATA: fileleng TYPE i,
+578            flen     TYPE i,
+579            lv_filename TYPE string,
+580            enh_version_management_hex_tb TYPE enh_version_management_hex_tb.
+581
+582
+583      DATA: window_title TYPE string,
+584            def_ext      TYPE string VALUE '.TXT',
+585            file_name    TYPE string,
+586            file_path    TYPE string,
+587            full_path    TYPE string.
+588
+589      REFRESH : gt_selected_rows.
+590      CALL METHOD c_alvgd->get_selected_rows
+591        IMPORTING
+592          et_index_rows = gt_selected_rows.
+593
+594      CLEAR : lv_lines.
+595      DESCRIBE TABLE gt_selected_rows LINES lv_lines.
+596      IF lv_lines EQ 0.
+597        MESSAGE 'Please select one record' TYPE 'I'.
+598        EXIT.
+599      ELSEIF lv_lines > 1.
+600        MESSAGE 'Please select only single record' TYPE 'I'.
+601        EXIT.
+602      ENDIF.
+603
+604      IF gt_selected_rows IS NOT INITIAL.
+605        READ TABLE gt_selected_rows INTO gs_selected_rows INDEX 1.
+606        IF sy-subrc = 0.
+607          READ TABLE gt_final INTO gs_final INDEX gs_selected_rows-index.
+608          IF sy-subrc = 0.
+609            IF gs_final-rec_flag = ' '.
+610              MESSAGE 'Download can not be performed' TYPE 'I'.
+611              EXIT.
+612            ELSE.
+613              CLEAR gs_paym.
+614              READ TABLE gt_paym INTO gs_paym WITH KEY laufi = gs_final-laufi
+615                                                       laufd = gs_final-laufd.
+616              IF sy-subrc EQ 0.
+617                CLEAR file_name.
+618                file_name = gs_paym-received_filename .
+619
+620                CALL FUNCTION 'ENH_XSTRING_TO_TAB'
+621                  EXPORTING
+622                    im_xstring = gs_final-file_data_received
+623                  IMPORTING
+624                    ex_data    = enh_version_management_hex_tb
+625                    ex_leng    = flen.
+626
+627                window_title = 'Enter File Name and File Path'.
+628                CALL METHOD cl_gui_frontend_services=>file_save_dialog
+629                  EXPORTING
+630                    window_title      = window_title
+631                    default_extension = def_ext
+632                    default_file_name = file_name
+633                  CHANGING
+634                    filename          = file_name
+635                    path              = file_path
+636                    fullpath          = full_path.
+637                IF full_path IS INITIAL.
+638                  MESSAGE 'Enter File name and File Path' TYPE 'I'.
+639                ELSE.
+640                  CALL FUNCTION 'GUI_DOWNLOAD'
+641                    EXPORTING
+642                      bin_filesize            = flen          "ostr_updated_signed_data_l
+643                      filename                = full_path      "lv_filename "'C:\TEST\TESTV1.TXT'
+644                      filetype                = 'BIN'
+645    *                 APPEND                  = ' '
+646    *                 WRITE_FIELD_SEPARATOR   = ' '
+647    *                 HEADER                  = '00'
+648    *                 TRUNC_TRAILING_BLANKS   = ' '
+649                    IMPORTING
+650                      filelength              = fileleng
+651                    TABLES
+652                      data_tab                = enh_version_management_hex_tb "OUT_DATA_TABLE
+653                    EXCEPTIONS
+654                      file_write_error        = 1
+655                      no_batch                = 2
+656                      gui_refuse_filetransfer = 3
+657                      invalid_type            = 4
+658                      no_authority            = 5
+659                      unknown_error           = 6
+660                      header_not_allowed      = 7
+661                      separator_not_allowed   = 8
+662                      filesize_not_allowed    = 9
+663                      header_too_long         = 10
+664                      dp_error_create         = 11
+665                      dp_error_send           = 12
+666                      dp_error_write          = 13
+667                      unknown_dp_error        = 14
+668                      access_denied           = 15
+669                      dp_out_of_memory        = 16
+670                      disk_full               = 17
+671                      dp_timeout              = 18
+672                      file_not_found          = 19
+673                      dataprovider_exception  = 20
+674                      control_flush_error     = 21
+675                      OTHERS                  = 22.
+676                  IF sy-subrc EQ 0.
+677                    MESSAGE 'File Downloaded Succesfully' TYPE 'I'.
+678                  ENDIF.
+679                  CLEAR :fileleng,flen,file_name,file_path,full_path.
+680                  REFRESH : enh_version_management_hex_tb.
+681                ENDIF.
+682              ENDIF.
+683            ENDIF.
+684          ENDIF.
+685        ENDIF.
+686      ENDIF.
+687
+688    ENDFORM.                    " DOWNLOAD_REC_DATA
+689    *&---------------------------------------------------------------------*
+690    *&      Form  F_RESENT
+691    *&---------------------------------------------------------------------*
+692    *       text
+693    *----------------------------------------------------------------------*
+694    *      -->P1        text
+695    *      <--P2        text
+696    *----------------------------------------------------------------------*
+697    FORM f_resent .
+698      REFRESH : gt_selected_rows.
+699      DATA: lv_lines TYPE i.
+700      DATA: fileleng TYPE i,
+701            flen     TYPE i,
+702            lv_filename TYPE string,
+703            enh_version_management_hex_tb TYPE enh_version_management_hex_tb.
+704
+705      DATA: lo_bnk_detail    TYPE REF TO zco_sios_bank_interface_encryp, "zco_sios_sbiwebservice_encrypt, "zfi_bnk_sbi_in_encco_si_sbiweb,
+706            proxy_data       TYPE zfile_upload2,                         "zfi_bnk_sbi_in_encfile_upload2,
+707            lt_input         TYPE zfile_upload_response2,                "zfi_bnk_sbi_in_encfile_upload1,
+708            lo_sys_exception TYPE REF TO cx_ai_system_fault.
+709
+710      DATA: err_string TYPE string.
+711
+712      CREATE OBJECT lo_bnk_detail.
+713
+714      CALL METHOD c_alvgd->get_selected_rows
+715        IMPORTING
+716          et_index_rows = gt_selected_rows.
+717
+718      CLEAR : lv_lines.
+719      DESCRIBE TABLE gt_selected_rows LINES lv_lines.
+720      IF lv_lines EQ 0.
+721
+722        MESSAGE 'Please select one record' TYPE 'I'.
+723        EXIT.
+724      ELSEIF lv_lines > 1.
+725        MESSAGE 'Please select only single record' TYPE 'I'.
+726        EXIT.
+727      ENDIF.
+728
+729      IF gt_selected_rows IS NOT INITIAL.
+730        READ TABLE gt_selected_rows INTO gs_selected_rows INDEX 1.
+731        IF sy-subrc = 0.
+732          READ TABLE gt_final INTO gs_final INDEX gs_selected_rows-index.
+733          IF sy-subrc = 0.
+734
+735            CLEAR gs_paym.
+736            READ TABLE gt_paym INTO gs_paym WITH KEY laufi = gs_final-laufi
+737                                                     laufd = gs_final-laufd.
+738            IF sy-subrc = 0.
+739              IF gs_paym-sent <> 'X'.
+740                MESSAGE 'Can not be resent' TYPE 'I'.
+741                EXIT.
+742              ELSE.
+743                proxy_data-parameters-arg0  = gs_paym-file_name.
+744                proxy_data-parameters-arg1  = gs_paym-file_data_sent.
+745                TRY.
+746                    CALL METHOD lo_bnk_detail->sios_bank_interface_encryption "SIOS_SBIWEBSERVICE_ENCRYPTION "si_sbiwebservice_enc
+747                      EXPORTING
+748                        output = proxy_data
+749                      IMPORTING
+750                        input  = lt_input.
+751                  CATCH cx_ai_system_fault INTO lo_sys_exception.
+752                    err_string = lo_sys_exception->get_text( ).
+753
+754                  CATCH cx_ai_application_fault .
+755                ENDTRY.
+756                IF err_string IS NOT INITIAL.
+757                  gs_paym-file_data_sent = gs_paym-file_data_sent.
+758                  gs_paym-sent_error     = 'X'.
+759                  gs_paym-sent           = 'X'.
+760                  gs_paym-sent_date      = sy-datum.
+761                  gs_paym-sent_time      = sy-uzeit.
+762                  MODIFY zfi_paym_file FROM gs_paym.
+763                  MESSAGE 'Error in sending' TYPE 'I'.
+764                ELSE.
+765                  gs_paym-file_data_sent = gs_paym-file_data_sent.
+766                  gs_paym-sent           = 'X'.
+767                  gs_paym-sent_error     = ' '.
+768                  gs_paym-sent_date      = sy-datum.
+769                  gs_paym-sent_time      = sy-uzeit.
+770                  MODIFY zfi_paym_file FROM gs_paym.
+771                  MESSAGE 'Sent Successfully' TYPE 'I'.
+772                ENDIF.
+773              ENDIF.
+774            ENDIF.
+775          ENDIF.
+776        ENDIF.
+777      ENDIF.
+778
+779    ENDFORM.                    " F_RESENT
+*--- End of ZFI_BNK_APP_F - 779 lines ---
+
+----------------------------------------------------------------------------------------------------
+Include          ZFI_BNK_APP_OUTPUTO01                     Level 1    Page 5
+Object           ZFI_BNK_APP                               Lines 60
+System           OCQ / 500   User SAP_ABAP   27.08.2026 09:15:06
+----------------------------------------------------------------------------------------------------
+1      *----------------------------------------------------------------------*
+2      ***INCLUDE ZFI_BNK_APP_OUTPUTO01.
+3      *----------------------------------------------------------------------*
+4      *&---------------------------------------------------------------------*
+5      *&      Module  OUTPUT  OUTPUT
+6      *&---------------------------------------------------------------------*
+7      *       text
+8      *----------------------------------------------------------------------*
+9      MODULE output OUTPUT.
+10       PERFORM f_prepare_op_tab.
+11     ***
+12       IF  c_ccont IS INITIAL.
+13
+14         CREATE OBJECT c_ccont
+15           EXPORTING
+16             container_name = 'CONTROL'.
+17       ENDIF.
+18
+19       IF c_alvgd IS INITIAL.
+20         CREATE OBJECT c_alvgd
+21           EXPORTING
+22             i_parent = c_ccont.
+23       ENDIF.
+24     * **Set field for ALV
+25       PERFORM f_alv_build_fieldcat.
+26
+27     **Set ALV attributes FOR LAYOUT
+28       PERFORM f_alv_report_layout.
+29
+30       CHECK NOT c_alvgd IS INITIAL.
+31
+32     **Call ALV GRID
+33       CALL METHOD c_alvgd->set_table_for_first_display
+34         EXPORTING
+35           is_layout                     = it_layout
+36         CHANGING
+37           it_outtab                     = gt_final
+38           it_fieldcatalog               = it_fcat
+39         EXCEPTIONS
+40           invalid_parameter_combination = 1
+41           program_error                 = 2
+42           too_many_lines                = 3
+43           OTHERS                        = 4.
+44       IF sy-subrc EQ 0.
+45     *    CALL METHOD c_alvgd3->refresh_table_display.
+46
+47       ENDIF.
+48
+49
+50     ENDMODULE.                 " OUTPUT  OUTPUT
+51     *&---------------------------------------------------------------------*
+52     *&      Module  STATUS_0100  OUTPUT
+53     *&---------------------------------------------------------------------*
+54     *       text
+55     *----------------------------------------------------------------------*
+56     MODULE status_0100 OUTPUT.
+57     *  SET PF-STATUS 'xxxxxxxx'.
+58     *  SET TITLEBAR 'xxx'.
+59
+60     ENDMODULE.                 " STATUS_0100  OUTPUT
+*--- End of ZFI_BNK_APP_OUTPUTO01 - 60 lines ---
+
+----------------------------------------------------------------------------------------------------
+Include          ZFI_BNK_APP_I01                           Level 1    Page 6
+Object           ZFI_BNK_APP                               Lines 38
+System           OCQ / 500   User SAP_ABAP   27.08.2026 09:15:06
+----------------------------------------------------------------------------------------------------
+1      *----------------------------------------------------------------------*
+2      ***INCLUDE ZFI_BNK_APP_I01.
+3      *----------------------------------------------------------------------*
+4      *&---------------------------------------------------------------------*
+5      *&      Module  USER_COMMAND_0100  INPUT
+6      *&---------------------------------------------------------------------*
+7      *       text
+8      *----------------------------------------------------------------------*
+9      MODULE user_command_0100 INPUT.
+10       DATA : lv_code type sy-ucomm.
+11       lv_code = sy-ucomm.
+12       case lv_code.
+13         when 'E'.
+14           LEAVE to SCREEN 0.
+15     *      call TRANSACTION 'ZBNK_APP2'.
+16
+17       ENDCASE.
+18
+19     ENDMODULE.                 " USER_COMMAND_0100  INPUT
+20     *&---------------------------------------------------------------------*
+21     *&      Module  GET_SELECTED_ROW  INPUT
+22     *&---------------------------------------------------------------------*
+23     *       text
+24     *----------------------------------------------------------------------*
+25     MODULE get_selected_row INPUT.
+26       DATA : lv_code1 TYPE sy-ucomm.
+27       lv_code1 = sy-ucomm.
+28       IF lv_code1 = 'DOWNLOAD1'.
+29         PERFORM download_sent_data.
+30       ELSEIF lv_code1 =  'DOWNLOAD2'.
+31         PERFORM download_raw_data.
+32       ELSEIF lv_code1 =  'DOWNLOAD3'.
+33         PERFORM download_rec_data.
+34       ELSEIF lv_code1 = 'RESENT'.
+35         PERFORM f_resent.
+36       ENDIF.
+37
+38     ENDMODULE.                 " GET_SELECTED_ROW  INPUT
+*--- End of ZFI_BNK_APP_I01 - 38 lines ---

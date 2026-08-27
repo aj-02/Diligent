@@ -2,7 +2,7 @@
 
 | # | Date | Issue | Cause | Fix | TR | Status |
 |---|------|-------|-------|-----|----|--------|
-| 1 | 26/08/26 | Q1 FY27 run: last venture **VN2012** not populated in the Excel output (`RawData` sheet). Reported by Gitesh S Lad, Corporate Accounts. | **Excel template, not ABAP.** The template-based spreadsheet export writes the list into the workbook's `RawData` defined name, which is `RawData!$A$1:$BV$778` — 74 columns. The report needs 75 (G/L account + description + 73 ventures), so the 75th column falls outside the range and is never written. Always hits the alphabetically last venture. | Widen the defined names in the template: `RawData` → `=RawData!$A$1:$CZ$5000`, `Header` → `=Header!$A$11:$CZ$5000`. Headroom to CZ so the next new venture does not repeat it. Summary sheets that map RawData by position (`USD_PL_Sub_Heads2` ends at BV, `USD_BS_Sub_Head2` at BW) need their formulas extended one column right. | n/a — no code change | Fix handed over 27/08/26, awaiting user confirmation |
+| 1 | 26/08/26 | Q1 FY27 run: last venture **VN2012** not populated in the Excel output (`RawData` sheet). Reported by Gitesh S Lad, Corporate Accounts. | **Still open.** The Excel-template theory was wrong — see "Retraction" below. Current lead: the export is truncated at a fixed `BAL_CLO<k>`, consistent with a saved ALV layout hiding every venture field above the number the layout was saved with. | Not yet determined. | n/a | **RETRACTED 27/08/26 — see below. Reopened.** |
 
 ## How it was localised (26–27/08/26)
 
@@ -36,3 +36,38 @@ hand, not by a template export.
   one particular venture set.
 - Object name unresolved: the `REPORT` statement reads `zzjvtb_test` while the SE38 print
   header says `ZFI_JV_TB`. Arnav confirms this is what runs in the backend.
+
+## Retraction, 27/08/26 — the template named range was NOT the cause
+
+Test run `ZJVTB Mock 2 Testing 27.08.2026xlsx.xlsx`, exported against the widened
+template (`RawData` = `$A$1:$CZ$5000`), came back **worse**: 18 columns, i.e. 2 + 16
+ventures, against 27 ventures in `lt_alljv`.
+
+Two findings kill the template theory:
+
+1. The output's own `RawData` defined name reads `RawData!$A$1:$R$692` — exactly the 18
+   columns written. **The export rewrites that name to match what it produced.** It is an
+   output of the export, not a constraint on it. Widening it to CZ had no effect because
+   nothing reads it.
+2. The 16 ventures written are exactly the **first 16 of the 27** in `lt_alljv`, in order.
+   Dropped: MM1702, MM2002, MM2012, MM2013, RU2002, SD1102, SD2002, SY2002, VN1101,
+   VN1102, VN2012.
+
+So this is not "the last column is missing" — it is a clean cut after `BAL_CLO16`. Q1 FY27
+had the same shape, cut after `BAL_CLO72`, which left only VN2012 missing and made it look
+like a last-column defect.
+
+### Current lead
+
+A cut at a fixed `BAL_CLO<k>` matches a **saved ALV layout**. Field names are positional
+(`BAL_CLO<sy-tabix>`), so a layout saved when a run had k venture columns knows
+`BAL_CLO1…BAL_CLO<k>`; anything above lands in the hidden column set, and hidden columns
+are not exported. `REUSE_ALV_GRID_DISPLAY_LVC` is called with `i_save = 'A'` and
+`i_default = 'X'`, so a default layout is applied automatically.
+
+Awaiting from Arnav, on one run: grid column count, the Change Layout (Ctrl+F8) hidden
+pane contents, and whether an ALV variant is involved at all or "upload a layout" only
+ever meant the Excel file in the export dialog.
+
+The widened template in `template/` is harmless but does nothing. Do not ship it.
+The draft mail in `MAIL-2026-08-27-gitesh.md` must not be sent.

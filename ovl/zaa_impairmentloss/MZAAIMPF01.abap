@@ -457,6 +457,16 @@ ENDFORM.                    " ZAA_VALUE_ADJUST
 *         ANBZ-SAFAV -> SPE_DEP_CU
 *         ANBZ-NAFAV -> ORD_DEP_CU
 *
+*       PV_DEPKIND says which bucket the amount belongs in:
+*         'S' - special depreciation  -> SPE_DEP_CU
+*         'O' - ordinary depreciation -> ORD_DEP_CU
+*         initial - decide from the transaction type, as the BDC did
+*       It is not enough to test the transaction type everywhere. Two of
+*       the three ABZU sites used the IF TTYPE = 'X70' rule, but the
+*       PWBACK site (screen 0600) wrote ANBZ-SAFAV unconditionally, with
+*       transaction types X21 / X32. Deriving from the type alone would
+*       silently move that amount into ordinary depreciation.
+*
 *       PV_BLART takes what the BDC put in RA01B-BLART. Only two of the
 *       three ABZU call sites set it ('AA'); the third left it to default,
 *       so it is a parameter and not a constant.
@@ -469,6 +479,7 @@ FORM ZAA_WRITEUP TABLES   PT_RETURN STRUCTURE BAPIRET2
                           PV_BZDAT
                           PV_TEXT
                           PV_BLART
+                          PV_DEPKIND
                           PV_CHECK
                  CHANGING PV_SUBRC.
 
@@ -520,11 +531,19 @@ FORM ZAA_WRITEUP TABLES   PT_RETURN STRUCTURE BAPIRET2
   LS_GENERAL-ACC_PRINCIPLE = G_C_ACCPRINCIPLE.
 * DEPR_AREA deliberately left initial - see G_C_ACCPRINCIPLE above.
 
-  IF PV_TTYPE = 'X70'.
-    LS_WRITEUP-SPE_DEP_CU = PV_AMOUNT.
-  ELSE.
-    LS_WRITEUP-ORD_DEP_CU = PV_AMOUNT.
-  ENDIF.
+  CASE PV_DEPKIND.
+    WHEN 'S'.
+      LS_WRITEUP-SPE_DEP_CU = PV_AMOUNT.
+    WHEN 'O'.
+      LS_WRITEUP-ORD_DEP_CU = PV_AMOUNT.
+    WHEN OTHERS.
+*     Initial - the rule the two sites that had one used.
+      IF PV_TTYPE = 'X70'.
+        LS_WRITEUP-SPE_DEP_CU = PV_AMOUNT.
+      ELSE.
+        LS_WRITEUP-ORD_DEP_CU = PV_AMOUNT.
+      ENDIF.
+  ENDCASE.
   LS_WRITEUP-CURRENCY  = G_WAERS.
   LS_WRITEUP-VALUEDATE = L_BZDAT.
 

@@ -229,9 +229,37 @@ posting. Two ways to get them, cheapest first:
   depreciation area, per line). Creates a real FI document — needs approval and
   a suitable client/asset; reversible via `AB08`.
 
-**Recommendation:** raise with functional now, and build the code with area
-determination isolated in a single FORM so the answer drops in without
-reworking the posting logic.
+#### RESOLVED IN THE CODE — 27/08/26
+
+The area is neither in the ALV list nor in the BDC. `IST_FINAL` has no area
+field, and `SAPMZAAIMP` contains no `AFABE` / area reference in any of its 1964
+lines. **It is hardcoded in the report's `SELECT`s on `ANLC`**, which is
+area-keyed, so every read already pins an area:
+
+| Mode | FORM in `ZAA_IMPARMENTLOSS` | Area read |
+|------|------------------------------|-----------|
+| `IMPAIR`     | `POST_ADDITIONAL_IMPAIRMENT`     | `AFABE = '01'` |
+| `WBACKGROSS` | `POST_WRITEBACKGROSS_IMPAIRMENT` | `'01' OR '20'`, loops `'01'` |
+| `DEPCOM`     | `DEPRICIATION_COMPARISON`        | `'01' OR '20'` |
+| `UNPDEP`     | `UNPLANNED_DEPRICIATION`         | **`AFABE = '70'`** |
+| `PWBACK`     | `WRITEBACK_IMPAIRMENT_PP`        | `AFABE = '01'` |
+| `WBACK`      | `POST_WRITEBACK_IMPAIRMENT`      | `'01' OR '20'`, loops `'01'` |
+
+**Consequence.** Passing `DEPR_AREA = '01'` is not a new hardcode — it makes
+explicit what the program has assumed since 2005. The amounts posted are
+computed *from* area 01 values, so posting them to area 01 is coherent, and the
+`EAA 627` errors were the BAPI objecting to areas the program never intended.
+Area 20 is genuinely in use (the comparison modes read 01 against 20) and holds
+no special depreciation balance.
+
+**`UNPDEP` reads area `70`, not `01`.** The area is per-mode. A single constant
+`'01'` in the new code would be wrong for that path.
+
+**Recommendation:** derive `DEPR_AREA` per mode from the table above rather than
+using one constant; isolate it in a single FORM. Take it to functional as a
+proposal with this evidence, not as an open question. Still worth their yes,
+because reading from an area is not strictly the same as posting to it and the
+old screen posted more broadly.
 
 ### BAPI field mapping — confirmed from SE37, 27/08/26
 

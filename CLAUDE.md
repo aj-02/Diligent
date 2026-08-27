@@ -191,8 +191,16 @@ In this repo:
 
 - **ZIP:** `kpmg/zpp_forecast_v2/` (screen-free *by design* — that is why it ships; adding
   `CALL SCREEN` or `cl_gui_custom_container` reverts it to paste-only), `kpmg/abapgit_pilot/`,
-  `ovl/ztest_t001/`, `kpmg/zfi_tds_cl34/` (also screen-free by design; its `.prog.xml`
-  `TPOOL` carries the report title only, selection texts by hand).
+  `ovl/ztest_t001/` (pilot — **never actually imported successfully**; do not cite it as
+  proof the ZIP path works).
+- **Hand-written abapGit XML has not yet imported on this landscape.** `kpmg/zfi_tds_cl34/`
+  is screen-free and has a complete `src/` + `.abapgit.xml` + `ZFI_TDS_CL34.zip`, but four
+  import attempts all short-dumped `XML_FORMAT_ERROR` / `CX_XSLT_FORMAT_ERROR` in
+  `FROM_XML`. It shipped by paste instead. **Do not hand-write abapGit XML for a new object
+  and promise it will import** — generate it by serialising from a system that has abapGit
+  installed, or plan on paste from the start. What was ruled out, so it need not be redone:
+  well-formedness, UTF-8/no-BOM/LF, `package.devc.xml`, `TPOOL` items carrying a `KEY`, and
+  `PROGDIR` element order.
 - **Hand-written abapGit XML: element order is load-bearing.** abapGit deserialises with
   `CALL TRANSFORMATION id`, which walks the target structure component by component and
   raises `CX_XSLT_FORMAT_ERROR` — a short dump in `ZABAPGIT_STANDALONE` reported as

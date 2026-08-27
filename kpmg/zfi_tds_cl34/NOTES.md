@@ -23,7 +23,29 @@ field list — it overrides both the FS and BUILD_BRIEF §D4), `docs/QUERIES.md`
 open points for Ankita Parikh and Bhavin Suthar), `BUILD_BRIEF.md` (the pinned build
 contract).
 
-## Shipping: abapGit ZIP, with paste as the fallback
+## Shipping: PASTE. The abapGit ZIP does not import — do not retry it blind
+
+**Four attempts, four short dumps** (`XML_FORMAT_ERROR` / `CX_XSLT_FORMAT_ERROR` in
+`FROM_XML`, program `ZABAPGIT_STANDALONE`, 27/08/26). The object shipped by paste.
+
+`ZFI_TDS_CL34.zip` and the `.prog.xml` files are kept in the folder because the sources and
+the `.abapgit.xml` are correct and reusable, **not** because the ZIP works. Ruled out
+already, so nobody repeats it:
+
+| Suspect | Verdict |
+|---|---|
+| XML well-formedness, BOM, line endings, trailing newline | clean — matches a real abapGit file byte-profile |
+| `package.devc.xml` | innocent; removed anyway (only needed when abapGit creates the package) |
+| `TPOOL` items carrying a `KEY` | innocent; removed anyway (Arnav maintains selection texts by hand) |
+| `PROGDIR` element order | **was a real defect** — `VARCL` must sit between `NAME` and `SUBC`; fixed, and the dump persisted |
+
+Whatever remains is not visible from outside the system. The next person to try this should
+capture **which file abapGit names in the dump** (ST22 → the `FROM_XML` frame) before
+changing anything — every fix above was made without that and three of the four were wrong.
+Better still: install abapGit properly and let it *serialise* a working object, then copy
+that shape.
+
+## The manual route (this is how it shipped)
 
 The object is **screen-free by design** — `CL_SALV_TABLE`, no `CALL SCREEN`, no
 `cl_gui_custom_container` — which is what makes it ZIP-shippable. Adding any of those

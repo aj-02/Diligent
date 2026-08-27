@@ -1,0 +1,35 @@
+ZJVTB Excel template - what was changed
+=======================================
+
+File in  : ZJVTB for Q1 FY27_SAP PR run date 04.08.2026.xlsx
+File out : ZJVTB_TEMPLATE_wide_2026-08-27.xlsx
+
+Only one part of the workbook was touched: the defined names (Excel Name Manager),
+stored in xl/workbook.xml. All 66 internal parts of the .xlsx are byte-identical
+except that one. No sheet, cell, formula, format or custom property was altered.
+
+Name        Before                  After
+----------  ----------------------  ----------------------
+RawData     RawData!$A$1:$BV$778    RawData!$A$1:$CZ$5000
+Header      Header!$A$11:$BV$788    Header!$A$11:$CZ$5000
+RawHeader   RawHeader!$A$1:$C$9     unchanged
+
+BV is column 74. The report needs 75 columns (G/L account + G/L description +
+73 ventures), so the 75th - Closing Bal VN2012 - fell outside the range the
+template export writes into. CZ is column 104, leaving headroom for further
+ventures.
+
+To see it in Excel: open either file, Formulas -> Name Manager (Ctrl+F3), look at
+the RawData and Header rows.
+
+Raw XML diff of the defined names:
+
+--- ORIGINAL (04.08.2026 output)
++++ WIDENED  (test template)
+@@ -10,4 +10,4 @@
+ <definedName name="Format">#REF!</definedName>
+-<definedName name="Header">Header!$A$11:$BV$788</definedName>
+-<definedName name="RawData">RawData!$A$1:$BV$778</definedName>
++<definedName name="Header">Header!$A$11:$CZ$5000</definedName>
++<definedName name="RawData">RawData!$A$1:$CZ$5000</definedName>
+ <definedName name="RawHeader">RawHeader!$A$1:$C$9</definedName>

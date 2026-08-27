@@ -164,13 +164,32 @@ Relevant: every amount field in `ZAA_IMPARMENTLOSS` is typed `LIKE ANLC-SAFAP`
 program has always worked in special-depreciation terms. `X20` carries debit/
 credit indicator `H` in TABW.
 
-#### Still to do — equivalence proof
+#### Equivalence proof — DONE 27/08/26
 
-Run `ABAAL` in **dialog** for the same asset and values (106009197/0000, `X20`,
-10.00, 27.08.2026) and compare. If the dialog transaction produces the same
-messages, the BAPI is a faithful replacement and the remaining messages are
-pre-existing business/config matters. If it posts cleanly, it is doing something
-with areas that the BAPI call must replicate.
+`ABAAL` run in dialog, same asset and values (106009197/0000, `X20`, 10.00,
+27.08.2026), simulated not posted. Message log:
+
+```
+Type W  Item 000  Check on BAdI implementation for depr. calcul. required
+Status bar: 0 errors, 1 warning
+```
+
+**Identical to `BAPI_ASSET_VALUE_ADJUST_CHECK` with `DEPR_AREA = 01`** — same
+message, same type, same count. The BAPI is a faithful replacement for the
+transaction at validation level.
+
+Note the dialog transaction raised **no** `EAA 627` area errors without being
+told an area, whereas the BAPI with `DEPR_AREA = 00` did. So `ABAAL` scopes the
+depreciation areas itself from configuration; the BAPI expects the caller to do
+it. That is why `DEPR_AREA` must be set explicitly in our call.
+
+**What is proven:** message-level equivalence.
+**What is not yet proven:** value-level equivalence — that `DEPR_AREA = 01`
+lands the same amounts in the same areas as the dialog does. Confirm with one
+real posting in a sandbox, comparing AW01N before/after for a dialog posting
+against a BAPI posting. This is a test activity, not a blocker to writing the
+code, but it must happen before go-live and it overlaps the open functional
+question on area scope above.
 
 ### BAPI field mapping — confirmed from SE37, 27/08/26
 

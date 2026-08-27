@@ -129,6 +129,49 @@ second, independent defect:
 **For functional:** which period is the impairment actually meant to post to?
 Fixing the code alone will not make this run succeed.
 
+### BAPI test sequence — CONFIRMED 27/08/26
+
+Four `BAPI_ASSET_VALUE_ADJUST_CHECK` runs in SE37, asset 106009197/0000
+(cap. date 01.09.2016, prior-year acquisition), `ASSETTRTYP` `X20`, INR.
+Nothing posted at any point — `_CHECK` validates only.
+
+| # | Changed | `RETURN` | Read |
+|---|---------|----------|------|
+| 1 | `PSTNG_DATE` 31.03.2026, `FIS_PERIOD` 03, amt 1,221.00 | `EAA 370` fiscal year already closed | AA FY2026 closed for OVL — see DEFECT 2 |
+| 2 | `PSTNG_DATE`/`TRANS_DATE` 27.08.2026, `FIS_PERIOD` blank | `EAA 632` cutoff value 2.36 in area 01 | got past year check; amount was the run total, not the row |
+| 3 | amount 10.00 | `EAA 627` special deprec. negative in areas 20/30/31/40 (+2x `590`) | not magnitude — those areas hold no special deprec. balance |
+| 4 | **`DEPR_AREA` = `01`** | **`AU 176` (type W) BAdI check for depr. calcul.** | **clean — warning only, no errors** |
+
+**Conclusion: the BAPI accepts transaction type `X20` and reaches full business
+validation.** Technical approach confirmed. `EAA 632` proved magnitude, `EAA 627`
+proved area scope, and scoping to area 01 cleared both. `AA 590` was a knock-on
+of `627`, not an independent transaction-type objection.
+
+`AU 176` is a standard S/4 new-AA advisory (type W), not a blocker.
+
+#### Open functional question — which depreciation areas?
+
+`DEPR_AREA = 00` (all areas) fails: areas 20/30/31/40 hold no special
+depreciation balance and go negative. `DEPR_AREA = 01` is clean.
+
+**Do not simply hardcode `01`.** The old BDC passed no area at all, so `ABAA`
+posted to whatever the transaction type configuration allowed. Restricting to
+area 01 changes what lands in the other areas and ledgers. Functional must
+confirm which areas impairment is meant to post to before this is fixed in code.
+
+Relevant: every amount field in `ZAA_IMPARMENTLOSS` is typed `LIKE ANLC-SAFAP`
+(special depreciation) and `P_SAFAP` is an obligatory selection parameter — this
+program has always worked in special-depreciation terms. `X20` carries debit/
+credit indicator `H` in TABW.
+
+#### Still to do — equivalence proof
+
+Run `ABAAL` in **dialog** for the same asset and values (106009197/0000, `X20`,
+10.00, 27.08.2026) and compare. If the dialog transaction produces the same
+messages, the BAPI is a faithful replacement and the remaining messages are
+pre-existing business/config matters. If it posts cleanly, it is doing something
+with areas that the BAPI call must replicate.
+
 ### BAPI field mapping — confirmed from SE37, 27/08/26
 
 `BAPIFAPO_GEN_INFO` components (read off the SE37 test screen, not guessed):

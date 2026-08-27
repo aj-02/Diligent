@@ -30,3 +30,36 @@ Owners: **Ankita Parikh** (functional, FI/TDS) | **Bhavin Suthar** (MM / account
 | Q19 | Bhavin | GLCode tab - MBEW read | FS [H27]: `BWKEY = RSEG-WERKS`. That holds under plant-level valuation. Is valuation at plant level for these company codes (OX14 / `T001K`)? | Implemented as the FS says - the plant is passed as the valuation area. Under company-code-level valuation the `MBEW` read finds nothing and column F is blank for stock purchase orders. |
 | Q20 | Ankita | Account type | FS [C2] asks for `CUSTOMERSUPPLIERACCOUNT` without qualifying it, so **no account-type filter is applied** and customer withholding items are not excluded. Should they be? | Not excluded. Where a customer item occurs, columns D and E come back blank because `LFA1` has no such account - visible, not silent. Add `KOART = 'K'` to `FETCH_WT_ITEMS` if the answer is yes. |
 | Q15 | Ankita | Selection screen defaults | `INIT_DEFAULTS` proposes an April-March period and a matching fiscal year. Do company codes 1000 and 4000 run an April-March variant (V3), or a calendar-year variant (K4)? | April-March assumed. Under K4 the proposed `P_GJAHR` and the proposed posting-date range contradict each other (the two filters are ANDed, so January-to-March would drop out) and the user must overtype both. Proposal only - both fields are guarded by `IS INITIAL`, so a variant or `SUBMIT ... WITH` always wins. |
+
+
+---
+
+## Validated on the first live run — 27/08/26
+
+Company code 1000, FY 2026, 49 rows returned. Arithmetic reconciled on a sample:
+`4,500 x 2% = 90`, `96,666.66 x 2% = 1,933.33`, `22,321.43 x 0.1% = 22.32`,
+`200,000 x 1% = 2,000`. Row 19 (`6,000,000` base, `1,000` tax) reconciles once the
+5,000,000 threshold is applied: `(6,000,000 - 5,000,000) x 0.1% = 1,000` — the exemption
+logic works.
+
+### Closed by the run
+
+| # | Was | Evidence |
+|---|---|---|
+| Q9 | is `T059OT` the right text table? | **YES.** Section and description populate throughout (`194C` / `TDS on Payment to Contractors`). `T059Z-TXT40` is dead and buried. |
+| Q10 | is `LFA1-J_1IPANNO` populated? | **YES.** Column E filled on every row. |
+| Q11 | is `BSEG-GHKON` populated? | **YES.** GL and GL name derive for direct FI postings. The `GKONT` / `HKONT_OPP` fallbacks are not needed. |
+| Q14 | `AWTYP` vs the FS's literal `AWKEY` | **`AWTYP` was right.** `5110000001` returns `33010001 STOCK OF RAW MATERIALS`, `5110000011-13` return `33010012 STOCK OF FINISHED GOODS` — the RMRP branch resolves through RSEG -> MBEW -> T030 BSX. The literal `AWKEY = 'RMRP'` would have left every one of these blank, silently. |
+| Q17 | is `BSEG-H_BUDAT` populated? | **YES.** Columns K and M filled on every row; no need to fall back to BKPF. |
+| Q18 | do both company codes run chart `ASTL`? | **Confirmed for 1000.** Column G resolves. 4000 still untested. |
+| Q19 | is valuation at plant level? | **YES.** The BKLAS -> T030 route returns accounts, so `BWKEY` = `WERKS` holds. |
+
+### Raised by the run — need a functional answer
+
+| # | Owner | Area | Question | Today |
+|---|---|---|---|---|
+| Q21 | Ankita | P/T - sign | Base and TDS come out **negative** (`4,500.00-`, `90.00-`) because `WITH_ITEM` stores vendor credits that way. On a compliance report that gets totalled, absolute values are normally wanted. Flip the sign? | Raw `WT_QSSHH` / `WT_QBSHH` as stored. One-line change in `BUILD_OUTPUT` if the answer is yes. |
+| Q22 | Ankita | Row selection | 7 rows / 6 documents carry **no deduction at all**: `1700000025-28` (down-payment *requests* — noted items, nothing posted) and `1900000087-88`. The FS objective says "documents in which TDS is deducted". Exclude rows with zero tax amount, and/or exclude noted items (`BKPF-BSTAT`)? | Both included; build contract D5 keeps a row when base **or** tax is non-zero. The status line reports them rather than dropping them silently. Related to Q6. |
+| Q23 | Ankita | J - Nature of Payment | Column J is **blank on roughly 80% of rows**. It is `BSEG-SGTXT` per FS [J2], but FS [J6] said *header* text. The blankness is evidence the business meant `BKPF-BKTXT`. Which? | `SGTXT` of the vendor line. This is Q5 with data behind it now. |
+| Q24 | Ankita | R/S - the two rate columns | R ("as per section") is `T059Z-QSATZ`; S ("deducted") is `WithholdingTaxPercent`, which is **also** `QSATZ` — so the two are near-duplicates by the FS's own design. Worse, **rows 27, 28, 29 and 38 (LEAN SERVICE) do not reconcile**: rate shows `2.0000` but the amounts imply 0.1% (`1,000 -> 1.00`, `10,000 -> 10.00`, `3,900 -> 3.90`), while rows 36/37 for the same vendor reconcile at 2%. Partial exemption? If column S should be the rate **actually applied**, the candidates are `TDS / base` or `WITH_ITEM-WT_QSZRT` (the exemption rate, DE `WT_EXRT`). | Both columns show `QSATZ`, one from the document and one from config. |
+| Q25 | Ankita | W/Y - zero vs blank | Threshold and Cumulative render as `0.00` where no certificate exists, which reads as "zero threshold" rather than "none maintained". Combined with Q4 (heading still says `(Y/N)`), how should "not maintained" look? | Numeric `0.00`. Suppressing zeros is an ALV setting, not a logic change. |

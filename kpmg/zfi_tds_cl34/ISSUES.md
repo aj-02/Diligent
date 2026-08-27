@@ -24,6 +24,7 @@ Bhavin Suthar (MM / account determination)
 | 27/08/26 | Which FS deviations to keep after the TXT40 proof | Tempting to revert every rig-informed change at once. Split them instead: DDIC **existence** questions are answerable from any S/4 (standard tables are identical), **content and configuration** questions are not | Only col I changed. The rig's DDL read also confirms `I_WithholdingTaxItem` exists and **every CDS element name the FS quotes is correct**, including the four the FS never spelled out (they are its five key elements), and that `RSEG-BUKRS` and `RSEG-WERKS` both exist — so the driver select, the RSEG read and the MBEW route should all activate as written. `GHKON` population, chart `ASTL`, `H_BUDAT` population and plant-level valuation stay FS-literal: they surface as blank data, not errors | `<TR>` |
 | 27/08/26 | Activation: *"data type of the component GHKON of GT_BSEG is not compatible with the data type of H_BUDAT"*, FORMS line 317 | Positional misalignment introduced when `H_BUDAT` / `H_BLDAT` were added for FS [K2]/[M2]. `TY_BSEG` had them appended after `GHKON`, but the SELECT listed them *before* it. Strict ABAP SQL assigns `INTO TABLE` by position, so `GHKON` was being written into `H_BUDAT` | SELECT reordered to `... secco, ghkon, h_budat, h_bldat`, matching `TY_BSEG` component for component. A checker now compares every SELECT field list against its target type's component order; all 13 buffers verified aligned | `<TR>` |
 | 27/08/26 | Activation: *"REPORT_GL_GAPS is invalid here (due to grammar)"*, FORMS line 1232 | Not a code defect — a **256-character source line**. The trailing `" ASSUMPTION:` comment on the T030 SELECT exceeded ABAP's 255-char limit, so SE38 wrapped it on paste and the tail (`... reported by REPORT_GL_GAPS`) landed on its own line without the `"` prefix, where it parsed as a statement | All 8 lines over 120 chars rewritten: long trailing comments moved into `*` blocks above the statement, and one 133-char string template split with `&&`. Longest line is now under 120. Rule added to `CLAUDE.md` — everything here ships by paste, so this will recur otherwise | `<TR>` |
+| 27/08/26 | First live run — all four objects activated and the report produced output | — | 49 rows, company code 1000, FY 2026. Arithmetic reconciled on a sample including the threshold case (`(6,000,000 - 5,000,000) x 0.1% = 1,000`). **Seven queries closed by the data: Q9, Q10, Q11, Q14, Q17, Q18, Q19.** All three GL branches resolve — direct FI via `GHKON`, and the RMRP branch via RSEG -> MBEW -> T030 BSX (`5110000001` -> `33010001`). The `AWTYP` decision recorded 27/08/26 is vindicated: the FS's literal `AWKEY = 'RMRP'` would have blanked every MM invoice silently. Five new functional questions raised as Q21-Q25 | `<TR>` |
 
 ## Open, not yet defects
 
@@ -32,9 +33,11 @@ Tracked in `docs/QUERIES.md` (Q1–Q15). The ones that would change a number on 
 - **Q1** column Y accumulation rule — `FIWTIN_ACC_EXEM` is keyed by `SECCO` (Ankita).
 - **Q2** columns U–X certificate pick — `SECCODE` / `FIWTIN_TANEX_SUB` unrestricted (Ankita).
 - **Q3** is a valuation grouping code active (OMWM)? `T001K-BWMOD` unverified (Bhavin).
-- **Q11** is `BSEG-GHKON` populated on the `KTOSL='WIT'` line? Blank ⇒ F/G blank for every
-  direct FI posting. Fallback order `GKONT` → `WITH_ITEM-HKONT_OPP`; one-field switch.
-- **Q10** is `LFA1-J_1IPANNO` populated? Blank ⇒ E and U–Y blank together.
+- ~~**Q11** `BSEG-GHKON`~~ — **closed 27/08/26**, populated.
+- ~~**Q10** `LFA1-J_1IPANNO`~~ — **closed 27/08/26**, populated.
+- **Q21** sign convention on the amount columns (negative today).
+- **Q22** should zero-deduction rows and noted items be excluded?
+- **Q24** rows 27–29 and 38 do not reconcile rate against amount — partial exemption?
 - **Q6** reversed / parked documents — reported today; needs a client decision.
 - **Q12** *(highest)* do `I_WithholdingTaxItem` / `I_JournalEntry` exist with the FS's
   element names? If not the program will not activate. Try this first (Basis).

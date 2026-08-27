@@ -302,6 +302,33 @@ FORM ZAA_GET_WAERS CHANGING PV_SUBRC.
 ENDFORM.                    " ZAA_GET_WAERS
 
 *&---------------------------------------------------------------------*
+*&      Form  ZAA_ALPHA_INPUT
+*&---------------------------------------------------------------------*
+*       Puts an asset number back into internal format.
+*
+*       ZAA_IMPARMENTLOSS strips the leading zeros before it fills the
+*       display table - SHIFT IST_FINAL-ANLN1 LEFT DELETING LEADING '0' -
+*       so the ALV shows a readable number. The BDC got away with that
+*       because the screen field ANBZ-ANLN1 re-padded the value through
+*       its ALPHA conversion exit on input. A BAPI performs no such
+*       conversion: it takes the value as given, so '104008114' finds no
+*       asset and comes back "not in company code OVL".
+*
+*       Safe to call on a value that is already padded - ALPHA_INPUT
+*       leaves it unchanged.
+*----------------------------------------------------------------------*
+FORM ZAA_ALPHA_INPUT USING    PV_IN
+                     CHANGING PV_OUT.
+
+  CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+       EXPORTING
+            INPUT  = PV_IN
+       IMPORTING
+            OUTPUT = PV_OUT.
+
+ENDFORM.                    " ZAA_ALPHA_INPUT
+
+*&---------------------------------------------------------------------*
 *&      Form  ZAA_COLLECT_RETURN
 *&---------------------------------------------------------------------*
 *       Folds the BAPI RETURN structure and RETURN_ALL table into one
@@ -315,15 +342,20 @@ FORM ZAA_COLLECT_RETURN TABLES   PT_RETURN STRUCTURE BAPIRET2
 
   CLEAR PV_SUBRC.
 
-  IF NOT PS_RETURN IS INITIAL.
-    PT_RETURN = PS_RETURN.
-    APPEND PT_RETURN.
+* RETURN_ALL already carries the message that RETURN repeats, so taking
+* both listed every asset twice in the run log. Use RETURN_ALL when the
+* BAPI filled it, and fall back to RETURN only when it did not.
+  IF PT_RETALL[] IS INITIAL.
+    IF NOT PS_RETURN IS INITIAL.
+      PT_RETURN = PS_RETURN.
+      APPEND PT_RETURN.
+    ENDIF.
+  ELSE.
+    LOOP AT PT_RETALL.
+      PT_RETURN = PT_RETALL.
+      APPEND PT_RETURN.
+    ENDLOOP.
   ENDIF.
-
-  LOOP AT PT_RETALL.
-    PT_RETURN = PT_RETALL.
-    APPEND PT_RETURN.
-  ENDLOOP.
 
   LOOP AT PT_RETURN WHERE TYPE = 'E' OR TYPE = 'A'.
     PV_SUBRC = 4.
@@ -363,6 +395,8 @@ FORM ZAA_VALUE_ADJUST TABLES   PT_RETURN STRUCTURE BAPIRET2
         LS_RETURN  LIKE BAPIRET2,
         LT_RETALL  LIKE BAPIRET2 OCCURS 0 WITH HEADER LINE,
         L_BZDAT    LIKE ANEK-BZDAT,
+        L_ANLN1    LIKE ANLA-ANLN1,
+        L_ANLN2    LIKE ANLA-ANLN2,
         L_SUBRC    LIKE SY-SUBRC.
 
   REFRESH: PT_RETURN, LT_RETALL.
@@ -396,9 +430,14 @@ FORM ZAA_VALUE_ADJUST TABLES   PT_RETURN STRUCTURE BAPIRET2
     EXIT.
   ENDIF.
 
+* Asset number arrives with its leading zeros stripped - see
+* ZAA_ALPHA_INPUT. Put it back before the BAPI sees it.
+  PERFORM ZAA_ALPHA_INPUT USING PV_ANLN1 CHANGING L_ANLN1.
+  PERFORM ZAA_ALPHA_INPUT USING PV_ANLN2 CHANGING L_ANLN2.
+
   LS_GENERAL-COMP_CODE     = P_BUKRS.
-  LS_GENERAL-ASSETMAINO    = PV_ANLN1.
-  LS_GENERAL-ASSETSUBNO    = PV_ANLN2.
+  LS_GENERAL-ASSETMAINO    = L_ANLN1.
+  LS_GENERAL-ASSETSUBNO    = L_ANLN2.
   LS_GENERAL-DOC_DATE      = SY-DATUM.
   LS_GENERAL-PSTNG_DATE    = P_BUDAT.
   LS_GENERAL-FIS_PERIOD    = P_MONAT.
@@ -489,6 +528,8 @@ FORM ZAA_WRITEUP TABLES   PT_RETURN STRUCTURE BAPIRET2
         LS_RETURN  LIKE BAPIRET2,
         LT_RETALL  LIKE BAPIRET2 OCCURS 0 WITH HEADER LINE,
         L_BZDAT    LIKE ANEK-BZDAT,
+        L_ANLN1    LIKE ANLA-ANLN1,
+        L_ANLN2    LIKE ANLA-ANLN2,
         L_SUBRC    LIKE SY-SUBRC.
 
   REFRESH: PT_RETURN, LT_RETALL.
@@ -519,9 +560,14 @@ FORM ZAA_WRITEUP TABLES   PT_RETURN STRUCTURE BAPIRET2
     EXIT.
   ENDIF.
 
+* Asset number arrives with its leading zeros stripped - see
+* ZAA_ALPHA_INPUT. Put it back before the BAPI sees it.
+  PERFORM ZAA_ALPHA_INPUT USING PV_ANLN1 CHANGING L_ANLN1.
+  PERFORM ZAA_ALPHA_INPUT USING PV_ANLN2 CHANGING L_ANLN2.
+
   LS_GENERAL-COMP_CODE     = P_BUKRS.
-  LS_GENERAL-ASSETMAINO    = PV_ANLN1.
-  LS_GENERAL-ASSETSUBNO    = PV_ANLN2.
+  LS_GENERAL-ASSETMAINO    = L_ANLN1.
+  LS_GENERAL-ASSETSUBNO    = L_ANLN2.
   LS_GENERAL-DOC_DATE      = SY-DATUM.
   LS_GENERAL-PSTNG_DATE    = P_BUDAT.
   LS_GENERAL-FIS_PERIOD    = P_MONAT.

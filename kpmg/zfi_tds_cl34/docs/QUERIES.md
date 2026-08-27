@@ -58,8 +58,28 @@ logic works.
 
 | # | Owner | Area | Question | Today |
 |---|---|---|---|---|
-| Q21 | Ankita | P/T - sign | Base and TDS come out **negative** (`4,500.00-`, `90.00-`) because `WITH_ITEM` stores vendor credits that way. On a compliance report that gets totalled, absolute values are normally wanted. Flip the sign? | Raw `WT_QSSHH` / `WT_QBSHH` as stored. One-line change in `BUILD_OUTPUT` if the answer is yes. |
+| Q21 | Ankita | P/T - sign | Base and TDS come out **negative** (`4,500.00-`, `90.00-`) because `WITH_ITEM` stores vendor credits that way. On a compliance report that gets totalled, positive figures are normally wanted. Flip them? **If yes, it must be `x -1`, NOT `ABS( )`** - the second run showed a credit memo (doc `5110000002`, transaction `MR8M`) coming through as `+450.00 / +0.45` against the original invoice's `-450.00 / -0.45`. The sign carries real meaning: taking absolute values would turn that reversal into a second deduction and the column would over-total. | Raw `WT_QSSHH` / `WT_QBSHH` as stored. One-line change in `BUILD_OUTPUT`. |
 | Q22 | Ankita | Row selection | 7 rows / 6 documents carry **no deduction at all**: `1700000025-28` (down-payment *requests* — noted items, nothing posted) and `1900000087-88`. The FS objective says "documents in which TDS is deducted". Exclude rows with zero tax amount, and/or exclude noted items (`BKPF-BSTAT`)? | Both included; build contract D5 keeps a row when base **or** tax is non-zero. The status line reports them rather than dropping them silently. Related to Q6. |
 | Q23 | Ankita | J - Nature of Payment | Column J is **blank on roughly 80% of rows**. It is `BSEG-SGTXT` per FS [J2], but FS [J6] said *header* text. The blankness is evidence the business meant `BKPF-BKTXT`. Which? | `SGTXT` of the vendor line. This is Q5 with data behind it now. |
 | Q24 | Ankita | R/S - the two rate columns | R ("as per section") is `T059Z-QSATZ`; S ("deducted") is `WithholdingTaxPercent`, which is **also** `QSATZ` — so the two are near-duplicates by the FS's own design. Worse, **rows 27, 28, 29 and 38 (LEAN SERVICE) do not reconcile**: rate shows `2.0000` but the amounts imply 0.1% (`1,000 -> 1.00`, `10,000 -> 10.00`, `3,900 -> 3.90`), while rows 36/37 for the same vendor reconcile at 2%. Partial exemption? If column S should be the rate **actually applied**, the candidates are `TDS / base` or `WITH_ITEM-WT_QSZRT` (the exemption rate, DE `WT_EXRT`). | Both columns show `QSATZ`, one from the document and one from config. |
 | Q25 | Ankita | W/Y - zero vs blank | Threshold and Cumulative render as `0.00` where no certificate exists, which reads as "zero threshold" rather than "none maintained". Combined with Q4 (heading still says `(Y/N)`), how should "not maintained" look? | Numeric `0.00`. Suppressing zeros is an ALV setting, not a logic change. |
+
+
+### Second run, company code with the `19*` / `511*` ranges — 27/08/26
+
+17 rows, **all reconcile, no exceptions.** `4,000 x 0.1% = 4.00`, `175,000 x 2% = 3,500`,
+`300,000 x 0.1% = 300.00`, `100,000 x 2% = 2,000`, `450 x 0.1% = 0.45`. No blank GL, no
+status message, no rate/amount mismatch.
+
+- **Q18 fully closed** - chart `ASTL` resolves in this company code too, so the FS's
+  hardcode holds for both in scope.
+- **The GL decision tree is now fully covered.** Run 1 exercised the `MBEW-BKLAS` -> `T030`
+  BSX route; this run adds the **`EKKN-SAKTO`** route - rows 15-17 (`5110000001-03`) return
+  `60020201 CONSUMPTION PROJECT INVENTORY`, a project/WBS account assignment. Row 14
+  (`5110000000`) returns `33010003 STOCK OF TRADED GOODS` via BSX. Both branches proven.
+- **Q24 sharpened.** The rate/amount mismatch does not occur anywhere in this run. Together
+  with run 1 - where it hit only LEAN SERVICE, a vendor holding an exemption certificate -
+  this is strong evidence the mismatch is certificate-driven source data, **not a code
+  defect**. The `WT_QSZRT` check on `1900000077` will settle it.
+- Minor, source data not the report: rows 9 and 10 carry an Invoice Date of `26.05.2025`
+  against a posting date of `26.05.2026`.

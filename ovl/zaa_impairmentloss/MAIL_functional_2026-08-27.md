@@ -12,10 +12,8 @@ Hi <name>,
 
 ZFIIMPR was failing in SM35. On S/4, ABAA and ABZU are no longer posting
 transactions — they redirect via RADISPATCH_AB01, and batch input cannot follow
-a redirect. We have moved the posting to the standard FI-AA BAPIs:
-BAPI_ASSET_VALUE_ADJUST for impairment and unplanned depreciation, and
-BAPI_ASSET_WRITEUP for write-back. There is no longer an SM35 session — each
-asset is validated before posting and the result is shown on screen.
+a redirect. The posting has been moved to the standard FI-AA BAPIs and the
+program is ready for your testing.
 
 Please confirm:
 

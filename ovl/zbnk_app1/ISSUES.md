@@ -16,8 +16,9 @@ Source: `ZFI_BNK_APP1.txt` (SE80, OCQ/500, SAP_ABAP, 27.08.2026 09:40) —
 
 Second signatory 68865 selected **one** batch. All three released.
 
-**Status:** root cause confirmed in code. Fix is a design change and needs functional
-sign-off before anything is written.
+**Status:** fix written and activated in OCQ/500 on 27.08.2026. **Not yet tested.**
+Functional sign-off on the transmission-timing change still open. Do not move to QA/PRD
+until both are done.
 
 ---
 
@@ -115,3 +116,63 @@ run carry level-2 approval is acceptable. It changes when money moves.
 **Open verification:** SE11 → `ZFI_PAYM_FILE` → Fields tab. Asserting the key is
 `LAUFD` + `LAUFI` (possibly + `ZBUKR`) with no batch component — inferred from every
 `READ TABLE` in both programs, not yet read from DDIC.
+
+
+---
+
+### Fix delivered 27.08.2026 — activated in OCQ, untested
+
+| # | Object | Lines | Change |
+|---|---|---|---|
+| 1 | `ZFI_BNK_APP1_F01` | 1073 → 1188 | `F_PREPARE_OP_TAB2`: run-level `WHERE sent = ' '` filter commented out. New `FORM F_RUN_PENDING_COUNT` |
+| 2 | `ZFI_BNK_APP1_I01` | 465 → 583 | `GET_SELECTED_ROW_TAB2` reordered |
+
+Marker author `SAP_ABAP`, date 27/08/26. Originals preserved commented inside BOC/EOC.
+Diffs verified: changes confined to the two regions named above, nothing else touched.
+
+**New behaviour of `APPROVE2`:**
+
+1. single-selection guard, e-token sign, verify, thumbprint check — all unchanged
+2. write `ZFI_BATCH_SIGN` for the **selected batch only**, `COMMIT`; `ROLLBACK` and
+   message on failure
+3. `PERFORM f_run_pending_count` for the run
+4. batches still pending → *"Batch approved. N of M batches in this run are approved -
+   file not sent yet."*, stop
+5. all approved → proxy send, `SENT = 'X'`, *"Run fully approved - file sent to the bank"*
+6. run already sent → *"Approval saved. File for this run was already sent to the bank"*,
+   **approval kept** (this is how the 21.08 orphans get their signature recorded)
+
+`F_RUN_PENDING_COUNT` checks **both** levels, not only level 2: tab 2's worklist only
+needs `FILE_DATA_SENT` populated, which one level-1 approval does for the whole run, so
+a batch could otherwise reach the bank with neither signature.
+
+**What the old code actually did — for the record.** It wrote exactly **one**
+`ZFI_BATCH_SIGN` row, for the selected batch. Batches 002 and 003 never received
+`DIGITL_SIGN = 'X'`. They were flagged sent at run level and dropped out of the
+worklist. It was never three approvals from one click; it was one approval that marked
+the run sent and made the other two batches unreachable.
+
+### Open — must close before this leaves OCQ
+
+1. **Functional sign-off** on the timing change: the bank file now waits until every
+   batch in a run is approved at both levels. This changes when money moves.
+2. **Test on a multi-batch run in QA.** Sequence: approve 1 of 3 → message says 1 of 3,
+   `SENT` blank, 002/003 still listed; SE16 shows only 001 signed; approve 2nd, then 3rd
+   → file sent once. Then the 21.08 run: 002/003 should reappear in tab 2 and approving
+   them should say "already sent" while recording the signature.
+3. **Tell the users.** The second signatory must now approve every batch of a run before
+   the file goes out. Without warning this will come back as a "file not sent" ticket.
+4. **What is in RAW_DATA — unresolved.** `ZFI_PAYMEDIUM_DMEE_20` has not been read. If
+   the run's file covers all batches, unapproved payments did reach the bank on 21.08.
+   If it covers only one batch, the other two were never transmitted at all and are
+   stranded — a second defect. Check: `ZBNK_APP2` → Download Raw File on the 21.08 run,
+   and see whether all three amounts appear.
+5. **Falsification test not yet run:** `SE16 → ZFI_BATCH_SIGN`, `BATCH_NO` starting
+   `OVL IN 20260821`. Expect one row with `DIGITL_SIGN = 'X'` at `SNRO = 2` and two
+   blank. Three `X` rows would mean something else also writes signatures and the
+   diagnosis is incomplete.
+6. **`SNRO` is not in the key** of `ZFI_BATCH_SIGN` (key is `BATCH_NO` + `SIGNER`). A
+   user configured as both level-1 and level-2 approver for one company code collapses
+   to a single row, and `F_ENSURE_BATCH_SIGN`'s `ACCEPTING DUPLICATE KEYS` silently
+   drops one. Not triggered here (68865 is level 2 only). DDIC key change if it bites.
+7. **Transport release** — manual.

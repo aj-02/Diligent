@@ -1,0 +1,195 @@
+# Clause 34 TDS Report - verbatim FS extract
+
+Source: `kpmg/zfi_tds_cl34/docs/Clause 34 TDS Report FS.xlsx` (as supplied, 21/08/2026, v1).
+Extracted verbatim, cell by cell. Read this file - do not work from memory.
+
+
+## Sheet: Functional Specification
+
+- [A1] Functional Specification
+- [A5] Development General
+- [A6] Object Name
+  - [C6] TDS Report
+  - [G6] Date
+  - [H6] 21/8/2026
+- [A7] Description
+  - [C7] TDS Report for compliance with clause 34
+  - [G7] Version
+  - [H7] 1
+- [A8] Object Type
+  - [C8] Report
+  - [G8] Module
+  - [H8] FI
+- [A9] Ownership
+- [A10] User
+  - [C10] Ankita Parikh
+  - [E10] Functional Consultant
+  - [G10] Bhavin Suthar
+- [A11] Reviewed By
+  - [C11] Ankita Parikh
+  - [E11] Technical Consultant
+- [A12] Process
+- [A13] Business Logic
+- [A14] Objective:  This report is developed with respect to compliance of TDS deduction reporting in which GL wise and document number wise TDS deduction details will be provided.
+- [A15] Applicability:  Company code 1000 and 4000
+- [A16] Additional selection:
+- [A17] Usage:
+- [A19] Processing:
+- [A20] Processing Mode:
+- [A21] Output type: List of documents in which TDS is dudcted along with other required details.
+- [A23] Dependency:
+- [A24] Constraint:
+- [A25] Assumption: We have added all the required columns based on format provided by the user and also confirm with user through one meeting as well. Any addition in required data either on input screen or output screen post approval of this FS will be consider as a change request.
+- [A35] Technical inputs
+- [A36] Trigger method
+- [A37] Output method
+- [A38] Selection parameters
+- [A39] Seq
+  - [B39] SAP Table Name
+  - [C39] SAP Field Name
+  - [D39] Field Description
+  - [E39] Single value / value range
+  - [G39] Remark
+- [A40] 1
+- [A41] 2
+- [A42] 3
+- [A52] Output/Form Layout (If Applicable)
+  - [D52] REPORT
+- [A54] Input File (If Applicable)
+- [J76] Standard
+  - [K76] Material
+  - [L76] Operation
+  - [N76] Overhead
+- [J77] Cost
+  - [K77] Cost
+  - [L77] Cost
+  - [N77] Cost
+- [L78] Machine
+  - [M78] Labor
+
+## Sheet: Input Screen
+
+- [C4] Company Code
+- [C6] Section Code
+- [C8] Vendor Code
+- [C10] Fiscal Year
+- [C12] Posting Date
+  - [E12] From
+  - [G12] To
+
+## Sheet: Output Screen
+
+- [A1] A
+  - [B1] B
+  - [C1] C
+  - [D1] D
+  - [E1] E
+  - [F1] F
+  - [G1] G
+  - [H1] H
+  - [I1] I
+  - [J1] J
+  - [K1] K
+  - [L1] L
+  - [M1] M
+  - [N1] N
+  - [O1] O
+  - [P1] P
+  - [Q1] Q
+  - [R1] R
+  - [S1] S
+  - [T1] T
+  - [U1] U
+  - [V1] V
+  - [W1] W
+  - [X1] X
+  - [Y1] Y
+- [B2] Inner joint two views :
+1 - I_WITHHOLDINGTAXITEM
+2 - I_JOURNALENTRY and apply mandatory filter from input screen of company code, fiscal year and posting date and fetch all the documents from field "ACCOUNTINGDOCUMENT" from view I_WITHHOLDINGTAXITEM
+  - [C2] get field "CUSTOMERSUPPLIERACCOUNT" from view I_WITHHOLDINGTAXITEM against each document selected in column B.
+  - [D2] Get CUSTOMERSUPPLIERACCOUNT from column C and fill in table LFA1 in field LIFNR and get NAME1
+  - [E2] Get CUSTOMERSUPPLIERACCOUNT from column C and fill in table LFA1 in field LIFNR and get J_1IPANNO
+  - [F2] Refer GL Code Logic Separate Excel Tab
+  - [G2] get GHKON from column GL Code and fill in SKA1 in SAKNR field and provide "ASTL" in KTOPL and fetch TXT50
+  - [H2] Get WITHHOLDINGTAXCODE from I_WITHHOLDINGTAXITEM for selected documents and provide in table T059Z in field WT_WITHCD and get QSCOD
+  - [I2] Get WITHHOLDINGTAXCODE from I_WITHHOLDINGTAXITEM for selected documents and provide in table T059Z in field WT_WITHCD and get TXT40
+  - [J2] get all the selected documents and fill in BELNR field, fiscal year, company code in table BSEG and where LIFNR <> blank and get SGTXT
+  - [K2] get all the selected documents and fill in BELNR field, company code, fiscal year in table BSEG and get H_BUDAT
+  - [L2] Get all the selected document and provide the same in BELNR, fiscal year and company code in BKPF and get XBLNR
+  - [M2] get all the selected documents and fill in BELNR field, fiscal year and company code in table BSEG and get H_BLDAT
+  - [N2] get all the selected documents and fill in BELNR field, compan code, fiscal year in table BSEG and get AUGBL
+  - [O2] get all the selected documents and fill in BELNR field, company code and fiscal year in table BSEG and get AUGDT
+  - [P2] Get WHLDGTAXBASEAMTINCOCODECRCY from view I_WITHHOLDINGTAXITEM for all selected ACCOUNTINGDOCUMENT
+  - [Q2] Get WITHHOLDINGTAXCODE from view I_WITHHOLDINGTAXITEM for all selected ACCOUNTINGDOCUMENT
+  - [R2] Get WITHHOLDINGTAXCODE from view I_WITHHOLDINGTAXITEM and provide in  WT_WITHCD field of T059Z and get QSATZ
+  - [S2] Get WITHHOLDINGTAXPERCENT from view I_WITHHOLDINGTAXITEM for all selected ACCOUNTINGDOCUMENT
+  - [T2] Get field WHLDGTAXAMTINCOCODECRCY from view I_WITHHOLDINGTAXITEM for all selected ACCOUNTINGDOCUMENT
+  - [U2] Get J_1IPANNO field from PAN number column and provide the same in PAN_NO in table FIWTIN_TAN_EXEM and get WT_EXDF
+  - [V2] Get J_1IPANNO field from PAN number column and provide the same in PAN_NO in table FIWTIN_TAN_EXEM and get WT_EXDT
+  - [W2] Get J_1IPANNO field from PAN number column and provide the same in PAN_NO in table FIWTIN_TAN_EXEM and get FIWTIN_EXEM_THR
+  - [X2] Get J_1IPANNO field from PAN number column and provide the same in PAN_NO in table FIWTIN_TAN_EXEM and get WT_EXNR
+  - [Y2] Get J_1IPANNO field from PAN number column and provide the same in PAN_NO in table FIWTIN_ACC_EXEM and get ACC_AMT
+- [B6] Posted FI Document number will be display here
+  - [C6] Vendor code from posted document will show here
+  - [D6] Vendor name from posted document will show here
+  - [E6] PAN from vendor master will display here
+  - [F6] For direct FI postings, offsetting GL will be display here and for purchase through PO having account assignment, GL mention at PO screen will display here and for normal PO, GL provided under GL determination at config level will display here.
+  - [G6] Name of provided GL will display here
+  - [H6] Section code of applicable tax code will display here
+  - [I6] Name of section code will display here
+  - [J6] Details provided in the header text field will show here.
+  - [K6] Document posting date will display here
+  - [L6] It is confirmed with business that any invoice numbers are provided in reference field only and hence we have provided the logic that will display values from reference field in this column.
+  - [M6] Document date provided in posted document will display here.
+  - [N6] Whenever, user fully clears posted document, system will post clearing doc. which will be considered as payment date.
+  - [O6] Whenever, user fully clears posted document, system will post clearing doc. which will be considered as payment date.
+  - [P6] Here base amount on which TDS is calculated will be display
+  - [Q6] Applicable Tax code will display here
+  - [R6] Applicable TDS rate will display here
+  - [S6] Actually deducted TDS rate will display here
+  - [T6] TDS amount will display here
+  - [U6] Valida from date for exemption certificate will display here
+  - [V6] Valit to date for exemtpion certificate will display here
+  - [W6] We will display threshhold amount maintained in vendor master here. If it is blank, it will be deemed as no threshold limit is maintained in vendor master
+  - [X6] Any exemption certificate number mention in vendor master will display here
+  - [Y6] Cummulative amout as of time of running this report will display here.
+- [A7] Sr
+  - [B7] Document number
+  - [C7] Vendor Code
+  - [D7] Vendor Name
+  - [E7] Vendor PAN
+  - [F7] GL Code
+  - [G7] GL Name
+  - [H7] Section
+  - [I7] Section Code Description
+  - [J7] Nature of Payment
+  - [K7] Document Date (SAP)
+  - [L7] Invoice No.
+  - [M7] Invoice Date
+  - [N7] Payment Doc No.
+  - [O7] Payment Date
+  - [P7] Base Amount
+  - [Q7] Tax Code
+  - [R7] TDS Rate as per section
+  - [S7] TDS Rate deducted
+  - [T7] TDS Amount
+  - [U7] Valid From
+  - [V7] Valid To
+  - [W7] Threshold Applicability (Y/N)
+  - [X7] Ceritificate Number
+  - [Y7] Cumulative Amount as of now for FY
+
+## Sheet: GLCode Logic
+
+- [D2] Select all the documents obtain in document number column and provide the same in BELNR and company code in BUKRS and fiscal year in GJAHR and KTOSL as WIT
+- [B6] For records having AWKEY other than RMRP
+  - [M6] For records having AWKEY as RMRP
+- [B10] get the GL from field GHKON from BSEG
+  - [M10] Get AWKEY and provide first 10 digits of AWKEY in BELNR of RSEG and Fiscal year in GJAHR and company code in BUKRS and get EBELN and EBELP and provide the same in EKKN
+- [H16] EKKN is Blank
+  - [P16] EKKN is not Blank
+- [H20] Get AWKEY and provide first 10 digits of AWKEY in BELNR of RSEG and Fiscal year in GJAHR and company code in BUKRS and get MATNR,WERKS and BWTAR provide the same in MBEW
+  - [P20] Get SAKTO as GL number
+- [H27] Select valuation class (BKLAS) from table MBEW where MATNR = RSEG-MATNR and BWKEY= RSEG_WERKS.
+- [H32] Pass BKLAS in T030, fetch KTOPL from T001 using BUKRS and provid the same in T030 and provide KTOSL as BSX and get KONTS as GL Account

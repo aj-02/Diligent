@@ -2,9 +2,42 @@
 
 | # | Date | Issue | Cause | Fix | TR | Status |
 |---|------|-------|-------|-----|----|--------|
+| 2 | 27/08/26 | — | — | fix delivered, awaiting test — see "Delivery" | — | **IN TEST** |
 | 1 | 27/08/26 | SM35 session `OVL202603BAA` fails immediately: `"LEAVE TO TRANSACTION" is not allowed in batch input` (msg 00 352) | ECC-era BDC targets `ABAA`/`ABZU`, which on S/4 dispatch via `RADISPATCH_AB01` | planned: replace BDC with AMFA BAPIs (C2) | — | **OPEN** |
 
 ---
+
+## Delivery — 27/08/26
+
+Two objects, both paste-only (module pool; abapGit does not serialise the
+screens or GUI status).
+
+| Object | Lines | Change |
+|--------|-------|--------|
+| `MZAAIMPF01` | 237 -> 612 | 6 new FORMs: `ZAA_VALUE_ADJUST`, `ZAA_WRITEUP`, `ZAA_GET_WAERS`, `ZAA_COLLECT_RETURN`, `ZAA_BAPI_COMMIT`, `ZAA_BAPI_ROLLBACK`. All 8 original BDC FORMs untouched. |
+| `MZAAIMPI01` | 1436 -> 1916 | 7 BDC call sites replaced across 6 EXEC branches; run log table and `ZAA_KEEP_LOG` / `ZAA_SHOW_LOG` appended. 935 untouched lines verified byte-identical. |
+
+Old BDC code is commented in place inside each `*BOC`/`*EOC` block, not
+deleted. No active `BDC_DYNPRO` / `BDC_FIELD` / `BDC_TRANSACTION` /
+`OPEN_GROUP` / `CLOSE_GROUP` reference remains in `MZAAIMPI01`.
+
+### Still open after delivery
+
+- **Defect 2** — AA fiscal year 2026 closed for OVL. Functional. Blocks any
+  posting regardless of this fix.
+- **`ACC_PRINCIPLE = '0004'`** — verbal from functional, needs written
+  confirmation. Behaviour change from ECC, which had no accounting principle
+  on this posting.
+- **Five of six modes untested.** Only `IMPAIR` was verified, on one asset
+  with `X20`. `UNPDEP` in particular reads area 70, which asset 106009197
+  does not carry.
+- **No document numbers in the run log** — `DOCUMENTREFERENCE` is not
+  captured, because `BAPIFAPO_DOC_REF`'s components were never pulled. This
+  is a regression against the SM35 log, which showed them. Get the structure
+  and it is a small addition to both FORMs.
+- **`DELETE IST_DISPLAY INDEX L_TABIX` inside `LOOP AT IST_DISPLAY`** is
+  reproduced as-is from the BDC version, including its index-shift
+  behaviour. Not corrected - out of scope for this issue, but real.
 
 ## Issue 1 — batch input dies at step 1 (msg 00 352)
 

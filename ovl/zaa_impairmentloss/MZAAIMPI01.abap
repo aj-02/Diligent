@@ -57,19 +57,19 @@ MODULE USER_COMMAND_0200 INPUT.
 
     WHEN 'EXEC'.
 *BOC By SAP_ABAP on 27/08/26
-      * S/4 conversion. Transaction ABAA is no longer a posting
-      * transaction - SE93 assigns it to dispatcher report RADISPATCH_AB01,
-      * which forwards with LEAVE TO TRANSACTION. That is illegal inside
-      * batch input, so the session built below died at step 1 with message
-      * 00 352 and could never post. Replaced by BAPI_ASSET_VALUE_ADJUST_CHECK / _POST,
-      * through the posting layer in MZAAIMPF01.
-      *
-      * Each row is validated with the _CHECK twin before it is posted, so a
-      * row that cannot post is reported instead of failing silently. Every
-      * message is kept per asset and shown at the end of the run - that is
-      * what the SM35 log used to provide.
-      *
-      * Old code:
+* S/4 conversion. Transaction ABAA is no longer a posting
+* transaction - SE93 assigns it to dispatcher report RADISPATCH_AB01,
+* which forwards with LEAVE TO TRANSACTION. That is illegal inside
+* batch input, so the session built below died at step 1 with message
+* 00 352 and could never post. Replaced by BAPI_ASSET_VALUE_ADJUST_CHECK / _POST,
+* through the posting layer in MZAAIMPF01.
+*
+* Each row is validated with the _CHECK twin before it is posted, so a
+* row that cannot post is reported instead of failing silently. Every
+* message is kept per asset and shown at the end of the run - that is
+* what the SM35 log used to provide.
+*
+* Old code:
 *      PERFORM OPEN_GROUP.
 *      LOOP AT IST_DISPLAY WHERE IMPRATIO <> 0.
 *        L_TABIX = SY-TABIX.
@@ -122,12 +122,12 @@ MODULE USER_COMMAND_0200 INPUT.
 *        ENDIF.
 *      ENDLOOP.
 *      PERFORM CLOSE_GROUP.
-      * New code:
+* New code:
       REFRESH: IT_ZAALOG, IT_ZAARET.
       CLEAR:   G_ZOKCNT, G_ZERRCNT.
       LOOP AT IST_DISPLAY WHERE IMPRATIO <> 0.
         L_TABIX = SY-TABIX.
-      * Validate first. The _CHECK call posts nothing.
+* Validate first. The _CHECK call posts nothing.
         PERFORM ZAA_VALUE_ADJUST TABLES   IT_ZAARET
                                  USING    IST_DISPLAY-ANLN1
                                           IST_DISPLAY-ANLN2
@@ -160,6 +160,9 @@ MODULE USER_COMMAND_0200 INPUT.
         ENDIF.
         PERFORM ZAA_KEEP_LOG.
       ENDLOOP.
+* Report what posted and what did not. Nothing else tells the user -
+* the SM35 log used to be the record of the run.
+      PERFORM ZAA_SHOW_LOG.
 *EOC By SAP_ABAP on 27/08/26
     WHEN 'DOWN'.
 
@@ -345,19 +348,19 @@ MODULE USER_COMMAND_0300 INPUT.
 
     WHEN 'EXEC'.
 *BOC By SAP_ABAP on 27/08/26
-      * S/4 conversion. Transaction ABZU is no longer a posting
-      * transaction - SE93 assigns it to dispatcher report RADISPATCH_AB01,
-      * which forwards with LEAVE TO TRANSACTION. That is illegal inside
-      * batch input, so the session built below died at step 1 with message
-      * 00 352 and could never post. Replaced by BAPI_ASSET_WRITEUP_CHECK / _POST,
-      * through the posting layer in MZAAIMPF01.
-      *
-      * Each row is validated with the _CHECK twin before it is posted, so a
-      * row that cannot post is reported instead of failing silently. Every
-      * message is kept per asset and shown at the end of the run - that is
-      * what the SM35 log used to provide.
-      *
-      * Old code:
+* S/4 conversion. Transaction ABZU is no longer a posting
+* transaction - SE93 assigns it to dispatcher report RADISPATCH_AB01,
+* which forwards with LEAVE TO TRANSACTION. That is illegal inside
+* batch input, so the session built below died at step 1 with message
+* 00 352 and could never post. Replaced by BAPI_ASSET_WRITEUP_CHECK / _POST,
+* through the posting layer in MZAAIMPF01.
+*
+* Each row is validated with the _CHECK twin before it is posted, so a
+* row that cannot post is reported instead of failing silently. Every
+* message is kept per asset and shown at the end of the run - that is
+* what the SM35 log used to provide.
+*
+* Old code:
 *      PERFORM OPEN_GROUP.
 *      LOOP AT IST_DISPLAY WHERE IMPWBRATIO <> 0.
 *        L_TABIX = SY-TABIX.
@@ -417,12 +420,12 @@ MODULE USER_COMMAND_0300 INPUT.
 *        ENDIF.
 *      ENDLOOP.
 *      PERFORM CLOSE_GROUP.
-      * New code:
+* New code:
       REFRESH: IT_ZAALOG, IT_ZAARET.
       CLEAR:   G_ZOKCNT, G_ZERRCNT.
       LOOP AT IST_DISPLAY WHERE IMPWBRATIO <> 0.
         L_TABIX = SY-TABIX.
-      * Validate first. The _CHECK call posts nothing.
+* Validate first. The _CHECK call posts nothing.
         PERFORM ZAA_WRITEUP TABLES   IT_ZAARET
                             USING    IST_DISPLAY-ANLN1
                                      IST_DISPLAY-ANLN2
@@ -459,6 +462,9 @@ MODULE USER_COMMAND_0300 INPUT.
         ENDIF.
         PERFORM ZAA_KEEP_LOG.
       ENDLOOP.
+* Report what posted and what did not. Nothing else tells the user -
+* the SM35 log used to be the record of the run.
+      PERFORM ZAA_SHOW_LOG.
 *EOC By SAP_ABAP on 27/08/26
     WHEN 'DOWN'.
 *Begin of <RD1K960036>
@@ -595,19 +601,19 @@ MODULE USER_COMMAND_0400 INPUT.
       CALL TRANSACTION 'AW01' AND SKIP FIRST SCREEN.
     WHEN 'EXEC'.
 *BOC By SAP_ABAP on 27/08/26
-      * S/4 conversion. Transaction ABAA is no longer a posting
-      * transaction - SE93 assigns it to dispatcher report RADISPATCH_AB01,
-      * which forwards with LEAVE TO TRANSACTION. That is illegal inside
-      * batch input, so the session built below died at step 1 with message
-      * 00 352 and could never post. Replaced by BAPI_ASSET_VALUE_ADJUST_CHECK / _POST,
-      * through the posting layer in MZAAIMPF01.
-      *
-      * Each row is validated with the _CHECK twin before it is posted, so a
-      * row that cannot post is reported instead of failing silently. Every
-      * message is kept per asset and shown at the end of the run - that is
-      * what the SM35 log used to provide.
-      *
-      * Old code:
+* S/4 conversion. Transaction ABAA is no longer a posting
+* transaction - SE93 assigns it to dispatcher report RADISPATCH_AB01,
+* which forwards with LEAVE TO TRANSACTION. That is illegal inside
+* batch input, so the session built below died at step 1 with message
+* 00 352 and could never post. Replaced by BAPI_ASSET_VALUE_ADJUST_CHECK / _POST,
+* through the posting layer in MZAAIMPF01.
+*
+* Each row is validated with the _CHECK twin before it is posted, so a
+* row that cannot post is reported instead of failing silently. Every
+* message is kept per asset and shown at the end of the run - that is
+* what the SM35 log used to provide.
+*
+* Old code:
 *      PERFORM OPEN_GROUP.
 *      LOOP AT IST_DISPLAY where NBVDIFF > 0. " where sel = 'X'.
 *        L_TABIX = SY-TABIX.
@@ -662,12 +668,12 @@ MODULE USER_COMMAND_0400 INPUT.
 *      ENDLOOP.
 *
 *      PERFORM CLOSE_GROUP.
-      * New code:
+* New code:
       REFRESH: IT_ZAALOG, IT_ZAARET.
       CLEAR:   G_ZOKCNT, G_ZERRCNT.
       LOOP AT IST_DISPLAY WHERE NBVDIFF > 0.
         L_TABIX = SY-TABIX.
-      * Validate first. The _CHECK call posts nothing.
+* Validate first. The _CHECK call posts nothing.
         PERFORM ZAA_VALUE_ADJUST TABLES   IT_ZAARET
                                  USING    IST_DISPLAY-ANLN1
                                           IST_DISPLAY-ANLN2
@@ -700,6 +706,9 @@ MODULE USER_COMMAND_0400 INPUT.
         ENDIF.
         PERFORM ZAA_KEEP_LOG.
       ENDLOOP.
+* Report what posted and what did not. Nothing else tells the user -
+* the SM35 log used to be the record of the run.
+      PERFORM ZAA_SHOW_LOG.
 *EOC By SAP_ABAP on 27/08/26
     WHEN 'DOWN'.
 *Begin of <RD1K960036>
@@ -834,19 +843,19 @@ MODULE USER_COMMAND_0500 INPUT.
 
     WHEN 'EXEC'.
 *BOC By SAP_ABAP on 27/08/26
-      * S/4 conversion. Transaction ABAA is no longer a posting
-      * transaction - SE93 assigns it to dispatcher report RADISPATCH_AB01,
-      * which forwards with LEAVE TO TRANSACTION. That is illegal inside
-      * batch input, so the session built below died at step 1 with message
-      * 00 352 and could never post. Replaced by BAPI_ASSET_VALUE_ADJUST_CHECK / _POST,
-      * through the posting layer in MZAAIMPF01.
-      *
-      * Each row is validated with the _CHECK twin before it is posted, so a
-      * row that cannot post is reported instead of failing silently. Every
-      * message is kept per asset and shown at the end of the run - that is
-      * what the SM35 log used to provide.
-      *
-      * Old code:
+* S/4 conversion. Transaction ABAA is no longer a posting
+* transaction - SE93 assigns it to dispatcher report RADISPATCH_AB01,
+* which forwards with LEAVE TO TRANSACTION. That is illegal inside
+* batch input, so the session built below died at step 1 with message
+* 00 352 and could never post. Replaced by BAPI_ASSET_VALUE_ADJUST_CHECK / _POST,
+* through the posting layer in MZAAIMPF01.
+*
+* Each row is validated with the _CHECK twin before it is posted, so a
+* row that cannot post is reported instead of failing silently. Every
+* message is kept per asset and shown at the end of the run - that is
+* what the SM35 log used to provide.
+*
+* Old code:
 *      PERFORM OPEN_GROUP.
 *      LOOP AT IST_DISPLAY WHERE IMPRATIO <> 0.
 *        L_TABIX = SY-TABIX.
@@ -899,12 +908,12 @@ MODULE USER_COMMAND_0500 INPUT.
 *        ENDIF.
 *      ENDLOOP.
 *      PERFORM CLOSE_GROUP.
-      * New code:
+* New code:
       REFRESH: IT_ZAALOG, IT_ZAARET.
       CLEAR:   G_ZOKCNT, G_ZERRCNT.
       LOOP AT IST_DISPLAY WHERE IMPRATIO <> 0.
         L_TABIX = SY-TABIX.
-      * Validate first. The _CHECK call posts nothing.
+* Validate first. The _CHECK call posts nothing.
         PERFORM ZAA_VALUE_ADJUST TABLES   IT_ZAARET
                                  USING    IST_DISPLAY-ANLN1
                                           IST_DISPLAY-ANLN2
@@ -937,6 +946,9 @@ MODULE USER_COMMAND_0500 INPUT.
         ENDIF.
         PERFORM ZAA_KEEP_LOG.
       ENDLOOP.
+* Report what posted and what did not. Nothing else tells the user -
+* the SM35 log used to be the record of the run.
+      PERFORM ZAA_SHOW_LOG.
 *EOC By SAP_ABAP on 27/08/26
     WHEN 'DOWN'.
 *Begin of <RD1K960036>
@@ -1109,19 +1121,19 @@ MODULE USER_COMMAND_0600 INPUT.
       CALL TRANSACTION 'AW01' AND SKIP FIRST SCREEN.
     WHEN 'EXEC'.
 *BOC By SAP_ABAP on 27/08/26
-      * S/4 conversion. Transaction ABZU is no longer a posting
-      * transaction - SE93 assigns it to dispatcher report RADISPATCH_AB01,
-      * which forwards with LEAVE TO TRANSACTION. That is illegal inside
-      * batch input, so the session built below died at step 1 with message
-      * 00 352 and could never post. Replaced by BAPI_ASSET_WRITEUP_CHECK / _POST,
-      * through the posting layer in MZAAIMPF01.
-      *
-      * Each row is validated with the _CHECK twin before it is posted, so a
-      * row that cannot post is reported instead of failing silently. Every
-      * message is kept per asset and shown at the end of the run - that is
-      * what the SM35 log used to provide.
-      *
-      * Old code:
+* S/4 conversion. Transaction ABZU is no longer a posting
+* transaction - SE93 assigns it to dispatcher report RADISPATCH_AB01,
+* which forwards with LEAVE TO TRANSACTION. That is illegal inside
+* batch input, so the session built below died at step 1 with message
+* 00 352 and could never post. Replaced by BAPI_ASSET_WRITEUP_CHECK / _POST,
+* through the posting layer in MZAAIMPF01.
+*
+* Each row is validated with the _CHECK twin before it is posted, so a
+* row that cannot post is reported instead of failing silently. Every
+* message is kept per asset and shown at the end of the run - that is
+* what the SM35 log used to provide.
+*
+* Old code:
 *      PERFORM OPEN_GROUP.
 *      LOOP AT IST_DISPLAY WHERE IMPRATIO <> 0.
 *        L_TABIX = SY-TABIX.
@@ -1294,16 +1306,16 @@ MODULE USER_COMMAND_0600 INPUT.
 **      ENDLOOP.
 *      PERFORM CLOSE_GROUP1.
 *
-      * The BDC wrote ANBZ-SAFAV here unconditionally, with transaction
-      * types X21 / X32, so the amount is special depreciation. PV_DEPKIND
-      * = 'S' says so explicitly - deriving it from the transaction type
-      * would have moved it into ordinary depreciation.
-      * New code:
+* The BDC wrote ANBZ-SAFAV here unconditionally, with transaction
+* types X21 / X32, so the amount is special depreciation. PV_DEPKIND
+* = 'S' says so explicitly - deriving it from the transaction type
+* would have moved it into ordinary depreciation.
+* New code:
       REFRESH: IT_ZAALOG, IT_ZAARET.
       CLEAR:   G_ZOKCNT, G_ZERRCNT.
       LOOP AT IST_DISPLAY WHERE IMPRATIO <> 0.
         L_TABIX = SY-TABIX.
-      * Validate first. The _CHECK call posts nothing.
+* Validate first. The _CHECK call posts nothing.
         PERFORM ZAA_WRITEUP TABLES   IT_ZAARET
                             USING    IST_DISPLAY-ANLN1
                                      IST_DISPLAY-ANLN2
@@ -1330,9 +1342,9 @@ MODULE USER_COMMAND_0600 INPUT.
           IF L_ZSUBRC = 0.
             PERFORM ZAA_BAPI_COMMIT.
             G_ZOKCNT = G_ZOKCNT + 1.
-      *     No DELETE here - it was commented out in the BDC version of
-      *     this branch (screen 0600), so the row stays in the list after
-      *     posting. Behaviour preserved, not corrected.
+*     No DELETE here - it was commented out in the BDC version of
+*     this branch (screen 0600), so the row stays in the list after
+*     posting. Behaviour preserved, not corrected.
           ELSE.
             PERFORM ZAA_BAPI_ROLLBACK.
             G_ZERRCNT = G_ZERRCNT + 1.
@@ -1342,6 +1354,9 @@ MODULE USER_COMMAND_0600 INPUT.
         ENDIF.
         PERFORM ZAA_KEEP_LOG.
       ENDLOOP.
+* Report what posted and what did not. Nothing else tells the user -
+* the SM35 log used to be the record of the run.
+      PERFORM ZAA_SHOW_LOG.
 *EOC By SAP_ABAP on 27/08/26
     WHEN 'DOWN'.
 *Begin of <RD1K960036>
@@ -1494,19 +1509,19 @@ MODULE USER_COMMAND_0700 INPUT.
 
     WHEN 'EXEC'.
 *BOC By SAP_ABAP on 27/08/26
-      * S/4 conversion. Transaction ABZU then ABAA is no longer a posting
-      * transaction - SE93 assigns it to dispatcher report RADISPATCH_AB01,
-      * which forwards with LEAVE TO TRANSACTION. That is illegal inside
-      * batch input, so the session built below died at step 1 with message
-      * 00 352 and could never post. Replaced by the write-up and value-adjust BAPIs,
-      * through the posting layer in MZAAIMPF01.
-      *
-      * Each row is validated with the _CHECK twin before it is posted, so a
-      * row that cannot post is reported instead of failing silently. Every
-      * message is kept per asset and shown at the end of the run - that is
-      * what the SM35 log used to provide.
-      *
-      * Old code:
+* S/4 conversion. Transaction ABZU then ABAA is no longer a posting
+* transaction - SE93 assigns it to dispatcher report RADISPATCH_AB01,
+* which forwards with LEAVE TO TRANSACTION. That is illegal inside
+* batch input, so the session built below died at step 1 with message
+* 00 352 and could never post. Replaced by the write-up and value-adjust BAPIs,
+* through the posting layer in MZAAIMPF01.
+*
+* Each row is validated with the _CHECK twin before it is posted, so a
+* row that cannot post is reported instead of failing silently. Every
+* message is kept per asset and shown at the end of the run - that is
+* what the SM35 log used to provide.
+*
+* Old code:
 *      PERFORM OPEN_GROUP.
 *      LOOP AT IST_DISPLAY WHERE IMPWBRATIO <> 0.
 *        L_TABIX = SY-TABIX.
@@ -1619,17 +1634,17 @@ MODULE USER_COMMAND_0700 INPUT.
 *      ENDLOOP.
 *      PERFORM CLOSE_GROUP1.
 *
-      * This branch posts twice per run: a write-up pass over the rows
-      * with IMPWBRATIO, then an unplanned depreciation pass over the
-      * rows with DEPDIFF. The BDC version built two separate sessions
-      * for them, so they were never atomic; the two passes stay
-      * independent here for the same reason.
-      * New code:
+* This branch posts twice per run: a write-up pass over the rows
+* with IMPWBRATIO, then an unplanned depreciation pass over the
+* rows with DEPDIFF. The BDC version built two separate sessions
+* for them, so they were never atomic; the two passes stay
+* independent here for the same reason.
+* New code:
       REFRESH: IT_ZAALOG, IT_ZAARET.
       CLEAR:   G_ZOKCNT, G_ZERRCNT.
       LOOP AT IST_DISPLAY WHERE IMPWBRATIO <> 0.
         L_TABIX = SY-TABIX.
-      * Validate first. The _CHECK call posts nothing.
+* Validate first. The _CHECK call posts nothing.
         PERFORM ZAA_WRITEUP TABLES   IT_ZAARET
                             USING    IST_DISPLAY-ANLN1
                                      IST_DISPLAY-ANLN2
@@ -1656,9 +1671,9 @@ MODULE USER_COMMAND_0700 INPUT.
           IF L_ZSUBRC = 0.
             PERFORM ZAA_BAPI_COMMIT.
             G_ZOKCNT = G_ZOKCNT + 1.
-      *     No DELETE here - it was commented out in the BDC version of
-      *     this branch (screen 0700, first pass), so the row stays in the list after
-      *     posting. Behaviour preserved, not corrected.
+*     No DELETE here - it was commented out in the BDC version of
+*     this branch (screen 0700, first pass), so the row stays in the list after
+*     posting. Behaviour preserved, not corrected.
           ELSE.
             PERFORM ZAA_BAPI_ROLLBACK.
             G_ZERRCNT = G_ZERRCNT + 1.
@@ -1670,7 +1685,7 @@ MODULE USER_COMMAND_0700 INPUT.
       ENDLOOP.
       LOOP AT IST_DISPLAY WHERE DEPDIFF <> 0.
         L_TABIX = SY-TABIX.
-      * Validate first. The _CHECK call posts nothing.
+* Validate first. The _CHECK call posts nothing.
         PERFORM ZAA_VALUE_ADJUST TABLES   IT_ZAARET
                                  USING    IST_DISPLAY-ANLN1
                                           IST_DISPLAY-ANLN2
@@ -1703,6 +1718,9 @@ MODULE USER_COMMAND_0700 INPUT.
         ENDIF.
         PERFORM ZAA_KEEP_LOG.
       ENDLOOP.
+* Report what posted and what did not. Nothing else tells the user -
+* the SM35 log used to be the record of the run.
+      PERFORM ZAA_SHOW_LOG.
 *EOC By SAP_ABAP on 27/08/26
     WHEN 'DOWN'.
 

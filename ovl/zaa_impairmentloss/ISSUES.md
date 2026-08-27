@@ -2,7 +2,7 @@
 
 | # | Date | Issue | Cause | Fix | TR | Status |
 |---|------|-------|-------|-----|----|--------|
-| 1 | 27/08/26 | SM35 session `OVL202603BAA` fails immediately: `"LEAVE TO TRANSACTION" is not allowed in batch input` (msg 00 352) | ECC-era BDC targets `ABAA`/`ABZU`, which on S/4 dispatch via `RADISPATCH_AB01` | open — see below | — | **OPEN** |
+| 1 | 27/08/26 | SM35 session `OVL202603BAA` fails immediately: `"LEAVE TO TRANSACTION" is not allowed in batch input` (msg 00 352) | ECC-era BDC targets `ABAA`/`ABZU`, which on S/4 dispatch via `RADISPATCH_AB01` | planned: replace BDC with AMFA BAPIs (C2) | — | **OPEN** |
 
 ---
 
@@ -60,10 +60,47 @@ are dead, not just impairment:
 
 ### Open items before a fix can be written
 
-- [ ] SE93 / dialog run on `ABZU` to confirm its successor transaction
-- [ ] SHDB: record `ABAAL`, then replay in mode **A** and mode **N**
-- [ ] SE37 `BAPI_ASSET_*` list from OCQ (fallback path)
+- [x] SE93 on `ABZU` — also `RADISPATCH_AB01`. Broken identically. 27/08/26
+- [x] SE93 on `ABAAL` — `SAPLAMDPS2I` dynpro 0019, package `FAA_SFWS_1`,
+      plain dialog transaction, no dispatcher. 27/08/26
+- [x] SE37 `BAPI_ASSET_*` — function group **AMFA**, "Fixed asset posting BAPIs".
+      Full list captured below. 27/08/26
+- [ ] `ABZU` successor transaction name (`/nABZU` -> System -> Status)
+- [ ] TABW: transaction type group behind `X20` / `X30`
+- [ ] SE37 interface of `BAPI_ASSET_VALUE_ADJUST_POST` and
+      `BAPI_ASSET_WRITEUP_POST`
 - [ ] Delete the dead session `OVL202603BAA` in SM35
+
+### Released BAPIs available on OCQ (function group AMFA)
+
+Every posting BAPI has a `_CHECK` twin that validates without posting.
+
+| BAPI | Short text |
+|------|-----------|
+| `BAPI_ASSET_ACQUISITION_POST`  | Post Asset Acquisition |
+| `BAPI_ASSET_DOWNPAYMENT_POST`  | Post Down Payment |
+| `BAPI_ASSET_INV_SUPPORT_POST`  | Post Investment Support |
+| `BAPI_ASSET_POSTCAP_POST`      | Post post-capitalization |
+| `BAPI_ASSET_RETIREMENT_POST`   | Post asset retirement |
+| `BAPI_ASSET_REVALUATION_POST`  | Post Revaluation |
+| `BAPI_ASSET_REVERSAL_POST`     | Post Asset Document Reversal |
+| `BAPI_ASSET_SUB_COST_REV_POST` | Post Subsequent Costs and Revenue |
+| `BAPI_ASSET_TRANSFER_POST`     | Post Intracompany Transfer |
+| `BAPI_ASSET_VALUE_ADJUST_POST` | **Post Depreciation** — replaces `ABAA` |
+| `BAPI_ASSET_WRITEUP_POST`      | **Post Write-Up** — replaces `ABZU` |
+
+### Mapping
+
+| Current BDC | Replacement |
+|---|---|
+| `ABAA` — unplanned depreciation (4 sites) | `BAPI_ASSET_VALUE_ADJUST_POST` |
+| `ABZU` — write-up (3 sites) | `BAPI_ASSET_WRITEUP_POST` |
+
+`ABZU`'s SE93 transaction text is "Write-up", which matches
+`BAPI_ASSET_WRITEUP_POST` exactly. Still to confirm: that
+`BAPI_ASSET_VALUE_ADJUST_POST` accepts the transaction types this program
+uses (`X20` / `X30`, set in `ZAA_IMPARMENTLOSS` FORM
+`POST_ADDITIONAL_IMPAIRMENT`) — check the transaction type group in TABW.
 
 ### Two candidate fixes
 
@@ -72,13 +109,24 @@ Swap the `SAPMA01B` dynpro blocks for the recorded `SAPLAMDPS2I` screens, change
 the seven `BDC_TRANSACTION` tcodes, remap `ANBZ-*` / `ANEK-*` field names.
 `MZAAIMPF01` needs no change. Contained, ~1 day.
 
-**C2 — replace the BDC with the FI-AA BAPI** (if `ABAAL` is not BI-capable —
-likely, since SAP does not support the new AA posting transactions for batch
-input). Rewrites the posting layer of `MZAAIMPI01`.
+**C2 — replace the BDC with the FI-AA BAPIs. RECOMMENDED as of 27/08/26.**
 
-**C2 removes the SM35 session entirely.** That is a user-facing workflow change:
-today users review the session before posting; they would get direct posting plus
-an error log, and `CLOSE_GROUP`'s `MESSAGE I053(ZAA)` +
-`CALL TRANSACTION 'SESSION_MANAGER'` become meaningless. **Needs functional
-sign-off before build.** If they want the review step kept, it becomes an ALV log
-with a separate post action — more work, flag early.
+Both transactions map to released BAPIs in function group AMFA (see above), so
+this is no longer a speculative path. It is also the supported one: SAP does not
+support the new AA posting transactions for batch input, so C1 would be building
+on something that may break again at the next upgrade.
+
+**The `_CHECK` twins remove the main objection to C2.** The earlier concern was
+that dropping the SM35 session takes away the users' review-before-post step.
+It does not have to:
+
+1. Loop the rows, call `BAPI_ASSET_VALUE_ADJUST_CHECK` /
+   `BAPI_ASSET_WRITEUP_CHECK` for each.
+2. Show the ALV with what would post, plus any BAPI errors per row.
+3. User confirms.
+4. Loop again with the `_POST` BAPIs, then `BAPI_TRANSACTION_COMMIT`.
+
+That is a closer match to how users work today than the session was, and the
+errors are per-asset and readable instead of buried in an SM35 log. Still worth
+walking functional through it, but it is no longer a workflow downgrade to
+apologise for.

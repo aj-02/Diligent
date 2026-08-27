@@ -89,6 +89,46 @@ Every posting BAPI has a `_CHECK` twin that validates without posting.
 | `BAPI_ASSET_VALUE_ADJUST_POST` | **Post Depreciation** — replaces `ABAA` |
 | `BAPI_ASSET_WRITEUP_POST`      | **Post Write-Up** — replaces `ABZU` |
 
+### BAPI test result — 27/08/26
+
+`BAPI_ASSET_VALUE_ADJUST_CHECK` run in SE37, asset 106009197/0000, `ASSETTRTYP`
+`X20`, amount 1,221.00 INR, `PSTNG_DATE` 31.03.2026, `TRANS_DATE` 12.08.2026,
+`FIS_PERIOD` 03. Nothing posted — `_CHECK` validates only.
+
+```
+RETURN: EAA 370  You cannot post to this fixed asset; Fiscal year already closed
+ADJUSTAREAVALUES: 0 entries   RETURN_ALL: 0 entries
+```
+
+**Interpretation.** The BAPI accepted the interface, parsed
+`GENERALPOSTINGDATA`, resolved company code OVL and the asset, and reached
+business validation. It did not reject `X20`. The failure is a period rule.
+Caveat: the BAPI may validate fiscal year before transaction type, so this is a
+strong signal rather than proof — retest with an open-year posting date to
+confirm outright.
+
+`BAPIFAPO_VALUE_ADJUSTMENT` components: `AMOUNT`, `CURRE`, `CUR`, `VALUEDATE`,
+`AMOUNT_LONG`. **No text field** — so `ANEK-SGTXT` must map into
+`FURTHERPOSTINGDATA` (`BAPIFAPO_ADD_INFO`), still to be captured. Fill `AMOUNT`
+or `AMOUNT_LONG`, not both.
+
+### DEFECT 2 — the failed run targeted a closed fiscal year
+
+`EAA 370` says AA fiscal year **2026 is closed for company code OVL**. The run
+that built session `OVL202603BAA` used posting date 31.03.2026 / period 3 —
+inside that closed year.
+
+**Even with working batch input, that run could not have posted.** This is a
+second, independent defect:
+
+| # | Defect | Nature |
+|---|--------|--------|
+| 1 | `LEAVE TO TRANSACTION` in batch input | S/4 conversion — code fix required |
+| 2 | Run targets a closed AA fiscal year | business / data — functional decision |
+
+**For functional:** which period is the impairment actually meant to post to?
+Fixing the code alone will not make this run succeed.
+
 ### BAPI field mapping — confirmed from SE37, 27/08/26
 
 `BAPIFAPO_GEN_INFO` components (read off the SE37 test screen, not guessed):

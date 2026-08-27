@@ -26,6 +26,38 @@ Old BDC code is commented in place inside each `*BOC`/`*EOC` block, not
 deleted. No active `BDC_DYNPRO` / `BDC_FIELD` / `BDC_TRANSACTION` /
 `OPEN_GROUP` / `CLOSE_GROUP` reference remains in `MZAAIMPI01`.
 
+### First live run — 27/08/26
+
+`ZFIIMPR` -> `ZAAIMP` -> Execute, impairment path, company code OVL, FY 2026,
+posting date 31.03.2026, period 3.
+
+**Confirmed working:** no SM35 session created, BAPI reached, run log rendered,
+`Assets posted 0`, `Assets in error 117`. The `LEAVE TO TRANSACTION` failure is
+gone.
+
+**Two defects surfaced, both fixed in `MZAAIMPF01`:**
+
+1. **Asset number lost its leading zeros.** Every row failed with
+   `Asset 104008114 0 not in company code OVL`. `ZAA_IMPARMENTLOSS` runs
+   `SHIFT IST_FINAL-ANLN1 LEFT DELETING LEADING '0'` in six places so the ALV
+   shows a readable number. The BDC survived it because the screen field
+   `ANBZ-ANLN1` re-padded the value through its ALPHA conversion exit on
+   input. **A BAPI performs no conversion** - it takes the value as given.
+   Fixed with new FORM `ZAA_ALPHA_INPUT`, called for `ANLN1` and `ANLN2` in
+   both posting FORMs. Idempotent, so the one path that does not strip zeros
+   is unaffected.
+
+   Worth remembering as a class of defect: anything the old code relied on a
+   *screen* to do - conversion exits, defaulting, derivation - has to be done
+   explicitly once the screen is gone. The currency field was the same story.
+
+2. **Every asset listed twice in the run log.** `ZAA_COLLECT_RETURN` appended
+   both `RETURN` and `RETURN_ALL`, and `RETURN_ALL` already contains the
+   message `RETURN` repeats. Now uses `RETURN_ALL` when the BAPI filled it and
+   falls back to `RETURN` only when it did not.
+
+`MZAAIMPF01` 612 -> 658 lines, 15 FORMs.
+
 ### Still open after delivery
 
 - **Defect 2** — AA fiscal year 2026 closed for OVL. Functional. Blocks any

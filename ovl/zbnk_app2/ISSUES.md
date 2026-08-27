@@ -10,8 +10,8 @@ no repo baseline existed, so no drift to report.
 
 ### Issue 1 — Back (F3) / Exit / Cancel dead after the batch list is displayed
 
-**Status:** root cause confirmed 27.08.2026. `ZFI_BNK_APP_I01` corrected and filed;
-SE41 status still to be created by hand.
+**Status: FIXED and verified by Arnav in OCQ, 27.08.2026.** Back (F3) and Exit
+(Shift+F3) confirmed working. Transport release still manual.
 
 `ZFI_BNK_APP_I01`, `MODULE USER_COMMAND_0100 INPUT`:
 
@@ -175,3 +175,35 @@ on every round trip, and the three near-duplicate download FORMs. Both are real,
 is this issue.
 
 Marker author for this object: `SAP_ABAP` (confirmed by Arnav 27.08.2026).
+
+
+---
+
+### Issue 1 — verified 27.08.2026
+
+All three parts applied to OCQ/500 and activated:
+
+| # | Object | Where | Result |
+|---|---|---|---|
+| 1 | GUI status `ZPF_FI_BNK_APP` + title `ZTITLE_FI_BNK_APP` | SE41 / SE80, by hand | created, activated |
+| 2 | `ZFI_BNK_APP_I01` | paste, 38 → 91 lines | activated |
+| 3 | `ZFI_BNK_APP_OUTPUTO01` | paste, 60 → 73 lines | activated |
+
+Arnav confirms **Back (F3) and Exit (Shift+F3) now work**.
+
+Still worth one pass when convenient — not blockers, and not regressions, since none of
+these paths were ever reachable on this screen before:
+
+- F12 (Cancel) → selection screen
+- re-execute after F3 → grid rebuilds, no dump, no blank container (this is what the
+  ALV `free` / `CLEAR` / `cl_gui_cfw=>flush` in step 2 exists for)
+- the four toolbar buttons — `DOWNLOAD1` / `DOWNLOAD2` / `DOWNLOAD3` / `RESENT` — which
+  had no buttons before the status existed, so `MODULE GET_SELECTED_ROW` has never run
+
+**Remaining manual step:** transport release.
+
+**Left alone deliberately** — real, but not this issue: `MODULE OUTPUT` re-runs
+`F_PREPARE_OP_TAB` and `SET_TABLE_FOR_FIRST_DISPLAY` on every round trip, so every
+button click now re-queries the database; and `DOWNLOAD_SENT_DATA` / `DOWNLOAD_RAW_DATA`
+/ `DOWNLOAD_REC_DATA` are near-identical copies differing only in source field, filename
+and guard flag.

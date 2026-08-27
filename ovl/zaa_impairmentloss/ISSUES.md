@@ -274,7 +274,8 @@ Company code OVL uses chart of depreciation **ONGC**. Valid real areas:
 | 01 | all modes except `UNPDEP`; clean BAPI check on 106009197 |
 | 20 | comparison modes read 01 against 20; named in `EAA 627` |
 | 30, 31 | named in `EAA 627` |
-| 70 | `UNPDEP` reads `AFABE = '70'` — **valid, so deliberate, not a typo** |
+| 40 | on the asset (`ANLB`); named in `EAA 627` |
+| 70 | in the chart, but **not on asset 106009197** — see below |
 
 **Area 04 does not exist in chart ONGC.** Functional suggested `DEPR_AREA = 04`;
 the BAPI returned `EAA 826` "Contact your system administrator (table error)"
@@ -282,8 +283,19 @@ with an empty `RETURN_ALL`, which is consistent with an area that has no master
 record. The suggestion cannot be applied as given — go back to functional with
 the area list rather than treating 04 as the answer.
 
-**Loose end:** `EAA 627` named area **40**, which does not appear in the list
-above. Confirm the T093 display was not truncated before relying on the list.
+`ANLB` for asset 106009197/0 (created 17.01.2017) lists areas
+**01, 15, 20, 30, 31, 40, 60, 90** — all valid to 31.12.9999. The earlier T093
+screenshot was truncated; area 40 is real, which is why `EAA 627` named it.
+
+**Correction to an earlier note in this file:** area 70 exists in chart ONGC but
+is **not** on this asset. So "area 70 is valid, therefore the `UNPDEP` select is
+deliberate" was too quick. `UNPLANNED_DEPRICIATION` reads `AFABE = '70'`, and
+for this asset that returns nothing. Either area 70 is carried only by a
+different class of assets, or that path is stale. Needs functional's answer —
+do not assume either way.
+
+**Area 04 appears in neither the chart nor the asset**, which conclusively
+explains `EAA 826`.
 
 **Open with functional (one round-trip, both questions):**
 

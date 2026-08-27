@@ -2,7 +2,7 @@
 
 | # | Date | Issue | Cause | Fix | TR | Status |
 |---|------|-------|-------|-----|----|--------|
-| 2 | 27/08/26 | — | — | fix delivered, awaiting test — see "Delivery" | — | **IN TEST** |
+| 2 | 27/08/26 | — | — | fix delivered and verified as far as a closed FY allows | — | **CODE DONE / BLOCKED ON FUNCTIONAL** |
 | 1 | 27/08/26 | SM35 session `OVL202603BAA` fails immediately: `"LEAVE TO TRANSACTION" is not allowed in batch input` (msg 00 352) | ECC-era BDC targets `ABAA`/`ABZU`, which on S/4 dispatch via `RADISPATCH_AB01` | planned: replace BDC with AMFA BAPIs (C2) | — | **OPEN** |
 
 ---
@@ -57,6 +57,38 @@ gone.
    falls back to `RETURN` only when it did not.
 
 `MZAAIMPF01` 612 -> 658 lines, 15 FORMs.
+
+### Verified run — 27/08/26
+
+Both includes active, re-run with the original parameters (OVL, FY 2026,
+posting date 31.03.2026, period 3, impairment path):
+
+```
+Assets posted            0
+Assets in error        117
+104008114  0  E  You cannot post to this fixed asset; Fiscal year already closed
+...one line per asset...
+```
+
+**This is the intended result and it closes the code fix.** Every proof point
+landed:
+
+| Proof | Evidence |
+|-------|----------|
+| `LEAVE TO TRANSACTION` failure gone | no SM35 session created at all |
+| BAPI reached with our data | `EAA 370` - the same message the BAPI returned when called by hand in SE37 |
+| Asset master resolves | `not in company code OVL` gone after the ALPHA fix |
+| Message log de-duplicated | one line per asset, was two |
+| Nothing posted | 0 posted - the closed year blocks it, as designed |
+
+`EAA 370` is a business rule, not a defect in the program. Only the closed
+fiscal year now stands between this and a real posting.
+
+(An activation error along the way - "A FORM already exists with the name
+BDC_DYNPRO" - was `MZAAIMPF01` content pasted into `MZAAIMPI01`. Include order
+puts `I01` before `F01`, so the duplicate surfaced against `F01` line 26. Worth
+knowing for next time: that message means the *other* definition is earlier in
+the program, not in the include the error names.)
 
 ### Still open after delivery
 

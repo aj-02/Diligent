@@ -54,42 +54,53 @@ approval or signature-write logic of any kind — it only reads `ZFI_BATCH_SIGN`
 fill the `PENDING_WITH` column. The program that writes the signature is a different
 object and has not been downloaded.
 
-**Leading hypothesis — truncated batch key from the BNK_BATCH_HEADER → REGUT port.**
+**Hypothesis tested and DISPROVEN (27.08.2026): batch-key truncation.**
 
-`F_PREPARE_OP_TAB` builds the batch identity twice, into two differently-sized fields:
+Proposed cause was that `F_PREPARE_OP_TAB` builds a 41-char composite key into
+`lv_key TYPE zfi_batch_sign-batch_no` and `CONCATENATE` truncates it silently
+(`SY-SUBRC = 4`, never checked), collapsing batches 001/002/003 onto one key.
 
-    ty_final-GUID  TYPE c LENGTH 45          "wide enough
-    lv_key         TYPE zfi_batch_sign-batch_no   (domain BNK_COM_BTCH_NO)
-    lt_keys        TYPE STANDARD TABLE OF zfi_batch_sign-batch_no
+Killed by three checks:
 
-    CONCATENATE zbukr banks laufd laufi xvorl dtkey lfdnr INTO lv_key RESPECTING BLANKS.
+| Check | Result |
+|---|---|
+| SE11 `BNK_COM_BTCH_NO` length | NUMC 10 — but this is the data element on `ty_final-batch_no`, **not** on `ZFI_BATCH_SIGN-BATCH_NO`, which is what `lv_key` inherits. Wrong field checked. |
+| SE16 `ZFI_BATCH_SIGN` `BATCH_NO > 9999999999` | 0 rows — no alpha-truncated keys stored |
+| SE16 `ZFI_BATCH_SIGN` `BATCH_NO = 2026082100` | 0 rows — no numeric-truncated keys stored |
 
-The comment in `ZFI_BNK_APP_TOP` states the concatenation is 41 characters, and a
-separate 45-char `GUID` field was introduced *because* `BATCH_NO` was not usable.
-If `ZFI_BATCH_SIGN-BATCH_NO` is shorter than the full concatenation, `CONCATENATE`
-truncates silently. `DTKEY` and `LFDNR` are the **last** two components and are the
-only ones that differ between batches 001 / 002 / 003 of the same run — they are the
-first to be cut off.
+Decisive counter-argument from the code itself: `F_PREPARE_OP_TAB` appends to the grid
+**only** when a signature row matches (`READ TABLE gt_batch_sign ... IF sy-subrc EQ 0`).
+Three rows are displayed, so three distinct keys matched three distinct signature
+records. The keys are not colliding.
 
-The consequence is that all three batches collapse onto one key:
+`ZFI_BATCH_SIGN-BATCH_NO`'s real type is still unverified — SE11 Fields tab still open.
 
-- `DELETE ADJACENT DUPLICATES FROM lt_keys` reduces the three to one;
-- the release program (same table, presumably the same key construction) writes **one**
-  `ZFI_BATCH_SIGN` row;
-- `READ TABLE gt_batch_sign ... WITH KEY batch_no = lv_key` then matches that single
-  signature row against **all three** REGUT rows.
+**SE93 confirmed:** `ZBNK_APP2` → program `ZFI_BNK_APP`, selection screen 1000,
+package `ZFI_OTH`, text "Bank Batch". Right object; it simply contains no release code.
 
-So the second signatory may well have released once. The display — and, depending on
-the release program, the actual authorisation — treats it as three.
+**Where-used on `ZFI_BATCH_SIGN` (11 hits) — the writer is one of these:**
 
-**To confirm (Arnav, no system access here):**
+| Object | Type | Note |
+|---|---|---|
+| `ZFI_BNK_APP1_TOP` / `_F01` / `_I01` | includes | sibling screen program — **prime suspect**, likely tcode ZBNK_APP1 |
+| `ZFI_BNK_APP_F` / `_TOP` | includes | this monitor, read-only |
+| `ZFI_BNK_APRV_MON` | program | "Monitor BNK process" |
+| `ZBCM_BNK_SEND_MAIL` | FM | "BCM Bank App send mail" |
+| `ZFI_PAYMEDIUM_DMEE_20` | FM | "Interface Btwn Paymt Program->DMEE 20" |
+| `ZBCM1` | enhancement impl | "bcm digital signaute" |
+| `ZBCM4` | enhancement impl | "bcm signature" |
+| `ZBCM_SIGN` | enhancement impl | — |
 
-- SE11 → data element `BNK_COM_BTCH_NO` → domain → output length. Compare against the
-  real sum of `REGUT-ZBUKR`(4) + `BANKS`(3) + `LAUFD`(8) + `LAUFI`(6) + `XVORL`(1) +
-  `DTKEY` + `LFDNR`. If it is short, this is the cause.
-- SE16 → `ZFI_BATCH_SIGN` for run LAUFD 21.08.2026 / LAUFI 2026082100002. **One** row
-  where three are expected confirms it outright.
-- SE93 → `ZBNK_APP2` → the program actually behind the tcode, and whether the release
-  button lives there or in a second program.
+Two candidate release paths: the Z program `ZFI_BNK_APP1`, or standard BCM approval
+with the three `ZBCM*` enhancements hooked in.
 
-**Open:** the release program itself, screen 100 flow logic, GUI status.
+**Next:** download `ZFI_BNK_APP1` with its include tree; confirm SE93 `ZBNK_APP1`.
+Ask the user which transaction 68865 actually released from — if it is a standard BCM
+approval screen, the defect is in `ZBCM1` / `ZBCM4` / `ZBCM_SIGN` instead.
+
+**Working expectation, untested:** the release routine loops the full internal table
+(or re-reads by `LAUFD`/`LAUFI`) rather than restricting to the rows returned by
+`get_selected_rows`.
+
+**Open:** `ZFI_BNK_APP1` source, `ZBCM*` sources, `ZFI_BATCH_SIGN` field list,
+screen 100 flow logic, GUI status.

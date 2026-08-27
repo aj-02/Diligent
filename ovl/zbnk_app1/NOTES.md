@@ -83,3 +83,9 @@ in the signature table only.
 `ZFI_PAYM_FILE`, `ZFI_BATCH_SIGN`, `ZFI_BNK_RULE`, `ZUSER_SIGNER`, `REGUT`, `REGUHM`,
 FM `ZFI_PAYMEDIUM_DMEE_20`, FM `ZBCM_BNK_SEND_MAIL`, enhancement implementations
 `ZBCM1` / `ZBCM4` / `ZBCM_SIGN`, proxy class `ZCO_SIOS_BANK_INTERFACE_ENCRYP`.
+
+## work/
+
+Clean-extracted include sources from the SE80 download in `original/`, line-number
+prefixes and page headers stripped. Line counts verified against the SE80 footers.
+Use these to diff against a fresh download; they are derived, never edited by hand.

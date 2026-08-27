@@ -8,6 +8,29 @@
 *                                        replaced  "GUI_DOWNLOAD" *
 *******************************************************************
 
+*BOC By SAP_ABAP on 27/08/26
+*&---------------------------------------------------------------------*
+*&  Run log for the BAPI posting that replaced the batch input
+*&---------------------------------------------------------------------*
+*  Declared here, at the top of the include and ahead of the first
+*  MODULE, because ABAP resolves data declarations in source order - they
+*  have to appear before their first use. The FORMs that go with them are
+*  at the end of this include; PERFORM has no such restriction.
+*&---------------------------------------------------------------------*
+DATA: IT_ZAARET LIKE BAPIRET2 OCCURS 0 WITH HEADER LINE.
+
+DATA: BEGIN OF IT_ZAALOG OCCURS 0,
+        ANLN1   LIKE ANLC-ANLN1,
+        ANLN2   LIKE ANLC-ANLN2,
+        TYPE    LIKE BAPIRET2-TYPE,
+        MESSAGE LIKE BAPIRET2-MESSAGE,
+      END OF IT_ZAALOG.
+
+DATA: G_ZOKCNT  TYPE I,
+      G_ZERRCNT TYPE I,
+      L_ZSUBRC  LIKE SY-SUBRC.
+*EOC By SAP_ABAP on 27/08/26
+
 *&---------------------------------------------------------------------*
 *&      Module  exit200  INPUT
 *&---------------------------------------------------------------------*
@@ -1835,24 +1858,10 @@ ENDMODULE.                 " move_selected_lines5  INPUT
 *&---------------------------------------------------------------------*
 *&  Run log for the BAPI posting that replaced the batch input
 *&---------------------------------------------------------------------*
-*  These live here rather than in MZAAIMPTOP / MZAAIMPF01 so the change
-*  stays inside the include that actually needed changing. Global data
-*  declared at top level of any include is program-wide, so position does
-*  not matter to the compiler.
+*  The FORMs may sit at the end - PERFORM resolves them wherever they are.
+*  The data may not: ABAP resolves declarations in source order, so it is
+*  declared at the top of this include instead, ahead of the first MODULE.
 *&---------------------------------------------------------------------*
-DATA: IT_ZAARET LIKE BAPIRET2 OCCURS 0 WITH HEADER LINE.
-
-DATA: BEGIN OF IT_ZAALOG OCCURS 0,
-        ANLN1   LIKE ANLC-ANLN1,
-        ANLN2   LIKE ANLC-ANLN2,
-        TYPE    LIKE BAPIRET2-TYPE,
-        MESSAGE LIKE BAPIRET2-MESSAGE,
-      END OF IT_ZAALOG.
-
-DATA: G_ZOKCNT  TYPE I,
-      G_ZERRCNT TYPE I,
-      L_ZSUBRC  LIKE SY-SUBRC.
-
 *&---------------------------------------------------------------------*
 *&      Form  ZAA_KEEP_LOG
 *&---------------------------------------------------------------------*

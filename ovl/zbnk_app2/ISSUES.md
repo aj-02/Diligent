@@ -10,7 +10,8 @@ no repo baseline existed, so no drift to report.
 
 ### Issue 1 — Back (F3) / Exit / Cancel dead after the batch list is displayed
 
-**Status:** cause identified in the ABAP; needs SE51 + SE41 to confirm and fix.
+**Status:** root cause confirmed 27.08.2026. `ZFI_BNK_APP_I01` corrected and filed;
+SE41 status still to be created by hand.
 
 `ZFI_BNK_APP_I01`, `MODULE USER_COMMAND_0100 INPUT`:
 
@@ -104,3 +105,73 @@ approval screen, the defect is in `ZBCM1` / `ZBCM4` / `ZBCM_SIGN` instead.
 
 **Open:** `ZFI_BNK_APP1` source, `ZBCM*` sources, `ZFI_BATCH_SIGN` field list,
 screen 100 flow logic, GUI status.
+
+
+---
+
+### Issue 1 — resolution (27.08.2026)
+
+**Root cause: screen 100 has no GUI status at all.**
+
+SE51 flow logic:
+
+    PROCESS BEFORE OUTPUT.
+      MODULE STATUS_0100.        "SET PF-STATUS commented out ('xxxxxxxx' stub)
+      MODULE OUTPUT.
+
+    PROCESS AFTER INPUT.
+      MODULE get_selected_row.
+      MODULE USER_COMMAND_0100.  "only handled 'E'
+
+`MODULE STATUS_0100` still holds the SE51 generator stub with `SET PF-STATUS 'xxxxxxxx'`
+and `SET TITLEBAR 'xxx'` both commented out, and no status is set anywhere else.
+Confirmed by Arnav: no GUI status exists in this program.
+
+Consequences beyond the reported symptom: `DOWNLOAD1`, `DOWNLOAD2`, `DOWNLOAD3` and
+`RESENT` have no buttons either, so all four branches of `MODULE get_selected_row` are
+unreachable. The only working controls are the ALV grid's own toolbar, which
+`SET_TABLE_FOR_FIRST_DISPLAY` supplies independently of any GUI status.
+
+Second defect, in `USER_COMMAND_0100`: the `CASE` handled only `'E'`, so even with a
+status the standard `BACK` / `EXIT` / `CANC` codes would fall through.
+
+**Fix — three parts, in order:**
+
+1. **SE41, manual** — create status `ZPF_FI_BNK_APP` (type: Normal screen) on program
+   `ZFI_BNK_APP`:
+
+   | Key | Function code | Fct type | Text |
+   |---|---|---|---|
+   | F3 | `BACK` | *(blank)* | Back |
+   | Shift+F3 | `EXIT` | *(blank)* | Exit |
+   | F12 | `CANC` | *(blank)* | Cancel |
+
+   Application toolbar: `DOWNLOAD1` Download Sent File, `DOWNLOAD2` Download Raw File,
+   `DOWNLOAD3` Download Received File, `RESENT` Resend.
+
+   **Fct type must stay blank.** Setting it to `E` (Exit command) makes SAP skip normal
+   PAI and run only an `AT EXIT-COMMAND` module; with none present the keys stay dead —
+   i.e. it reproduces the reported bug.
+
+   Then SE80 → GUI Titles → `ZTITLE_FI_BNK_APP` = "Bank Batch Monitor".
+
+2. **`ZFI_BNK_APP_I01`** — done, `ovl/zbnk_app2/ZFI_BNK_APP_I01.abap`, 38 → 91 lines.
+   `CASE` extended to `BACK` / `CANC` / `EXIT` / `E`; `EXIT` → `LEAVE PROGRAM`, the rest
+   → `LEAVE TO SCREEN 0`. ALV grid and container freed (`free`, `CLEAR`,
+   `cl_gui_cfw=>flush`) before leaving — without it, `LEAVE TO SCREEN 0` returns to the
+   selection screen with `C_CCONT` / `C_ALVGD` bound to a destroyed screen, and the PBO
+   guard `IF c_ccont IS INITIAL` then skips re-creation on the next run.
+   `MODULE get_selected_row` untouched.
+
+3. **`ZFI_BNK_APP_OUTPUTO01`** — pending. Fill in `SET PF-STATUS 'ZPF_FI_BNK_APP'` and
+   `SET TITLEBAR 'ZTITLE_FI_BNK_APP'` in `MODULE STATUS_0100`.
+
+**Deliberately not done:** no `AT EXIT-COMMAND` module. Screen 100 has no input fields,
+only the custom container, so no field validation can block PAI. Adding one would force
+an SE51 flow-logic change for no behavioural gain. Flow logic is unchanged.
+
+**Not touched:** the PBO re-running `F_PREPARE_OP_TAB` and `SET_TABLE_FOR_FIRST_DISPLAY`
+on every round trip, and the three near-duplicate download FORMs. Both are real, neither
+is this issue.
+
+Marker author for this object: `SAP_ABAP` (confirmed by Arnav 27.08.2026).

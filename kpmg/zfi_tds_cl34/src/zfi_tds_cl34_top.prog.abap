@@ -267,25 +267,39 @@ TYPES: BEGIN OF ty_skat,
 *& withholding tax key (QSCOD, col H), its 40 character text (TXT40,
 *& col I) and the configured rate (QSATZ, col R).
 *&
-*& " ASSUMPTION: T059Z carries TXT40. FS [I2] states it plainly. If the
-*& activation fails on that field, the text is held in a language
-*& dependent table instead and column I has to come from there - the
-*& candidates are T059ZT (text of the tax CODE, key SPRAS / LAND1 /
-*& WITHT / WT_WITHCD) and T059OT (text of the official KEY, key SPRAS /
-*& LAND1 / WT_QSCOD). Given column I is headed "Section Code
-*& Description" and column H is the official key, T059OT is the closer
-*& match of the two. FETCH_TAX_CONFIG and the col I read in
-*& BUILD_OUTPUT are the only two places to change.
+*& FS [I2] says to take the col I text from T059Z-TXT40. **That field does
+*& not exist** - proved on the Astral system itself, activation 27/08/26:
+*& "No component exists with the name TXT40" against ZFI_TDS_CL34_TOP.
+*& T059Z has no text field at all; its texts are language dependent and
+*& live in separate tables. Column I is therefore read from T059OT, the
+*& text of the OFFICIAL withholding tax key - which is what column H
+*& holds, so the two agree. T059ZT was the alternative (text of the tax
+*& CODE, key SPRAS / LAND1 / WITHT / WT_WITHCD) and is the one to switch
+*& to if the business means the code text rather than the section text.
+*& Registered as QUERIES Q9.
 *&---------------------------------------------------------------------*
 TYPES: BEGIN OF ty_t059z,
          land1     TYPE t059z-land1,
          witht     TYPE t059z-witht,
          wt_withcd TYPE t059z-wt_withcd,
          qscod     TYPE t059z-qscod,
-         txt40     TYPE t059z-txt40,
          qsatz     TYPE t059z-qsatz,
        END OF ty_t059z,
        tt_t059z TYPE STANDARD TABLE OF ty_t059z WITH DEFAULT KEY.
+
+*&---------------------------------------------------------------------*
+*& Text of the official withholding tax key = column I.
+*& Key: MANDT, SPRAS, LAND1, WT_QSCOD. Note the field is WT_QSCOD here
+*& and QSCOD on T059Z - the name changes between the two tables and that
+*& is an easy place to introduce a bug.
+*&---------------------------------------------------------------------*
+TYPES: BEGIN OF ty_t059ot,
+         spras    TYPE t059ot-spras,
+         land1    TYPE t059ot-land1,
+         wt_qscod TYPE t059ot-wt_qscod,
+         text40   TYPE t059ot-text40,
+       END OF ty_t059ot,
+       tt_t059ot TYPE STANDARD TABLE OF ty_t059ot WITH DEFAULT KEY.
 
 *&---------------------------------------------------------------------*
 *& Exemption certificate key, built once and used as the FOR ALL ENTRIES
@@ -557,7 +571,8 @@ DATA: gt_witem  TYPE tt_witem,                  " driver - withholding tax items
 DATA: gt_lfa1   TYPE tt_lfa1,                   " vendor master, name and PAN
       gt_t001   TYPE tt_t001,                   " company code - country, currency, chart of accounts
       gt_skat   TYPE tt_skat,                   " GL account texts in the logon language
-      gt_t059z  TYPE tt_t059z.                  " withholding tax code configuration
+      gt_t059z  TYPE tt_t059z,                  " withholding tax code configuration
+      gt_t059ot TYPE tt_t059ot.                 " official withholding tax key texts
 
 DATA: gt_tanex  TYPE tt_tanex,                  " exemption certificates
       gt_accex  TYPE tt_accex.                  " accumulated base amounts

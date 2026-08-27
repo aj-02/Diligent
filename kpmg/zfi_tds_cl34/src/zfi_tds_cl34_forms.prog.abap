@@ -652,8 +652,22 @@ FORM build_output.
            BINARY SEARCH.
       IF sy-subrc = 0.
         ls_out-section  = <ls_t059z>-qscod.       " col H
-        ls_out-sec_desc = <ls_t059z>-txt40.       " col I  FS [I2] - the same T059Z row, no second read
         ls_out-rate_sec = <ls_t059z>-qsatz.       " col R  zero is legitimate for a formula based code
+      ENDIF.
+
+*     Col I. FS [I2] names T059Z-TXT40, which does not exist; the text of
+*     the official key comes from T059OT. H and I are then consistent -
+*     if QSCOD is unmaintained in config both are blank together, which
+*     is configuration, not a defect.
+      IF ls_out-section IS NOT INITIAL.
+        READ TABLE gt_t059ot ASSIGNING FIELD-SYMBOL(<ls_t059ot>)
+             WITH KEY spras    = sy-langu
+                      land1    = ls_t001-land1
+                      wt_qscod = ls_out-section
+             BINARY SEARCH.
+        IF sy-subrc = 0.
+          ls_out-sec_desc = <ls_t059ot>-text40.   " col I
+        ENDIF.
       ENDIF.
 
     ENDIF.
@@ -764,9 +778,10 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM fetch_tax_config.
 
-  DATA lt_wtkey TYPE tt_t059z.
+  DATA: lt_wtkey TYPE tt_t059z,
+        lt_otkey TYPE tt_t059ot.
 
-  CLEAR gt_t059z.
+  CLEAR: gt_t059z, gt_t059ot.
 
   LOOP AT gt_witem ASSIGNING FIELD-SYMBOL(<ls_wi>).
 
@@ -785,7 +800,7 @@ FORM fetch_tax_config.
   DELETE ADJACENT DUPLICATES FROM lt_wtkey COMPARING land1 witht wt_withcd.
 
   IF lt_wtkey IS NOT INITIAL.
-    SELECT land1, witht, wt_withcd, qscod, txt40, qsatz
+    SELECT land1, witht, wt_withcd, qscod, qsatz
       FROM t059z
       FOR ALL ENTRIES IN @lt_wtkey
       WHERE land1     = @lt_wtkey-land1
@@ -795,6 +810,32 @@ FORM fetch_tax_config.
   ENDIF.
 
   SORT gt_t059z BY land1 witht wt_withcd.
+
+* Text of the official withholding tax key, in the logon language.
+* FS [I2] asks for T059Z-TXT40; that field does not exist - see the
+* comment on TY_T059OT in ZFI_TDS_CL34_TOP.
+  LOOP AT gt_t059z ASSIGNING FIELD-SYMBOL(<ls_t059z>).
+    CHECK <ls_t059z>-qscod IS NOT INITIAL.
+    APPEND INITIAL LINE TO lt_otkey ASSIGNING FIELD-SYMBOL(<ls_ok>).
+    <ls_ok>-spras    = sy-langu.
+    <ls_ok>-land1    = <ls_t059z>-land1.
+    <ls_ok>-wt_qscod = <ls_t059z>-qscod.
+  ENDLOOP.
+
+  SORT lt_otkey BY spras land1 wt_qscod.
+  DELETE ADJACENT DUPLICATES FROM lt_otkey COMPARING spras land1 wt_qscod.
+
+  IF lt_otkey IS NOT INITIAL.
+    SELECT spras, land1, wt_qscod, text40
+      FROM t059ot
+      FOR ALL ENTRIES IN @lt_otkey
+      WHERE spras    = @lt_otkey-spras
+        AND land1    = @lt_otkey-land1
+        AND wt_qscod = @lt_otkey-wt_qscod
+      INTO TABLE @gt_t059ot.
+  ENDIF.
+
+  SORT gt_t059ot BY spras land1 wt_qscod.
 
 ENDFORM.
 

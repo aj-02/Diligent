@@ -17,6 +17,11 @@ screens or GUI status).
 | `MZAAIMPF01` | 237 -> 612 | 6 new FORMs: `ZAA_VALUE_ADJUST`, `ZAA_WRITEUP`, `ZAA_GET_WAERS`, `ZAA_COLLECT_RETURN`, `ZAA_BAPI_COMMIT`, `ZAA_BAPI_ROLLBACK`. All 8 original BDC FORMs untouched. |
 | `MZAAIMPI01` | 1436 -> 1916 | 7 BDC call sites replaced across 6 EXEC branches; run log table and `ZAA_KEEP_LOG` / `ZAA_SHOW_LOG` appended. 935 untouched lines verified byte-identical. |
 
+**Both includes activated on OCQ 27/08/26.** One activation error on
+`MZAAIMPI01` (51 x "field is unknown") - the run-log `DATA` block had been
+placed at the end of the include; ABAP resolves declarations in source order,
+so it was moved ahead of the first MODULE. Fixed and reactivated.
+
 Old BDC code is commented in place inside each `*BOC`/`*EOC` block, not
 deleted. No active `BDC_DYNPRO` / `BDC_FIELD` / `BDC_TRANSACTION` /
 `OPEN_GROUP` / `CLOSE_GROUP` reference remains in `MZAAIMPI01`.

@@ -261,6 +261,38 @@ proposal with this evidence, not as an open question. Still worth their yes,
 because reading from an area is not strictly the same as posting to it and the
 old screen posted more broadly.
 
+### Depreciation areas — chart ONGC, confirmed 27/08/26
+
+Company code OVL uses chart of depreciation **ONGC**. Valid real areas:
+
+**01, 15, 20, 30, 31, 60, 70, 90**
+
+(There is no chart "OVL" — that lookup returns nothing.)
+
+| Area | Evidence of use |
+|------|-----------------|
+| 01 | all modes except `UNPDEP`; clean BAPI check on 106009197 |
+| 20 | comparison modes read 01 against 20; named in `EAA 627` |
+| 30, 31 | named in `EAA 627` |
+| 70 | `UNPDEP` reads `AFABE = '70'` — **valid, so deliberate, not a typo** |
+
+**Area 04 does not exist in chart ONGC.** Functional suggested `DEPR_AREA = 04`;
+the BAPI returned `EAA 826` "Contact your system administrator (table error)"
+with an empty `RETURN_ALL`, which is consistent with an area that has no master
+record. The suggestion cannot be applied as given — go back to functional with
+the area list rather than treating 04 as the answer.
+
+**Loose end:** `EAA 627` named area **40**, which does not appear in the list
+above. Confirm the T093 display was not truncated before relying on the list.
+
+**Open with functional (one round-trip, both questions):**
+
+1. Which depreciation area should impairment post to? The program has read 01
+   since 2005 and 01 validates cleanly. 04 does not exist in chart ONGC — if 04
+   is genuinely intended, the asset masters need it added, which is a much
+   larger change.
+2. Confirm `UNPDEP` posting to area 70 is intended.
+
 ### BAPI field mapping — confirmed from SE37, 27/08/26
 
 `BAPIFAPO_GEN_INFO` components (read off the SE37 test screen, not guessed):

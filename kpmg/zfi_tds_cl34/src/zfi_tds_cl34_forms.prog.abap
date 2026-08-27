@@ -312,10 +312,21 @@ FORM fetch_wt_items.
 
 * Every line of every driver document. KTOSL is deliberately absent from
 * the WHERE clause - see the form comment above.
+*
+* THE FIELD ORDER BELOW MUST MATCH TY_BSEG COMPONENT FOR COMPONENT.
+* Strict ABAP SQL assigns INTO TABLE by POSITION, not by name, so a field
+* inserted in the select but not in the same slot of the type silently
+* lands in the wrong component - or, if the types happen to differ,
+* fails activation with "component X is not compatible with Y".
+*
+* H_BUDAT and H_BLDAT are the header dates propagated onto the line item,
+* which FS [K2] and [M2] name for columns K and M.
+* " ASSUMPTION: BSEG-GHKON is populated on the withholding line. The field
+* exists; its content on the Astral system is unverified. If it is empty
+* in practice, columns F and G stay blank for direct FI postings - see
+* QUERIES Q11.
   SELECT bukrs, belnr, gjahr, buzei, koart, ktosl, lifnr, sgtxt,
-         augbl, augdt, secco,
-         h_budat, h_bldat,        " FS [K2] / [M2] - header dates off the line item
-         ghkon                     " ASSUMPTION: BSEG-GHKON is populated on the withholding line; the field exists (DD03L position 364) but its content on the Astral system is unverified
+         augbl, augdt, secco, ghkon, h_budat, h_bldat
     FROM bseg
     FOR ALL ENTRIES IN @gt_dockey
     WHERE bukrs = @gt_dockey-bukrs
@@ -605,7 +616,10 @@ FORM build_output.
                                       <ls_wi>-buzei
                              CHANGING ls_vline.
 
-    ls_out-nature = ls_vline-sgtxt.               " col J  " ASSUMPTION: item text of the vendor line, not BKPF header text
+*   " ASSUMPTION: col J is the item text of the vendor line, not the
+*   BKPF header text. FS [J6] says header text, FS [J2] says BSEG-SGTXT
+*   of the line "where LIFNR <> blank". QUERIES Q5.
+    ls_out-nature = ls_vline-sgtxt.               " col J
     ls_out-budat  = ls_vline-h_budat.             " col K  FS [K2] - BSEG-H_BUDAT, not BKPF-BUDAT
     ls_out-bldat  = ls_vline-h_bldat.             " col M  FS [M2] - BSEG-H_BLDAT, not BKPF-BLDAT
     ls_out-augbl  = ls_vline-augbl.               " col N  blank while the item is open
@@ -712,16 +726,23 @@ ENDFORM.
 *& Company code data. No FOR ALL ENTRIES is needed - the selection screen
 *& already restricts the company codes and the field is obligatory.
 *&
-*& The chart of accounts is read here rather than hardcoded. FS cell [G2]
-*& asks for a literal 'ASTL'; a literal chart of accounts breaks the
-*& moment a second one is in scope and CLAUDE.md forbids it outright.
+*& The chart of accounts read here is the one the GLCode Logic tab asks
+*& for - "fetch KTOPL from T001 using BUKRS and provide the same in T030".
+*& It is NOT the one column G uses: FS [G2] asks for a literal 'ASTL'
+*& there, and that instruction is honoured through the constant
+*& GC_KTOPL_GL. The two are deliberately separate.
+*&
+*& " ASSUMPTION: KTOPL is maintained for every company code in scope. The
+*& field exists; the content on the Astral system is unverified. A blank
+*& chart drops the T030 account determination for that company code and
+*& the document is counted by REPORT_GL_GAPS.
 *&---------------------------------------------------------------------*
 FORM fetch_company_data.
 
   CLEAR gt_t001.
 
   SELECT bukrs, land1, waers,
-         ktopl                     " ASSUMPTION: KTOPL is maintained for every company code in scope; the field exists, the content on the Astral system is unverified
+         ktopl
     FROM t001
     WHERE bukrs IN @s_bukrs
     INTO TABLE @gt_t001.
@@ -735,6 +756,10 @@ ENDFORM.
 *& and the cumulative column, so a column-wide blank PAN blanks six
 *& columns at once - that is a defect to investigate, while scattered
 *& blanks are normal for vendors without a PAN.
+*&
+*& " ASSUMPTION: the PAN is held in LFA1-J_1IPANNO and is read at its
+*& full dictionary length, never truncated to 10. Its population on the
+*& Astral system is unverified - QUERIES Q10.
 *&---------------------------------------------------------------------*
 FORM fetch_vendor_data.
 
@@ -753,7 +778,7 @@ FORM fetch_vendor_data.
 
   IF lt_venkey IS NOT INITIAL.
     SELECT lifnr, name1,
-           j_1ipanno               " ASSUMPTION: the PAN is held in LFA1-J_1IPANNO; the field exists as CHAR 40, its population on the Astral system is unverified
+           j_1ipanno              " col E - see the ASSUMPTION above
       FROM lfa1
       FOR ALL ENTRIES IN @lt_venkey
       WHERE lifnr = @lt_venkey-lifnr
@@ -1227,8 +1252,11 @@ FORM fetch_mm_data.
   DELETE ADJACENT DUPLICATES FROM lt_t030key COMPARING ktopl ktosl bklas.
 
   IF lt_t030key IS NOT INITIAL.
-    SELECT ktopl, ktosl, bwmod, komok, bklas,
-           konts                   " ASSUMPTION: T030 is read without BWMOD / KOMOK because T001K-BWMOD is unverified on this landscape; the blank valuation grouping code wins and any remaining ambiguity is logged in GT_GLAMB and reported by REPORT_GL_GAPS
+*   " ASSUMPTION: T030 is read on KTOPL / KTOSL / BKLAS only. BWMOD is
+*   left out because T001K-BWMOD could not be verified; the blank
+*   valuation grouping code wins, and any remaining ambiguity is logged
+*   in GT_GLAMB and reported by REPORT_GL_GAPS. QUERIES Q3.
+    SELECT ktopl, ktosl, bwmod, komok, bklas, konts
       FROM t030
       FOR ALL ENTRIES IN @lt_t030key
       WHERE ktopl = @lt_t030key-ktopl
@@ -1483,7 +1511,9 @@ FORM derive_gl_rmrp USING    ps_bkpf   TYPE ty_bkpf
     <ls_amb>-bukrs  = ps_bkpf-bukrs.
     <ls_amb>-belnr  = ps_bkpf-belnr.
     <ls_amb>-gjahr  = ps_bkpf-gjahr.
-    <ls_amb>-reason = |BSX account determination not unique for valuation class { lv_bklas } - lowest valuation grouping code shown|.
+    <ls_amb>-reason = |BSX account determination not unique for | &&
+                      |valuation class { lv_bklas } - lowest | &&
+                      |valuation grouping code shown|.
   ENDIF.
 
 ENDFORM.
@@ -1715,7 +1745,10 @@ FORM read_exemption USING    pv_bukrs  TYPE fiwtin_tan_exem-bukrs
 
       pv_exdf = <ls_tanex>-wt_exdf.             " col U
       pv_exdt = <ls_tanex>-wt_exdt.             " col V
-      pv_thr  = <ls_tanex>-fiwtin_exem_thr.     " col W  " ASSUMPTION: shown as the threshold amount, not as a Y/N flag; blank means no threshold maintained
+*     " ASSUMPTION: col W shows the threshold AMOUNT, not a Y/N flag.
+*     FS [W7] heads it "(Y/N)" but FS [W6] asks for the amount; blank
+*     means no threshold maintained. QUERIES Q4.
+      pv_thr  = <ls_tanex>-fiwtin_exem_thr.     " col W
       pv_cert = <ls_tanex>-wt_exnr.             " col X
 
     ENDIF.

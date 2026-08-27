@@ -49,7 +49,9 @@ TYPES: BEGIN OF ty_output,
          gl_name   TYPE skat-txt50,                     " col G  GL long text, SKAT not SKA1 (SKA1 has no text field)
          section   TYPE t059z-qscod,                    " col H  official withholding tax key
          sec_desc  TYPE t059ot-text40,                  " col I  text of the official key - T059OT, not T059Z
-         nature    TYPE bseg-sgtxt,                     " col J  " ASSUMPTION: item text of the vendor line, not header text
+*        " ASSUMPTION: col J is the item text of the vendor line, not
+*        the BKPF header text - see QUERIES Q5.
+         nature    TYPE bseg-sgtxt,                     " col J
          budat     TYPE bkpf-budat,                     " col K  posting date (FS heading says "Document Date (SAP)")
          xblnr     TYPE bkpf-xblnr,                     " col L  reference = invoice number, per FS [L6]
          bldat     TYPE bkpf-bldat,                     " col M  document date

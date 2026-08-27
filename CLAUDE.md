@@ -82,6 +82,16 @@ Single line: append `"Changes by Arnav on DD/MM/YY`
 
 ## Delivering code
 
+- **Keep source lines under ~120 characters.** Everything here ships by paste, and SE38
+  wraps a long line on paste: the tail lands on the next line without its `"` prefix and
+  becomes a bogus statement, reported as `"<WORD>" is invalid here (due to grammar)` at a
+  line that looks innocent. ABAP's hard limit is 255 but the wrap bites well before that.
+  Long `" ASSUMPTION:` notes go in a `*` block above the statement, not trailing it.
+- **A field list and its target type are matched by POSITION, not by name.** Strict ABAP
+  SQL assigns `INTO TABLE @itab` slot by slot, so inserting a field in the SELECT without
+  inserting it at the same index of the `TYPES` silently fills the wrong component - or,
+  when the types differ, fails activation with `component "X" ... not compatible with "Y"`,
+  naming two fields that look unrelated. Re-check both lists together after any edit.
 - **Complete objects, never fragments.** The file you write is whole, first line to last —
   `" ... existing code ..."` or "rest unchanged" is a failure. If it was 866 lines before it
   is ≥866 lines after; state the before/after count. Chat gets the root cause, a change table

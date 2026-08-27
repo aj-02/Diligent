@@ -191,6 +191,48 @@ against a BAPI posting. This is a test activity, not a blocker to writing the
 code, but it must happen before go-live and it overlaps the open functional
 question on area scope above.
 
+### DEFECT 3 / open design question — depreciation area derivation
+
+Established 27/08/26, in this order:
+
+| Test | Result |
+|------|--------|
+| BAPI, `DEPR_AREA` = `00` | `EAA 627` special deprec. negative, areas 20/30/31/40 |
+| BAPI, `DEPR_AREA` = blank | **identical** — blank behaves as `00` |
+| BAPI, `DEPR_AREA` = `01` | clean, `AU 176` warning only |
+| `ABAAL` dialog, **no area given** | clean, `AU 176` warning only |
+| SE16 `TABWA`, `BWASL` = `X20` | **no entries** — type is not area-limited |
+
+**Conclusion.** `ABAAL` derives per-area values itself from each depreciation
+area's own rules. `BAPI_ASSET_VALUE_ADJUST_*` does not — it applies the amount
+it is given to every area, so areas holding no special depreciation balance go
+negative.
+
+**This is not a like-for-like swap.** The screen performed business logic
+implicitly; the BAPI requires it stated explicitly. The old ECC BDC also passed
+no area and relied on the same screen derivation, so this logic has never
+existed in our code and cannot be recovered from it.
+
+Options:
+
+1. `DEPR_AREA = 01` — clean, but posts to area 01 only. Almost certainly
+   narrower than what `ABAAL` does. **Do not adopt without confirmation.**
+2. Populate `ADJUSTAREAVALUES` with explicit per-area amounts. Correct approach,
+   but requires knowing which areas get what.
+
+**Needed to decide:** the actual per-area amounts `ABAAL` produces for one
+posting. Two ways to get them, cheapest first:
+
+- `ABAAL` entry screen — look for a depreciation-area tab / `Goto` -> areas
+  view listing each area with its amount. Read-only if it exists.
+- Otherwise post one document in a sandbox and read `ANEP` for it (`AFABE` =
+  depreciation area, per line). Creates a real FI document — needs approval and
+  a suitable client/asset; reversible via `AB08`.
+
+**Recommendation:** raise with functional now, and build the code with area
+determination isolated in a single FORM so the answer drops in without
+reworking the posting logic.
+
 ### BAPI field mapping — confirmed from SE37, 27/08/26
 
 `BAPIFAPO_GEN_INFO` components (read off the SE37 test screen, not guessed):

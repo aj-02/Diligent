@@ -41,6 +41,23 @@ fi
 
 echo "sync: branch $branch"
 
+# ------------------------------------------------------- 0. commit identity
+# Commits must carry Arnav's GitHub account so they show on his profile and
+# contribution graph. The +noreply address is bound to the account by GitHub
+# itself, so it needs no email verification and exposes no real mailbox.
+# Claude Code sessions run from a fresh clone with a container-global "Claude"
+# identity, so this is re-applied per-repo on every run rather than relied on.
+git config --local user.name  "Arnav Johri"
+git config --local user.email "82252072+arnavjohri@users.noreply.github.com"
+
+# When Claude Code is driving, record it as co-author: the commit lands on
+# Arnav's graph but still says plainly who wrote it. On his own laptop the
+# global identity is his, so no trailer is added.
+coauthor=""
+if [ "$(git config --global --get user.email || true)" = "noreply@anthropic.com" ]; then
+  coauthor="Co-Authored-By: Claude <noreply@anthropic.com>"
+fi
+
 # ---------------------------------------------------------------- 1. commit
 if [ "$do_commit" = 1 ]; then
   git add -A
@@ -52,7 +69,7 @@ if [ "$do_commit" = 1 ]; then
       areas="$(git diff --cached --name-only | cut -d/ -f1 | sort -u | paste -sd', ' -)"
       msg="Auto-sync: $count file(s) — $areas"
     fi
-    git commit -q -m "$msg" -m "$(git diff --cached --name-status)"
+    git commit -q -m "$msg" -m "$(git diff --cached --name-status)" ${coauthor:+-m "$coauthor"}
     echo "sync: committed $count file(s) — $(git log -1 --format=%h) $msg"
   fi
 fi

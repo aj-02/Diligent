@@ -134,6 +134,18 @@
      <MSGNR>020</MSGNR>
      <TEXT>Material &amp;1 is excluded from forecasting</TEXT>
     </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_FCST</ARBGB>
+     <MSGNR>022</MSGNR>
+     <TEXT>Enter the name of the file to upload</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_FCST</ARBGB>
+     <MSGNR>023</MSGNR>
+     <TEXT>Template could not be saved to &amp;1</TEXT>
+    </T100>
    </T100_TEXTS>
   </asx:values>
  </asx:abap>

@@ -1,4 +1,0 @@
-Attribution check 2 — 31/08/26
-Confirms sync.sh authors session commits as Arnav Johri via the
-GitHub noreply address, after the Diligent email was verified.
-Delete once confirmed.

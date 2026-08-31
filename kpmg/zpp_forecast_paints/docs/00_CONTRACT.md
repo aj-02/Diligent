@@ -285,6 +285,9 @@ before calculation, not at save time.
     030 Forecast &1 updated for plant &2
     031 Row &1: period &2 must be between 1 and 12
     032 Enter a financial year
+    033 Row &1: &2 &3 is longer than the field allows
+    034 Table &1 is locked by another user, nothing was written
+    035 The database update of table &1 failed, nothing was written
 
 ## Not sourced by the FS — code it, flag it, leave it empty
 

@@ -15,8 +15,8 @@
 *&   the program either writes a blank template for that type or reads
 *&   the filled in file and loads it.
 *&
-*&   Six upload types - the four WRICEF upload items plus the two tables
-*&   the FS lists under "custom table maitainance":
+*&   Six upload types - the upload items named in the WRICEF list of the
+*&   FS plus the tables it lists under "custom table maitainance":
 *&
 *&     1  Product category      ZPPT_PNT_PCAT
 *&     2  Material tracking     ZPPT_PNT_MTRK
@@ -382,8 +382,12 @@ FORM download_template.
                not_supported_by_gui = 2
                OTHERS           = 3 ).
 
+* Message 013 is about reading a file, so a failed write says so in its
+* own words rather than borrowing the wrong text
   IF sy-subrc <> 0.
-    MESSAGE e013 WITH lv_name.
+    CONCATENATE 'The template could not be written to' lv_name
+           INTO lv_msg SEPARATED BY space.
+    MESSAGE lv_msg TYPE 'E'.
   ENDIF.
 
   CONCATENATE 'Template written to' lv_name INTO lv_msg SEPARATED BY space.
@@ -473,20 +477,24 @@ ENDFORM.
 FORM parse_file.
 
   DATA: lt_cell TYPE string_table,
-        lv_line TYPE string.
+        lv_line TYPE string,
+        lv_row  TYPE i.
 
+* The loop starts at row 2 because row 1 is the heading row, and
+* sy-tabix is therefore the row number IN THE FILE - the number the
+* user sees in the spreadsheet - not a count of data rows
   LOOP AT gt_file INTO lv_line FROM 2.
 
-    DATA(lv_row) = sy-tabix.
-
-    CLEAR lt_cell.
-    SPLIT lv_line AT g_tab INTO TABLE lt_cell.
+    lv_row = sy-tabix.
 
 *   A spreadsheet export usually ends with a run of empty lines. They
 *   are not data and are not reported as errors.
     IF lv_line IS INITIAL.
       CONTINUE.
     ENDIF.
+
+    CLEAR lt_cell.
+    SPLIT lv_line AT g_tab INTO TABLE lt_cell.
 
     CASE g_type.
       WHEN 1. PERFORM parse_pcat  USING lt_cell lv_row.
@@ -543,7 +551,6 @@ FORM parse_pcat USING pt_cell TYPE string_table
   DATA: ls_row  TYPE ty_row,
         lv_c    TYPE string,
         lv_ok   TYPE abap_bool,
-        lv_txt  TYPE string,
         lv_rowc TYPE c LENGTH 10.
 
   ls_row-row = pv_row.
@@ -559,10 +566,7 @@ FORM parse_pcat USING pt_cell TYPE string_table
   PERFORM cell USING pt_cell 3 CHANGING lv_c.
   PERFORM fits USING lv_c ls_row-prod_cat CHANGING lv_ok.
   IF lv_ok = abap_false.
-    CONCATENATE 'Row' lv_rowc '- category' lv_c
-                'is longer than the field allows'
-           INTO lv_txt SEPARATED BY space.
-    PERFORM reject_txt USING ls_row lv_txt.
+    PERFORM reject USING ls_row '033' lv_rowc 'category' lv_c.
     RETURN.
   ENDIF.
   ls_row-prod_cat = lv_c.
@@ -580,10 +584,7 @@ FORM parse_pcat USING pt_cell TYPE string_table
   TRANSLATE lv_c TO UPPER CASE.
   PERFORM fits USING lv_c ls_row-mts_mto CHANGING lv_ok.
   IF lv_ok = abap_false.
-    CONCATENATE 'Row' lv_rowc '- MTS/MTO value' lv_c
-                'is longer than the field allows'
-           INTO lv_txt SEPARATED BY space.
-    PERFORM reject_txt USING ls_row lv_txt.
+    PERFORM reject USING ls_row '033' lv_rowc 'MTS/MTO value' lv_c.
     RETURN.
   ENDIF.
   ls_row-mts_mto = lv_c.
@@ -737,7 +738,6 @@ FORM parse_fqt USING pt_cell TYPE string_table
   DATA: ls_row  TYPE ty_row,
         lv_c    TYPE string,
         lv_ok   TYPE abap_bool,
-        lv_txt  TYPE string,
         lv_int  TYPE i,
         lv_rowc TYPE c LENGTH 10,
         lv_qtrc TYPE c LENGTH 10.
@@ -789,10 +789,7 @@ FORM parse_fqt USING pt_cell TYPE string_table
 
     PERFORM fits USING lv_c ls_row-reason CHANGING lv_ok.
     IF lv_ok = abap_false.
-      CONCATENATE 'Row' lv_rowc '- the reason text is longer than'
-                  'the field allows'
-             INTO lv_txt SEPARATED BY space.
-      PERFORM reject_txt USING ls_row lv_txt.
+      PERFORM reject USING ls_row '033' lv_rowc 'reason text' lv_c.
       RETURN.
     ENDIF.
     ls_row-reason = lv_c.
@@ -853,20 +850,20 @@ FORM read_master.
   DELETE ADJACENT DUPLICATES FROM gt_fkey
                          COMPARING werks matnr gjahr quarter.
 
-  CHECK gt_key IS NOT INITIAL.
-
 * Plant / material existence, for every upload type
-  SELECT werks, matnr
-    FROM marc
-    FOR ALL ENTRIES IN @gt_key
-   WHERE werks = @gt_key-werks
-     AND matnr = @gt_key-matnr
-    INTO TABLE @gt_marc.
+  IF gt_key IS NOT INITIAL.
+    SELECT werks, matnr
+      FROM marc
+      FOR ALL ENTRIES IN @gt_key
+     WHERE werks = @gt_key-werks
+       AND matnr = @gt_key-matnr
+      INTO TABLE @gt_marc.
 
-  SORT gt_marc BY werks matnr.
+    SORT gt_marc BY werks matnr.
+  ENDIF.
 
 * Base unit of measure, needed only where the file carries a unit
-  IF g_type = 4.
+  IF g_type = 4 AND gt_key IS NOT INITIAL.
     SELECT matnr, meins
       FROM mara
       FOR ALL ENTRIES IN @gt_key
@@ -878,7 +875,7 @@ FORM read_master.
 
 * A material that is excluded from the forecast must not receive a
 * business forecast or a forecast change
-  IF g_type = 5 OR g_type = 6.
+  IF ( g_type = 5 OR g_type = 6 ) AND gt_key IS NOT INITIAL.
     SELECT werks, matnr
       FROM zppt_pnt_mexc
       FOR ALL ENTRIES IN @gt_key
@@ -906,28 +903,34 @@ FORM read_existing.
   CASE g_type.
 
     WHEN 1.
-      SELECT werks, matnr, ernam, erdat
-        FROM zppt_pnt_pcat
-        FOR ALL ENTRIES IN @gt_key
-       WHERE werks = @gt_key-werks
-         AND matnr = @gt_key-matnr
-        INTO TABLE @gt_adm.
+      IF gt_key IS NOT INITIAL.
+        SELECT werks, matnr, ernam, erdat
+          FROM zppt_pnt_pcat
+          FOR ALL ENTRIES IN @gt_key
+         WHERE werks = @gt_key-werks
+           AND matnr = @gt_key-matnr
+          INTO TABLE @gt_adm.
+      ENDIF.
 
     WHEN 2.
-      SELECT werks, new_matnr, ernam, erdat
-        FROM zppt_pnt_mtrk
-        FOR ALL ENTRIES IN @gt_key
-       WHERE werks     = @gt_key-werks
-         AND new_matnr = @gt_key-matnr
-        INTO TABLE @gt_adm.
+      IF gt_key IS NOT INITIAL.
+        SELECT werks, new_matnr, ernam, erdat
+          FROM zppt_pnt_mtrk
+          FOR ALL ENTRIES IN @gt_key
+         WHERE werks     = @gt_key-werks
+           AND new_matnr = @gt_key-matnr
+          INTO TABLE @gt_adm.
+      ENDIF.
 
     WHEN 3.
-      SELECT werks, matnr, ernam, erdat
-        FROM zppt_pnt_mexc
-        FOR ALL ENTRIES IN @gt_key
-       WHERE werks = @gt_key-werks
-         AND matnr = @gt_key-matnr
-        INTO TABLE @gt_adm.
+      IF gt_key IS NOT INITIAL.
+        SELECT werks, matnr, ernam, erdat
+          FROM zppt_pnt_mexc
+          FOR ALL ENTRIES IN @gt_key
+         WHERE werks = @gt_key-werks
+           AND matnr = @gt_key-matnr
+          INTO TABLE @gt_adm.
+      ENDIF.
 
     WHEN 4.
       IF gt_hkey IS NOT INITIAL.
@@ -981,7 +984,11 @@ FORM validate_rows.
     lv_rowc = ls_row-row.
     CONDENSE lv_rowc.
 
-    lv_matc = ls_row-matnr.
+*   WRITE ... TO applies the MATN1 output conversion, so the message
+*   quotes the material the way the user typed it in the spreadsheet
+*   and not the internally padded key
+    CLEAR lv_matc.
+    WRITE ls_row-matnr TO lv_matc.
     CONDENSE lv_matc.
 
 *   Plant / material must exist in MARC. FS: "Pass plant and material to
@@ -1336,9 +1343,8 @@ FORM write_data.
 
   PERFORM lock_table CHANGING lv_lock.
   IF lv_lock = abap_false.
-    CONCATENATE 'Table' g_tabn 'is locked by another user,'
-                'nothing was written'
-           INTO lv_txt SEPARATED BY space.
+    MESSAGE ID gc_msgid TYPE 'E' NUMBER '034'
+            WITH g_tabn INTO lv_txt.
     PERFORM fail_all USING lv_txt.
     RETURN.
   ENDIF.
@@ -1367,9 +1373,8 @@ FORM write_data.
     COMMIT WORK AND WAIT.
   ELSE.
     ROLLBACK WORK.
-    CONCATENATE 'The database update of table' g_tabn 'failed,'
-                'nothing was written'
-           INTO lv_txt SEPARATED BY space.
+    MESSAGE ID gc_msgid TYPE 'E' NUMBER '035'
+            WITH g_tabn INTO lv_txt.
     PERFORM fail_all USING lv_txt.
   ENDIF.
 
@@ -1385,11 +1390,14 @@ FORM lock_table CHANGING cv_ok TYPE abap_bool.
 
   CLEAR cv_ok.
 
+* Scope 1 keeps the lock with this dialog step instead of handing it to
+* the update task, because the MODIFY below is a direct database write
+* and the lock is released by the explicit DEQUEUE, not by COMMIT WORK
   CALL FUNCTION 'ENQUEUE_E_TABLE'
     EXPORTING
       mode_rstable   = 'E'
       tabname        = g_tabn
-      _scope         = '2'
+      _scope         = '1'
       _wait          = abap_true
     EXCEPTIONS
       foreign_lock   = 1
@@ -1408,7 +1416,7 @@ FORM unlock_table.
     EXPORTING
       mode_rstable = 'E'
       tabname      = g_tabn
-      _scope       = '3'.
+      _scope       = '1'.
 
 ENDFORM.
 
@@ -1723,7 +1731,8 @@ FORM accept USING ps_row TYPE ty_row
                   pv_ex  TYPE abap_bool.
 
   DATA: ls_log TYPE ty_log,
-        lv_txt TYPE string.
+        lv_txt TYPE string,
+        lv_act TYPE string.
 
   ls_log-row     = ps_row-row.
   ls_log-werks   = ps_row-werks.
@@ -1732,15 +1741,17 @@ FORM accept USING ps_row TYPE ty_row
   ls_log-quarter = ps_row-quarter.
 
   IF pv_ex = abap_true.
-    lv_txt = 'The existing entry is overwritten'.
+    lv_act = 'the existing entry is overwritten'.
   ELSE.
-    lv_txt = 'A new entry is created'.
+    lv_act = 'a new entry is created'.
   ENDIF.
+
+  lv_txt = lv_act.
 
   IF p_test = abap_true.
     ls_log-light  = gc_yellow.
     ls_log-status = gc_tst.
-    CONCATENATE 'Test run, nothing written -' lv_txt
+    CONCATENATE 'Test run, nothing written -' lv_act
            INTO lv_txt SEPARATED BY space.
   ELSEIF pv_ex = abap_true.
     ls_log-light  = gc_green.
@@ -1835,6 +1846,7 @@ FORM head_text CHANGING cv_head TYPE string.
   DATA lv_tab TYPE string.
 
   lv_tab = g_tabn.
+  CONDENSE lv_tab.
 
   IF p_test = abap_true.
     CONCATENATE 'Test run against table' lv_tab '- nothing was written'

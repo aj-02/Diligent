@@ -200,6 +200,24 @@
      <MSGNR>032</MSGNR>
      <TEXT>Enter a financial year</TEXT>
     </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_PFCST</ARBGB>
+     <MSGNR>033</MSGNR>
+     <TEXT>Row &amp;1: &amp;2 &amp;3 is longer than the field allows</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_PFCST</ARBGB>
+     <MSGNR>034</MSGNR>
+     <TEXT>Table &amp;1 is locked by another user, nothing was written</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_PFCST</ARBGB>
+     <MSGNR>035</MSGNR>
+     <TEXT>The database update of table &amp;1 failed, nothing was written</TEXT>
+    </T100>
    </T100_TEXTS>
   </asx:values>
  </asx:abap>

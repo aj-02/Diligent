@@ -38,7 +38,7 @@ Separate object set — no Adhesive object is touched.
 | Domain | `ZDO_PNT_BRAND` | CHAR 40 | ZIP |
 | Data elements | `ZDE_PNT_*` (14) | one per domain, plus `ZDE_PNT_REASON` on the **existing** `ZDO_REASON` | ZIP |
 | Tables | `ZPPT_PNT_*` (8) | see §2 | ZIP |
-| Message class | `ZPP_PFCST` | 32 messages | ZIP |
+| Message class | `ZPP_PFCST` | 35 messages | ZIP |
 | Class | `ZCL_PP_PFCST_UTIL` | FY / quarter / period / conversions | ZIP |
 | Class | `ZCL_PP_PFCST` | calculation engine | ZIP |
 | Report | `ZPP_PAINT_FORECAST` | generation, 3 radio modes | ZIP |
@@ -97,7 +97,7 @@ as `" ASSUMPTION:`.
 ## 4. Shipping
 
 `.abapgit.xml` at the folder root (`STARTING_FOLDER /src/`, `FOLDER_LOGIC PREFIX`);
-`src/` holds the package, 13 domains, 14 data elements, 8 tables, the message class,
+`src/` holds the package, 13 domains, 14 data elements, 8 tables, the message class (35 messages),
 2 classes and 3 reports. Import via `ZABAPGIT_STANDALONE` -> New Offline Repo ->
 Import package from ZIP -> Pull.
 

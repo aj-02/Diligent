@@ -2,9 +2,23 @@
 
 | # | Date | Issue | Cause | Fix | TR |
 |---|------|-------|-------|-----|-----|
-| 1 | 31/08/26 | Sachin Thakur (F&A): earlier error gone, but ZFIAPP posted payment document 1726000164 (27.06.2026, co. code OVL) **without consuming a cheque** — FCHN shows "No check information was found"; last cheque in the register is 277581 dated 29.04.2026 | Diagnosed, not yet fixed — see below | open | — |
+| 1 | 31/08/26 | Sachin Thakur (F&A): earlier error gone, but ZFIAPP posted payment document 1726000164 (27.06.2026, co. code OVL) **without consuming a cheque** — FCHN shows "No check information was found"; last cheque in the register is 277581 dated 29.04.2026 | **Confirmed 31/08/26: the cheque lot entered on the ZFIAPP selection screen was exhausted** (PCEC `CHECL` = `CHECT`), so `CHECL + 1` fell outside the lot, FCH5 rejected it, and `bdc_fch5` discarded the error | code fix pending — needs fresh download of `ZFI_CP_MAS_VEN_AI001` | open | — |
 
-## Issue 1 — analysis (31/08/26, from the 08.08.2026 listing)
+## Issue 1 — confirmed cause (31/08/26)
+
+**The cheque lot the users key into the ZFIAPP selection screen was exhausted.** In PCEC that
+lot's `CHECL` (SE16 column heading **"Status"**) had reached `CHECT`, so `find_chec_no`
+handed FCH5 a number past the end of the lot, FCH5 refused it, and `bdc_fch5` threw the
+error away — leaving the F-53 document posted with no cheque and no message. The users pick
+the lot by vendor/purpose, so a rarely-used lot runs out unnoticed.
+
+PCEC on OVL holds 72 lots, all on house bank **HB_01 / account HB001**; several already show
+`CHECL = CHECT`, so this will recur on the next exhausted lot until the program is fixed.
+
+Immediate action (functional, no code): open a new lot in **FCHI** and assign a cheque to
+document 1726000164 manually in **FCH5**.
+
+## Issue 1 — code analysis (31/08/26, from the 08.08.2026 listing)
 
 F-53 and FCH5 are two separate CALL TRANSACTIONs in two LUWs. The F-53 posting commits
 (`UPDATE 'S'`) before the cheque step runs, and **every failure in the cheque step is

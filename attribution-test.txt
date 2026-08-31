@@ -1,5 +1,0 @@
-Attribution test — 31/08/26
-
-Checks that a commit made from a Claude Code session is authored as
-Arnav Johri via the GitHub +noreply address, and therefore lands on the
-profile contribution graph. Delete once confirmed.

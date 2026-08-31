@@ -38,7 +38,13 @@ DATA: gt_msg  TYPE bapiret2_t,
       gt_alv  TYPE zcl_pp_fcst=>tt_alv,
       go_fcst TYPE REF TO zcl_pp_fcst,
       go_alv  TYPE REF TO cl_salv_table,
-      g_mode  TYPE char1.
+      g_mode  TYPE char1,
+*BOC By Arnav on 31/08/26
+*     The quarter actually being planned. It is P_QUART when a quarter
+*     was typed and is worked out from the date range when one was not,
+*     so the column headings and the generation always agree.
+      g_quart TYPE zde_quarter.
+*EOC By Arnav on 31/08/26
 
 *&---------------------------------------------------------------------*
 SELECTION-SCREEN BEGIN OF BLOCK b0 WITH FRAME TITLE TEXT-b00.
@@ -404,6 +410,15 @@ START-OF-SELECTION.
 
   PERFORM display.
 
+*BOC By Arnav on 31/08/26
+* The Save button lives on a GUI status, and this program deliberately
+* has none - it is screen free so that the whole object can ship by
+* abapGit, and SE41 statuses are not serialised. The button therefore
+* never appeared and the user was left with no way of saving from the
+* list at all. The question is asked once the list is closed instead.
+  PERFORM save_prompt.
+*EOC By Arnav on 31/08/26
+
 
 *&---------------------------------------------------------------------*
 *& Application log - SLG1, object ZPP_FCST subobject GENERATE
@@ -485,6 +500,8 @@ FORM generate.
                    WHEN p_qtr = abap_true THEN zcl_pp_fcst=>gc_mode-quarterly
                    ELSE                        zcl_pp_fcst=>gc_mode-monthly ).
 
+  PERFORM resolve_quarter.   "Changes by Arnav on 31/08/26
+
   CASE g_mode.
 
     WHEN zcl_pp_fcst=>gc_mode-annual.
@@ -497,10 +514,16 @@ FORM generate.
                                           et_msg     = lt_msg ).
 
     WHEN zcl_pp_fcst=>gc_mode-quarterly.
+*BOC By Arnav on 31/08/26
+*     P_QUART is blank when the user gave a date range instead, and the
+*     class was then asked to plan quarter "". G_QUART carries the
+*     quarter either way.
+*                                             iv_quarter = p_quart
       go_fcst->generate_quarterly( EXPORTING ir_werks   = s_werks[]
                                              ir_matnr   = s_matnr[]
                                              iv_fyear   = p_fyear
-                                             iv_quarter = p_quart
+                                             iv_quarter = g_quart
+*EOC By Arnav on 31/08/26
                                              iv_legacy  = p_legc
                                              iv_tonnage = p_tonn
                                    IMPORTING et_alv     = gt_alv
@@ -678,6 +701,12 @@ FORM visible_columns CHANGING ct_show TYPE tt_fname.
 
       APPEND 'LY_TOTAL'   TO ct_show.   " Total LY Sales Qty
       APPEND 'PROD_CAT'   TO ct_show.   " Product Cat.
+*BOC By Arnav on 31/08/26
+*     MTS / MTO was drawn on the quarterly sheet only. It is asked for on
+*     annual as well, next to the product category it is maintained with
+*     on ZPPT_PROD_CAT.
+      APPEND 'MTS_MTO'    TO ct_show.   " MTS / MTO
+*EOC By Arnav on 31/08/26
       APPEND 'LOAD_FCT'   TO ct_show.   " Load Factor
       APPEND 'FCST_TOTAL' TO ct_show.   " Forecast Qty_FY2026-27
 
@@ -749,6 +778,13 @@ FORM visible_columns CHANGING ct_show TYPE tt_fname.
 
   ENDCASE.
 
+*BOC By Arnav on 31/08/26
+* Price, asked for on all three radio buttons. The column is drawn on
+* every mode; it stays empty until the functional team confirm where the
+* figure comes from - see the note on TY_ALV-PRICE in ZCL_PP_FCST.
+  APPEND 'PRICE' TO ct_show.
+*EOC By Arnav on 31/08/26
+
 * ---- the result of a save --------------------------------------------
 * Only when the run actually saved. The forecast number and the per row
 * outcome are the point of pressing save, so they are shown then and
@@ -766,9 +802,14 @@ FORM visible_columns CHANGING ct_show TYPE tt_fname.
 *     Sheet 2 shows Business Forecast but not the additional column.
 *     The Final ALV sheet carries it and the change upload writes it.
       APPEND 'BUS_FCST_ADD' TO ct_show.
-    ELSE.
-*     MTS / MTO is drawn on sheet 2 only
+*BOC By Arnav on 31/08/26
+*   Annual now carries MTS / MTO in its own right, so appending it here
+*   as well would list the column twice and give it two positions.
+*    ELSE.
+*      APPEND 'MTS_MTO' TO ct_show.
+    ELSEIF g_mode = zcl_pp_fcst=>gc_mode-monthly.
       APPEND 'MTS_MTO' TO ct_show.
+*EOC By Arnav on 31/08/26
     ENDIF.
 
     APPEND 'MEINS'   TO ct_show.   " unit for every quantity column
@@ -914,10 +955,23 @@ FORM setup_columns USING pt_show TYPE tt_fname.
       PERFORM txt USING 'FCST_QTY' 'LY vs Current Requirement Qty'.
     ENDIF.
 
+*BOC By Arnav on 31/08/26
+*   The headings above are the neutral ones. On quarter and month based
+*   planning the calendar month behind each column is known, so it is
+*   drawn instead - "Jul-25" rather than "LY Month 1". The neutral texts
+*   stay as the fallback for a run where the quarter cannot be worked
+*   out. Annual already names its months and is untouched.
+    PERFORM month_headings.
+*EOC By Arnav on 31/08/26
+
   ENDIF.
 
   PERFORM txt USING 'PROD_CAT'  'Product Cat.'.
   PERFORM txt USING 'MTS_MTO'   'MTS / MTO'.
+*BOC By Arnav on 31/08/26
+  PERFORM txt USING 'NTGEW'     'Net Weight'.
+  PERFORM txt USING 'PRICE'     'Price'.
+*EOC By Arnav on 31/08/26
   PERFORM txt USING 'MVGR1_TXT' 'Material Group 1'.
   PERFORM txt USING 'MVGR2_TXT' 'Material Group 2'.
   PERFORM txt USING 'MVGR3_TXT' 'Material Group 3'.
@@ -926,6 +980,223 @@ FORM setup_columns USING pt_show TYPE tt_fname.
   PERFORM txt USING 'FCST_NO'   'Forecast Number'.
 
 ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+*& BOC By Arnav on 31/08/26
+*&
+*& The quarter actually being planned
+*&
+*& Quarter based planning takes either a quarter or a date range. When a
+*& date range was given P_QUART is blank, and the class was being asked
+*& to plan quarter "" - which produced a list whose columns belonged to
+*& no month at all. The quarter of the first date of the range is used
+*& instead, so generation and headings agree.
+*&---------------------------------------------------------------------*
+FORM resolve_quarter.
+
+  DATA: lv_month TYPE numc2,
+        lv_per   TYPE numc2,
+        lv_date  TYPE dats.
+
+  CLEAR g_quart.
+
+  CASE g_mode.
+
+    WHEN zcl_pp_fcst=>gc_mode-quarterly.
+
+      IF p_quart IS NOT INITIAL.
+        g_quart = p_quart.
+        RETURN.
+      ENDIF.
+
+      READ TABLE s_datum INTO DATA(ls_dt) INDEX 1.
+      CHECK sy-subrc = 0.
+
+      lv_date = ls_dt-low.
+      CHECK lv_date IS NOT INITIAL.
+
+      lv_month = lv_date+4(2).
+      lv_per   = zcl_pp_fcst_util=>month_to_period( lv_month ).
+      g_quart  = zcl_pp_fcst_util=>period_to_quarter( lv_per ).
+
+    WHEN zcl_pp_fcst=>gc_mode-monthly.
+
+      CHECK p_perio IS NOT INITIAL.
+      lv_per  = p_perio.
+      g_quart = zcl_pp_fcst_util=>period_to_quarter( lv_per ).
+
+  ENDCASE.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+*& Calendar month headings for quarter and month based planning
+*&
+*& "M1", "M2", "LY Month 1" mean nothing to a planner. Every month
+*& column is headed with the month it actually holds - Jul-25, Aug-25,
+*& Sep-25 for the comparison quarter, Apr-26 to Jun-26 for the three
+*& months before the plan, and the planned months themselves.
+*&
+*& Called after the neutral headings, so anything that cannot be worked
+*& out keeps the text it already had.
+*&---------------------------------------------------------------------*
+FORM month_headings.
+
+  DATA: lv_nam TYPE char3,
+        lv_hdr TYPE string,
+        lv_col TYPE lvc_fname,
+        lv_ix  TYPE i,
+        lv_qi  TYPE i,
+        lv_per TYPE numc2,
+        lv_yy  TYPE gjahr,
+        lv_mm  TYPE numc2.
+
+  CHECK g_quart IS NOT INITIAL.
+
+* ---- last year, the same quarter -------------------------------------
+  DATA(lt_ly) = zcl_pp_fcst_util=>last_year_quarter( iv_fyear   = p_fyear
+                                                     iv_quarter = g_quart ).
+
+  lv_ix = 3.
+  LOOP AT lt_ly INTO DATA(ls_ly).
+    lv_ix  = lv_ix + 1.
+    lv_yy  = ls_ly-gjahr.
+    lv_mm  = ls_ly-month.
+    PERFORM month_name USING lv_mm CHANGING lv_nam.
+    lv_hdr = |{ lv_nam }-{ lv_yy+2(2) }|.
+    lv_col = |M{ lv_ix }_LAST|.
+    PERFORM txt USING lv_col lv_hdr.
+  ENDLOOP.
+
+  lv_hdr = |Total LY Q{ g_quart } Sales Qty|.
+  PERFORM txt USING 'LY_QTR_TOT' lv_hdr.
+
+* ---- the three months immediately before the plan --------------------
+  IF g_mode = zcl_pp_fcst=>gc_mode-monthly.
+    lv_per = p_perio.
+  ELSE.
+    lv_qi  = g_quart.
+    lv_per = ( lv_qi - 1 ) * 3 + 1.
+  ENDIF.
+
+  DATA(lt_l3m) = zcl_pp_fcst_util=>last_three_months( iv_fyear  = p_fyear
+                                                      iv_period = lv_per ).
+
+  lv_ix = 0.
+  LOOP AT lt_l3m INTO DATA(ls_l3).
+    lv_ix  = lv_ix + 1.
+    lv_yy  = ls_l3-gjahr.
+    lv_mm  = ls_l3-month.
+    PERFORM month_name USING lv_mm CHANGING lv_nam.
+    lv_hdr = |{ lv_nam }-{ lv_yy+2(2) }|.
+    lv_col = |M{ lv_ix }_CURR|.
+    PERFORM txt USING lv_col lv_hdr.
+  ENDLOOP.
+
+* ---- the months being planned ----------------------------------------
+  IF g_mode = zcl_pp_fcst=>gc_mode-quarterly.
+
+    DATA(lt_qtr) = zcl_pp_fcst_util=>quarter_periods( iv_fyear   = p_fyear
+                                                      iv_quarter = g_quart ).
+
+    lv_ix = 3.
+    LOOP AT lt_qtr INTO DATA(ls_q).
+      lv_ix  = lv_ix + 1.
+      lv_yy  = ls_q-gjahr.
+      lv_mm  = ls_q-month.
+      PERFORM month_name USING lv_mm CHANGING lv_nam.
+
+      lv_hdr = |{ lv_nam }-{ lv_yy+2(2) }|.
+      lv_col = |M{ lv_ix }_FCST|.
+      PERFORM txt USING lv_col lv_hdr.
+
+      lv_hdr = |{ lv_nam }-{ lv_yy+2(2) } tonnage|.
+      lv_col = |M{ lv_ix }_TON|.
+      PERFORM txt USING lv_col lv_hdr.
+    ENDLOOP.
+
+  ELSE.
+
+*   Month based planning forecasts one month, drawn in M4_FCST
+    lv_per = p_perio.
+    zcl_pp_fcst_util=>period_to_yearmonth( EXPORTING iv_fyear  = p_fyear
+                                                     iv_period = lv_per
+                                           IMPORTING ev_gjahr  = lv_yy
+                                                     ev_month  = lv_mm ).
+    PERFORM month_name USING lv_mm CHANGING lv_nam.
+
+    lv_hdr = |{ lv_nam }-{ lv_yy+2(2) }|.
+    PERFORM txt USING 'M4_FCST' lv_hdr.
+
+    lv_hdr = |{ lv_nam }-{ lv_yy+2(2) } tonnage|.
+    PERFORM txt USING 'M4_TON' lv_hdr.
+
+    lv_hdr = |Additional Plan Qty { lv_nam }-{ lv_yy+2(2) }|.
+    PERFORM txt USING 'BUS_FCST_ADD' lv_hdr.
+
+  ENDIF.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+*& Save from the list
+*&
+*& There is no GUI status in this program and there cannot be one - it
+*& is screen free so that the object ships by abapGit, and SE41 statuses
+*& are not serialised. SET_SCREEN_STATUS therefore always failed and the
+*& Save button never reached the toolbar, which is why the list looked
+*& like it refused to save. The list is closed first and the question is
+*& asked afterwards, which needs no status at all.
+*&
+*& Skipped when the Save checkbox already saved the run, when there is
+*& nothing to save, and when the user has no create authority - there is
+*& no point asking a question whose answer can only be refused.
+*&---------------------------------------------------------------------*
+FORM save_prompt.
+
+* LV_Q is CHAR 100 and not a STRING: TEXT_QUESTION of POPUP_TO_CONFIRM
+* is typed generic C, which a STRING is not compatible with.
+  DATA: lv_ans  TYPE c LENGTH 1,
+        lv_q    TYPE char100,
+        lv_rows TYPE char10.
+
+  CHECK p_save = abap_false.
+  CHECK gt_alv IS NOT INITIAL.
+  CHECK go_fcst IS BOUND.
+
+  LOOP AT s_werks INTO DATA(ls_w3).
+    IF zcl_pp_fcst_util=>check_authority( iv_werks = ls_w3-low
+                                          iv_actvt = '01' ) = abap_false.
+      RETURN.
+    ENDIF.
+  ENDLOOP.
+
+  lv_rows = lines( gt_alv ).
+  CONDENSE lv_rows.
+  CONCATENATE 'Save' lv_rows 'forecast row(s) for' p_fyear
+         INTO lv_q SEPARATED BY space.
+  CONCATENATE lv_q '?' INTO lv_q.
+
+  CALL FUNCTION 'POPUP_TO_CONFIRM'
+    EXPORTING  titlebar              = 'Save forecast'
+               text_question         = lv_q
+               text_button_1         = 'Save'
+               text_button_2         = 'Do not save'
+               default_button        = '2'
+               display_cancel_button = abap_false
+    IMPORTING  answer                = lv_ans
+    EXCEPTIONS text_not_found        = 1
+               OTHERS                = 2.
+
+  CHECK sy-subrc = 0 AND lv_ans = '1'.
+
+  PERFORM save_all.
+
+ENDFORM.
+*& EOC By Arnav on 31/08/26
 
 
 *&---------------------------------------------------------------------*

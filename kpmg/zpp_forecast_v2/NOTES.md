@@ -9,8 +9,10 @@ ZFORECAST (Adhesive), Astral / UDAY, built to `Forecast Template-Adhesive.xlsx` 
 - `ZCL_PP_FCST_UTIL` — FY / quarter / period / tonnage helpers (global class).
 - `ZPP_FORECAST` (tcode ZFCST) — three radio modes.
 - `ZPP_FORECAST_REPORT` (tcode ZFCST_RPT) — final ALV.
-- `ZPP_FORECAST_UPLOAD` (tcode ZFCST_UPL) — eight upload types with template download
-  (`gui_download` template + `gui_upload`).
+- `ZPP_FORECAST_UPLOAD` (tcode ZFCST_UPL) — eight upload types, each with its own
+  Download Template button on the line of its radio button. Reads a real `.XLSX`
+  (`CL_FDT_XL_SPREADSHEET`), a `.CSV`, or tab separated text; templates download as
+  `.csv`.
 
 ## Gotchas
 
@@ -34,6 +36,26 @@ ZFORECAST (Adhesive), Astral / UDAY, built to `Forecast Template-Adhesive.xlsx` 
   the system on 21.08.2026 against the FS wording.
 - Two places where the document's prose and its worked example disagree are documented in
   `00_TECHNICAL_OBJECTS.md` §9 — **read that before "fixing" a formula**.
+- **Save has no button and cannot have one.** There is no GUI status and SE41
+  statuses are not serialised by abapGit, so `set_screen_status` always failed and
+  SALV fell back to its own toolbar. Saving is driven by the `P_SAVE` checkbox and,
+  when that is not ticked, by a `POPUP_TO_CONFIRM` raised after the list is closed
+  (`FORM save_prompt`). Do not "fix" this by adding a GUI status — that makes the
+  whole object paste-only again.
+- **The number range fallback is not a substitute for SNRO.** `NUMBER_FROM_TABLE`
+  derives a forecast number from `ZPPT_FCST_YR` when `NUMBER_GET_NEXT` on `ZPPFCST`
+  cannot serve one, so a system without the SNRO object can still save. It has no
+  concurrency protection. `ZPPFCST` must still be created in SNRO.
+- **Legacy data is preferred, not exclusive.** With the Legacy checkbox on, the
+  standard source is still read and `MERGE_MISSING` fills every plant/material/month
+  bucket `ZPPT_SLS_HIST` does not carry. Legacy wins where it has a figure. This
+  makes a legacy run cost the same as a normal one.
+- **`TY_ALV-PRICE` is empty by design.** The column is drawn on all three modes; the
+  source and the calculation are still open with the functional team. It is typed
+  `P LENGTH 13 DECIMALS 2` rather than over a CURR data element, because a CURR
+  column with no currency reference makes SALV raise `CX_SALV_DATA_ERROR`, and it is
+  written to no table — storing it would need a new field on all three forecast
+  tables.
 - `ZPPT_FCST_CFG` holds what the document hardcodes (VKORG default 1100, BWART default 601,
   legacy TVARVC name) so config changes need no code change. MTS/MTO lives on
   `ZPPT_PROD_CAT`, not in a table of its own.

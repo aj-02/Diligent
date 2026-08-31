@@ -71,6 +71,22 @@ CLASS zcl_pp_fcst DEFINITION
              prod_cat  TYPE zde_prod_cat,
              load_fct  TYPE zde_load_fct,
              mts_mto   TYPE zde_mts_mto,
+*BOC By Arnav on 31/08/26
+*            Price column asked for on all three radio buttons. Where it
+*            comes from and how it is worked out is still open with the
+*            functional team, so the column is declared and displayed but
+*            nothing fills it yet.
+*
+*            Typed as a plain packed field and NOT over a CURR data
+*            element on purpose: a CURR column with no currency reference
+*            field makes SALV raise CX_SALV_DATA_ERROR. It is display
+*            only and is written to no table, so no DDIC change is needed
+*            and the abapGit ZIP is unaffected.
+*            " ASSUMPTION: price is per base unit of measure, in the
+*            " company code currency. To be confirmed before the logic
+*            " is written.
+             price     TYPE p LENGTH 13 DECIMALS 2,
+*EOC By Arnav on 31/08/26
 
              "--- annual -------------------------------------------------
              m01        TYPE zde_fcst_qty,
@@ -252,6 +268,16 @@ CLASS zcl_pp_fcst DEFINITION
                 ir_matnr        TYPE tr_matnr
       RETURNING VALUE(rt_scope) TYPE tt_scope.
 
+*BOC By Arnav on 31/08/26
+    "! Adds the buckets of IT_FROM that CT_HIST does not already carry.
+    "! Nothing already in CT_HIST is touched, so the legacy figure always
+    "! wins over the standard one for the same plant, material and month.
+    METHODS merge_missing
+      IMPORTING it_from  TYPE tt_hist
+      EXPORTING ev_added TYPE i
+      CHANGING  ct_hist  TYPE tt_hist.
+*EOC By Arnav on 31/08/26
+
     METHODS fill_master_data
       CHANGING cs_alv TYPE ty_alv.
 
@@ -277,6 +303,15 @@ CLASS zcl_pp_fcst DEFINITION
     METHODS number_get
       IMPORTING iv_fyear     TYPE zde_fyear
       RETURNING VALUE(rv_no) TYPE zde_fcst_no.
+
+*BOC By Arnav on 31/08/26
+    "! Next forecast number derived from ZPPT_FCST_YR itself. Used only
+    "! when number range object ZPPFCST is not available, so that a
+    "! missing SNRO entry does not stop the user saving.
+    METHODS number_from_table
+      IMPORTING iv_fyear     TYPE zde_fyear
+      RETURNING VALUE(rv_no) TYPE zde_fcst_no.
+*EOC By Arnav on 31/08/26
 
     METHODS add_msg
       IMPORTING iv_type   TYPE bapi_mtype DEFAULT 'E'
@@ -313,16 +348,53 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
                                    IMPORTING ev_from  = DATA(lv_from)
                                              ev_to    = DATA(lv_to) ).
 
+*BOC By Arnav on 31/08/26
+*   Legacy used to be exclusive - a plant, material and month that
+*   ZPPT_SLS_HIST did not carry was reported as zero, and a material with
+*   no legacy row at all disappeared from the run:
+*
+*    IF iv_legacy = abap_true.
+*      mt_hist = read_legacy( ir_werks = ir_werks ir_matnr = ir_matnr
+*                             iv_from = lv_from iv_to = lv_to ).
+*    ELSE.
+*      mt_hist = read_billing( ir_werks = ir_werks ir_matnr = ir_matnr
+*                              iv_from = lv_from iv_to = lv_to ).
+*      add_old_material_qty( EXPORTING ir_werks = ir_werks ir_matnr = ir_matnr
+*                                      iv_from = lv_from iv_to = lv_to
+*                            CHANGING  ct_hist = mt_hist ).
+*    ENDIF.
+*
+*   Legacy is now the PREFERRED source rather than the only one. Every
+*   bucket legacy does not cover is filled from the standard tables, so a
+*   part loaded legacy file no longer hides the SAP history behind it.
+    DATA: lt_std   TYPE tt_hist,
+          lv_gaps  TYPE i.
+
+    CLEAR: mt_hist, lt_std, lv_gaps.
+
     IF iv_legacy = abap_true.
       mt_hist = read_legacy( ir_werks = ir_werks ir_matnr = ir_matnr
                              iv_from = lv_from iv_to = lv_to ).
-    ELSE.
-      mt_hist = read_billing( ir_werks = ir_werks ir_matnr = ir_matnr
-                              iv_from = lv_from iv_to = lv_to ).
-      add_old_material_qty( EXPORTING ir_werks = ir_werks ir_matnr = ir_matnr
-                                      iv_from = lv_from iv_to = lv_to
-                            CHANGING  ct_hist = mt_hist ).
     ENDIF.
+
+    lt_std = read_billing( ir_werks = ir_werks ir_matnr = ir_matnr
+                           iv_from = lv_from iv_to = lv_to ).
+    add_old_material_qty( EXPORTING ir_werks = ir_werks ir_matnr = ir_matnr
+                                    iv_from = lv_from iv_to = lv_to
+                          CHANGING  ct_hist = lt_std ).
+
+    IF iv_legacy = abap_true.
+      merge_missing( EXPORTING it_from  = lt_std
+                     IMPORTING ev_added = lv_gaps
+                     CHANGING  ct_hist  = mt_hist ).
+      IF lv_gaps > 0.
+        add_msg( EXPORTING iv_type = 'W' iv_number = 023 iv_v1 = lv_gaps
+                 CHANGING  ct_msg = et_msg ).
+      ENDIF.
+    ELSE.
+      mt_hist = lt_std.
+    ENDIF.
+*EOC By Arnav on 31/08/26
 
     DATA(lt_scope) = build_scope( ir_werks = ir_werks ir_matnr = ir_matnr ).
 
@@ -438,16 +510,49 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
       DATA(lv_swap) = lv_from. lv_from = lv_to. lv_to = lv_swap.
     ENDIF.
 
+*BOC By Arnav on 31/08/26
+*   Legacy is the preferred source, not the only one - see the note in
+*   GENERATE_ANNUAL. The standard tables fill every plant, material and
+*   month the legacy upload does not carry.
+*
+*    IF iv_legacy = abap_true.
+*      mt_hist = read_legacy( ir_werks = ir_werks ir_matnr = ir_matnr
+*                             iv_from = lv_from iv_to = lv_to ).
+*    ELSE.
+*      mt_hist = read_billing( ir_werks = ir_werks ir_matnr = ir_matnr
+*                              iv_from = lv_from iv_to = lv_to ).
+*      add_old_material_qty( EXPORTING ir_werks = ir_werks ir_matnr = ir_matnr
+*                                      iv_from = lv_from iv_to = lv_to
+*                            CHANGING  ct_hist = mt_hist ).
+*    ENDIF.
+    DATA: lt_std  TYPE tt_hist,
+          lv_gaps TYPE i.
+
+    CLEAR: mt_hist, lt_std, lv_gaps.
+
     IF iv_legacy = abap_true.
       mt_hist = read_legacy( ir_werks = ir_werks ir_matnr = ir_matnr
                              iv_from = lv_from iv_to = lv_to ).
-    ELSE.
-      mt_hist = read_billing( ir_werks = ir_werks ir_matnr = ir_matnr
-                              iv_from = lv_from iv_to = lv_to ).
-      add_old_material_qty( EXPORTING ir_werks = ir_werks ir_matnr = ir_matnr
-                                      iv_from = lv_from iv_to = lv_to
-                            CHANGING  ct_hist = mt_hist ).
     ENDIF.
+
+    lt_std = read_billing( ir_werks = ir_werks ir_matnr = ir_matnr
+                           iv_from = lv_from iv_to = lv_to ).
+    add_old_material_qty( EXPORTING ir_werks = ir_werks ir_matnr = ir_matnr
+                                    iv_from = lv_from iv_to = lv_to
+                          CHANGING  ct_hist = lt_std ).
+
+    IF iv_legacy = abap_true.
+      merge_missing( EXPORTING it_from  = lt_std
+                     IMPORTING ev_added = lv_gaps
+                     CHANGING  ct_hist  = mt_hist ).
+      IF lv_gaps > 0.
+        add_msg( EXPORTING iv_type = 'W' iv_number = 023 iv_v1 = lv_gaps
+                 CHANGING  ct_msg = et_msg ).
+      ENDIF.
+    ELSE.
+      mt_hist = lt_std.
+    ENDIF.
+*EOC By Arnav on 31/08/26
 
     DATA(lt_scope) = build_scope( ir_werks = ir_werks ir_matnr = ir_matnr ).
 
@@ -588,19 +693,55 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
       DATA(lv_swap) = lv_from. lv_from = lv_to. lv_to = lv_swap.
     ENDIF.
 
+*BOC By Arnav on 31/08/26
+*   Legacy is the preferred source, not the only one - see the note in
+*   GENERATE_ANNUAL. Monthly reads material documents rather than
+*   invoices, so the gaps are filled from MATDOC.
+*
+*    IF iv_legacy = abap_true.
+*      mt_hist = read_legacy( ir_werks = ir_werks ir_matnr = ir_matnr
+*                             iv_from = lv_from iv_to = lv_to ).
+*    ELSE.
+*      mt_hist = read_matdoc( ir_werks = ir_werks ir_matnr = ir_matnr
+*                             iv_from = lv_from iv_to = lv_to ).
+*      add_old_material_qty( EXPORTING ir_werks       = ir_werks
+*                                      ir_matnr       = ir_matnr
+*                                      iv_from        = lv_from
+*                                      iv_to          = lv_to
+*                                      iv_use_billing = abap_false
+*                            CHANGING  ct_hist        = mt_hist ).
+*    ENDIF.
+    DATA: lt_std  TYPE tt_hist,
+          lv_gaps TYPE i.
+
+    CLEAR: mt_hist, lt_std, lv_gaps.
+
     IF iv_legacy = abap_true.
       mt_hist = read_legacy( ir_werks = ir_werks ir_matnr = ir_matnr
                              iv_from = lv_from iv_to = lv_to ).
-    ELSE.
-      mt_hist = read_matdoc( ir_werks = ir_werks ir_matnr = ir_matnr
-                             iv_from = lv_from iv_to = lv_to ).
-      add_old_material_qty( EXPORTING ir_werks       = ir_werks
-                                      ir_matnr       = ir_matnr
-                                      iv_from        = lv_from
-                                      iv_to          = lv_to
-                                      iv_use_billing = abap_false
-                            CHANGING  ct_hist        = mt_hist ).
     ENDIF.
+
+    lt_std = read_matdoc( ir_werks = ir_werks ir_matnr = ir_matnr
+                          iv_from = lv_from iv_to = lv_to ).
+    add_old_material_qty( EXPORTING ir_werks       = ir_werks
+                                    ir_matnr       = ir_matnr
+                                    iv_from        = lv_from
+                                    iv_to          = lv_to
+                                    iv_use_billing = abap_false
+                          CHANGING  ct_hist        = lt_std ).
+
+    IF iv_legacy = abap_true.
+      merge_missing( EXPORTING it_from  = lt_std
+                     IMPORTING ev_added = lv_gaps
+                     CHANGING  ct_hist  = mt_hist ).
+      IF lv_gaps > 0.
+        add_msg( EXPORTING iv_type = 'W' iv_number = 023 iv_v1 = lv_gaps
+                 CHANGING  ct_msg = et_msg ).
+      ENDIF.
+    ELSE.
+      mt_hist = lt_std.
+    ENDIF.
+*EOC By Arnav on 31/08/26
 
     DATA(lt_scope) = build_scope( ir_werks = ir_werks ir_matnr = ir_matnr ).
 
@@ -699,6 +840,9 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
   METHOD save.
 
     DATA lv_saved TYPE i.
+*BOC By Arnav on 31/08/26
+    DATA lv_refused TYPE i.
+*EOC By Arnav on 31/08/26
 
     LOOP AT ct_alv ASSIGNING FIELD-SYMBOL(<ls>) WHERE mark = abap_true.
 
@@ -707,6 +851,7 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
         add_msg( EXPORTING iv_number = 010 iv_v1 = <ls>-werks iv_v2 = '01'
                  CHANGING  ct_msg = rt_msg ).
         <ls>-light = '1'.
+        lv_refused = lv_refused + 1.   "Changes by Arnav on 31/08/26
         CONTINUE.
       ENDIF.
 
@@ -728,6 +873,7 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
             add_msg( EXPORTING iv_number = 021 iv_v1 = <ls>-fyear
                      CHANGING  ct_msg = rt_msg ).
             <ls>-light = '1'.
+            lv_refused = lv_refused + 1.   "Changes by Arnav on 31/08/26
             CONTINUE.
           ENDIF.
 
@@ -759,6 +905,7 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
                                iv_v2 = <ls>-matnr iv_v3 = <ls>-fyear
                      CHANGING  ct_msg = rt_msg ).
             <ls>-light = '1'.
+            lv_refused = lv_refused + 1.   "Changes by Arnav on 31/08/26
             CONTINUE.
           ENDIF.
 
@@ -779,6 +926,7 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
                                iv_v2 = <ls>-matnr iv_v3 = <ls>-fyear
                      CHANGING  ct_msg = rt_msg ).
             <ls>-light = '1'.
+            lv_refused = lv_refused + 1.   "Changes by Arnav on 31/08/26
             CONTINUE.
           ENDIF.
 
@@ -798,6 +946,7 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
       ELSE.
         <ls>-light   = '1'.
         <ls>-message = |Save failed|.
+        lv_refused   = lv_refused + 1.   "Changes by Arnav on 31/08/26
       ENDIF.
 
     ENDLOOP.
@@ -814,7 +963,19 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
                CHANGING  ct_msg = rt_msg ).
     ELSE.
       ROLLBACK WORK.
-      add_msg( EXPORTING iv_number = 017 CHANGING ct_msg = rt_msg ).
+*BOC By Arnav on 31/08/26
+*     017 is "Select at least one line", which is what the user was told
+*     even when they had selected rows and every one of them had been
+*     refused for a reason already sitting in RT_MSG. The two cases are
+*     now told apart.
+*      add_msg( EXPORTING iv_number = 017 CHANGING ct_msg = rt_msg ).
+      IF lv_refused > 0.
+        add_msg( EXPORTING iv_number = 022 iv_v1 = lv_refused
+                 CHANGING  ct_msg = rt_msg ).
+      ELSE.
+        add_msg( EXPORTING iv_number = 017 CHANGING ct_msg = rt_msg ).
+      ENDIF.
+*EOC By Arnav on 31/08/26
     ENDIF.
 
   ENDMETHOD.
@@ -1109,6 +1270,15 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
 *&---------------------------------------------------------------------*
   METHOD fill_master_data.
 
+*BOC By Arnav on 31/08/26
+*   Net weight is MARA-NTGEW and its unit MARA-GEWEI, confirmed with the
+*   functional team on 31/08/26. It is read here, shown in the Net Weight
+*   column of all three modes and is the only figure ZCL_PP_FCST_UTIL
+*   =>TO_TONNAGE multiplies by, so a material with no net weight in MARA
+*   reports zero tonnage rather than a wrong one.
+*   Field list and target list are matched by POSITION - MATKL, MEINS,
+*   NTGEW, GEWEI in both.
+*EOC By Arnav on 31/08/26
     SELECT SINGLE matkl, meins, ntgew, gewei FROM mara
       INTO ( @cs_alv-matkl, @cs_alv-meins, @cs_alv-ntgew, @cs_alv-gewei )
       WHERE matnr = @cs_alv-matnr.
@@ -1211,10 +1381,94 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
                  OTHERS                  = 4.
 
     IF sy-subrc <> 0.
-      CLEAR rv_no.
+*BOC By Arnav on 31/08/26
+*     A missing SNRO object or interval used to clear the number, the row
+*     was then refused, and the user reported that the system would not
+*     let them save anything at all. SNRO stays the right source and is
+*     still tried first; when it is not there the number is derived from
+*     ZPPT_FCST_YR so the forecast can still be saved.
+*      CLEAR rv_no.
+      rv_no = number_from_table( iv_fyear ).
+*EOC By Arnav on 31/08/26
     ELSE.
       rv_no = |{ rv_no ALPHA = IN }|.
     ENDIF.
+
+  ENDMETHOD.
+
+
+*&---------------------------------------------------------------------*
+*& Forecast number without SNRO
+*&
+*& Only reached when NUMBER_GET_NEXT could not serve the number. The
+*& highest number already stored for the financial year is taken and one
+*& is added; the first number of a year is the last two digits of the
+*& year the financial year starts in followed by 00000001, which is the
+*& shape the number range gives.
+*&
+*& " ASSUMPTION: this is a fallback, not a replacement. Two users saving
+*& " in the same second could draw the same number, so number range
+*& " object ZPPFCST must still be created in SNRO - see NOTES.md.
+*&---------------------------------------------------------------------*
+  METHOD number_from_table.
+
+    DATA: lv_max  TYPE zde_fcst_no,
+          lv_char TYPE char10,
+          lv_num  TYPE n LENGTH 10.
+
+    CLEAR rv_no.
+
+    SELECT MAX( fcst_no ) FROM zppt_fcst_yr INTO @lv_max
+      WHERE fyear = @iv_fyear.
+
+    IF lv_max IS INITIAL.
+
+      zcl_pp_fcst_util=>split_fyear( EXPORTING iv_fyear     = iv_fyear
+                                     IMPORTING ev_year_from = DATA(lv_year) ).
+      CHECK lv_year IS NOT INITIAL.
+
+      CONCATENATE lv_year+2(2) '00000001' INTO lv_char.
+      rv_no = lv_char.
+      RETURN.
+
+    ENDIF.
+
+*   A number written by an earlier release, or by hand, may not be
+*   numeric. Rather than dump, the row is refused as it was before.
+    TRY.
+        lv_num = lv_max.
+      CATCH cx_sy_conversion_no_number.
+        RETURN.
+    ENDTRY.
+
+    lv_num = lv_num + 1.
+    rv_no  = lv_num.
+
+  ENDMETHOD.
+
+
+*&---------------------------------------------------------------------*
+*& Fill the buckets one source does not cover from another
+*&---------------------------------------------------------------------*
+  METHOD merge_missing.
+
+    CLEAR ev_added.
+
+    LOOP AT it_from INTO DATA(ls_from).
+
+      READ TABLE ct_hist TRANSPORTING NO FIELDS
+        WITH TABLE KEY werks = ls_from-werks
+                       matnr = ls_from-matnr
+                       gjahr = ls_from-gjahr
+                       month = ls_from-month.
+
+*     Already carried by the preferred source, which wins
+      CHECK sy-subrc <> 0.
+
+      INSERT ls_from INTO TABLE ct_hist.
+      ev_added = ev_added + 1.
+
+    ENDLOOP.
 
   ENDMETHOD.
 

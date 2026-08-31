@@ -8,16 +8,6 @@
 *& what was rejected and why.
 *&
 *& Built to Forecast Template-Adhesive.xlsx dated 20.08.2026
-*&
-*& 31.08.2026  Arnav  Corrections: file row numbers in the log, plant
-*&                    cell condensed before it is cut to four
-*&                    characters, non numeric cells rejected instead of
-*&                    loaded as zero, product category length, unit of
-*&                    measure validated, excluded materials refused on
-*&                    the two forecast uploads, plant locked for the
-*&                    run, MARC and the authorisation check read once
-*&                    for the file, own messages 022 and 023, example
-*&                    row in the template written commented out
 *&---------------------------------------------------------------------*
 REPORT zpp_forecast_upload MESSAGE-ID zpp_fcst.
 
@@ -38,37 +28,7 @@ TYPES: BEGIN OF ty_raw,
          action  TYPE char14,
          light   TYPE char1,
          message TYPE char200,
-       END OF ty_log,
-
-*BOC By Arnav on 31/08/26
-*      Every row keeps the line number it has in the file the user is
-*      looking at, so the log points at the right line even though the
-*      heading, the blank rows and the commented rows are dropped
-*      before processing
-       BEGIN OF ty_row,
-         srow TYPE i,
-         data TYPE ty_raw,
-       END OF ty_row,
-
-*      Plant and material existence, the authorisation check and the
-*      exclusion list are read once for the whole file instead of once
-*      per row
-       BEGIN OF ty_key,
-         werks TYPE werks_d,
-         matnr TYPE matnr,
-       END OF ty_key,
-
-       BEGIN OF ty_auth,
-         werks TYPE werks_d,
-         ok    TYPE abap_bool,
-       END OF ty_auth,
-
-       BEGIN OF ty_lock,
-         tabname TYPE rstable-tabname,
-         varkey  TYPE rstable-varkey,
-         ok      TYPE abap_bool,
-       END OF ty_lock.
-*EOC By Arnav on 31/08/26
+       END OF ty_log.
 
 CONSTANTS: gc_new  TYPE char14 VALUE 'Created',
            gc_chg  TYPE char14 VALUE 'Changed',
@@ -82,14 +42,6 @@ DATA: gt_raw TYPE STANDARD TABLE OF ty_raw,
       g_chg  TYPE i,
       g_err  TYPE i,
       g_tab  TYPE c LENGTH 1.
-
-*BOC By Arnav on 31/08/26
-DATA: gt_row  TYPE STANDARD TABLE OF ty_row,
-      gt_marc TYPE HASHED TABLE OF ty_key WITH UNIQUE KEY werks matnr,
-      gt_excl TYPE HASHED TABLE OF ty_key WITH UNIQUE KEY werks matnr,
-      gt_auth TYPE SORTED TABLE OF ty_auth WITH UNIQUE KEY werks,
-      gt_lock TYPE SORTED TABLE OF ty_lock WITH UNIQUE KEY tabname varkey.
-*EOC By Arnav on 31/08/26
 
 *&---------------------------------------------------------------------*
 SELECTION-SCREEN FUNCTION KEY 1.
@@ -132,29 +84,17 @@ AT SELECTION-SCREEN.
   IF sscrfields-ucomm = 'FC01'.
     PERFORM download_template.
   ELSEIF sscrfields-ucomm = 'ONLI' AND p_file IS INITIAL.
-*BOC By Arnav on 31/08/26
-*    MESSAGE e013 WITH 'no file name entered'.
-*   013 reads "Upload file could not be read", which is not what
-*   happened - no file was named at all. 022 says that.
-    MESSAGE e022.
-*EOC By Arnav on 31/08/26
+    MESSAGE e013 WITH 'no file name entered'.
   ENDIF.
 
 *&---------------------------------------------------------------------*
 START-OF-SELECTION.
 
-*BOC By Arnav on 31/08/26
-*  CLEAR: gt_raw, gt_log, g_new, g_chg, g_err.
-  CLEAR: gt_raw, gt_row, gt_log, gt_marc, gt_excl, gt_auth, gt_lock,
-         g_new, g_chg, g_err.
-*EOC By Arnav on 31/08/26
+  CLEAR: gt_raw, gt_log, g_new, g_chg, g_err.
 
   PERFORM upload_file.
 
-*BOC By Arnav on 31/08/26
-*  IF gt_raw IS INITIAL.
-  IF gt_row IS INITIAL.
-*EOC By Arnav on 31/08/26
+  IF gt_raw IS INITIAL.
     MESSAGE s008 DISPLAY LIKE 'I'.
     RETURN.
   ENDIF.
@@ -178,12 +118,6 @@ START-OF-SELECTION.
   ELSE.
     ROLLBACK WORK.
   ENDIF.
-
-*BOC By Arnav on 31/08/26
-* The locks are taken with _SCOPE 1, which survives the COMMIT, so they
-* are given back explicitly once the work is written
-  PERFORM unlock_all.
-*EOC By Arnav on 31/08/26
 
   PERFORM display_log.
 
@@ -283,18 +217,8 @@ FORM download_template.
   PERFORM join_row USING lt_head CHANGING lv_line.
   APPEND lv_line TO lt_out.
 
-*BOC By Arnav on 31/08/26
-*  PERFORM join_row USING lt_demo CHANGING lv_line.
-*  APPEND lv_line TO lt_out.
-* The example row is written commented out. A user who fills the sheet
-* in underneath it and forgets to delete it used to get a spurious
-* rejected row on every run. UPLOAD_FILE ignores any row whose first
-* cell starts with an asterisk, which also lets a user park a row he
-* does not want to load yet.
   PERFORM join_row USING lt_demo CHANGING lv_line.
-  CONCATENATE '*' lv_line INTO lv_line.
   APPEND lv_line TO lt_out.
-*EOC By Arnav on 31/08/26
 
   CONCATENATE lv_name '.txt' INTO lv_file.
 
@@ -321,12 +245,7 @@ FORM download_template.
     CONCATENATE 'Template saved to' lv_full INTO lv_msg SEPARATED BY space.
     MESSAGE lv_msg TYPE 'S'.
   ELSE.
-*BOC By Arnav on 31/08/26
-*    MESSAGE e013 WITH lv_full.
-*   013 is about reading an upload file. This is a failed template
-*   download, which is 023.
-    MESSAGE e023 WITH lv_full.
-*EOC By Arnav on 31/08/26
+    MESSAGE e013 WITH lv_full.
   ENDIF.
 
 ENDFORM.
@@ -376,13 +295,7 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM upload_file.
 
-*BOC By Arnav on 31/08/26
-*  DATA lv_name TYPE string.
-  DATA: lv_name TYPE string,
-        ls_raw  TYPE ty_raw,
-        ls_row  TYPE ty_row,
-        lv_tmp  TYPE char40.
-*EOC By Arnav on 31/08/26
+  DATA lv_name TYPE string.
 
   lv_name = p_file.
 
@@ -399,50 +312,13 @@ FORM upload_file.
     MESSAGE e013 WITH lv_name.
   ENDIF.
 
-*BOC By Arnav on 31/08/26
-*  IF p_head = 'X'.
-*    DELETE gt_raw INDEX 1.
-*  ENDIF.
-*
-** Trailing blank lines at the end of a spreadsheet export are ignored
-** rather than reported as errors
-*  DELETE gt_raw WHERE f01 IS INITIAL AND f02 IS INITIAL AND f03 IS INITIAL.
-*
-* Deleting the heading and the blank rows out of GT_RAW left SY-TABIX in
-* the processing loops one or more lines adrift of the line the user is
-* looking at, so every rejection was reported against the wrong row. The
-* rows to process are copied into GT_ROW instead, each carrying the line
-* number it really has in the file.
-  CLEAR gt_row.
+  IF p_head = 'X'.
+    DELETE gt_raw INDEX 1.
+  ENDIF.
 
-  LOOP AT gt_raw INTO ls_raw.
-
-*   The heading is line 1 when the checkbox says the file has one
-    IF p_head = 'X' AND sy-tabix = 1.
-      CONTINUE.
-    ENDIF.
-
-*   Blank lines, trailing ones from a spreadsheet export and any left
-*   in the middle, are skipped rather than reported as errors
-    IF ls_raw-f01 IS INITIAL AND ls_raw-f02 IS INITIAL
-                             AND ls_raw-f03 IS INITIAL.
-      CONTINUE.
-    ENDIF.
-
-*   A row whose first cell starts with an asterisk is a comment
-    lv_tmp = ls_raw-f01.
-    CONDENSE lv_tmp.
-    IF lv_tmp(1) = '*'.
-      CONTINUE.
-    ENDIF.
-
-    CLEAR ls_row.
-    ls_row-srow = sy-tabix.
-    ls_row-data = ls_raw.
-    APPEND ls_row TO gt_row.
-
-  ENDLOOP.
-*EOC By Arnav on 31/08/26
+* Trailing blank lines at the end of a spreadsheet export are ignored
+* rather than reported as errors
+  DELETE gt_raw WHERE f01 IS INITIAL AND f02 IS INITIAL AND f03 IS INITIAL.
 
 ENDFORM.
 
@@ -467,31 +343,10 @@ FORM do_category.
         lv_tmp   TYPE char40,
         lv_blank TYPE char12.
 
-*BOC By Arnav on 31/08/26
-  DATA: ls_row TYPE ty_row,
-        lv_ok  TYPE abap_bool.
+  LOOP AT gt_raw INTO ls_raw.
 
-* Plant, material and authorisation for the whole file, in one read
-  PERFORM prefetch USING 1 2 abap_false.
-*EOC By Arnav on 31/08/26
-
-*BOC By Arnav on 31/08/26
-*  LOOP AT gt_raw INTO ls_raw.
-*
-*    lv_row = sy-tabix.
-*    PERFORM to_plant    USING ls_raw-f01 CHANGING lv_werks.
-  LOOP AT gt_row INTO ls_row.
-
-    lv_row = ls_row-srow.
-    ls_raw = ls_row-data.
-    CLEAR: lv_matnr, lv_err.
-
-    PERFORM to_plant USING ls_raw-f01 CHANGING lv_werks lv_err.
-    IF lv_err IS NOT INITIAL.
-      PERFORM log USING lv_row lv_werks lv_matnr lv_blank gc_err lv_err.
-      CONTINUE.
-    ENDIF.
-*EOC By Arnav on 31/08/26
+    lv_row = sy-tabix.
+    PERFORM to_plant    USING ls_raw-f01 CHANGING lv_werks.
     PERFORM to_material USING ls_raw-f02 CHANGING lv_matnr.
 
     PERFORM check_marc USING lv_werks lv_matnr CHANGING lv_err.
@@ -502,36 +357,14 @@ FORM do_category.
 
     lv_tmp = ls_raw-f03.
     CONDENSE lv_tmp.
-*BOC By Arnav on 31/08/26
-*    lv_cat = to_upper( lv_tmp ).
-*   ZDE_PROD_CAT is two characters wide. A longer entry was assigned to
-*   it, kept its first two characters and loaded without a word, so
-*   "AB1" went in as "AB". It is refused now.
-    IF strlen( lv_tmp ) > 2.
-      lv_err = 'Product category is longer than the two characters the field holds'.
-      PERFORM log USING lv_row lv_werks lv_matnr lv_blank gc_err lv_err.
-      CONTINUE.
-    ENDIF.
     lv_cat = to_upper( lv_tmp ).
-*EOC By Arnav on 31/08/26
     IF lv_cat IS INITIAL.
       lv_err = 'Product category is mandatory'.
       PERFORM log USING lv_row lv_werks lv_matnr lv_blank gc_err lv_err.
       CONTINUE.
     ENDIF.
 
-*BOC By Arnav on 31/08/26
-*    PERFORM to_dec USING ls_raw-f04 CHANGING lv_load.
-*   A cell that is not a number used to come back as zero and be
-*   reported as "must be greater than zero", which reads like an empty
-*   cell. The two are told apart now.
-    PERFORM to_dec USING ls_raw-f04 CHANGING lv_load lv_ok.
-    IF lv_ok = abap_false.
-      lv_err = 'Load factor is not a number, use a dot for decimals and no commas'.
-      PERFORM log USING lv_row lv_werks lv_matnr lv_blank gc_err lv_err.
-      CONTINUE.
-    ENDIF.
-*EOC By Arnav on 31/08/26
+    PERFORM to_dec USING ls_raw-f04 CHANGING lv_load.
     IF lv_load <= 0.
       lv_err = 'Load factor must be a number greater than zero'.
       PERFORM log USING lv_row lv_werks lv_matnr lv_blank gc_err lv_err.
@@ -546,17 +379,6 @@ FORM do_category.
       PERFORM log USING lv_row lv_werks lv_matnr lv_blank gc_err lv_err.
       CONTINUE.
     ENDIF.
-
-*BOC By Arnav on 31/08/26
-*   Nothing stopped two users, or an upload and the forecast screen,
-*   reading the same row and writing it back over one another. The
-*   plant is locked for the length of the run before the row is read.
-    PERFORM lock_row USING 'ZPPT_PROD_CAT' lv_werks CHANGING lv_err.
-    IF lv_err IS NOT INITIAL.
-      PERFORM log USING lv_row lv_werks lv_matnr lv_blank gc_err lv_err.
-      CONTINUE.
-    ENDIF.
-*EOC By Arnav on 31/08/26
 
 *   The existing row is read first so the original created by and
 *   created on are carried forward instead of being wiped by the MODIFY
@@ -611,29 +433,10 @@ FORM do_tracking.
         lv_txt   TYPE string,
         lv_blank TYPE char12.
 
-*BOC By Arnav on 31/08/26
-  DATA ls_row TYPE ty_row.
+  LOOP AT gt_raw INTO ls_raw.
 
-  PERFORM prefetch USING 1 2 abap_false.
-*EOC By Arnav on 31/08/26
-
-*BOC By Arnav on 31/08/26
-*  LOOP AT gt_raw INTO ls_raw.
-*
-*    lv_row = sy-tabix.
-*    PERFORM to_plant    USING ls_raw-f01 CHANGING lv_werks.
-  LOOP AT gt_row INTO ls_row.
-
-    lv_row = ls_row-srow.
-    ls_raw = ls_row-data.
-    CLEAR: lv_new, lv_err.
-
-    PERFORM to_plant USING ls_raw-f01 CHANGING lv_werks lv_err.
-    IF lv_err IS NOT INITIAL.
-      PERFORM log USING lv_row lv_werks lv_new lv_blank gc_err lv_err.
-      CONTINUE.
-    ENDIF.
-*EOC By Arnav on 31/08/26
+    lv_row = sy-tabix.
+    PERFORM to_plant    USING ls_raw-f01 CHANGING lv_werks.
     PERFORM to_material USING ls_raw-f02 CHANGING lv_new.
     PERFORM to_material USING ls_raw-f03 CHANGING lv_old1.
     PERFORM to_material USING ls_raw-f04 CHANGING lv_old2.
@@ -670,14 +473,6 @@ FORM do_tracking.
       CONTINUE.
     ENDIF.
 
-*BOC By Arnav on 31/08/26
-    PERFORM lock_row USING 'ZPPT_MAT_TRACK' lv_werks CHANGING lv_err.
-    IF lv_err IS NOT INITIAL.
-      PERFORM log USING lv_row lv_werks lv_new lv_blank gc_err lv_err.
-      CONTINUE.
-    ENDIF.
-*EOC By Arnav on 31/08/26
-
     CLEAR: ls_trk, ls_old, lv_ex.
     SELECT SINGLE * FROM zppt_mat_track INTO @ls_old
       WHERE werks = @lv_werks AND new_matnr = @lv_new.
@@ -711,11 +506,6 @@ ENDFORM.
 
 
 *&---------------------------------------------------------------------*
-*BOC By Arnav on 31/08/26
-* The two reads below stay inside the row loop on purpose. They have to
-* see the rows written earlier in this same file, so they cannot be
-* pre-read with FOR ALL ENTRIES the way MARC is.
-*EOC By Arnav on 31/08/26
 FORM check_chain USING pv_werks TYPE werks_d
                        pv_old1  TYPE matnr
                        pv_old2  TYPE matnr
@@ -761,29 +551,10 @@ FORM do_exclusion.
         lv_txt   TYPE string,
         lv_blank TYPE char12.
 
-*BOC By Arnav on 31/08/26
-  DATA ls_row TYPE ty_row.
+  LOOP AT gt_raw INTO ls_raw.
 
-  PERFORM prefetch USING 1 2 abap_false.
-*EOC By Arnav on 31/08/26
-
-*BOC By Arnav on 31/08/26
-*  LOOP AT gt_raw INTO ls_raw.
-*
-*    lv_row = sy-tabix.
-*    PERFORM to_plant    USING ls_raw-f01 CHANGING lv_werks.
-  LOOP AT gt_row INTO ls_row.
-
-    lv_row = ls_row-srow.
-    ls_raw = ls_row-data.
-    CLEAR: lv_matnr, lv_err.
-
-    PERFORM to_plant USING ls_raw-f01 CHANGING lv_werks lv_err.
-    IF lv_err IS NOT INITIAL.
-      PERFORM log USING lv_row lv_werks lv_matnr lv_blank gc_err lv_err.
-      CONTINUE.
-    ENDIF.
-*EOC By Arnav on 31/08/26
+    lv_row = sy-tabix.
+    PERFORM to_plant    USING ls_raw-f01 CHANGING lv_werks.
     PERFORM to_material USING ls_raw-f02 CHANGING lv_matnr.
 
     PERFORM check_marc USING lv_werks lv_matnr CHANGING lv_err.
@@ -791,14 +562,6 @@ FORM do_exclusion.
       PERFORM log USING lv_row lv_werks lv_matnr lv_blank gc_err lv_err.
       CONTINUE.
     ENDIF.
-
-*BOC By Arnav on 31/08/26
-    PERFORM lock_row USING 'ZPPT_MAT_EXCL' lv_werks CHANGING lv_err.
-    IF lv_err IS NOT INITIAL.
-      PERFORM log USING lv_row lv_werks lv_matnr lv_blank gc_err lv_err.
-      CONTINUE.
-    ENDIF.
-*EOC By Arnav on 31/08/26
 
     CLEAR: ls_exc, ls_old, lv_ex.
     SELECT SINGLE * FROM zppt_mat_excl INTO @ls_old
@@ -853,10 +616,7 @@ FORM do_history.
         lv_ex    TYPE abap_bool,
         lv_err   TYPE string,
         lv_txt   TYPE string,
-*BOC By Arnav on 31/08/26
-*        lv_tmp   TYPE char40,
-*       Its only use, the unit of measure cell, is now done by TO_UOM
-*EOC By Arnav on 31/08/26
+        lv_tmp   TYPE char40,
         lv_per   TYPE char12,
         lv_i     TYPE i,
         lv_src   TYPE i,
@@ -865,31 +625,10 @@ FORM do_history.
   FIELD-SYMBOLS: <lv_in>  TYPE any,
                  <lv_out> TYPE any.
 
-*BOC By Arnav on 31/08/26
-  DATA: ls_row TYPE ty_row,
-        lv_ok  TYPE abap_bool,
-        lv_bad TYPE i.
+  LOOP AT gt_raw INTO ls_raw.
 
-  PERFORM prefetch USING 1 2 abap_false.
-*EOC By Arnav on 31/08/26
-
-*BOC By Arnav on 31/08/26
-*  LOOP AT gt_raw INTO ls_raw.
-*
-*    lv_row = sy-tabix.
-*    PERFORM to_plant    USING ls_raw-f01 CHANGING lv_werks.
-  LOOP AT gt_row INTO ls_row.
-
-    lv_row = ls_row-srow.
-    ls_raw = ls_row-data.
-    CLEAR: lv_matnr, lv_err, lv_per.
-
-    PERFORM to_plant USING ls_raw-f01 CHANGING lv_werks lv_err.
-    IF lv_err IS NOT INITIAL.
-      PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
-      CONTINUE.
-    ENDIF.
-*EOC By Arnav on 31/08/26
+    lv_row = sy-tabix.
+    PERFORM to_plant    USING ls_raw-f01 CHANGING lv_werks.
     PERFORM to_material USING ls_raw-f02 CHANGING lv_matnr.
 
     lv_per = ls_raw-f03.
@@ -901,10 +640,7 @@ FORM do_history.
       CONTINUE.
     ENDIF.
 
-*BOC By Arnav on 31/08/26
-*    PERFORM to_int USING ls_raw-f03 CHANGING lv_year.
-    PERFORM to_int USING ls_raw-f03 CHANGING lv_year lv_ok.
-*EOC By Arnav on 31/08/26
+    PERFORM to_int USING ls_raw-f03 CHANGING lv_year.
     IF lv_year < 1900 OR lv_year > 2999.
       lv_err = 'Year must be the four digit year the financial year starts in'.
       PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
@@ -912,25 +648,9 @@ FORM do_history.
     ENDIF.
     lv_gjahr = lv_year.
 
-*BOC By Arnav on 31/08/26
-*    lv_tmp = ls_raw-f16.
-*    CONDENSE lv_tmp.
-*    lv_meins = to_upper( lv_tmp ).
-*   A unit that does not exist was stored exactly as typed and only
-*   showed up later, as a wrong or failed tonnage conversion. It is
-*   checked, and converted from its external form, here.
-    PERFORM to_uom USING ls_raw-f16 CHANGING lv_meins lv_err.
-    IF lv_err IS NOT INITIAL.
-      PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
-      CONTINUE.
-    ENDIF.
-
-    PERFORM lock_row USING 'ZPPT_SLS_HIST' lv_werks CHANGING lv_err.
-    IF lv_err IS NOT INITIAL.
-      PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
-      CONTINUE.
-    ENDIF.
-*EOC By Arnav on 31/08/26
+    lv_tmp = ls_raw-f16.
+    CONDENSE lv_tmp.
+    lv_meins = to_upper( lv_tmp ).
 
     CLEAR: ls_hist, ls_old, lv_ex.
     SELECT SINGLE * FROM zppt_sls_hist INTO @ls_old
@@ -947,9 +667,6 @@ FORM do_history.
 
 *   Columns 4 to 15 of the file hold M01 to M12, April first
     CLEAR lv_tot.
-*BOC By Arnav on 31/08/26
-    CLEAR lv_bad.
-*EOC By Arnav on 31/08/26
     lv_i = 1.
     WHILE lv_i <= 12.
 
@@ -960,44 +677,17 @@ FORM do_history.
       ASSIGN COMPONENT lv_src OF STRUCTURE ls_raw  TO <lv_in>.
       ASSIGN COMPONENT lv_fld OF STRUCTURE ls_hist TO <lv_out>.
 
-*BOC By Arnav on 31/08/26
-*      IF <lv_in> IS ASSIGNED AND <lv_out> IS ASSIGNED.
-*        PERFORM to_dec USING <lv_in> CHANGING lv_qty.
-*        <lv_out> = lv_qty.
-*        lv_tot   = lv_tot + lv_qty.
-*      ENDIF.
-*     A month cell that was not a number was loaded as a zero without a
-*     word to the user. The row is rejected now and the column named.
       IF <lv_in> IS ASSIGNED AND <lv_out> IS ASSIGNED.
-        PERFORM to_dec USING <lv_in> CHANGING lv_qty lv_ok.
-        IF lv_ok = abap_false.
-          lv_bad = lv_i.
-          EXIT.
-        ENDIF.
+        PERFORM to_dec USING <lv_in> CHANGING lv_qty.
         <lv_out> = lv_qty.
         lv_tot   = lv_tot + lv_qty.
       ENDIF.
-*EOC By Arnav on 31/08/26
 
       lv_i = lv_i + 1.
     ENDWHILE.
 
-*BOC By Arnav on 31/08/26
-    IF lv_bad > 0.
-      lv_err = |Month column M{ lv_bad } is not a number, use a dot for | &&
-               |decimals and no commas|.
-      PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
-      CONTINUE.
-    ENDIF.
-*EOC By Arnav on 31/08/26
-
     IF lv_tot = 0.
-*BOC By Arnav on 31/08/26
-*      lv_err = 'All twelve monthly figures are zero or not numeric'.
-*     Not a number is reported on its own now, so this is only the
-*     all zero case
-      lv_err = 'All twelve monthly figures are zero'.
-*EOC By Arnav on 31/08/26
+      lv_err = 'All twelve monthly figures are zero or not numeric'.
       PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
       CONTINUE.
     ENDIF.
@@ -1045,35 +735,11 @@ FORM do_business USING pv_mode TYPE char1.
         lv_txt   TYPE string,
         lv_per   TYPE char12.
 
-*BOC By Arnav on 31/08/26
-  DATA: ls_row  TYPE ty_row,
-        lv_ok   TYPE abap_bool,
-        lv_ltab TYPE rstable-tabname,
-        lv_lkey TYPE rstable-varkey.
+  LOOP AT gt_raw INTO ls_raw.
 
-* The material is column 1 and the plant column 2 in these two layouts
-  PERFORM prefetch USING 2 1 abap_true.
-*EOC By Arnav on 31/08/26
-
-*BOC By Arnav on 31/08/26
-*  LOOP AT gt_raw INTO ls_raw.
-*
-*    lv_row = sy-tabix.
-*    PERFORM to_material USING ls_raw-f01 CHANGING lv_matnr.
-*    PERFORM to_plant    USING ls_raw-f02 CHANGING lv_werks.
-  LOOP AT gt_row INTO ls_row.
-
-    lv_row = ls_row-srow.
-    ls_raw = ls_row-data.
-    CLEAR: lv_matnr, lv_err, lv_per.
-
+    lv_row = sy-tabix.
     PERFORM to_material USING ls_raw-f01 CHANGING lv_matnr.
-    PERFORM to_plant    USING ls_raw-f02 CHANGING lv_werks lv_err.
-    IF lv_err IS NOT INITIAL.
-      PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
-      CONTINUE.
-    ENDIF.
-*EOC By Arnav on 31/08/26
+    PERFORM to_plant    USING ls_raw-f02 CHANGING lv_werks.
     PERFORM period_text USING pv_mode ls_raw-f03 CHANGING lv_per.
 
     PERFORM check_marc USING lv_werks lv_matnr CHANGING lv_err.
@@ -1082,30 +748,14 @@ FORM do_business USING pv_mode TYPE char1.
       CONTINUE.
     ENDIF.
 
-*BOC By Arnav on 31/08/26
-*   A material taken out of forecasting still accepted a business
-*   forecast, which the generation run then ignored
-    PERFORM check_excl USING lv_werks lv_matnr CHANGING lv_err.
-    IF lv_err IS NOT INITIAL.
-      PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
-      CONTINUE.
-    ENDIF.
-*EOC By Arnav on 31/08/26
-
-*BOC By Arnav on 31/08/26
-*    PERFORM to_int USING ls_raw-f03 CHANGING lv_pi.
-    PERFORM to_int USING ls_raw-f03 CHANGING lv_pi lv_ok.
-*EOC By Arnav on 31/08/26
+    PERFORM to_int USING ls_raw-f03 CHANGING lv_pi.
     PERFORM check_period USING pv_mode lv_pi CHANGING lv_err.
     IF lv_err IS NOT INITIAL.
       PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
       CONTINUE.
     ENDIF.
 
-*BOC By Arnav on 31/08/26
-*    PERFORM to_int USING ls_raw-f04 CHANGING lv_year.
-    PERFORM to_int USING ls_raw-f04 CHANGING lv_year lv_ok.
-*EOC By Arnav on 31/08/26
+    PERFORM to_int USING ls_raw-f04 CHANGING lv_year.
     IF lv_year < 1900 OR lv_year > 2999.
       lv_err = 'Year must be the four digit year the financial year starts in'.
       PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
@@ -1113,47 +763,12 @@ FORM do_business USING pv_mode TYPE char1.
     ENDIF.
     lv_gjahr = lv_year.
 
-*BOC By Arnav on 31/08/26
-*    PERFORM to_dec USING ls_raw-f05 CHANGING lv_qty.
-*   An empty cell, or a cell that was not a number, was written as a
-*   zero business forecast and reported back as created
-    IF ls_raw-f05 IS INITIAL.
-      lv_err = 'Sales forecast quantity is mandatory'.
-      PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
-      CONTINUE.
-    ENDIF.
-
-    PERFORM to_dec USING ls_raw-f05 CHANGING lv_qty lv_ok.
-    IF lv_ok = abap_false.
-      lv_err = 'Sales forecast quantity is not a number, use a dot for decimals'
-             && ' and no commas'.
-      PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
-      CONTINUE.
-    ENDIF.
-*EOC By Arnav on 31/08/26
+    PERFORM to_dec USING ls_raw-f05 CHANGING lv_qty.
     IF lv_qty < 0.
       lv_err = 'Sales forecast quantity cannot be negative'.
       PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
       CONTINUE.
     ENDIF.
-
-*BOC By Arnav on 31/08/26
-*   The plant and year are locked for the run before the row is read,
-*   so an upload and a second upload cannot read the same row and write
-*   it back over one another
-    IF pv_mode = 'Q'.
-      lv_ltab = 'ZPPT_FCST_QT'.
-    ELSE.
-      lv_ltab = 'ZPPT_FCST_MN'.
-    ENDIF.
-    CONCATENATE lv_werks lv_gjahr INTO lv_lkey SEPARATED BY '/'.
-
-    PERFORM lock_row USING lv_ltab lv_lkey CHANGING lv_err.
-    IF lv_err IS NOT INITIAL.
-      PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
-      CONTINUE.
-    ENDIF.
-*EOC By Arnav on 31/08/26
 
     CLEAR lv_ex.
 
@@ -1266,37 +881,13 @@ FORM do_change USING pv_mode TYPE char1.
         lv_per   TYPE char12,
         lv_yes   TYPE abap_bool.
 
-*BOC By Arnav on 31/08/26
-  DATA: ls_row  TYPE ty_row,
-        lv_ok   TYPE abap_bool,
-        lv_prev TYPE string,
-        lv_ltab TYPE rstable-tabname,
-        lv_lkey TYPE rstable-varkey.
-
-  PERFORM prefetch USING 2 1 abap_true.
-*EOC By Arnav on 31/08/26
-
   lv_yes = abap_true.
 
-*BOC By Arnav on 31/08/26
-*  LOOP AT gt_raw INTO ls_raw.
-*
-*    lv_row = sy-tabix.
-*    PERFORM to_material USING ls_raw-f01 CHANGING lv_matnr.
-*    PERFORM to_plant    USING ls_raw-f02 CHANGING lv_werks.
-  LOOP AT gt_row INTO ls_row.
+  LOOP AT gt_raw INTO ls_raw.
 
-    lv_row = ls_row-srow.
-    ls_raw = ls_row-data.
-    CLEAR: lv_matnr, lv_err, lv_per.
-
+    lv_row = sy-tabix.
     PERFORM to_material USING ls_raw-f01 CHANGING lv_matnr.
-    PERFORM to_plant    USING ls_raw-f02 CHANGING lv_werks lv_err.
-    IF lv_err IS NOT INITIAL.
-      PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
-      CONTINUE.
-    ENDIF.
-*EOC By Arnav on 31/08/26
+    PERFORM to_plant    USING ls_raw-f02 CHANGING lv_werks.
     PERFORM period_text USING pv_mode ls_raw-f03 CHANGING lv_per.
 
     PERFORM check_marc USING lv_werks lv_matnr CHANGING lv_err.
@@ -1305,28 +896,14 @@ FORM do_change USING pv_mode TYPE char1.
       CONTINUE.
     ENDIF.
 
-*BOC By Arnav on 31/08/26
-    PERFORM check_excl USING lv_werks lv_matnr CHANGING lv_err.
-    IF lv_err IS NOT INITIAL.
-      PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
-      CONTINUE.
-    ENDIF.
-*EOC By Arnav on 31/08/26
-
-*BOC By Arnav on 31/08/26
-*    PERFORM to_int USING ls_raw-f03 CHANGING lv_pi.
-    PERFORM to_int USING ls_raw-f03 CHANGING lv_pi lv_ok.
-*EOC By Arnav on 31/08/26
+    PERFORM to_int USING ls_raw-f03 CHANGING lv_pi.
     PERFORM check_period USING pv_mode lv_pi CHANGING lv_err.
     IF lv_err IS NOT INITIAL.
       PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
       CONTINUE.
     ENDIF.
 
-*BOC By Arnav on 31/08/26
-*    PERFORM to_int USING ls_raw-f04 CHANGING lv_year.
-    PERFORM to_int USING ls_raw-f04 CHANGING lv_year lv_ok.
-*EOC By Arnav on 31/08/26
+    PERFORM to_int USING ls_raw-f04 CHANGING lv_year.
     IF lv_year < 1900 OR lv_year > 2999.
       lv_err = 'Year must be the four digit year the financial year starts in'.
       PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
@@ -1343,40 +920,12 @@ FORM do_change USING pv_mode TYPE char1.
       CONTINUE.
     ENDIF.
 
-*BOC By Arnav on 31/08/26
-*    PERFORM to_dec USING ls_raw-f05 CHANGING lv_qty.
-*    IF lv_qty = 0.
-*      lv_err = 'Change quantity is zero or not numeric, nothing to apply'.
-*   Not a number and a genuine zero were reported with the same
-*   sentence, which sent the user looking for the wrong thing
-    PERFORM to_dec USING ls_raw-f05 CHANGING lv_qty lv_ok.
-    IF lv_ok = abap_false.
-      lv_err = 'Change quantity is not a number, use a dot for decimals and no commas'.
-      PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
-      CONTINUE.
-    ENDIF.
-
+    PERFORM to_dec USING ls_raw-f05 CHANGING lv_qty.
     IF lv_qty = 0.
-      lv_err = 'Change quantity is zero, there is nothing to apply'.
-*EOC By Arnav on 31/08/26
+      lv_err = 'Change quantity is zero or not numeric, nothing to apply'.
       PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
       CONTINUE.
     ENDIF.
-
-*BOC By Arnav on 31/08/26
-    IF pv_mode = 'Q'.
-      lv_ltab = 'ZPPT_FCST_QT'.
-    ELSE.
-      lv_ltab = 'ZPPT_FCST_MN'.
-    ENDIF.
-    CONCATENATE lv_werks lv_gjahr INTO lv_lkey SEPARATED BY '/'.
-
-    PERFORM lock_row USING lv_ltab lv_lkey CHANGING lv_err.
-    IF lv_err IS NOT INITIAL.
-      PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
-      CONTINUE.
-    ENDIF.
-*EOC By Arnav on 31/08/26
 
 *   A change adjusts a forecast that already exists. If it is not there
 *   the row is rejected rather than a bare change record being created.
@@ -1393,20 +942,6 @@ FORM do_change USING pv_mode TYPE char1.
         PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
         CONTINUE.
       ENDIF.
-
-*BOC By Arnav on 31/08/26
-*     A change REPLACES the additional quantity, it does not add to it,
-*     so loading the same file twice is harmless. That also means a
-*     change already standing against the period is overwritten, which
-*     used to happen silently. The log says so now.
-* ASSUMPTION: replace, not accumulate. Two separate changes for one
-* period therefore keep only the last quantity and reason. Confirm with
-* the functional team before the first live load.
-      CLEAR lv_prev.
-      IF ls_qt-bus_fcst_add <> 0 AND ls_qt-bus_fcst_add <> lv_qty.
-        lv_prev = |, previous change { ls_qt-bus_fcst_add } replaced|.
-      ENDIF.
-*EOC By Arnav on 31/08/26
 
       ls_qt-bus_fcst_add = lv_qty.
       ls_qt-reason       = lv_rsn.
@@ -1434,11 +969,7 @@ FORM do_change USING pv_mode TYPE char1.
         ENDIF.
       ENDIF.
 
-*BOC By Arnav on 31/08/26
-*      lv_txt = |Change { lv_qty }, final quantity now { lv_total }, reason { lv_rsn }|.
-      lv_txt = |Change { lv_qty }, final quantity now { lv_total }, | &&
-               |reason { lv_rsn }{ lv_prev }|.
-*EOC By Arnav on 31/08/26
+      lv_txt = |Change { lv_qty }, final quantity now { lv_total }, reason { lv_rsn }|.
 
     ELSE.
 
@@ -1453,13 +984,6 @@ FORM do_change USING pv_mode TYPE char1.
         PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
         CONTINUE.
       ENDIF.
-
-*BOC By Arnav on 31/08/26
-      CLEAR lv_prev.
-      IF ls_mn-bus_fcst_add <> 0 AND ls_mn-bus_fcst_add <> lv_qty.
-        lv_prev = |, previous change { ls_mn-bus_fcst_add } replaced|.
-      ENDIF.
-*EOC By Arnav on 31/08/26
 
       ls_mn-bus_fcst_add = lv_qty.
       ls_mn-reason       = lv_rsn.
@@ -1485,11 +1009,7 @@ FORM do_change USING pv_mode TYPE char1.
         ENDIF.
       ENDIF.
 
-*BOC By Arnav on 31/08/26
-*      lv_txt = |Change { lv_qty }, final quantity now { lv_total }, reason { lv_rsn }|.
-      lv_txt = |Change { lv_qty }, final quantity now { lv_total }, | &&
-               |reason { lv_rsn }{ lv_prev }|.
-*EOC By Arnav on 31/08/26
+      lv_txt = |Change { lv_qty }, final quantity now { lv_total }, reason { lv_rsn }|.
 
     ENDIF.
 
@@ -1578,18 +1098,9 @@ FORM period_text USING pv_mode TYPE char1
         lv_nam TYPE char3,
         lv_num TYPE char2.
 
-*BOC By Arnav on 31/08/26
-  DATA lv_ok TYPE abap_bool.
-*EOC By Arnav on 31/08/26
-
   CLEAR cv_txt.
 
-*BOC By Arnav on 31/08/26
-*  PERFORM to_int USING pv_in CHANGING lv_i.
-* An unreadable period simply leaves the heading blank here, the row
-* itself is rejected by CHECK_PERIOD
-  PERFORM to_int USING pv_in CHANGING lv_i lv_ok.
-*EOC By Arnav on 31/08/26
+  PERFORM to_int USING pv_in CHANGING lv_i.
 
   IF pv_mode = 'Q'.
     IF lv_i >= 1 AND lv_i <= 4.
@@ -1616,10 +1127,8 @@ FORM check_marc USING pv_werks TYPE werks_d
                       pv_matnr TYPE matnr
                 CHANGING pv_err TYPE string.
 
-*BOC By Arnav on 31/08/26
-*  DATA: lv_hit TYPE matnr,
-*        lv_ok  TYPE abap_bool.
-*EOC By Arnav on 31/08/26
+  DATA: lv_hit TYPE matnr,
+        lv_ok  TYPE abap_bool.
 
   CLEAR pv_err.
 
@@ -1628,79 +1137,32 @@ FORM check_marc USING pv_werks TYPE werks_d
     RETURN.
   ENDIF.
 
-*BOC By Arnav on 31/08/26
-*  SELECT SINGLE matnr FROM marc INTO @lv_hit
-*    WHERE werks = @pv_werks AND matnr = @pv_matnr.
-*
-*  IF sy-subrc <> 0.
-*    pv_err = |Material { pv_matnr } is not extended to plant { pv_werks }|.
-*    RETURN.
-*  ENDIF.
-*
-*  lv_ok = zcl_pp_fcst_util=>check_authority( iv_werks = pv_werks
-*                                             iv_actvt = '02' ).
-*  IF lv_ok = abap_false.
-*    pv_err = |No authorisation to maintain forecast data for plant { pv_werks }|.
-*  ENDIF.
-*
-* MARC was read once per row and the authorisation object was checked
-* once per row as well, for what is in practice a handful of plants.
-* Both now come out of the buffers PREFETCH fills in one pass.
-  READ TABLE gt_marc TRANSPORTING NO FIELDS
-       WITH TABLE KEY werks = pv_werks matnr = pv_matnr.
+  SELECT SINGLE matnr FROM marc INTO @lv_hit
+    WHERE werks = @pv_werks AND matnr = @pv_matnr.
+
   IF sy-subrc <> 0.
     pv_err = |Material { pv_matnr } is not extended to plant { pv_werks }|.
     RETURN.
   ENDIF.
 
-  PERFORM check_auth USING pv_werks CHANGING pv_err.
-*EOC By Arnav on 31/08/26
+  lv_ok = zcl_pp_fcst_util=>check_authority( iv_werks = pv_werks
+                                             iv_actvt = '02' ).
+  IF lv_ok = abap_false.
+    pv_err = |No authorisation to maintain forecast data for plant { pv_werks }|.
+  ENDIF.
 
 ENDFORM.
 
 
 *&---------------------------------------------------------------------*
-*BOC By Arnav on 31/08/26
-*FORM to_plant USING pv_in TYPE any CHANGING cv_werks TYPE werks_d.
-*
-** Plant carries no conversion exit, so it is taken as typed
-*  CLEAR cv_werks.
-*  cv_werks = pv_in.
-*  CONDENSE cv_werks.
-*
-*ENDFORM.
-*
-* The 40 character cell was assigned straight to the 4 character plant,
-* so it was cut to four characters BEFORE the CONDENSE ran. A cell
-* holding " 1001" became " 100" and then "100", and the row was
-* rejected against a plant the user never typed. The cell is condensed
-* at full width first, and one longer than a plant code is refused
-* rather than silently shortened.
-FORM to_plant USING pv_in TYPE any
-              CHANGING cv_werks TYPE werks_d
-                       cv_err   TYPE string.
-
-  DATA lv_in TYPE char40.
+FORM to_plant USING pv_in TYPE any CHANGING cv_werks TYPE werks_d.
 
 * Plant carries no conversion exit, so it is taken as typed
-  CLEAR: cv_werks, cv_err.
-
-  lv_in = pv_in.
-  CONDENSE lv_in.
-
-  IF lv_in IS INITIAL.
-    RETURN.
-  ENDIF.
-
-  IF strlen( lv_in ) > 4.
-    cv_err = |{ lv_in } is longer than a plant code|.
-    RETURN.
-  ENDIF.
-
-  cv_werks = lv_in.
+  CLEAR cv_werks.
+  cv_werks = pv_in.
+  CONDENSE cv_werks.
 
 ENDFORM.
-*EOC By Arnav on 31/08/26
 
 
 *&---------------------------------------------------------------------*
@@ -1729,122 +1191,46 @@ ENDFORM.
 
 
 *&---------------------------------------------------------------------*
-*BOC By Arnav on 31/08/26
-*FORM to_dec USING pv_in TYPE any CHANGING cv_out TYPE any.
-*
-*  DATA lv_in TYPE string.
-*
-*  CLEAR cv_out.
-*
-*  lv_in = pv_in.
-*  CONDENSE lv_in NO-GAPS.
-*  CHECK lv_in IS NOT INITIAL.
-*
-** Thousand separators from a spreadsheet export are dropped
-*  REPLACE ALL OCCURRENCES OF ',' IN lv_in WITH ''.
-*
-*  TRY.
-*      cv_out = lv_in.
-*    CATCH cx_sy_conversion_no_number.
-*      CLEAR cv_out.
-*  ENDTRY.
-*
-*ENDFORM.
-*
-* A cell that was not a number came back as a silent zero, was written
-* to the database as a zero quantity and reported to the user as a
-* successful load. The caller is told now whether the cell could be
-* read. An empty cell is a valid zero and is reported as readable - the
-* callers that need a figure check the cell for empty themselves.
-FORM to_dec USING pv_in TYPE any
-            CHANGING cv_out TYPE any
-                     cv_ok  TYPE abap_bool.
+FORM to_dec USING pv_in TYPE any CHANGING cv_out TYPE any.
 
   DATA lv_in TYPE string.
 
-  CLEAR: cv_out, cv_ok.
+  CLEAR cv_out.
 
   lv_in = pv_in.
   CONDENSE lv_in NO-GAPS.
+  CHECK lv_in IS NOT INITIAL.
 
-  IF lv_in IS INITIAL.
-    cv_ok = abap_true.
-    RETURN.
-  ENDIF.
-
-** Thousand separators from a spreadsheet export are dropped
-*  REPLACE ALL OCCURRENCES OF ',' IN lv_in WITH ''.
-*
-* Dropping every comma was safe only if the comma was always a thousand
-* separator. Where the decimal separator is a comma it is not, and
-* "1,5" was loaded as 15 - a quantity multiplied by ten, written to the
-* database, and reported to the user as a successful load. The two
-* cases cannot be told apart from the cell alone: "12,000" is twelve
-* thousand in one locale and twelve in another. A cell holding a comma
-* is refused instead of guessed at, and the message says what to do.
-  IF lv_in CS ','.
-    CLEAR cv_out.
-    cv_ok = abap_false.
-    RETURN.
-  ENDIF.
+* Thousand separators from a spreadsheet export are dropped
+  REPLACE ALL OCCURRENCES OF ',' IN lv_in WITH ''.
 
   TRY.
       cv_out = lv_in.
-      cv_ok  = abap_true.
     CATCH cx_sy_conversion_no_number.
       CLEAR cv_out.
-      cv_ok = abap_false.
   ENDTRY.
 
 ENDFORM.
-*EOC By Arnav on 31/08/26
 
 
 *&---------------------------------------------------------------------*
-*BOC By Arnav on 31/08/26
-*FORM to_int USING pv_in TYPE any CHANGING cv_out TYPE i.
-*
-*  DATA lv_in TYPE string.
-*
-*  CLEAR cv_out.
-*
-*  lv_in = pv_in.
-*  CONDENSE lv_in NO-GAPS.
-*  CHECK lv_in IS NOT INITIAL.
-*
-*  TRY.
-*      cv_out = lv_in.
-*    CATCH cx_sy_conversion_no_number.
-*      CLEAR cv_out.
-*  ENDTRY.
-*
-*ENDFORM.
-FORM to_int USING pv_in TYPE any
-            CHANGING cv_out TYPE i
-                     cv_ok  TYPE abap_bool.
+FORM to_int USING pv_in TYPE any CHANGING cv_out TYPE i.
 
   DATA lv_in TYPE string.
 
-  CLEAR: cv_out, cv_ok.
+  CLEAR cv_out.
 
   lv_in = pv_in.
   CONDENSE lv_in NO-GAPS.
-
-  IF lv_in IS INITIAL.
-    cv_ok = abap_true.
-    RETURN.
-  ENDIF.
+  CHECK lv_in IS NOT INITIAL.
 
   TRY.
       cv_out = lv_in.
-      cv_ok  = abap_true.
     CATCH cx_sy_conversion_no_number.
       CLEAR cv_out.
-      cv_ok = abap_false.
   ENDTRY.
 
 ENDFORM.
-*EOC By Arnav on 31/08/26
 
 
 *&---------------------------------------------------------------------*
@@ -2022,247 +1408,3 @@ FORM txt USING po_cols TYPE REF TO cl_salv_columns_table
   ENDTRY.
 
 ENDFORM.
-
-
-*BOC By Arnav on 31/08/26
-*&---------------------------------------------------------------------*
-*& New routines added with the corrections of 31/08/26
-*&---------------------------------------------------------------------*
-
-*&---------------------------------------------------------------------*
-*& Plant and material existence, and the exclusion list, were read one
-*& row at a time inside the processing loops. They are read once for the
-*& whole file here instead. The plant and the material sit in different
-*& columns depending on the upload type, so the caller says which.
-*&---------------------------------------------------------------------*
-FORM prefetch USING pv_pcol TYPE i
-                    pv_mcol TYPE i
-                    pv_excl TYPE abap_bool.
-
-  DATA: ls_row TYPE ty_row,
-        ls_key TYPE ty_key,
-        lt_key TYPE STANDARD TABLE OF ty_key,
-        lv_dum TYPE string.
-
-  FIELD-SYMBOLS: <lv_p> TYPE any,
-                 <lv_m> TYPE any.
-
-  CLEAR: gt_marc, gt_excl, gt_auth, lt_key.
-
-  LOOP AT gt_row INTO ls_row.
-
-    UNASSIGN: <lv_p>, <lv_m>.
-    ASSIGN COMPONENT pv_pcol OF STRUCTURE ls_row-data TO <lv_p>.
-    ASSIGN COMPONENT pv_mcol OF STRUCTURE ls_row-data TO <lv_m>.
-    CHECK <lv_p> IS ASSIGNED AND <lv_m> IS ASSIGNED.
-
-*   Normalised exactly as the processing loop will normalise it, or the
-*   buffer would be read with a key it does not hold
-    CLEAR ls_key.
-    PERFORM to_plant    USING <lv_p> CHANGING ls_key-werks lv_dum.
-    PERFORM to_material USING <lv_m> CHANGING ls_key-matnr.
-
-    CHECK ls_key-werks IS NOT INITIAL AND ls_key-matnr IS NOT INITIAL.
-    APPEND ls_key TO lt_key.
-
-  ENDLOOP.
-
-* The SORT sits outside the loop and compares exactly the two fields
-* the DELETE compares
-  SORT lt_key BY werks matnr.
-  DELETE ADJACENT DUPLICATES FROM lt_key COMPARING werks matnr.
-
-  CHECK lt_key IS NOT INITIAL.
-
-  SELECT werks, matnr FROM marc
-    FOR ALL ENTRIES IN @lt_key
-    WHERE werks = @lt_key-werks
-      AND matnr = @lt_key-matnr
-    INTO TABLE @gt_marc.
-
-* Only the two forecast uploads care about the exclusion list. A
-* category, a code change or a history row is still allowed for a
-* material that is out of forecasting.
-  CHECK pv_excl = abap_true.
-
-  SELECT werks, matnr FROM zppt_mat_excl
-    FOR ALL ENTRIES IN @lt_key
-    WHERE werks = @lt_key-werks
-      AND matnr = @lt_key-matnr
-    INTO TABLE @gt_excl.
-
-ENDFORM.
-
-
-*&---------------------------------------------------------------------*
-*& The authorisation object is checked once per plant, not once per row
-*&---------------------------------------------------------------------*
-FORM check_auth USING pv_werks TYPE werks_d
-                CHANGING pv_err TYPE string.
-
-  DATA ls_auth TYPE ty_auth.
-
-  CLEAR pv_err.
-
-  READ TABLE gt_auth INTO ls_auth WITH TABLE KEY werks = pv_werks.
-  IF sy-subrc <> 0.
-    CLEAR ls_auth.
-    ls_auth-werks = pv_werks.
-    ls_auth-ok    = zcl_pp_fcst_util=>check_authority( iv_werks = pv_werks
-                                                       iv_actvt = '02' ).
-    INSERT ls_auth INTO TABLE gt_auth.
-  ENDIF.
-
-  IF ls_auth-ok = abap_false.
-    pv_err = |No authorisation to maintain forecast data for plant { pv_werks }|.
-  ENDIF.
-
-ENDFORM.
-
-
-*&---------------------------------------------------------------------*
-*& A material taken out of forecasting still accepted a business
-*& forecast and a forecast change, both of which the generation run then
-*& ignored - the figures sat in the table doing nothing
-*&---------------------------------------------------------------------*
-FORM check_excl USING pv_werks TYPE werks_d
-                      pv_matnr TYPE matnr
-                CHANGING pv_err TYPE string.
-
-  CLEAR pv_err.
-
-  READ TABLE gt_excl TRANSPORTING NO FIELDS
-       WITH TABLE KEY werks = pv_werks matnr = pv_matnr.
-  IF sy-subrc = 0.
-    pv_err = |Material { pv_matnr } is excluded from forecasting|.
-  ENDIF.
-
-ENDFORM.
-
-
-*&---------------------------------------------------------------------*
-*& The unit of measure was stored exactly as typed. An entry that is not
-*& a unit at all went in and only showed up later as a wrong or failed
-*& tonnage conversion. The standard conversion exit both validates it
-*& and turns the external entry into the internal code.
-*&---------------------------------------------------------------------*
-FORM to_uom USING pv_in TYPE any
-            CHANGING cv_meins TYPE meins
-                     cv_err   TYPE string.
-
-  DATA lv_in TYPE char40.
-
-  CLEAR: cv_meins, cv_err.
-
-  lv_in = pv_in.
-  CONDENSE lv_in.
-  lv_in = to_upper( lv_in ).
-
-  IF lv_in IS INITIAL.
-    cv_err = 'Unit of measure is mandatory'.
-    RETURN.
-  ENDIF.
-
-  CALL FUNCTION 'CONVERSION_EXIT_CUNIT_INPUT'
-    EXPORTING  input          = lv_in
-               language       = sy-langu
-    IMPORTING  output         = cv_meins
-    EXCEPTIONS unit_not_found = 1
-               OTHERS         = 2.
-
-  IF sy-subrc <> 0.
-    CLEAR cv_meins.
-    cv_err = |Unit of measure { lv_in } is not defined|.
-  ENDIF.
-
-ENDFORM.
-
-
-*&---------------------------------------------------------------------*
-*& Nothing locked anything. Two uploads, or an upload and the forecast
-*& screen, could read the same row and write it back over each other.
-*& The generic table lock is used so no new lock object is needed, at
-*& plant level for the master data tables and at plant and year level
-*& for the forecast tables.
-*&
-*& " ASSUMPTION: ZCL_PP_FCST does not take this lock yet, so this
-*& protects one upload against another but not against a save from
-*& ZFCST. The same call has to go into the class save for the cover to
-*& be complete.
-*&---------------------------------------------------------------------*
-FORM lock_row USING pv_tab TYPE any
-                    pv_key TYPE any
-              CHANGING pv_err TYPE string.
-
-  DATA: ls_lock TYPE ty_lock,
-        lv_tab  TYPE rstable-tabname,
-        lv_key  TYPE rstable-varkey.
-
-  CLEAR pv_err.
-
-* A test run writes nothing, so it takes nothing away from anybody else
-  IF p_test = 'X'.
-    RETURN.
-  ENDIF.
-
-  lv_tab = pv_tab.
-  lv_key = pv_key.
-
-* The lock is taken once per table and key for the whole run. The same
-* key appears on many rows of one file and the lock table is a limited
-* resource, so the outcome is remembered instead of the enqueue server
-* being asked again.
-  READ TABLE gt_lock INTO ls_lock
-       WITH TABLE KEY tabname = lv_tab varkey = lv_key.
-  IF sy-subrc = 0.
-    IF ls_lock-ok = abap_false.
-      CONCATENATE 'Being loaded by another user:' lv_key
-             INTO pv_err SEPARATED BY space.
-    ENDIF.
-    RETURN.
-  ENDIF.
-
-  CALL FUNCTION 'ENQUEUE_E_TABLE'
-    EXPORTING  mode_rstable   = 'E'
-               tabname        = lv_tab
-               varkey         = lv_key
-               _scope         = '1'
-    EXCEPTIONS foreign_lock   = 1
-               system_failure = 2
-               OTHERS         = 3.
-
-  CLEAR ls_lock.
-  ls_lock-tabname = lv_tab.
-  ls_lock-varkey  = lv_key.
-
-  IF sy-subrc = 0.
-    ls_lock-ok = abap_true.
-  ELSE.
-    ls_lock-ok = abap_false.
-    CONCATENATE 'Being loaded by another user:' lv_key
-           INTO pv_err SEPARATED BY space.
-  ENDIF.
-
-  INSERT ls_lock INTO TABLE gt_lock.
-
-ENDFORM.
-
-
-*&---------------------------------------------------------------------*
-*& _SCOPE 1 keeps the lock past COMMIT WORK, so it is given back here.
-*& This report holds no other lock, so releasing all of them is safe.
-*&---------------------------------------------------------------------*
-FORM unlock_all.
-
-  IF p_test = 'X'.
-    RETURN.
-  ENDIF.
-
-  CHECK gt_lock IS NOT INITIAL.
-
-  CALL FUNCTION 'DEQUEUE_ALL'.
-
-  CLEAR gt_lock.
-
-ENDFORM.
-*EOC By Arnav on 31/08/26

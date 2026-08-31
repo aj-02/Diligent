@@ -37,16 +37,6 @@ ZFORECAST (Adhesive), Astral / UDAY, built to `Forecast Template-Adhesive.xlsx` 
 - `ZPPT_FCST_CFG` holds what the document hardcodes (VKORG default 1100, BWART default 601,
   legacy TVARVC name) so config changes need no code change. MTS/MTO lives on
   `ZPPT_PROD_CAT`, not in a table of its own.
-- **`ZPP_FORECAST_UPLOAD`, since 31/08/26.** A row whose first cell starts with `*` is
-  ignored, which is how the example row in the downloaded template is written — do not
-  "fix" that by writing the example row as plain data. Plant, MARC and the authorisation
-  check are read once per run by `PREFETCH`, which is told which columns hold the plant
-  and the material (1/2 for upload types 1 to 4, 2/1 for types 5 to 8) — a new upload type
-  with a different layout has to pass its own column numbers. The generic table lock
-  (`ENQUEUE_E_TABLE`, `_SCOPE 1`) is taken once per plant, or per plant and year for the
-  forecast tables, and released by `DEQUEUE_ALL` after the `COMMIT`; **`ZCL_PP_FCST` does
-  not take it yet**, so an upload is protected against another upload but not against a
-  save from ZFCST.
 - Do not mix DDIC or class names with v1 — the inventories genuinely differ (see
   `zpp_forecast/NOTES.md`).
 

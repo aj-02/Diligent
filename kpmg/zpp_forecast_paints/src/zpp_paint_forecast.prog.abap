@@ -50,6 +50,7 @@ DATA: gt_annual  TYPE zcl_pp_pfcst=>tt_annual,
       gt_quarter TYPE zcl_pp_pfcst=>tt_quarter,
       gt_month   TYPE zcl_pp_pfcst=>tt_month,
       go_alv     TYPE REF TO cl_salv_table,
+      go_fcst    TYPE REF TO zcl_pp_pfcst,
       gv_mode    TYPE char1.
 
 * Financial year, quarter and period the headings are built from. In
@@ -190,7 +191,7 @@ CLASS lcl_alv IMPLEMENTATION.
           APPEND ls_a TO lt_a.
         ENDLOOP.
 
-        lv_no = zcl_pp_pfcst=>save_annual( it_data = lt_a
+        lv_no = go_fcst->save_annual( it_data = lt_a
                                            iv_fyear = gv_hfy ).
 
         IF lv_no IS INITIAL.
@@ -219,7 +220,7 @@ CLASS lcl_alv IMPLEMENTATION.
           APPEND ls_q TO lt_q.
         ENDLOOP.
 
-        lv_no = zcl_pp_pfcst=>save_quarter( it_data = lt_q ).
+        lv_no = go_fcst->save_quarter( it_data = lt_q ).
 
         IF lv_no IS INITIAL.
           MESSAGE s029 DISPLAY LIKE 'E'.
@@ -246,7 +247,7 @@ CLASS lcl_alv IMPLEMENTATION.
           APPEND ls_m TO lt_m.
         ENDLOOP.
 
-        lv_no = zcl_pp_pfcst=>save_month( it_data = lt_m ).
+        lv_no = go_fcst->save_month( it_data = lt_m ).
 
         IF lv_no IS INITIAL.
           MESSAGE s029 DISPLAY LIKE 'E'.
@@ -515,13 +516,17 @@ FORM generate.
                         WHEN p_qtr = abap_true THEN gc_mode_qtr
                         ELSE                        gc_mode_mth ).
 
+  IF go_fcst IS NOT BOUND.
+    CREATE OBJECT go_fcst.
+  ENDIF.
+
   CASE gv_mode.
 
     WHEN gc_mode_ann.
 
       gv_hfy = p_fyear.
 
-      gt_annual = zcl_pp_pfcst=>generate_annual(
+      gt_annual = go_fcst->generate_annual(
                     it_werks   = s_werks[]
                     it_matnr   = s_matnr[]
                     iv_fyear   = p_fyear
@@ -543,7 +548,7 @@ FORM generate.
         gv_hq = zcl_pp_pfcst_util=>get_quarter_from_date( ls_qd-low ).
       ENDIF.
 
-      gt_quarter = zcl_pp_pfcst=>generate_quarter(
+      gt_quarter = go_fcst->generate_quarter(
                      it_werks     = s_werks[]
                      it_matnr     = s_matnr[]
                      iv_fyear     = p_qfyear
@@ -568,7 +573,7 @@ FORM generate.
         gv_hper = zcl_pp_pfcst_util=>get_month_slot( ls_md-low ).
       ENDIF.
 
-      gt_month = zcl_pp_pfcst=>generate_month(
+      gt_month = go_fcst->generate_month(
                    it_werks     = s_werks[]
                    it_matnr     = s_matnr[]
                    iv_fyear     = p_mfyear

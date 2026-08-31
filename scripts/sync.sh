@@ -41,6 +41,22 @@ fi
 
 echo "sync: branch $branch"
 
+# ------------------------------------------------------- 0. commit identity
+# GitHub counts a commit towards the profile contribution graph only when the
+# AUTHOR email is verified on the GitHub account. A Claude Code session commits
+# as Claude <noreply@anthropic.com>, which GitHub attributes to the @claude
+# account instead — so work done in a session never appeared on Arnav's profile.
+# Re-stamp the identity when it is unset or is Anthropic's default; a real
+# identity (Arnav's own laptop) is left untouched.
+current_email="$(git config user.email 2>/dev/null || true)"
+case "$current_email" in
+  ""|*@anthropic.com)
+    git config user.name  "Arnav Johri"
+    git config user.email "82252072+aj-02@users.noreply.github.com"
+    echo "sync: commit identity set to Arnav Johri <82252072+aj-02@users.noreply.github.com>"
+    ;;
+esac
+
 # ---------------------------------------------------------------- 1. commit
 if [ "$do_commit" = 1 ]; then
   git add -A

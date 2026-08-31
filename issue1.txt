@@ -1,0 +1,5 @@
+issue1 — GitHub access test
+Created: 31/08/26
+Purpose: confirm that commits pushed from a Claude Code web session
+appear on the repository Overview / recent-commits view.
+No ABAP object is affected by this file. Safe to delete.

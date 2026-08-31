@@ -35,4 +35,15 @@ and `ERDAT` over the rows this upload has just written. The annual branch alread
 in ZFCST, and the reason is gone. The class also has to take the same lock as `LOCK_ROW`
 for the locking to cover upload against ZFCST.
 
+### 31/08/26 — follow-up, decimal comma
+
+| # | Issue | Root cause | Fix |
+|---|---|---|---|
+| 13 | A quantity written with a decimal comma loaded multiplied by ten — `1,5` went in as `15`, reported as a successful load | `TO_DEC` stripped every comma on the assumption it was always a thousand separator | a cell holding a comma is refused, not guessed at; the four messages say to use a dot and no commas |
+
+`12,000` is twelve thousand in one locale and twelve in another and cannot be told apart
+from the cell alone, so no attempt is made to. **Consequence:** an Excel column formatted
+with a thousand separator exports as `12,000` in a tab-delimited save and is now rejected.
+Users must format the quantity columns as plain numbers or General before saving.
+
 TR: not yet transported.

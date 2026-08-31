@@ -527,7 +527,7 @@ FORM do_category.
 *   cell. The two are told apart now.
     PERFORM to_dec USING ls_raw-f04 CHANGING lv_load lv_ok.
     IF lv_ok = abap_false.
-      lv_err = 'Load factor is not a number'.
+      lv_err = 'Load factor is not a number, use a dot for decimals and no commas'.
       PERFORM log USING lv_row lv_werks lv_matnr lv_blank gc_err lv_err.
       CONTINUE.
     ENDIF.
@@ -984,7 +984,8 @@ FORM do_history.
 
 *BOC By Arnav on 31/08/26
     IF lv_bad > 0.
-      lv_err = |Month column M{ lv_bad } is not a number|.
+      lv_err = |Month column M{ lv_bad } is not a number, use a dot for | &&
+               |decimals and no commas|.
       PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
       CONTINUE.
     ENDIF.
@@ -1124,7 +1125,8 @@ FORM do_business USING pv_mode TYPE char1.
 
     PERFORM to_dec USING ls_raw-f05 CHANGING lv_qty lv_ok.
     IF lv_ok = abap_false.
-      lv_err = 'Sales forecast quantity is not a number'.
+      lv_err = 'Sales forecast quantity is not a number, use a dot for decimals'
+             && ' and no commas'.
       PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
       CONTINUE.
     ENDIF.
@@ -1349,7 +1351,7 @@ FORM do_change USING pv_mode TYPE char1.
 *   sentence, which sent the user looking for the wrong thing
     PERFORM to_dec USING ls_raw-f05 CHANGING lv_qty lv_ok.
     IF lv_ok = abap_false.
-      lv_err = 'Change quantity is not a number'.
+      lv_err = 'Change quantity is not a number, use a dot for decimals and no commas'.
       PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
       CONTINUE.
     ENDIF.
@@ -1770,8 +1772,21 @@ FORM to_dec USING pv_in TYPE any
     RETURN.
   ENDIF.
 
-* Thousand separators from a spreadsheet export are dropped
-  REPLACE ALL OCCURRENCES OF ',' IN lv_in WITH ''.
+** Thousand separators from a spreadsheet export are dropped
+*  REPLACE ALL OCCURRENCES OF ',' IN lv_in WITH ''.
+*
+* Dropping every comma was safe only if the comma was always a thousand
+* separator. Where the decimal separator is a comma it is not, and
+* "1,5" was loaded as 15 - a quantity multiplied by ten, written to the
+* database, and reported to the user as a successful load. The two
+* cases cannot be told apart from the cell alone: "12,000" is twelve
+* thousand in one locale and twelve in another. A cell holding a comma
+* is refused instead of guessed at, and the message says what to do.
+  IF lv_in CS ','.
+    CLEAR cv_out.
+    cv_ok = abap_false.
+    RETURN.
+  ENDIF.
 
   TRY.
       cv_out = lv_in.

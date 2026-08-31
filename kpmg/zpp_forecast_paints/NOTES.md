@@ -59,6 +59,37 @@ Plus the final ALV report with its own selection screen.
 9. **Monthly mode wording** is the quarterly text with "month" substituted — the
    divide-by-3 in `Requirement Qty = max(...)/3 * category %` needs confirming.
 
+## Object set
+
+Separate from Adhesive — agreed 31/08/26. Package `ZPP_PNT_FCST`, everything prefixed
+`ZPP_PNT_*` / `ZDO_PNT_*` / `ZDE_PNT_*` / `ZCL_PP_PFCST*`. No Adhesive object is touched.
+Full inventory and the SE11 fallback field lists: `docs/00_TECHNICAL_OBJECTS.md`.
+The contract every object was built against: `docs/00_CONTRACT.md`.
+
+- `ZCL_PP_PFCST_UTIL` — FY / quarter / period / tonnage / KL / crore helpers.
+- `ZCL_PP_PFCST` — calculation engine, three modes.
+- `ZPP_PAINT_FORECAST` (tcode ZPFCST) — generation, three radio modes.
+- `ZPP_PAINT_FCST_UPL` (tcode ZPFCST_UPL) — six upload types with template download.
+- `ZPP_PAINT_FCST_RPT` (tcode ZPFCST_RPT) — final ALV.
+
+## Gotchas
+
+- **Screen-free by design, and load-bearing.** Same rule as Adhesive v2: everything
+  displays through `CL_SALV_TABLE` full screen, rows are picked with the SALV selection
+  column, Save is a SALV toolbar function. Adding `CALL SCREEN` or
+  `cl_gui_custom_container` turns the whole folder back into a paste-only object.
+- **VKORG and BWART are never hardcoded** — they come from `ZPPT_PNT_CFG` per plant,
+  because the FS gives 4000 in one sheet and 1100 in another.
+- **BRAND and DPL have no confirmed source.** Both columns are present but empty, with the
+  intended SELECT commented out directly above. `ZPP_BRAND` is read by the FS but never
+  defined; selecting from a table that may not exist would fail activation.
+- **abapGit element order.** Two corrections were applied that v2 does not have — see
+  `docs/00_TECHNICAL_OBJECTS.md` §4. If a TABL or PROG dumps on import, that is where to
+  look first.
+- Tonnage is gross weight annually and net weight quarterly, exactly as the FS says.
+
 ## Status
 
-Template filed, nothing built yet. Object naming, package and split still to be agreed.
+31/08/26 — full object set built to the FS, shipped as one ZIP for a single abapGit import.
+Not yet activated on the system. 22 open points for the functional team in
+`docs/OPEN_QUESTIONS.md`; of those only BRAND and DPL leave a visible column empty.

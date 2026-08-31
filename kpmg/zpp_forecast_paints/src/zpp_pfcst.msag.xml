@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="utf-8"?>
+<abapGit version="v1.0.0" serializer="LCL_OBJECT_MSAG" serializer_version="v1.0.0">
+ <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+  <asx:values>
+   <T100A>
+    <ARBGB>ZPP_PFCST</ARBGB>
+    <STEXT>ZFORECAST Paints</STEXT>
+    <MASTERLANG>E</MASTERLANG>
+   </T100A>
+   <T100_TEXTS>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_PFCST</ARBGB>
+     <MSGNR>001</MSGNR>
+     <TEXT>Enter a plant</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_PFCST</ARBGB>
+     <MSGNR>002</MSGNR>
+     <TEXT>Financial year &amp;1 is not in the format YYYY-YYYY</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_PFCST</ARBGB>
+     <MSGNR>003</MSGNR>
+     <TEXT>Enter either a quarter or a date range, not both</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_PFCST</ARBGB>
+     <MSGNR>004</MSGNR>
+     <TEXT>Enter a quarter or a date range</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_PFCST</ARBGB>
+     <MSGNR>005</MSGNR>
+     <TEXT>Financial year is mandatory when a quarter is entered</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_PFCST</ARBGB>
+     <MSGNR>006</MSGNR>
+     <TEXT>No configuration found for plant &amp;1 in table ZPPT_PNT_CFG</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_PFCST</ARBGB>
+     <MSGNR>007</MSGNR>
+     <TEXT>No billing data found for the selection</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_PFCST</ARBGB>
+     <MSGNR>008</MSGNR>
+     <TEXT>No forecast data found for the selection</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_PFCST</ARBGB>
+     <MSGNR>009</MSGNR>
+     <TEXT>Material &amp;1 is not created in plant &amp;2</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_PFCST</ARBGB>
+     <MSGNR>010</MSGNR>
+     <TEXT>Forecast &amp;1 saved for plant &amp;2</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_PFCST</ARBGB>
+     <MSGNR>011</MSGNR>
+     <TEXT>Select at least one row</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_PFCST</ARBGB>
+     <MSGNR>012</MSGNR>
+     <TEXT>Product category is not maintained for material &amp;1 plant &amp;2</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_PFCST</ARBGB>
+     <MSGNR>013</MSGNR>
+     <TEXT>File &amp;1 could not be read</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_PFCST</ARBGB>
+     <MSGNR>014</MSGNR>
+     <TEXT>The file contains no data rows</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_PFCST</ARBGB>
+     <MSGNR>015</MSGNR>
+     <TEXT>Row &amp;1: plant is missing</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_PFCST</ARBGB>
+     <MSGNR>016</MSGNR>
+     <TEXT>Row &amp;1: material is missing</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_PFCST</ARBGB>
+     <MSGNR>017</MSGNR>
+     <TEXT>Row &amp;1: &amp;2 is not a valid number</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_PFCST</ARBGB>
+     <MSGNR>018</MSGNR>
+     <TEXT>Row &amp;1: quarter &amp;2 must be between 1 and 4</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_PFCST</ARBGB>
+     <MSGNR>019</MSGNR>
+     <TEXT>Row &amp;1: financial year &amp;2 is not valid</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_PFCST</ARBGB>
+     <MSGNR>020</MSGNR>
+     <TEXT>&amp;1 rows uploaded, &amp;2 rows rejected</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_PFCST</ARBGB>
+     <MSGNR>021</MSGNR>
+     <TEXT>Number range object ZPPPFCST is not maintained</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_PFCST</ARBGB>
+     <MSGNR>022</MSGNR>
+     <TEXT>Material &amp;1 is excluded from forecast in plant &amp;2</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_PFCST</ARBGB>
+     <MSGNR>023</MSGNR>
+     <TEXT>You are not authorised for plant &amp;1</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_PFCST</ARBGB>
+     <MSGNR>024</MSGNR>
+     <TEXT>Row &amp;1: reason for change is mandatory</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_PFCST</ARBGB>
+     <MSGNR>025</MSGNR>
+     <TEXT>Brand is not maintained for plant &amp;1 material &amp;2</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_PFCST</ARBGB>
+     <MSGNR>026</MSGNR>
+     <TEXT>Quarter &amp;1 does not match the entered date range</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_PFCST</ARBGB>
+     <MSGNR>027</MSGNR>
+     <TEXT>You are not authorised to use legacy data</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_PFCST</ARBGB>
+     <MSGNR>028</MSGNR>
+     <TEXT>Row &amp;1: unit &amp;2 does not match the base unit of material &amp;3</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_PFCST</ARBGB>
+     <MSGNR>029</MSGNR>
+     <TEXT>Save cancelled</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_PFCST</ARBGB>
+     <MSGNR>030</MSGNR>
+     <TEXT>Forecast &amp;1 updated for plant &amp;2</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_PFCST</ARBGB>
+     <MSGNR>031</MSGNR>
+     <TEXT>Row &amp;1: period &amp;2 must be between 1 and 12</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZPP_PFCST</ARBGB>
+     <MSGNR>032</MSGNR>
+     <TEXT>Enter a financial year</TEXT>
+    </T100>
+   </T100_TEXTS>
+  </asx:values>
+ </asx:abap>
+</abapGit>

@@ -1,0 +1,276 @@
+SOURCE: mail "CR -2C Forecast paints" — Bhavini Jain <bhavini.jain@diligentglobal.com>
+TO: Arnav Johri  CC: Vikas Goyal
+SENT: 31.08.2026 09:08 UTC
+ATTACHMENT: Forecast Template-Paints.xlsx (29096 bytes)
+BODY: "Please start the development of below objects."
+
+Text extracted from the workbook, verbatim, cell order preserved (TAB = cell break).
+The .xlsx binary itself is not in the repo — the mail connector returns extracted text
+only. Keep the original attachment in Outlook / OneDrive as the binding copy.
+
+=== Sheet: Sheet1 ===
+1	ZFORECAST Report
+1.1	Annual Forecating
+Selection Screen
+Plant	Mandatory	From		To
+Material		From		To
+Financial Year	Mandatory	From		To
+Check Box	Tonnage Wise
+A	system will consider the last year direct sales to the customer
+B	Product wise product category and Its percertage will be maintained by User.
+C	Total Forecast Qty=Last year Sales Qty of that month * Product category %
+D	Provision to Skip the few material from Forecast
+E	Forecast number generation
+F	Table Maintainace for MTS and MTO
+G	Plant maintance if new material is replace old code
+H	In annual forecast, final qty will be Last year april 25 sales Qty*Growth factor
+
+Annual Forecast — ALV columns
+MFG. PLANT CODE | MFG. PLANT NAME | BRAND | MAT. CODE | MAT. DESC |
+MTS / MTO / DIS ART / TINTING | MATERIAL GROUP 1 | MATERIAL GROUP 2 | MATERIAL GROUP 5 |
+MATERIAL GROUP | PACK SIZE | DPL | QTY / CARTON |
+Q1_26-27_APR 26 .. Q4_26-27_MAR 26  FORECAST QTY (EA)        (12 columns)
+Q1_26-27_APR 26 .. Q4_26-27_MAR 26  FORECAST Volume in KL    (12 columns)
+Q1_26-27_APR 26 .. Q4_26-27_MAR 26  FORECAST Value in Crores (12 columns)
+26-27_MAR 26_FORECAST Value in Crores   (trailing duplicate column in the sheet)
+
+1.2	Quarterly Forecasting
+Selection Screen
+Plant	Mandatory	From		To
+Material		From		To
+Financial Year		From		To
+Quarter	Mandatory
+Date	Mandatory	From		To
+Check Box	Tonnage Wise
+A	if we enter the Quarter Q2, then system should calculate the sales of last jul25, aug 25 and sep 25, and last 3 months of sales from April 26, may 26, and June 26.
+	if we enter the date, then system should calcuate the sales from last year 3 months forward and current year last 3 months
+	Financial Year will be mandatory in case of Quarter entry
+B	Product wise product category and Its percertage will be maintained by User.
+C	Forecast Qty=whichever is maximum of from last year and current year* Product category %
+D	Provision to Skip the few material from Forecast
+E	Forecast number generation
+F	Table Maintainace for MTS and MTO
+G	Provision to Upload the Sales forecast
+H	Final forecast qty is whichever is maximum out of sales forecast qty and Forecast Qty
+I	Provision to upload the additional or substraction of forecast
+J	Last 3 years sales data upload in the custom table
+
+Quarterly ALV columns
+MFG. PLANT CODE | MFG. PLANT NAME | BRAND | MAT. CODE | MAT. DESC |
+MTS / MTO / DIS ART / TINTING | MATERIAL GROUP 1 | MATERIAL GROUP 2 | MATERIAL GROUP 5 |
+MATERIAL GROUP | PACK SIZE | DPL | QTY / CARTON |
+July'25 | Aug'25 | Sep'25 | Total LY Quarter Sales Qty |
+April'26 | May'26 | Jun'26 | L3 Month Total Sales Qty | Max. Qty (E , I ) |
+Product Cat. | Growth Based on Category | Forecast (Max * Growth %) |
+Business Forecast (Jul'26 To Sep'26) | Final Forecast Qty |
+July'26 | Aug'26 | Sep'26 | Pack Size | Final july 26 in KL
+
+Upload Program format for sales forecast
+Plant	Material	Quarter	Financial Year	Sales Forecast Qty
+Mandatory	Mandatory	Mandatory	Mandatory	Mandatory
+
+Upload Program format for addition or subtraction of Forecast
+Plant	Material	Quarter	Financial Year	Sales Forecast Qty	Reason
+Mandatory	Mandatory	Mandatory	Mandatory	Mandatory	Mandatory
+
+1.3	Monthly Forecasting
+Selection Screen
+Plant	Mandatory	From		To
+Material		From		To
+Financial Year		From		To
+Month	Mandatory
+Date	Mandatory	From		To
+Check Box	Tonnage Wise
+A	if we enter the month July 26, then system should calculate the sales of last jul25, aug 25 and sep 25, and last 3 months of sales from April 26, may 26, and June 26.
+	if we enter the date, then system should calcuate the sales from last year 3 months forward and current year last 3 months
+	Financial Year will be mandatory in case of Quarter entry
+B	Product wise product category and Its percertage will be maintained by User.
+C	Requirement Qty=whichever is maximum of from last year and current year/3* Product category %
+D	Provision to Skip the few material from Forecast
+E	Forecast number generation
+F	Table Maintainace for MTS and MTO
+G	Provision to Upload the Sales forecast
+H	Final forecast qty is whichever is maximum out of sales forecast qty and Forecast Qty
+I	Provision to upload the additional or substraction of forecast
+J	Last 3 years sales data upload in the custom table
+
+July'26 Forecast — ALV columns
+MFG. PLANT CODE | MFG. PLANT NAME | BRAND | MAT. CODE | MAT. DESC |
+MTS / MTO / DIS ART / TINTING | MATERIAL GROUP 1 | MATERIAL GROUP 2 | MATERIAL GROUP 5 |
+MATERIAL GROUP | PACK SIZE | DPL | QTY / CARTON |
+July'25 | Aug'25 | Sep'25 | Total LY Quarter Sales Qty |
+April'26 | May'26 | Jun'26 | L3 Month Total Sales Qty | Max. Qty (E , I ) |
+Product Cat. | Growth Based on Category | Forecast (Max * Growth %) |
+Business Forecast (Jul'26 To Sep'26) | Final Forecast Qty |
+July'26 | Pack Size | Final july 26 in KL
+
+WRICEF Identity
+1	Yearly data, monthly data and Quarterly data
+2	Upload program for last year sales data
+3	Upload program for sales forecast
+4	Upload program for Changes in final forecast Qty
+
+Final Report
+Selection screen
+Plant	Mandatory
+Material
+Financial Year
+Month	Mandatory
+Quarter	Mandatory
+Forecast Number
+Columns: Material | Plant | Material descr | Material Group | Material Group1 |
+Material Group 2 | Material Group 5 | Annual forecast | Quarter forecast |
+Additional forecast | Total Quarter forecast | Monthly Forecast | Additional forecast |
+Total Monthly forecast | Forecast Number
+
+=== Sheet: RADIO BUTTON 1 ANNUAL ===
+1	ZFORECAST Report
+1.1	Annual Forecating
+Selection Screen
+Plant	Mandatory	From		To
+Material		From		To
+Financial Year	Mandatory	From 2026	To 2027
+Check Box	Tonnage Wise with Gross Weight
+checkbox	Legacy data	Authorization through tvarvc.
+A	system will consider the last year direct sales to the customer
+B	Product wise product category and Its percertage will be maintained by User.	TMG	upload	(Plant / Material / material group / %)
+C	Total Forecast Qty=Last year Sales Qty of that month * Product category %
+D	Provision to Skip the few material from Forecast	TMG	upload
+E	Forecast number generation
+F	Table Maintainace for MTS and MTO	TMG	upload
+
+custom table maitainance
+1	ZPP_PROD_CATEGORY
+	Fields: Plant / Material / Category / Load Factor / MTS/MTO
+1.1	Upload Format: Plant | Material | Category | Load Factor | MTS/MTO
+	Validation: If the Plant AND MATERIAL IS EXIST IN THE TABLE, THEN OVERWRITE THE ENTRY OR ELSE NEW ENTRY
+	Pass plant and material to marc-werks and plant and check entry is exist.
+	If not, error message:- Material is not created in the Plant
+2	ZPP_MATERIAL_TRACKING
+	Fields: Plant / New Material Code / old Material code1 / old Material code2
+2.1	Upload Format: Plant | New Material code | Old Material 1 | Old Material 2
+	Validation: same overwrite-or-insert rule; same MARC existence check
+3	ZPP_MATERIAL_EXCLUDE
+	Fields: Plant / Material
+3.1	Upload Format: Plant | Material code
+
+Logic (column -> derivation)
+MFG. PLANT CODE	selection screen plant
+MFG. PLANT NAME	Pass selection screen plant to T001W-WERKS and take T001W-NAME1
+BRAND	Pass selection screen plant and ALV material to ZPP_BRAND-WERKS and MATNR and show BRAND.
+MAT. CODE	Pass selection screen fiscal year to VBRK-GJAHR and take all VBELN where VBRK-FKSTO is not equal to X and VBTYP is not equal to U and take all VBRK-VBELN and FKDAT. Pass all VBRK-VBELN and selection screen Plant to VBRP-VBELN and WERKS where VBRP-shkzg is equal to blank and take VBRP-MATNR.
+	if user has selected the checkbox of legacy data then pass plant, material and year to ZPP_SALES_HISTORY-MATNR and WERKS and take a month wise value.
+MAT. DESC	Pass VBRP-MATNR to MAKT-MATNR and show MAKT-MAKTX.
+MTS / MTO / DIS ART / TINTING	pass VBRP-MATNR and werks to ZPP_MATERIAL_CATEGORY-MATNR and WERKS and take MTS/MTO
+MATERIAL GROUP 1	Pass VBRP-MATNR to MVKE-MATNR for MVGR1 is not equal to blank and VKORG=4000 and take MVGR1. pass MVKE-MVGR1 to TVM1T-MVGR1 and take BEZEI
+MATERIAL GROUP 2	Pass VBRP-MATNR to MVKE-MATNR for MVGR3 is not equal to blank and VKORG=4000 and take MVGR3. pass MVKE-MVGR3 to TVM3T-MVGR3 and take BEZEI
+MATERIAL GROUP 5	Pass VBRP-MATNR to MVKE-MATNR for MVGR4 is not equal to blank and VKORG=4000 and take MVGR4. pass MVKE-MVGR4 to TVM4T-MVG41 and take BEZEI
+UOM	Pass VBRP-MATNR to MARA-MATNR and take MARA-MEINS
+MATERIAL GROUP	For VBRP-MATNR show MATKL.
+PACK SIZE	Pass ALV MATNR to MARM-MATNR where MARA-MEINH is not equal to ALV UOM and take MARM-UMREN. If the MEINH is equal to ML or GM, then divide the value with 1000.
+Gross Weight	Pass ALV MATNR to MARA-MATNR and take MARA-BRGEW
+DPL	(no derivation given in the sheet)
+QTY / CARTON	Pass VBRP-MATNR to MVKE-MATNR for MVGR1 is not equal to blank and VKORG=4000 and take AUMNG.
+Load Factor	pass VBRP-MATNR and werks to ZPP_MATERIAL_CATEGORY-MATNR and WERKS and take Load Factor
+Apr-25 .. Mar-26 (12 columns)	For VBRP-MATNR, WERKS and VBRK-FKDAT, do the sum of VBRP-FKIMG.
+	also Pass MATDOC-MATNR and WERKS to ZPP_MATERIAL_TRACKING-NEW_MATNR and WERKS and take ZPP_MATERIAL_TRACKING-OLD_MATERIAL1 and OLD_MATERIAL2. Pass this two old material to MATDOC-MATNR, WERKS and BUDAT is from ALV and do the sum of MATDOC-MENGE.
+Total LY Sales Qty	sum from april 2025 to Mar 2026
+Forecast Qty_FY2026-27	Load factor * total ly sales qty
+Q1..Q4 monthly FORECAST QTY (EA), 12 columns	(april 25/Total LY Sales Qty) * forecast Qty
+	[sheet repeats "april 25" on all 12 rows — see NOTES.md open point]
+Q1..Q4 monthly FORECAST Volume in KL, 12 columns	Forecast Qty of April 25 * pack size/1000
+	[same repeated-month wording]
+Q1..Q4 monthly FORECAST Value in Crores, 12 columns	DPL * forecast Qty of April 25 / 10000000
+	[only the April row carries the formula in the sheet]
+if user select the check box of tonnage, then show the value in tonnage.
+for tonnage	Forecast Qty * Gross Weight / 1000
+
+Upon succesful data verification, provide the option to save the data.
+if user save the data, instert the data in Z Table By generating the forecast number by custom SNRO
+SNRO	ZPP_PAINTS_SNRO      (SNRO will be finanical year wise)
+Table	ZPP_PAINTS_YEAR
+Fields: FORECAST Number | Plant | Material | Description | Material Group | Net weight |
+Material Group 1 | Material Group 2 | Material Group 3 | Material Group 4 | Material Group 5 |
+Financial Year | M1..M12 | Total LY Sales Qty | Product Cat. | Load Factor | MTS/MTO |
+Forecast Qty_FY2026-27 | M1_FORECAST..M12_FORECAST | M1_FORECAST_TON..M12_FORECAST_TON
+(all "FROM ALV")
+Note	for every new run of the report, kindly assign the same forecast number which is
+	available in the table. If it is not then create new forecast number
+
+=== Sheet: Radio Button 2 Quauter ===
+1.2	Quarterly Forecasting
+Selection Screen
+Plant	Mandatory	From		To
+Material		From		To
+Quarter	Mandatory	(e.g. JULY - SEP)
+Year
+Date	Mandatory	From		To
+Check Box	Tonnage Wise
+checkbox	Legacy data	Authorization through tvarvc.
+A	if we enter the Quarter Q2, then system should calculate the sales of last jul25, aug 25 and sep 25, and last 3 months of sales from April 26, may 26, and June 26.
+	if we enter the date, then system should calcuate the sales from last year 3 months forward and current year last 3 months
+	year is mandatory when Quarter is not initial
+	eighter quarter or date, one field must be mandatory.
+
+Quarter calendar
+Q1	APRIL to June	01.04.2026	30.06.2026
+Q2	JULY TO SEP	01.07.2026	30.09.2026
+Q3	OCT to Dec	01.10.2026	31.12.2026
+Q4	JAN TO MAR	01.01.2027	31.03.2027
+
+Logic (column -> derivation)
+Plant	selection screen plant
+Material	Pass selection screen QUATER as FKDAT to VBRK-FKDAT and take all VBELN where VBRK-FKSTO is not equal to X and VBTYP is not equal to U and take all VBRK-VBELN and FKDAT. Pass all VBRK-VBELN and selection screen Plant to VBRP-VBELN and WERKS where VBRP-shkzg is not equal to blank and take VBRP-MATNR.
+Description	Pass VBRP-MATNR to MAKT-MATNR and show MAKT-MAKTX.
+Material Group	For VBRP-MATNR show MATKL.
+Net weight	For VBRP-MATNR show NTGEW.
+Material Group 1	MVKE-MVGR1 where VKORG=1100 -> TVM1T-BEZEI
+Material Group 2	MVKE-MVGR2 where VKORG=1100 -> TVM2T-BEZEI
+Material Group 3	MVKE-MVGR3 where VKORG=1100 -> TVM3T-BEZEI
+Material Group 4	MVKE-MVGR4 where VKORG=1100 -> TVM4T-MVG41
+Material Group 5	MVKE-MVGR5 where VKORG=1100 -> TVM5T-BEZEI
+July'25 / Aug'25 / Sep'25	For VBRP-WERKS, MATNR, and VBRK-FKDAT(01.07.2025 to 31.07.2025) Do the sum of VBRP-FKIMG MATNR wise
+	also Pass MATDOC-MATNR and WERKS to ZPP_MATERIAL_TRACKING-NEW_MATNR and WERKS and take OLD_MATERIAL1 / OLD_MATERIAL2. Pass this two old material to MATDOC-MATNR, WERKS and BUDAT is from ALV and do the sum of MATDOC-MENGE.
+	if user has selected the checkbox of legacy data then pass plant, material and year to ZPP_SALES_HISTORY-MATNR and WERKS and take a month wise value.
+Total LY Quarter Sales Qty	sum of aug 2025 to sep 25   [sheet wording; means the 3 LY quarter months]
+April'26 / May'26 / Jun'26	same FKIMG sum, current-year months
+L3 Month Total Sales Qty	sum of April 26 to June 26.
+Max. Qty (E , I )	Maximum from Total LY sales qty and L3 month total sales qty
+Product Cat.	ZPP_MATERIAL_CATEGORY (MATNR + WERKS) -> Category
+Growth Based on Category	ZPP_MATERIAL_CATEGORY (MATNR + WERKS) -> Load Factor
+MTS/MTO	ZPP_MATERIAL_CATEGORY (MATNR + WERKS) -> MTS/MTO
+Forecast (Max * Growth %)	PRODUCT CATEGORY * MAX QTY
+Business Forecast (Jul'26 To Sep'26)	From ZPP_ADH_FORE_QUATER
+Final Forecast Qty	Compare forecast and business forecast
+July'26	(july 25/total quarter sales of last year) * final forecast qty
+Aug'26	(aug 25/total quarter sales of last year) * final forecast qty
+Sep'26	(sep 25/total quarter sales of last year) * final forecast qty
+July 26 TONNAGE	Net weight * july 26
+Aug 26 TONNAGE	Net weight * Aug 26
+Sep 26 TONNAGE	Net Weight * Sep 26
+Extra ALV columns present in the sample rows: MTS/MTO, Gross Weight,
+July'26 KL, Aug'26 KL, Sep'26 KL, July'26 IN cr, Aug'26 in CR, Sep'26 in CR
+
+Validation
+1	provide to save the data only when the quarter condition is matched.
+2	Instert the data with same forecast number by passing the fiscal year to
+	ZPP_ADH_FORECAST_YEAR-FISCAL YEAR and take FORECAST number
+upon save, please insert the data in ZPP_ADH_FORE_QUATER
+Fields: FORECAST NUMBER | Plant | Material | Description | Material Group | Net weight |
+Material Group 1..5 | QUARTER | YEAR | M4_LAST | M5_LAST | M6_LAST |
+Total LY Quarter Sales Qty | M1_CURRENT | M2_CURRENT | M3_CURRENT |
+L3 Month Total Sales Qty | MAX QTY | Product Cat. | Growth Based on Category | MTS/MTO |
+Forecast (Max * Growth %) | Business Forecast M4 TO M6 |
+Business Forecast M4 TO M6 additional | Final Forecast Qty |
+M4_FORECAST | M5_FORECAST | M6_FORECAST | M4_TONNAGE | M5_TONNAGE | M6_TONNAGE |
+MTS/MTO | reason for change      (all "From ALV")
+
+Upload Program format
+Material | PLANT | QUARTER | YEAR | SALES FORECAST      (all Mandatory)
+Upload program format for change
+Material | PLANT | QUARTER | YEAR | SALES FORECAST | Reason for change   (all Mandatory)
+Check material, plant, quarter, year, month is exist in the above mentioned table
+
+=== END OF EXTRACT ===
+Sample data rows carried in the sheets (growth factors A 1.3 / B 1.3 / C 1.2 / D 1.1 / E 1.0)
+are worked examples, not configuration.

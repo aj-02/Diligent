@@ -683,10 +683,27 @@ FORM visible_columns CHANGING ct_show TYPE tt_fname.
   CLEAR ct_show.
 
 * ---- leading block, identical on all three FS sheets ----------------
-  ct_show = VALUE tt_fname(
-    ( 'WERKS' ) ( 'MATNR' ) ( 'MAKTX' ) ( 'MATKL' ) ( 'NTGEW' )
-    ( 'MVGR1_TXT' ) ( 'MVGR2_TXT' ) ( 'MVGR3_TXT' )
-    ( 'MVGR4_TXT' ) ( 'MVGR5_TXT' ) ).
+*BOC By Arnav on 31/08/26
+* The rows of a VALUE table constructor have to be COMPATIBLE with the
+* row type on this release, not merely convertible, so a C literal into
+* a row typed LVC_FNAME is refused - the same syntax error the upload
+* program threw sixteen times over STRING_TABLE. APPEND converts, and it
+* is what the rest of this routine already uses.
+*  ct_show = VALUE tt_fname(
+*    ( 'WERKS' ) ( 'MATNR' ) ( 'MAKTX' ) ( 'MATKL' ) ( 'NTGEW' )
+*    ( 'MVGR1_TXT' ) ( 'MVGR2_TXT' ) ( 'MVGR3_TXT' )
+*    ( 'MVGR4_TXT' ) ( 'MVGR5_TXT' ) ).
+  APPEND 'WERKS'     TO ct_show.
+  APPEND 'MATNR'     TO ct_show.
+  APPEND 'MAKTX'     TO ct_show.
+  APPEND 'MATKL'     TO ct_show.
+  APPEND 'NTGEW'     TO ct_show.
+  APPEND 'MVGR1_TXT' TO ct_show.
+  APPEND 'MVGR2_TXT' TO ct_show.
+  APPEND 'MVGR3_TXT' TO ct_show.
+  APPEND 'MVGR4_TXT' TO ct_show.
+  APPEND 'MVGR5_TXT' TO ct_show.
+*EOC By Arnav on 31/08/26
 
   CASE g_mode.
 

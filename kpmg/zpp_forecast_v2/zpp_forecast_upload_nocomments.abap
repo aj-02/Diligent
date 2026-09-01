@@ -1,17 +1,3 @@
-*&---------------------------------------------------------------------*
-*& Report  ZPP_FORECAST_UPLOAD   Transaction  ZFCST_UPL
-*& ZFORECAST (Adhesive) - all uploads in one program
-*&
-*& Eight upload types selected by radio button. Each radio button has a
-*& Download Template button of its own beside it, so the file the user
-*& fills in always carries the right columns in the right order.
-*&
-*& The file is read back as a real Excel workbook (.XLSX / .XLS) through
-*& CL_FDT_XL_SPREADSHEET, or as CSV or tab separated text. The user no
-*& longer has to save their spreadsheet as a text file first.
-*&
-*& Built to Forecast Template-Adhesive.xlsx dated 20.08.2026
-*&---------------------------------------------------------------------*
 REPORT zpp_forecast_upload MESSAGE-ID zpp_fcst.
 
 TABLES sscrfields.
@@ -45,39 +31,11 @@ DATA: gt_raw TYPE STANDARD TABLE OF ty_raw,
       g_chg  TYPE i,
       g_err  TYPE i,
       g_tab  TYPE c LENGTH 1,
-*BOC By Arnav on 31/08/26
-*     The upload type as a key rather than eight radio buttons, so the
-*     template layout can be asked for by name
       g_type TYPE char4,
-*     Set when the file was read as a workbook. CL_FDT_XL_SPREADSHEET
-*     consumes the heading row itself, so the header checkbox must not
-*     delete a second row.
       g_xls  TYPE abap_bool.
-*EOC By Arnav on 31/08/26
 
-*&---------------------------------------------------------------------*
 SELECTION-SCREEN FUNCTION KEY 1.
 
-*BOC By Arnav on 31/08/26
-* One Download Template button per upload type, on the line of the radio
-* button it belongs to. The single button in the application toolbar
-* served whichever radio button happened to be selected, so a user who
-* wanted the legacy history layout had to select that radio button
-* first; the eight buttons below each download their own layout whatever
-* is selected.
-*
-* The radio button texts move from the selection texts into COMMENT
-* fields, because a parameter inside BEGIN OF LINE does not draw its
-* selection text. They are filled in INITIALIZATION.
-*
-*PARAMETERS: p_cat  RADIOBUTTON GROUP typ DEFAULT 'X',
-*            p_trk  RADIOBUTTON GROUP typ,
-*            p_exc  RADIOBUTTON GROUP typ,
-*            p_hist RADIOBUTTON GROUP typ,
-*            p_busq RADIOBUTTON GROUP typ,
-*            p_busm RADIOBUTTON GROUP typ,
-*            p_chgq RADIOBUTTON GROUP typ,
-*            p_chgm RADIOBUTTON GROUP typ.
 SELECTION-SCREEN BEGIN OF BLOCK b0 WITH FRAME TITLE TEXT-b00.
 
 SELECTION-SCREEN BEGIN OF LINE.
@@ -129,7 +87,6 @@ SELECTION-SCREEN PUSHBUTTON 40(24) b_chgm USER-COMMAND tcgm.
 SELECTION-SCREEN END OF LINE.
 
 SELECTION-SCREEN END OF BLOCK b0.
-*EOC By Arnav on 31/08/26
 
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-b01.
 PARAMETERS: p_file TYPE localfile,
@@ -137,19 +94,11 @@ PARAMETERS: p_file TYPE localfile,
             p_test AS CHECKBOX DEFAULT 'X'.
 SELECTION-SCREEN END OF BLOCK b1.
 
-
-*&---------------------------------------------------------------------*
 INITIALIZATION.
 
-* The file name is deliberately not OBLIGATORY. A mandatory field is
-* checked before AT SELECTION-SCREEN runs, which would stop the user
-* pressing Download Template before they have a file to name.
   sscrfields-functxt_01 = 'Download Template'.
   g_tab = cl_abap_char_utilities=>horizontal_tab.
 
-*BOC By Arnav on 31/08/26
-* Radio button texts, which a parameter inside BEGIN OF LINE cannot draw
-* from the selection texts
   c_cat  = 'Product Category'.
   c_trk  = 'Material Tracking'.
   c_exc  = 'Material Exclusion'.
@@ -167,26 +116,15 @@ INITIALIZATION.
   b_busm = 'Download Template'.
   b_chgq = 'Download Template'.
   b_chgm = 'Download Template'.
-*EOC By Arnav on 31/08/26
 
-*&---------------------------------------------------------------------*
 AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_file.
 
   PERFORM f4_file.
 
-*&---------------------------------------------------------------------*
 AT SELECTION-SCREEN.
 
-*BOC By Arnav on 31/08/26
-*  IF sscrfields-ucomm = 'FC01'.
-*    PERFORM download_template.
-*  ELSEIF sscrfields-ucomm = 'ONLI' AND p_file IS INITIAL.
-*    MESSAGE e013 WITH 'no file name entered'.
-*  ENDIF.
   CASE sscrfields-ucomm.
 
-*   The application toolbar button still serves whichever radio button
-*   is selected. The eight buttons name their own type.
     WHEN 'FC01'.
       PERFORM current_type CHANGING g_type.
       PERFORM download_template USING g_type.
@@ -205,9 +143,7 @@ AT SELECTION-SCREEN.
       ENDIF.
 
   ENDCASE.
-*EOC By Arnav on 31/08/26
 
-*&---------------------------------------------------------------------*
 START-OF-SELECTION.
 
   CLEAR: gt_raw, gt_log, g_new, g_chg, g_err.
@@ -230,9 +166,6 @@ START-OF-SELECTION.
     WHEN p_chgm. PERFORM do_change   USING 'M'.
   ENDCASE.
 
-* Nothing is committed on a test run. On a real run the good rows are
-* committed even when other rows failed, so a partly correct file loads
-* what it can and the log says exactly what it did not.
   IF p_test = abap_false AND ( g_new > 0 OR g_chg > 0 ).
     COMMIT WORK AND WAIT.
   ELSE.
@@ -241,11 +174,6 @@ START-OF-SELECTION.
 
   PERFORM display_log.
 
-
-*&---------------------------------------------------------------------*
-*& Template definition - one place, used by the download button and
-*& matching the layouts documented for the functional team
-*&---------------------------------------------------------------------*
 FORM current_type CHANGING cv_type TYPE char4.
 
   CLEAR cv_type.
@@ -263,44 +191,6 @@ FORM current_type CHANGING cv_type TYPE char4.
 
 ENDFORM.
 
-
-*&---------------------------------------------------------------------*
-*& BOC By Arnav on 31/08/26
-*&
-*& Template layout - taken from the dictionary, not typed in here
-*&
-*& The layout used to be written into this program: the column headings
-*& as literals, and a second row of sample data carrying plant 1001,
-*& material FG00000000001 and year 2026. Two things were wrong with it.
-*&
-*&   1  It is hardcoded master data. That plant, that material and that
-*&      year belong to no real system, they go stale on their own, and
-*&      the standard for this repository is that nothing is hardcoded
-*&      unless the functional spec says to hardcode it.
-*&   2  A heading typed here drifts away from the field it loads. The
-*&      heading IS the DDIC label of that field now, so a label changed
-*&      in SE11 changes the template with it and the two cannot
-*&      disagree.
-*&
-*& The sample row goes with it. Saying what a column means is the
-*& heading's job; saying what a valid value is belongs to the validation
-*& messages, which already name every rule.
-*&
-*& The old body, for reference - it is also what the syntax check was
-*& rejecting, "'PLANT' and the row type of CT_HEAD are incompatible",
-*& sixteen times, two per upload type:
-*&
-*&   ct_head = VALUE #( ( 'PLANT' ) ( 'MATERIAL' ) ( 'CATEGORY' )
-*&                      ( 'LOAD FACTOR' ) ( 'MTS OR MTO' ) ).
-*&   ct_demo = VALUE #( ( '1001' ) ( 'FG00000000001' ) ( 'A' )
-*&                      ( '1.300' ) ( 'MTS' ) ).
-*&
-*& The rows of a VALUE table constructor have to be COMPATIBLE with the
-*& row type on this release, not merely convertible. 'PLANT' is a C
-*& literal and the row type of STRING_TABLE is STRING, so every one of
-*& them was refused. APPEND converts and is used throughout instead -
-*& the same statement ZPP_FORECAST already builds its column list with.
-*&---------------------------------------------------------------------*
 FORM template_columns USING pv_type TYPE any
                       CHANGING ct_head TYPE string_table
                                cv_name TYPE string.
@@ -315,9 +205,6 @@ FORM template_columns USING pv_type TYPE any
 
   CLEAR: ct_head, cv_name.
 
-* Each entry is the table and field the column loads. The order is the
-* order of the columns in the file, and it is the ONLY thing about the
-* layout this program still decides for itself.
   CASE pv_type.
 
     WHEN 'CAT'.
@@ -392,11 +279,6 @@ FORM template_columns USING pv_type TYPE any
     APPEND lv_txt TO ct_head.
   ENDLOOP.
 
-* The twelve legacy columns are all ZDE_FCST_QTY, so the dictionary
-* label is the same twelve times over and would not tell the user which
-* month is which. They are named from the financial calendar instead -
-* period 1 is April - by the same routine that labels the result list,
-* so the template and the log say the same thing.
   IF lv_mth = abap_true.
     DO 12 TIMES.
       lv_i = sy-index.
@@ -414,14 +296,6 @@ FORM template_columns USING pv_type TYPE any
 
 ENDFORM.
 
-
-*&---------------------------------------------------------------------*
-*& The dictionary label of TABLE-FIELD
-*&
-*& Long text first, then medium, then the field text, so the heading is
-*& as readable as the dictionary allows. A field with no label at all
-*& still gets its own name rather than an empty column.
-*&---------------------------------------------------------------------*
 FORM field_label USING pv_key TYPE string
                  CHANGING cv_txt TYPE string.
 
@@ -473,13 +347,7 @@ FORM field_label USING pv_key TYPE string
   CONDENSE cv_txt.
 
 ENDFORM.
-*& EOC By Arnav on 31/08/26
 
-
-*&---------------------------------------------------------------------*
-* PV_TYPE is TYPE ANY, not TYPE CHAR4: the eight buttons pass a literal
-* such as 'CAT', which is C(3) and would not be type compatible with a
-* C(4) formal parameter.
 FORM download_template USING pv_type TYPE any.
 
   DATA: lt_head TYPE string_table,
@@ -496,28 +364,14 @@ FORM download_template USING pv_type TYPE any.
 
   CHECK lt_head IS NOT INITIAL.
 
-*BOC By Arnav on 31/08/26
-* One row, the column headings. The sample row that used to follow it
-* carried invented master data - see the note on TEMPLATE_COLUMNS.
-*  PERFORM join_row USING lt_demo CHANGING lv_line.
-*  APPEND lv_line TO lt_out.
   PERFORM join_row USING lt_head CHANGING lv_line.
   APPEND lv_line TO lt_out.
-*EOC By Arnav on 31/08/26
 
-*BOC By Arnav on 31/08/26
-* The template was written as .txt, which Excel opens through the text
-* import wizard - and a user who clicked past it got the columns in one
-* cell and uploaded a file the program could not read. A .csv opens
-* straight into columns, and the upload now reads the workbook back
-* whether it is saved as .csv or as .xlsx.
-*  CONCATENATE lv_name '.txt' INTO lv_file.
   CONCATENATE lv_name '.csv' INTO lv_file.
-*EOC By Arnav on 31/08/26
 
   cl_gui_frontend_services=>file_save_dialog(
     EXPORTING  default_file_name = lv_file
-               default_extension = 'csv'   "Changes by Arnav on 31/08/26
+               default_extension = 'csv'
     CHANGING   filename          = lv_file
                path              = lv_path
                fullpath          = lv_full
@@ -535,13 +389,9 @@ FORM download_template USING pv_type TYPE any.
                OTHERS           = 2 ).
 
   IF sy-subrc = 0.
-*BOC By Arnav on 31/08/26
-*   The headings are the dictionary labels of the fields the columns
-*   load, so the user is told to keep them where they are.
     CONCATENATE 'Template saved to' lv_full
                 '- keep row 1 and the column order as they are'
            INTO lv_msg SEPARATED BY space.
-*EOC By Arnav on 31/08/26
     MESSAGE lv_msg TYPE 'S'.
   ELSE.
     MESSAGE e013 WITH lv_full.
@@ -549,15 +399,6 @@ FORM download_template USING pv_type TYPE any.
 
 ENDFORM.
 
-
-*&---------------------------------------------------------------------*
-*BOC By Arnav on 31/08/26
-*& The template is comma separated now rather than tab separated, so a
-*& value that itself contains a comma or a quote is wrapped in quotes
-*& and its own quotes are doubled - the CSV convention the upload reads
-*& back. Nothing in the shipped layouts needs it today; a reason text
-*& added to a template later would.
-*&---------------------------------------------------------------------*
 FORM join_row USING pt_val TYPE string_table
               CHANGING cv_line TYPE string.
 
@@ -569,8 +410,6 @@ FORM join_row USING pt_val TYPE string_table
 
   LOOP AT pt_val INTO lv_val.
 
-*   SY-TABIX is read straight away rather than after the statements
-*   below, so nothing in between can have moved it
     lv_ix  = sy-tabix.
     lv_out = lv_val.
 
@@ -588,10 +427,7 @@ FORM join_row USING pt_val TYPE string_table
   ENDLOOP.
 
 ENDFORM.
-*& EOC By Arnav on 31/08/26
 
-
-*&---------------------------------------------------------------------*
 FORM f4_file.
 
   DATA: lt_files TYPE filetable,
@@ -612,33 +448,6 @@ FORM f4_file.
 
 ENDFORM.
 
-
-*&---------------------------------------------------------------------*
-*& BOC By Arnav on 31/08/26
-*&
-*& Reading the file the user actually has
-*&
-*& GUI_UPLOAD with FILETYPE 'ASC' and HAS_FIELD_SEPARATOR reads tab
-*& separated TEXT. Handed a real .XLSX it reads the zip container as
-*& text, so every row came back as rubbish or as nothing at all - which
-*& is what the users were reporting. The workbook is now read as a
-*& workbook; CSV and tab separated text still work exactly as before:
-*&
-*&   .XLSX .XLSM .XLS   binary, CL_FDT_XL_SPREADSHEET, first worksheet
-*&   .CSV               comma separated, quoted values understood
-*&   anything else      tab separated, comma as a fallback
-*&
-*& The old body, for reference:
-*&
-*&   cl_gui_frontend_services=>gui_upload(
-*&     EXPORTING  filename            = lv_name
-*&                filetype            = 'ASC'
-*&                has_field_separator = 'X'
-*&     CHANGING   data_tab            = gt_raw ... ).
-*&   IF p_head = 'X'.
-*&     DELETE gt_raw INDEX 1.
-*&   ENDIF.
-*&---------------------------------------------------------------------*
 FORM upload_file.
 
   DATA: lv_name TYPE string,
@@ -657,14 +466,10 @@ FORM upload_file.
 
   PERFORM drop_header.
 
-* Trailing blank lines at the end of a spreadsheet export are ignored
-* rather than reported as errors
   DELETE gt_raw WHERE f01 IS INITIAL AND f02 IS INITIAL AND f03 IS INITIAL.
 
 ENDFORM.
 
-
-*&---------------------------------------------------------------------*
 FORM file_extension USING pv_name TYPE string
                     CHANGING cv_ext TYPE string.
 
@@ -674,8 +479,6 @@ FORM file_extension USING pv_name TYPE string
   CLEAR cv_ext.
   CHECK pv_name CS '.'.
 
-* The LAST dot, so a path such as C:\My.Files\history.xlsx is read
-* correctly
   SPLIT pv_name AT '.' INTO TABLE lt_part.
   lv_last = lines( lt_part ).
   CHECK lv_last > 1.
@@ -688,15 +491,6 @@ FORM file_extension USING pv_name TYPE string
 
 ENDFORM.
 
-
-*&---------------------------------------------------------------------*
-*& A real Excel workbook
-*&
-*& The sheet is read by COLUMN POSITION, never by column name.
-*& CL_FDT_XL_SPREADSHEET builds the component names from the heading row
-*& of the sheet, which the user can and does retype; the template fixes
-*& the ORDER of the columns, and that is what is relied on.
-*&---------------------------------------------------------------------*
 FORM upload_excel USING pv_name TYPE string.
 
   DATA: lt_bin  TYPE solix_tab,
@@ -732,9 +526,6 @@ FORM upload_excel USING pv_name TYPE string.
   lv_xstr = cl_bcs_convert=>solix_to_xstring( it_solix = lt_bin
                                               iv_size  = lv_len ).
 
-* A workbook saved in the old .XLS format, or a file renamed to .XLSX
-* that is not one, cannot be parsed. The user is told to save it as CSV
-* rather than being left with an empty list.
   TRY.
       CREATE OBJECT lo_xl
         EXPORTING document_name = pv_name
@@ -799,10 +590,6 @@ FORM upload_excel USING pv_name TYPE string.
 
 ENDFORM.
 
-
-*&---------------------------------------------------------------------*
-*& CSV or tab separated text
-*&---------------------------------------------------------------------*
 FORM upload_text USING pv_name TYPE string
                        pv_ext  TYPE string.
 
@@ -811,8 +598,6 @@ FORM upload_text USING pv_name TYPE string
         lv_sep  TYPE c LENGTH 1,
         ls_raw  TYPE ty_raw.
 
-* Read whole lines. The separator is decided below rather than by
-* HAS_FIELD_SEPARATOR, which only ever splits on a tab.
   cl_gui_frontend_services=>gui_upload(
     EXPORTING  filename        = pv_name
                filetype        = 'ASC'
@@ -826,8 +611,6 @@ FORM upload_text USING pv_name TYPE string
     RETURN.
   ENDIF.
 
-* A tab anywhere in the file wins, so a tab separated export whose text
-* happens to contain commas is still split on tabs
   CLEAR lv_sep.
   LOOP AT lt_line INTO lv_line.
     IF lv_line CS g_tab.
@@ -856,14 +639,6 @@ FORM upload_text USING pv_name TYPE string
 
 ENDFORM.
 
-
-*&---------------------------------------------------------------------*
-*& One line into the sixteen raw columns
-*&
-*& SPLIT does the work whenever the line carries no quote, which is
-*& every line of every template shipped today. Only a line that really
-*& is quoted is walked character by character.
-*&---------------------------------------------------------------------*
 FORM split_line USING pv_line TYPE string
                       pv_sep  TYPE c
                 CHANGING cs_raw TYPE ty_raw.
@@ -883,9 +658,6 @@ FORM split_line USING pv_line TYPE string
 
     SPLIT pv_line AT pv_sep INTO TABLE lt_fld.
     LOOP AT lt_fld INTO lv_fld.
-*     SY-TABIX is copied first. Handing a system field straight to a
-*     FORM passes it by reference, and the form is then working on a
-*     field the runtime may move underneath it.
       lv_ix = sy-tabix.
       PERFORM put_field USING lv_ix lv_fld CHANGING cs_raw.
     ENDLOOP.
@@ -901,7 +673,6 @@ FORM split_line USING pv_line TYPE string
     lv_ch = pv_line+lv_off(1).
 
     IF lv_ch = '"'.
-*     Two quotes inside a quoted value are one quote
       IF lv_q = abap_true AND lv_off + 2 <= lv_len AND pv_line+lv_off(2) = '""'.
         CONCATENATE lv_val '"' INTO lv_val RESPECTING BLANKS.
         lv_off = lv_off + 2.
@@ -933,16 +704,12 @@ FORM split_line USING pv_line TYPE string
 
 ENDFORM.
 
-
-*&---------------------------------------------------------------------*
 FORM put_field USING pv_ix  TYPE i
                      pv_val TYPE string
                CHANGING cs_raw TYPE ty_raw.
 
   FIELD-SYMBOLS <lv_out> TYPE any.
 
-* Sixteen columns is what TY_RAW holds. A file with more is not an
-* error, the extra columns simply belong to no field.
   CHECK pv_ix >= 1 AND pv_ix <= 16.
 
   UNASSIGN <lv_out>.
@@ -953,17 +720,6 @@ FORM put_field USING pv_ix  TYPE i
 
 ENDFORM.
 
-
-*&---------------------------------------------------------------------*
-*& The heading row
-*&
-*& CL_FDT_XL_SPREADSHEET turns the heading row of the sheet into the
-*& component names of the table it returns, so an Excel upload arrives
-*& with the heading already gone. Deleting on the checkbox alone would
-*& then have thrown away the first real row. The row is matched against
-*& the first heading of the template instead, and the checkbox is only
-*& used for a text file whose first row is something else.
-*&---------------------------------------------------------------------*
 FORM drop_header.
 
   DATA: lt_head  TYPE string_table,
@@ -1000,12 +756,7 @@ FORM drop_header.
   ENDIF.
 
 ENDFORM.
-*& EOC By Arnav on 31/08/26
 
-
-*&---------------------------------------------------------------------*
-*& 1 - Product category, load factor, MTS / MTO
-*&---------------------------------------------------------------------*
 FORM do_category.
 
   DATA: ls_raw   TYPE ty_raw,
@@ -1060,8 +811,6 @@ FORM do_category.
       CONTINUE.
     ENDIF.
 
-*   The existing row is read first so the original created by and
-*   created on are carried forward instead of being wiped by the MODIFY
     CLEAR: ls_cat, ls_old, lv_ex.
     SELECT SINGLE * FROM zppt_prod_cat INTO @ls_old
       WHERE werks = @lv_werks AND matnr = @lv_matnr.
@@ -1094,10 +843,6 @@ FORM do_category.
 
 ENDFORM.
 
-
-*&---------------------------------------------------------------------*
-*& 2 - Material code tracking, old code to new code
-*&---------------------------------------------------------------------*
 FORM do_tracking.
 
   DATA: ls_raw   TYPE ty_raw,
@@ -1145,8 +890,6 @@ FORM do_tracking.
       CONTINUE.
     ENDIF.
 
-*   An old code that is itself a successor would make the chain
-*   ambiguous, so it is refused rather than silently mis-added
     PERFORM check_chain USING lv_werks lv_old1 lv_old2 CHANGING lv_err.
     IF lv_err IS NOT INITIAL.
       PERFORM log USING lv_row lv_werks lv_new lv_blank gc_err lv_err.
@@ -1184,8 +927,6 @@ FORM do_tracking.
 
 ENDFORM.
 
-
-*&---------------------------------------------------------------------*
 FORM check_chain USING pv_werks TYPE werks_d
                        pv_old1  TYPE matnr
                        pv_old2  TYPE matnr
@@ -1214,10 +955,6 @@ FORM check_chain USING pv_werks TYPE werks_d
 
 ENDFORM.
 
-
-*&---------------------------------------------------------------------*
-*& 3 - Material exclusion
-*&---------------------------------------------------------------------*
 FORM do_exclusion.
 
   DATA: ls_raw   TYPE ty_raw,
@@ -1276,10 +1013,6 @@ FORM do_exclusion.
 
 ENDFORM.
 
-
-*&---------------------------------------------------------------------*
-*& 4 - Legacy sales history, twelve months on one row
-*&---------------------------------------------------------------------*
 FORM do_history.
 
   DATA: ls_raw   TYPE ty_raw,
@@ -1345,7 +1078,6 @@ FORM do_history.
     ls_hist-gjahr = lv_gjahr.
     ls_hist-meins = lv_meins.
 
-*   Columns 4 to 15 of the file hold M01 to M12, April first
     CLEAR lv_tot.
     lv_i = 1.
     WHILE lv_i <= 12.
@@ -1391,10 +1123,6 @@ FORM do_history.
 
 ENDFORM.
 
-
-*&---------------------------------------------------------------------*
-*& 5 and 6 - Business forecast given by sales, quarterly or monthly
-*&---------------------------------------------------------------------*
 FORM do_business USING pv_mode TYPE char1.
 
   DATA: ls_raw   TYPE ty_raw,
@@ -1456,9 +1184,6 @@ FORM do_business USING pv_mode TYPE char1.
 
       lv_qtr = lv_pi.
 
-*     The whole row is read and written back, so a business forecast
-*     loaded onto an already generated forecast changes only that one
-*     column and leaves the calculated figures untouched
       CLEAR ls_qt.
       SELECT SINGLE * FROM zppt_fcst_qt INTO @ls_qt
         WHERE werks = @lv_werks AND matnr = @lv_matnr
@@ -1535,10 +1260,6 @@ FORM do_business USING pv_mode TYPE char1.
 
 ENDFORM.
 
-
-*&---------------------------------------------------------------------*
-*& 7 and 8 - Additional or reduced quantity with a reason
-*&---------------------------------------------------------------------*
 FORM do_change USING pv_mode TYPE char1.
 
   DATA: ls_raw   TYPE ty_raw,
@@ -1607,8 +1328,6 @@ FORM do_change USING pv_mode TYPE char1.
       CONTINUE.
     ENDIF.
 
-*   A change adjusts a forecast that already exists. If it is not there
-*   the row is rejected rather than a bare change record being created.
     IF pv_mode = 'Q'.
 
       lv_qtr = lv_pi.
@@ -1628,8 +1347,6 @@ FORM do_change USING pv_mode TYPE char1.
       PERFORM final_qty CHANGING ls_qt-fcst_qty ls_qt-bus_fcst
                                  ls_qt-bus_fcst_add ls_qt-final_qty.
 
-*     FINAL_QTY no longer carries the change, so the guard tests the
-*     total the change actually moves
       lv_total = ls_qt-final_qty + ls_qt-bus_fcst_add.
       IF lv_total < 0.
         lv_err = 'The reduction is larger than the forecast, the final quantity would be negative'.
@@ -1693,27 +1410,12 @@ FORM do_change USING pv_mode TYPE char1.
 
     ENDIF.
 
-*   A change always adjusts an existing forecast, so it is never a create
     PERFORM log_ok USING lv_row lv_werks lv_matnr lv_per lv_yes lv_txt.
 
   ENDLOOP.
 
 ENDFORM.
 
-
-*&---------------------------------------------------------------------*
-*& FINAL_QTY must be worked out exactly as the report works it out, or
-*& an uploaded row and a generated row would disagree.
-*&
-*& The FS compares the generated forecast with the business forecast and
-*& takes the higher of the two - "Compare forecast and business
-*& forecast", sheet 3 row 57, confirmed by the worked example where
-*& 1200 against 4000 gives 4000. The additional plan quantity is NOT
-*& part of it; it is added afterwards to give the second final column.
-*&
-*& This previously added all three together, which inflated every
-*& uploaded row.
-*&---------------------------------------------------------------------*
 FORM final_qty CHANGING cv_gen TYPE zde_fcst_qty
                         cv_bus TYPE zde_fcst_qty
                         cv_add TYPE zde_fcst_qty
@@ -1723,8 +1425,6 @@ FORM final_qty CHANGING cv_gen TYPE zde_fcst_qty
 
 ENDFORM.
 
-
-*&---------------------------------------------------------------------*
 FORM stamp USING pv_exists TYPE abap_bool
            CHANGING cv_ernam TYPE any
                     cv_erdat TYPE any
@@ -1741,8 +1441,6 @@ FORM stamp USING pv_exists TYPE abap_bool
 
 ENDFORM.
 
-
-*&---------------------------------------------------------------------*
 FORM check_period USING pv_mode TYPE char1
                         pv_per  TYPE i
                   CHANGING pv_err TYPE string.
@@ -1761,11 +1459,6 @@ FORM check_period USING pv_mode TYPE char1
 
 ENDFORM.
 
-
-*&---------------------------------------------------------------------*
-*& The period is shown on the log in words so the user is not left
-*& working out why month 1 means April
-*&---------------------------------------------------------------------*
 FORM period_text USING pv_mode TYPE char1
                        pv_in   TYPE any
                  CHANGING cv_txt TYPE char12.
@@ -1801,8 +1494,6 @@ FORM period_text USING pv_mode TYPE char1
 
 ENDFORM.
 
-
-*&---------------------------------------------------------------------*
 FORM check_marc USING pv_werks TYPE werks_d
                       pv_matnr TYPE matnr
                 CHANGING pv_err TYPE string.
@@ -1833,19 +1524,14 @@ FORM check_marc USING pv_werks TYPE werks_d
 
 ENDFORM.
 
-
-*&---------------------------------------------------------------------*
 FORM to_plant USING pv_in TYPE any CHANGING cv_werks TYPE werks_d.
 
-* Plant carries no conversion exit, so it is taken as typed
   CLEAR cv_werks.
   cv_werks = pv_in.
   CONDENSE cv_werks.
 
 ENDFORM.
 
-
-*&---------------------------------------------------------------------*
 FORM to_material USING pv_in TYPE any CHANGING cv_matnr TYPE matnr.
 
   DATA lv_in TYPE char40.
@@ -1856,7 +1542,6 @@ FORM to_material USING pv_in TYPE any CHANGING cv_matnr TYPE matnr.
   CONDENSE lv_in.
   CHECK lv_in IS NOT INITIAL.
 
-* Entered without leading zeros in the spreadsheet, stored padded
   CALL FUNCTION 'CONVERSION_EXIT_MATN1_INPUT'
     EXPORTING  input        = lv_in
     IMPORTING  output       = cv_matnr
@@ -1869,8 +1554,6 @@ FORM to_material USING pv_in TYPE any CHANGING cv_matnr TYPE matnr.
 
 ENDFORM.
 
-
-*&---------------------------------------------------------------------*
 FORM to_dec USING pv_in TYPE any CHANGING cv_out TYPE any.
 
   DATA lv_in TYPE string.
@@ -1881,7 +1564,6 @@ FORM to_dec USING pv_in TYPE any CHANGING cv_out TYPE any.
   CONDENSE lv_in NO-GAPS.
   CHECK lv_in IS NOT INITIAL.
 
-* Thousand separators from a spreadsheet export are dropped
   REPLACE ALL OCCURRENCES OF ',' IN lv_in WITH ''.
 
   TRY.
@@ -1892,8 +1574,6 @@ FORM to_dec USING pv_in TYPE any CHANGING cv_out TYPE any.
 
 ENDFORM.
 
-
-*&---------------------------------------------------------------------*
 FORM to_int USING pv_in TYPE any CHANGING cv_out TYPE i.
 
   DATA lv_in TYPE string.
@@ -1912,8 +1592,6 @@ FORM to_int USING pv_in TYPE any CHANGING cv_out TYPE i.
 
 ENDFORM.
 
-
-*&---------------------------------------------------------------------*
 FORM log USING pv_row    TYPE i
                pv_werks  TYPE any
                pv_matnr  TYPE any
@@ -1946,8 +1624,6 @@ FORM log USING pv_row    TYPE i
 
 ENDFORM.
 
-
-*&---------------------------------------------------------------------*
 FORM log_ok USING pv_row    TYPE i
                   pv_werks  TYPE any
                   pv_matnr  TYPE any
@@ -1978,8 +1654,6 @@ FORM log_ok USING pv_row    TYPE i
 
 ENDFORM.
 
-
-*&---------------------------------------------------------------------*
 FORM display_log.
 
   DATA: lo_alv  TYPE REF TO cl_salv_table,
@@ -2027,8 +1701,6 @@ FORM display_log.
       PERFORM txt USING lo_cols 'ACTION'  'Result'.
       PERFORM txt USING lo_cols 'MESSAGE' 'Detail'.
 
-*     The detail column carries a whole sentence, so it is given room
-*     up front instead of the user dragging it wider on every run
       TRY.
           lo_cols->get_column( 'MESSAGE' )->set_output_length( 60 ).
         CATCH cx_salv_not_found.
@@ -2045,8 +1717,6 @@ FORM display_log.
 
 ENDFORM.
 
-
-*&---------------------------------------------------------------------*
 FORM txt USING po_cols TYPE REF TO cl_salv_columns_table
                pv_name TYPE any
                pv_text TYPE any.
@@ -2065,12 +1735,6 @@ FORM txt USING po_cols TYPE REF TO cl_salv_columns_table
   lv_m   = lv_txt.
   lv_l   = lv_txt.
 
-* ALV picks WHICH of the three heading texts to draw from the column
-* output length - the short one below 10 characters, the medium one
-* below 20, the long one above that. A long heading on a narrow numeric
-* column was therefore drawn from the short text and cut off. The width
-* is set from the heading so the long text is chosen, and set_optimize
-* then widens further where the data needs it.
   lv_len = strlen( lv_txt ).
   IF lv_len < 10.
     lv_len = 10.

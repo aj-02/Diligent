@@ -25,6 +25,16 @@ ZFORECAST (Adhesive), Astral / UDAY, built to `Forecast Template-Adhesive.xlsx` 
   or `cl_gui_custom_container` here** — doing so converts the whole repo back to paste-only.
 - `LVC_T_FNAME` is not available in every release, so the column-name list is typed locally
   over `LVC_FNAME`.
+- **Do not build an internal table with a `VALUE` constructor over literals here.** The
+  rows of a `VALUE` table constructor must be *compatible* with the row type on this
+  release, not merely convertible, so `VALUE #( ( 'PLANT' ) )` into a `STRING_TABLE`
+  (row type `STRING`) and `VALUE tt_fname( ( 'WERKS' ) )` (row type `LVC_FNAME`) are both
+  refused — "'PLANT' and the row type of CT_HEAD are incompatible", 16 of them in the
+  upload program on 31/08/26. `APPEND` converts; use it. Structured rows with named
+  components (`VALUE #( ( sign = 'I' ... ) )`) are fine and are used in `ZCL_PP_FCST`.
+- **Upload template headings come from the DDIC, not from the program.** `TEMPLATE_COLUMNS`
+  lists the table and field behind each column; `FIELD_LABEL` reads the label through
+  `DDIF_FIELDINFO_GET`. There is no sample data row — see ISSUES.md 31/08/26.
 - Every table name in the source document exceeds SAP's 16-character limit and had to be
   renamed (`ZPP_ADH_FORECAST_YEAR` → `ZPPT_FCST_YR`, etc.); `ZPP_ADHESIVE_SNRO` → `ZPPFCST`
   because number range objects are capped at 10. The rename table is in

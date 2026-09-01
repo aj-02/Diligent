@@ -533,10 +533,16 @@ FORM visible_columns CHANGING ct_show TYPE tt_fname.
 
   CLEAR ct_show.
 
-  ct_show = VALUE tt_fname(
-    ( 'WERKS' ) ( 'MATNR' ) ( 'MAKTX' ) ( 'MATKL' ) ( 'NTGEW' )
-    ( 'MVGR1_TXT' ) ( 'MVGR2_TXT' ) ( 'MVGR3_TXT' )
-    ( 'MVGR4_TXT' ) ( 'MVGR5_TXT' ) ).
+  APPEND 'WERKS'     TO ct_show.
+  APPEND 'MATNR'     TO ct_show.
+  APPEND 'MAKTX'     TO ct_show.
+  APPEND 'MATKL'     TO ct_show.
+  APPEND 'NTGEW'     TO ct_show.
+  APPEND 'MVGR1_TXT' TO ct_show.
+  APPEND 'MVGR2_TXT' TO ct_show.
+  APPEND 'MVGR3_TXT' TO ct_show.
+  APPEND 'MVGR4_TXT' TO ct_show.
+  APPEND 'MVGR5_TXT' TO ct_show.
 
   CASE g_mode.
 

@@ -23,6 +23,15 @@
 * NOTE 3 - DDL VIEW vs VIEW ENTITY: same caveat as the I_ extension.
 *   If C_FixedAssetWorklist is a view entity, use "extend view entity" and
 *   drop @AbapCatalog.sqlViewAppendName.
+*
+* NOTE 4 - IF THE ELEMENT IS NOT FOUND, IT IS AN ALIAS PROBLEM.
+*   Same trap as object 1, where the ANLA data source turned out to be
+*   aliased "an". Here the element being added comes from the extended
+*   view's own data source, so the reference must match how that data source
+*   is aliased in C_FixedAssetWorklist's FROM clause. In ADT put the cursor
+*   inside the braces, type the alias followed by "." and press Ctrl+Space
+*   to see what is actually in scope. Do NOT rename the element itself -
+*   ZZCustodianOfAssets is what the DDLX and the OData service expect.
 *****************************************************************************/
 
 @EndUserText.label: 'Ext: Custodian of Assets - Consumption'
@@ -30,10 +39,10 @@
 
 extend view C_FixedAssetWorklist with ZZC_FixedAssetWorklist_Ext
 {
-  " Element published by ZZI_FIXEDASSETWORKLIST_EXT on the interface view.
+  " Element published by ZZI_FIXEDASSETWORKLIST_EXT on the interface view
+  " (activated 01/09/26).
   " ASSUMPTION: C_FixedAssetWorklist selects from I_FixedAssetWorklist without
-  " ASSUMPTION: an alias. If ADT reports "ZZCustodianOfAssets is not defined",
-  " ASSUMPTION: prefix it with the alias used in the standard view's FROM
-  " ASSUMPTION: clause, e.g. Worklist.ZZCustodianOfAssets.
+  " ASSUMPTION: an alias. If ADT rejects this, see NOTE 4 - prefix with the
+  " ASSUMPTION: alias, do not rename the element.
   ZZCustodianOfAssets
 }

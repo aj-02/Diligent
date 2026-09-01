@@ -12,8 +12,7 @@ metadata extension for the UI annotation.
 Stack (views confirmed by Arnav; source table confirmed as **ANLU**):
 
     ANLU  (asset master user fields, CI_ANLU customer include)   <-- custodian lives here
-        -> ZZI_FIXEDASSET_USERFIELD          (new customer interface view)
-             ~ associated [0..1] into ~
+        ~ associated [0..1] directly from the extension, no wrapper view ~
     ANLA -> I_FixedAssetWorklist             (standard interface view)
              -> C_FixedAssetWorklist         (standard consumption view, exposed by the service)
                  -> OData service            -> F1592
@@ -56,10 +55,14 @@ Activate strictly in this order. Same transport.
 
 | # | Object | Type | File |
 |---|--------|------|------|
-| 1 | `ZZI_FIXEDASSET_USERFIELD` | CDS interface view over ANLU (new) | `ZZI_FIXEDASSET_USERFIELD.ddls.asddls` |
-| 2 | `ZZI_FIXEDASSETWORKLIST_EXT` | CDS extend view (interface) | `ZZI_FIXEDASSETWORKLIST_EXT.ddls.asddls` |
-| 3 | `ZZC_FIXEDASSETWORKLIST_EXT` | CDS extend view (consumption) | `ZZC_FIXEDASSETWORKLIST_EXT.ddls.asddls` |
-| 4 | `ZZC_FIXEDASSETWL_MDE` | CDS metadata extension (DDLX) | `ZZC_FIXEDASSETWL_MDE.ddlx.asddlx` |
+| 1 | `ZZI_FIXEDASSETWORKLIST_EXT` | CDS extend view (interface) | `ZZI_FIXEDASSETWORKLIST_EXT.ddls.asddls` |
+| 2 | `ZZC_FIXEDASSETWORKLIST_EXT` | CDS extend view (consumption) | `ZZC_FIXEDASSETWORKLIST_EXT.ddls.asddls` |
+| 3 | `ZZC_FIXEDASSETWL_MDE` | CDS metadata extension (DDLX) | `ZZC_FIXEDASSETWL_MDE.ddlx.asddlx` |
+
+**All three are extensions — no new view is created.** A CDS association can
+target a DDIC table directly, so ANLU is reached from the extension itself. The
+earlier `ZZI_FIXEDASSET_USERFIELD` wrapper view was unnecessary and has been
+deleted.
 
 Exposed element name is `ZZCustodianOfAssets` in all three. Ships by paste into
 ADT (new DDL source / new metadata extension) — not by abapGit ZIP.
@@ -76,10 +79,10 @@ the CI_ANLU customer-include table. Consequences, all of them good:
   customer-include table. An `extend view` appends to the SELECT list over the
   *existing* data sources; it cannot add a join. So the field cannot simply be
   named in the extension.
-- **Route taken:** wrap ANLU in a small interface view
-  (`ZZI_FIXEDASSET_USERFIELD`), then declare a `[0..1]` association to it
-  *inside* the `I_FixedAssetWorklist` extension and select through it. The path
-  expression compiles to a LEFT OUTER JOIN.
+- **Route taken:** declare a `[0..1]` association **straight to the ANLU table**
+  inside the `I_FixedAssetWorklist` extension and select through it. A CDS
+  association may target a DDIC table, not just a CDS entity, so no wrapper
+  view is needed. The path expression compiles to a LEFT OUTER JOIN.
 - **`[0..1]`, not `[1..1]`.** ANLU rows exist only where user fields were
   maintained. `[1..1]` would inner-join and silently drop every asset with no
   custodian from the worklist — a data-loss bug nobody notices until the list
@@ -89,16 +92,33 @@ the CI_ANLU customer-include table. Consequences, all of them good:
 
 Two things still to confirm before activation:
 
-1. **The ANLU field name** — AS03 → F1 → Technical Information. Goes into
-   `ZZI_FIXEDASSET_USERFIELD` (token `ZZ_REPLACE_WITH_CONFIRMED_FIELD`).
+1. **The ANLU field name** — AS03 → F1 → Technical Information. Token
+   `ZZ_REPLACE_WITH_CONFIRMED_FIELD` in the interface extension.
 2. **The ANLA alias** in `I_FixedAssetWorklist`'s FROM clause — goes into the
    association ON condition (token `<ANLA_ALIAS>`). If that view selects from
    an intermediate CDS view rather than ANLA directly, the ON condition has to
    be written against that view's elements instead.
 
-Worth 30 seconds first: open `I_FixedAssetWorklist` in ADT and search for
-`ANLU`. If SAP already joins it on this release, drop `ZZI_FIXEDASSET_USERFIELD`
-and the association entirely and select the field directly — one line.
+## Does anything in the flow already read ANLU?
+
+Worth checking before pasting — if it does, the association goes away too and
+this collapses to a one-line extension. Fastest route is a where-used on the
+table, which answers it for the whole system in one screen:
+
+**`/nSE11` → Database table `ANLU` → Display → Where-Used List
+(Ctrl+Shift+F3) → tick *Views* and *CDS views* / *DDIC objects* → Enter.**
+
+ADT equivalent: open ANLU, Ctrl+Shift+G (Get Where-Used).
+
+Read the result three ways:
+
+- **Nothing comes back** → expected. Keep the association as delivered.
+- **A standard CDS view reads ANLU** → open `I_FixedAssetWorklist` and check
+  its association list at the top for one pointing at that view. If there is
+  one, use `_ThatAssoc.<field>` and delete our association. If there is not,
+  ours still stands — a view existing elsewhere does not put it in scope here.
+- **A Z view already reads ANLU** → someone has done this before. Send it to
+  me before we add a second one.
 
 ## Fallback, if the association is rejected
 

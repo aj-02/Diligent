@@ -12,8 +12,8 @@
 * NOTE 1 - THIS LAYER IS NOT OPTIONAL.
 *   Adding the element to I_FixedAssetWorklist alone leaves it invisible to
 *   the app. The service exposes the C_ view, so the element must be
-*   published here too. Activate ZZI_FIXEDASSET_USERFIELD then
-*   ZZI_FIXEDASSETWORKLIST_EXT first - this is object 3 of 4.
+*   published here too. Activate ZZI_FIXEDASSETWORKLIST_EXT first - this is
+*   object 2 of 3.
 *
 * NOTE 2 - NO UI ANNOTATIONS HERE.
 *   @UI.lineItem / @UI.selectionField belong in the metadata extension

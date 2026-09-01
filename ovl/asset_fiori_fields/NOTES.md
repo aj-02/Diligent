@@ -20,13 +20,20 @@ Fiori Asset Accounting apps, routed to us via SAP (Gaurav Sharma).
 support portal is not reachable from this machine, so that markdown file is the local copy
 of record.
 
-**The KBA is scoped to F1615/F1617 only.** It does not mention F1592, nor
-`C_FixedAssetWorklist` / `I_FixedAssetWorklist`. It is a *works as designed* article — no
-correction to implement, everything falls to customer-side extensibility.
+**The KBA is scoped to F1615/F1617 only.** It does not mention F1592. It is a *works as designed*
+article — no correction to implement, everything falls to customer-side extensibility.
+
+**The two view names in SAP's reply are not SAP names.** `C_FixedAssetWorklist` and
+`I_FixedAssetWorklist` could not be found in any public SAP artefact; `_FixedAssetWorklist` exists
+only as an *association alias* pointing at `I_FixedAsset`. Do not build against them. See
+`ANALYSIS.md` §1.
 
 The one mechanism it names, verbatim: *"This CDS View `I_FixedAsset` have reference
 extension view `E_FixedAsset`. Using this Extension View, you can add any field contained in
 table ANLU."*
+
+**`ANALYSIS.md` is the working document for this thread** — the rectification route, what is
+confirmed vs to-verify, the in-system check list, and the field-name traps.
 
 ## Gotchas
 
@@ -37,9 +44,12 @@ table ANLU."*
   evaluation group, a personnel number, or a customer field in ANLU. Which one decides
   whether this is config or development. Unconfirmed — must be read off AS03 via
   F1 -> Technical Information.
-- The KBA proves an `E_FixedAsset` extension reaches `I_FixedAsset`. It does **not**
-  establish that the field propagates onward into the F1592 worklist stack, nor that it
-  appears in "Adapt Filters" without a separate metadata extension. Open question.
+- A CDS field extension does **not** propagate up the stack. Every consuming view is its own
+  extension object, and `E_FixedAsset` alone does not reach `I_FixedAsset` — that is two objects.
+- Key-user extensibility of the asset master is **time-independent only** (ANLU). If custodian has
+  to change over the asset's life, this route cannot deliver it. Settle that requirement first.
+- The KBA's release table for the cube/query names is stale and contradicts its own prose; the
+  deprecation runs the other way. Verify in the View Browser, never from the KBA table.
 - **Item 1 (depreciation key not defaulting) is not a Fiori defect** and should not be
   handled in the same thread as items 2 and 3.
 

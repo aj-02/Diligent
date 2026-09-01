@@ -17,3 +17,15 @@ with SAP KBA 3049624 attached.
 "works as designed" article — no correction exists. Sanctioned route is a customer field in
 ANLU plus an extension of `E_FixedAsset`. Blocked pending three answers from OVL/SAP:
 exact S/4 release + FPS, the technical name behind "Custodian of Assets", and note 3435255.
+
+**01/09/26 (later)** — Research sweep completed; findings written to `ANALYSIS.md`.
+Headline: the two CDS view names SAP quoted (`C_FixedAssetWorklist`, `I_FixedAssetWorklist`)
+could not be corroborated as SAP objects and must not be built against. Recommended route for
+items 2/3 is key-user extensibility (Custom Fields → business context for the asset master →
+UIs and Reports → Enable Usage), with `SCFD_EUI` to promote any existing ECC-era `CI_ANLU`
+fields rather than creating new ones. Hard constraint found: asset-master key-user extensibility
+is time-independent only — if custodian must be time-dependent the route does not apply.
+Item 1 reframed: `0000` is a real depreciation key ("no depreciation and no interest"), so the
+key defaulted and is wrong, rather than failing to default; `OAYZ`/`ANKB` plus the `AO21`
+depreciation-area screen layout rule are the two controls. Chart of depreciation is ONGC and
+asset 106009197/0 already carries the same eight areas — no test asset needs creating.

@@ -90,14 +90,14 @@ the CI_ANLU customer-include table. Consequences, all of them good:
 - **Not a CBEB field.** CI_ANLU is the classic append route, so the *Custom
   Fields and Logic* app is not involved and cannot do this for us.
 
-Two things still to confirm before activation:
+Both unknowns are now confirmed (Arnav, 01/09/26):
 
-1. **The ANLU field name** — AS03 → F1 → Technical Information. Token
-   `ZZ_REPLACE_WITH_CONFIRMED_FIELD` in the interface extension.
-2. **The ANLA alias** in `I_FixedAssetWorklist`'s FROM clause — goes into the
-   association ON condition (token `<ANLA_ALIAS>`). If that view selects from
-   an intermediate CDS view rather than ANLA directly, the ON condition has to
-   be written against that view's elements instead.
+| | Value |
+|---|---|
+| ANLU field | `ZZCUSTODIAN` |
+| ANLA alias in `I_FixedAssetWorklist` | `an` |
+
+No placeholders remain in any of the three sources.
 
 ## Does anything in the flow already read ANLU?
 

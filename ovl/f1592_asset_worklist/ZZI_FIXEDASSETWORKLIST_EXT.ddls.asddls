@@ -48,10 +48,8 @@
 *   The right-hand side references ANLA columns through the alias the
 *   standard view gives its data source. Deliberate: the raw table field
 *   names are certain, the standard view's CDS element names are not, and a
-*   wrong element name costs an activation cycle. Replace <ANLA_ALIAS> with
-*   the alias from the standard view's "from anla as ..." clause. If that
-*   view selects from an intermediate CDS view rather than ANLA directly,
-*   send me its FROM clause and I will rewrite this ON condition.
+*   wrong element name costs an activation cycle. The
+*   ANLA alias in this view is "an" (confirmed by Arnav, 01/09/26).
 *
 * NOTE 7 - DDL VIEW vs VIEW ENTITY.
 *   Written for a classic DDL view. If ADT shows the standard source as
@@ -70,14 +68,10 @@
 
 extend view I_FixedAssetWorklist with ZZI_FixedAssetWorklist_Ext
   association [0..1] to anlu as _ZZAssetUserField
-    on  _ZZAssetUserField.bukrs = <ANLA_ALIAS>.bukrs
-    and _ZZAssetUserField.anln1 = <ANLA_ALIAS>.anln1
-    and _ZZAssetUserField.anln2 = <ANLA_ALIAS>.anln2
+    on  _ZZAssetUserField.bukrs = an.bukrs
+    and _ZZAssetUserField.anln1 = an.anln1
+    and _ZZAssetUserField.anln2 = an.anln2
 {
-  " ASSUMPTION: replace ZZ_REPLACE_WITH_CONFIRMED_FIELD with the ANLU field
-  " ASSUMPTION: name from AS03 -> F1 -> Technical Information. It is a
-  " ASSUMPTION: CI_ANLU customer-include field, so expect ZZCUSTODIAN or
-  " ASSUMPTION: similar. This token and <ANLA_ALIAS> are the only two blanks
-  " ASSUMPTION: left in the whole delivery.
-  _ZZAssetUserField.ZZ_REPLACE_WITH_CONFIRMED_FIELD as ZZCustodianOfAssets
+  " ANLU-ZZCUSTODIAN, a CI_ANLU customer-include field (confirmed 01/09/26).
+  _ZZAssetUserField.zzcustodian as ZZCustodianOfAssets
 }

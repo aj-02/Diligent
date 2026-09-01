@@ -208,3 +208,23 @@ the download.
 
 - **Files:** `src/zpp_forecast_upload.prog.abap` (1956 -> 2090),
   `src/zpp_forecast.prog.abap`.
+
+---
+
+## 31/08/26 — MTS/MTO and Price on the Final ALV
+
+Follow-up to point 4 and point 5 of the review round: the same two columns are
+wanted on `ZPP_FORECAST_REPORT`, not only on the three radio buttons of
+`ZPP_FORECAST`.
+
+- **MTS/MTO** — taken from `ZPPT_FCST_YR-MTS_MTO`, which the annual save already
+  writes, so most rows cost nothing. A forecast saved before the category was
+  maintained carries a blank; `ZPPT_PROD_CAT` fills it in, read **once** with
+  `FOR ALL ENTRIES` alongside the two reads already there rather than a
+  `SELECT SINGLE` per row. Drawn with the material attributes, after Material
+  Group, which is where the annual sheet puts it.
+- **Price** — drawn last and **empty**, exactly as on the three planning modes.
+  Same `P LENGTH 13 DECIMALS 2` typing and the same `" ASSUMPTION:` note; a CURR
+  column with no currency reference makes SALV raise `CX_SALV_DATA_ERROR`.
+- No DDIC change: neither column is stored by this report, it only displays.
+- **Files:** `src/zpp_forecast_report.prog.abap` (365 -> 413).

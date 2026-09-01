@@ -56,8 +56,19 @@ Activate strictly in this order. Same transport.
 | # | Object | Type | File |
 |---|--------|------|------|
 | 1 | `ZZI_FIXEDASSETWORKLIST_EXT` | CDS extend view (interface) | `ZZI_FIXEDASSETWORKLIST_EXT.ddls.asddls` |
-| 2 | `ZZC_FIXEDASSETWORKLIST_EXT` | CDS extend view (consumption) | `ZZC_FIXEDASSETWORKLIST_EXT.ddls.asddls` |
-| 3 | `ZZC_FIXEDASSETWL_MDE` | CDS metadata extension (DDLX) | `ZZC_FIXEDASSETWL_MDE.ddlx.asddlx` |
+| 2 | `ZZC_FIXEDASSETWORKLIST_EXT` | CDS extend view (consumption) + UI annotations | `ZZC_FIXEDASSETWORKLIST_EXT.ddls.asddls` |
+
+**Two objects, both extensions.** A third object was planned - metadata
+extension `ZZC_FIXEDASSETWL_MDE` - and abandoned on 01/09/26: activation
+failed because `C_FixedAssetWorklist` does not carry
+`@Metadata.allowExtensions: true` on this release and so accepts no DDLX at
+all. The `@UI.*` annotations were moved onto the element in object 2. Do not
+recreate the DDLX, and do not add `allowExtensions` to the standard view -
+that is a modification of an SAP object.
+
+Upgrade risk of annotating in the extend view is low here: `ZZCustodianOfAssets`
+is a customer element, so SAP's own DDLX will never annotate it and cannot
+collide. The usual objection to this route does not apply.
 
 **All three are extensions — no new view is created.** A CDS association can
 target a DDIC table directly, so ANLU is reached from the extension itself. The

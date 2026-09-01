@@ -44,12 +44,19 @@
 *   validity interval, so there is no key-date question for the functional
 *   team and no risk of row multiplication.
 *
-* NOTE 6 - THE ON CONDITION USES TABLE FIELDS, NOT CDS ELEMENT NAMES.
-*   The right-hand side references ANLA columns through the alias the
-*   standard view gives its data source. Deliberate: the raw table field
-*   names are certain, the standard view's CDS element names are not, and a
-*   wrong element name costs an activation cycle. The
-*   ANLA alias in this view is "an" (confirmed by Arnav, 01/09/26).
+* NOTE 6 - THE TWO SIDES OF THE ON CONDITION ARE NAMED DIFFERENTLY. THIS IS
+*   CORRECT - DO NOT "FIX" IT.
+*     LEFT  (_ZZAssetUserField.*) -> raw ANLU TABLE columns: bukrs/anln1/anln2
+*     RIGHT (an.*)                -> CDS ELEMENT names of the data source
+*   The alias "an" in I_FixedAssetWorklist is not table ANLA - it is a CDS
+*   view over it, so it publishes CamelCase elements, not DDIC column names.
+*   Confirmed 01/09/26: an.bukrs was rejected, an.CompanyCode resolved.
+*   Making the left side CamelCase too will fail - ANLU is a plain table.
+*
+*   If MasterFixedAsset / FixedAsset are also rejected, get the real names
+*   from ADT: type "an." and press Ctrl+Space for the element list. Likely
+*   alternatives are AssetMainNumber / AssetSubNumber, or
+*   FixedAsset / FixedAssetSubnumber.
 *
 * NOTE 7 - DDL VIEW vs VIEW ENTITY.
 *   Written for a classic DDL view. If ADT shows the standard source as
@@ -68,9 +75,9 @@
 
 extend view I_FixedAssetWorklist with ZZI_FixedAssetWorklist_Ext
   association [0..1] to anlu as _ZZAssetUserField
-    on  _ZZAssetUserField.bukrs = an.bukrs
-    and _ZZAssetUserField.anln1 = an.anln1
-    and _ZZAssetUserField.anln2 = an.anln2
+    on  _ZZAssetUserField.bukrs = an.CompanyCode
+    and _ZZAssetUserField.anln1 = an.MasterFixedAsset
+    and _ZZAssetUserField.anln2 = an.FixedAsset
 {
   " ANLU-ZZCUSTODIAN, a CI_ANLU customer-include field (confirmed 01/09/26).
   _ZZAssetUserField.zzcustodian as ZZCustodianOfAssets

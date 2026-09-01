@@ -9,12 +9,14 @@ appear in F1592, because the field is not selected by the CDS stack behind the
 app. Fix is a modification-free CDS extension of the two standard views plus a
 metadata extension for the UI annotation.
 
-Stack (confirmed by Arnav):
+Stack (views confirmed by Arnav; source table confirmed as **ANLU**):
 
-    <source table, e.g. ANLA>
-        -> I_FixedAssetWorklist      (standard interface view)
-            -> C_FixedAssetWorklist  (standard consumption view, exposed by the service)
-                -> OData service     -> F1592
+    ANLU  (asset master user fields, CI_ANLU customer include)   <-- custodian lives here
+        -> ZZI_FIXEDASSET_USERFIELD          (new customer interface view)
+             ~ associated [0..1] into ~
+    ANLA -> I_FixedAssetWorklist             (standard interface view)
+             -> C_FixedAssetWorklist         (standard consumption view, exposed by the service)
+                 -> OData service            -> F1592
 
 ## Confirm before coding — 3 checks, ~10 minutes
 
@@ -54,36 +56,60 @@ Activate strictly in this order. Same transport.
 
 | # | Object | Type | File |
 |---|--------|------|------|
-| 1 | `ZZI_FIXEDASSETWORKLIST_EXT` | CDS extend view (interface) | `ZZI_FIXEDASSETWORKLIST_EXT.ddls.asddls` |
-| 2 | `ZZC_FIXEDASSETWORKLIST_EXT` | CDS extend view (consumption) | `ZZC_FIXEDASSETWORKLIST_EXT.ddls.asddls` |
-| 3 | `ZZC_FIXEDASSETWL_MDE` | CDS metadata extension (DDLX) | `ZZC_FIXEDASSETWL_MDE.ddlx.asddlx` |
+| 1 | `ZZI_FIXEDASSET_USERFIELD` | CDS interface view over ANLU (new) | `ZZI_FIXEDASSET_USERFIELD.ddls.asddls` |
+| 2 | `ZZI_FIXEDASSETWORKLIST_EXT` | CDS extend view (interface) | `ZZI_FIXEDASSETWORKLIST_EXT.ddls.asddls` |
+| 3 | `ZZC_FIXEDASSETWORKLIST_EXT` | CDS extend view (consumption) | `ZZC_FIXEDASSETWORKLIST_EXT.ddls.asddls` |
+| 4 | `ZZC_FIXEDASSETWL_MDE` | CDS metadata extension (DDLX) | `ZZC_FIXEDASSETWL_MDE.ddlx.asddlx` |
 
 Exposed element name is `ZZCustodianOfAssets` in all three. Ships by paste into
 ADT (new DDL source / new metadata extension) — not by abapGit ZIP.
 
-## Variant A — field is on a table already in the view (expected)
+## The ANLU finding, and what it means
 
-As delivered. Replace `ZZ_REPLACE_WITH_CONFIRMED_FIELD` in object 1 with
-`<alias>.<field>` from checks 1 and 2. Nothing else changes.
+Confirmed: the custodian field is on **ANLU** — *Asset Master Record User Fields*,
+the CI_ANLU customer-include table. Consequences, all of them good:
 
-## Variant B — field is time-dependent (ANLZ) or on an unjoined table
+- **Not time-dependent.** ANLU is keyed MANDT/BUKRS/ANLN1/ANLN2, one row per
+  asset — the same key as ANLA. None of the ANLZ validity-interval trouble
+  applies: no key-date decision for the functional team, no row multiplication.
+- **But ANLU is not in the standard view's FROM.** SAP does not join a
+  customer-include table. An `extend view` appends to the SELECT list over the
+  *existing* data sources; it cannot add a join. So the field cannot simply be
+  named in the extension.
+- **Route taken:** wrap ANLU in a small interface view
+  (`ZZI_FIXEDASSET_USERFIELD`), then declare a `[0..1]` association to it
+  *inside* the `I_FixedAssetWorklist` extension and select through it. The path
+  expression compiles to a LEFT OUTER JOIN.
+- **`[0..1]`, not `[1..1]`.** ANLU rows exist only where user fields were
+  maintained. `[1..1]` would inner-join and silently drop every asset with no
+  custodian from the worklist — a data-loss bug nobody notices until the list
+  is short.
+- **Not a CBEB field.** CI_ANLU is the classic append route, so the *Custom
+  Fields and Logic* app is not involved and cannot do this for us.
 
-`extend view` appends to the SELECT list over the *existing* FROM; it cannot
-introduce a data source. Options, in order of preference:
+Two things still to confirm before activation:
 
-1. **Use an association the standard view already publishes.** If
-   `I_FixedAssetWorklist` exposes something like `_FixedAsset` or a
-   time-dependent association, the extension can path-expression through it:
-   `_Assoc.Field as ZZCustodianOfAssets`. Only valid for a to-one association.
-2. **Own composite view.** Build `ZZI_FIXEDASSET_CUSTODIAN` over the source
-   table with the validity filter (ANLZ is interval-based on ADATU/BDATU — a
-   naive join multiplies rows), then reference it. Requires the standard view
-   to permit a new association in the extension, which is release-dependent.
-3. **Own worklist view.** Copy the stack into Z and point a custom tile at it.
-   Last resort — loses SAP maintenance.
+1. **The ANLU field name** — AS03 → F1 → Technical Information. Goes into
+   `ZZI_FIXEDASSET_USERFIELD` (token `ZZ_REPLACE_WITH_CONFIRMED_FIELD`).
+2. **The ANLA alias** in `I_FixedAssetWorklist`'s FROM clause — goes into the
+   association ON condition (token `<ANLA_ALIAS>`). If that view selects from
+   an intermediate CDS view rather than ANLA directly, the ON condition has to
+   be written against that view's elements instead.
 
-Decision needed from the functional side in Variant B: which validity date
-governs (system date vs. a report key date). Do not guess this.
+Worth 30 seconds first: open `I_FixedAssetWorklist` in ADT and search for
+`ANLU`. If SAP already joins it on this release, drop `ZZI_FIXEDASSET_USERFIELD`
+and the association entirely and select the field directly — one line.
+
+## Fallback, if the association is rejected
+
+Declaring an association inside a view extension is release-dependent. If ADT
+rejects it, this is a design change, not a syntax fix. Options in order:
+
+1. **Use an association the standard view already publishes** — if
+   `I_FixedAssetWorklist` exposes `_FixedAsset` or similar to an ANLA-based
+   view, extend *that* view instead and let the worklist inherit the element.
+2. **Custom worklist view** — copy the C_ stack into Z, join ANLU there, point
+   a custom tile at it. Loses SAP maintenance; last resort.
 
 ## After activation
 

@@ -141,14 +141,23 @@ FORM template_columns CHANGING ct_head TYPE string_table
                                ct_demo TYPE string_table
                                cv_name TYPE string.
 
+*BOC By Arnav on 02/09/26
+* Second old material is blank on the tracking example row. An empty
+* STRING variable is appended rather than a literal, so the row type is
+* never in question.
+  DATA lv_blank TYPE string.
+*EOC By Arnav on 02/09/26
+
   CLEAR: ct_head, ct_demo, cv_name.
 
 *BOC By Arnav on 02/09/26
-* A text literal is type C. This release requires the row of a
-* VALUE constructor to be COMPATIBLE with the row type, and C is not
-* compatible with STRING, so all sixteen assignments below were
-* rejected with "'PLANT' and the row type of 'CT_HEAD' are
-* incompatible". String templates are type STRING, so they are.
+* A text literal is type C and the row of CT_HEAD / CT_DEMO is STRING.
+* The VALUE constructor short form below was rejected sixteen times with
+* "'PLANT' and the row type of 'CT_HEAD' are incompatible", and writing
+* the rows as string templates - ( |PLANT| ) - was rejected the same way,
+* so this release will not take a constructor expression here at all.
+* Plain APPEND is used instead: it assigns by conversion rather than by
+* compatibility, which is the pre-7.40 idiom and works on any release.
 *  IF p_cat = 'X'.
 *    cv_name = 'ZFCST_Product_Category'.
 *    ct_head = VALUE #( ( 'PLANT' ) ( 'MATERIAL' ) ( 'CATEGORY' )
@@ -210,63 +219,125 @@ FORM template_columns CHANGING ct_head TYPE string_table
 *                       ( '2026' ) ( '-10' ) ( 'Reduced plan' ) ).
   IF p_cat = 'X'.
     cv_name = 'ZFCST_Product_Category'.
-    ct_head = VALUE #( ( |PLANT| ) ( |MATERIAL| ) ( |CATEGORY| )
-                       ( |LOAD FACTOR| ) ( |MTS OR MTO| ) ).
-    ct_demo = VALUE #( ( |1001| ) ( |FG00000000001| ) ( |A| )
-                       ( |1.300| ) ( |MTS| ) ).
+    APPEND 'PLANT'       TO ct_head.
+    APPEND 'MATERIAL'    TO ct_head.
+    APPEND 'CATEGORY'    TO ct_head.
+    APPEND 'LOAD FACTOR' TO ct_head.
+    APPEND 'MTS OR MTO'  TO ct_head.
+    APPEND '1001'          TO ct_demo.
+    APPEND 'FG00000000001' TO ct_demo.
+    APPEND 'A'             TO ct_demo.
+    APPEND '1.300'         TO ct_demo.
+    APPEND 'MTS'           TO ct_demo.
 
   ELSEIF p_trk = 'X'.
     cv_name = 'ZFCST_Material_Tracking'.
-    ct_head = VALUE #( ( |PLANT| ) ( |NEW MATERIAL| )
-                       ( |OLD MATERIAL 1| ) ( |OLD MATERIAL 2| ) ).
-    ct_demo = VALUE #( ( |1001| ) ( |FG00000000002| )
-                       ( |FG00000000001| ) ( || ) ).
+    APPEND 'PLANT'          TO ct_head.
+    APPEND 'NEW MATERIAL'   TO ct_head.
+    APPEND 'OLD MATERIAL 1' TO ct_head.
+    APPEND 'OLD MATERIAL 2' TO ct_head.
+    APPEND '1001'          TO ct_demo.
+    APPEND 'FG00000000002' TO ct_demo.
+    APPEND 'FG00000000001' TO ct_demo.
+    APPEND lv_blank        TO ct_demo.
 
   ELSEIF p_exc = 'X'.
     cv_name = 'ZFCST_Material_Exclusion'.
-    ct_head = VALUE #( ( |PLANT| ) ( |MATERIAL| ) ).
-    ct_demo = VALUE #( ( |1001| ) ( |FG00000000001| ) ).
+    APPEND 'PLANT'    TO ct_head.
+    APPEND 'MATERIAL' TO ct_head.
+    APPEND '1001'          TO ct_demo.
+    APPEND 'FG00000000001' TO ct_demo.
 
   ELSEIF p_hist = 'X'.
     cv_name = 'ZFCST_Legacy_Sales_History'.
-    ct_head = VALUE #( ( |PLANT| ) ( |MATERIAL| ) ( |YEAR| )
-                       ( |M1 APR| ) ( |M2 MAY| ) ( |M3 JUN| ) ( |M4 JUL| )
-                       ( |M5 AUG| ) ( |M6 SEP| ) ( |M7 OCT| ) ( |M8 NOV| )
-                       ( |M9 DEC| ) ( |M10 JAN| ) ( |M11 FEB| ) ( |M12 MAR| )
-                       ( |UOM| ) ).
-    ct_demo = VALUE #( ( |1001| ) ( |FG00000000001| ) ( |2025| )
-                       ( |100| ) ( |120| ) ( |90| ) ( |110| )
-                       ( |95| ) ( |130| ) ( |105| ) ( |115| )
-                       ( |125| ) ( |85| ) ( |100| ) ( |140| )
-                       ( |EA| ) ).
+    APPEND 'PLANT'    TO ct_head.
+    APPEND 'MATERIAL' TO ct_head.
+    APPEND 'YEAR'     TO ct_head.
+    APPEND 'M1 APR'   TO ct_head.
+    APPEND 'M2 MAY'   TO ct_head.
+    APPEND 'M3 JUN'   TO ct_head.
+    APPEND 'M4 JUL'   TO ct_head.
+    APPEND 'M5 AUG'   TO ct_head.
+    APPEND 'M6 SEP'   TO ct_head.
+    APPEND 'M7 OCT'   TO ct_head.
+    APPEND 'M8 NOV'   TO ct_head.
+    APPEND 'M9 DEC'   TO ct_head.
+    APPEND 'M10 JAN'  TO ct_head.
+    APPEND 'M11 FEB'  TO ct_head.
+    APPEND 'M12 MAR'  TO ct_head.
+    APPEND 'UOM'      TO ct_head.
+    APPEND '1001'          TO ct_demo.
+    APPEND 'FG00000000001' TO ct_demo.
+    APPEND '2025'          TO ct_demo.
+    APPEND '100'           TO ct_demo.
+    APPEND '120'           TO ct_demo.
+    APPEND '90'            TO ct_demo.
+    APPEND '110'           TO ct_demo.
+    APPEND '95'            TO ct_demo.
+    APPEND '130'           TO ct_demo.
+    APPEND '105'           TO ct_demo.
+    APPEND '115'           TO ct_demo.
+    APPEND '125'           TO ct_demo.
+    APPEND '85'            TO ct_demo.
+    APPEND '100'           TO ct_demo.
+    APPEND '140'           TO ct_demo.
+    APPEND 'EA'            TO ct_demo.
 
   ELSEIF p_busq = 'X'.
     cv_name = 'ZFCST_Business_Forecast_Quarterly'.
-    ct_head = VALUE #( ( |MATERIAL| ) ( |PLANT| ) ( |QUARTER| )
-                       ( |YEAR| ) ( |SALES FORECAST| ) ).
-    ct_demo = VALUE #( ( |FG00000000001| ) ( |1001| ) ( |2| )
-                       ( |2026| ) ( |12000| ) ).
+    APPEND 'MATERIAL'       TO ct_head.
+    APPEND 'PLANT'          TO ct_head.
+    APPEND 'QUARTER'        TO ct_head.
+    APPEND 'YEAR'           TO ct_head.
+    APPEND 'SALES FORECAST' TO ct_head.
+    APPEND 'FG00000000001' TO ct_demo.
+    APPEND '1001'          TO ct_demo.
+    APPEND '2'             TO ct_demo.
+    APPEND '2026'          TO ct_demo.
+    APPEND '12000'         TO ct_demo.
 
   ELSEIF p_busm = 'X'.
     cv_name = 'ZFCST_Business_Forecast_Monthly'.
-    ct_head = VALUE #( ( |MATERIAL| ) ( |PLANT| ) ( |MONTH| )
-                       ( |YEAR| ) ( |SALES FORECAST| ) ).
-    ct_demo = VALUE #( ( |FG00000000001| ) ( |1001| ) ( |1| )
-                       ( |2026| ) ( |4000| ) ).
+    APPEND 'MATERIAL'       TO ct_head.
+    APPEND 'PLANT'          TO ct_head.
+    APPEND 'MONTH'          TO ct_head.
+    APPEND 'YEAR'           TO ct_head.
+    APPEND 'SALES FORECAST' TO ct_head.
+    APPEND 'FG00000000001' TO ct_demo.
+    APPEND '1001'          TO ct_demo.
+    APPEND '1'             TO ct_demo.
+    APPEND '2026'          TO ct_demo.
+    APPEND '4000'          TO ct_demo.
 
   ELSEIF p_chgq = 'X'.
     cv_name = 'ZFCST_Forecast_Change_Quarterly'.
-    ct_head = VALUE #( ( |MATERIAL| ) ( |PLANT| ) ( |QUARTER| )
-                       ( |YEAR| ) ( |CHANGE QTY| ) ( |REASON| ) ).
-    ct_demo = VALUE #( ( |FG00000000001| ) ( |1001| ) ( |2| )
-                       ( |2026| ) ( |10| ) ( |Additional plan| ) ).
+    APPEND 'MATERIAL'   TO ct_head.
+    APPEND 'PLANT'      TO ct_head.
+    APPEND 'QUARTER'    TO ct_head.
+    APPEND 'YEAR'       TO ct_head.
+    APPEND 'CHANGE QTY' TO ct_head.
+    APPEND 'REASON'     TO ct_head.
+    APPEND 'FG00000000001'   TO ct_demo.
+    APPEND '1001'            TO ct_demo.
+    APPEND '2'               TO ct_demo.
+    APPEND '2026'            TO ct_demo.
+    APPEND '10'              TO ct_demo.
+    APPEND 'Additional plan' TO ct_demo.
 
   ELSEIF p_chgm = 'X'.
     cv_name = 'ZFCST_Forecast_Change_Monthly'.
-    ct_head = VALUE #( ( |MATERIAL| ) ( |PLANT| ) ( |MONTH| )
-                       ( |YEAR| ) ( |CHANGE QTY| ) ( |REASON| ) ).
-    ct_demo = VALUE #( ( |FG00000000001| ) ( |1001| ) ( |1| )
-                       ( |2026| ) ( |-10| ) ( |Reduced plan| ) ).
+    APPEND 'MATERIAL'   TO ct_head.
+    APPEND 'PLANT'      TO ct_head.
+    APPEND 'MONTH'      TO ct_head.
+    APPEND 'YEAR'       TO ct_head.
+    APPEND 'CHANGE QTY' TO ct_head.
+    APPEND 'REASON'     TO ct_head.
+    APPEND 'FG00000000001' TO ct_demo.
+    APPEND '1001'          TO ct_demo.
+    APPEND '1'             TO ct_demo.
+    APPEND '2026'          TO ct_demo.
+    APPEND '-10'           TO ct_demo.
+    APPEND 'Reduced plan'  TO ct_demo.
 *EOC By Arnav on 02/09/26
   ENDIF.
 

@@ -50,13 +50,24 @@ Root cause: a text literal `'PLANT'` is type `C`. On this release the row of a
 All 16 `ct_head` / `ct_demo` assignments hit it; the `cv_name = '...'` lines did
 not, because a plain MOVE into a `STRING` variable is a conversion and allowed.
 
-Fix: every literal row rewritten as a string template — `( |PLANT| )` — which is
-type `STRING`. Empty row is `( || )`. `CONV string( 'PLANT' )` would work too but
-is far longer on a 16-line block.
+Attempt 1 — string templates, `( |PLANT| )`: **rejected the same way.** So the
+problem is not C-vs-STRING; this release will not take a constructor expression
+with a literal row over an elementary line type at all, whatever the literal's
+type.
 
-Watch: `ZPP_FORECAST` has the same shape at `FORM visible_columns`
-(`ct_show = VALUE tt_fname( ( 'WERKS' ) ... )`) and in `LCL_HANDLER=>SHOW_RESULT`.
-Row type there is `LVC_FNAME` (CHAR30), not `STRING`, so it may pass — if it does
-not, the same string-template fix applies.
+Attempt 2 — plain `APPEND 'PLANT' TO ct_head.`: **this is the fix.** APPEND
+assigns by conversion rather than by compatibility. All 16 assignments rewritten
+as APPEND blocks; the one blank example cell appends a cleared `lv_blank TYPE
+string` so no literal is involved there either.
 
-TR: not yet · Files: `kpmg/zpp_forecast_v2/src/zpp_forecast_upload.prog.abap`
+Same shape corrected pre-emptively in `ZPP_FORECAST`, which had not been pasted
+yet: the leading `ct_show = VALUE tt_fname( ( 'WERKS' ) ... )` block in
+`FORM visible_columns` (pre-existing) and `lt_res` in `LCL_HANDLER=>SHOW_RESULT`
+(added 02/09/26) are both APPEND now.
+
+**Rule for this landscape: do not use `VALUE` with literal rows over an
+elementary line type. Use APPEND.** Structured-row `VALUE #( ( sign = 'I' ... ) )`
+in `ZCL_PP_FCST` is a different shape and is not affected.
+
+TR: not yet · Files: `kpmg/zpp_forecast_v2/src/zpp_forecast_upload.prog.abap`,
+`kpmg/zpp_forecast_v2/src/zpp_forecast.prog.abap`

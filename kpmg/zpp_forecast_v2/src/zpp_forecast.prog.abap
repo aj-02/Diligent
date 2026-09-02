@@ -203,13 +203,19 @@ CLASS lcl_handler IMPLEMENTATION.
 *   forecast proposal, so it carries exactly the FS columns. Once Save
 *   has run they are the point of having pressed it, so they are taken
 *   out of hiding and put at the end of the list.
-    DATA lv_col TYPE lvc_fname.
+    DATA: lv_col  TYPE lvc_fname,
+          lt_res  TYPE tt_fname.
 
     CHECK go_alv IS BOUND.
 
     DATA(lo_cols) = go_alv->get_columns( ).
 
-    DATA(lt_res) = VALUE tt_fname( ( 'FCST_NO' ) ( 'MESSAGE' ) ).
+*   Built with APPEND, not VALUE. ZPP_FORECAST_UPLOAD was rejected on
+*   this release with "'PLANT' and the row type of 'CT_HEAD' are
+*   incompatible" for exactly this shape - a literal row in a
+*   constructor expression over an elementary line type.
+    APPEND 'FCST_NO' TO lt_res.
+    APPEND 'MESSAGE' TO lt_res.
 
     LOOP AT lt_res INTO lv_col.
 
@@ -796,10 +802,27 @@ FORM visible_columns CHANGING ct_show TYPE tt_fname.
   CLEAR ct_show.
 
 * ---- leading block, identical on all three FS sheets ----------------
-  ct_show = VALUE tt_fname(
-    ( 'WERKS' ) ( 'MATNR' ) ( 'MAKTX' ) ( 'MATKL' ) ( 'NTGEW' )
-    ( 'MVGR1_TXT' ) ( 'MVGR2_TXT' ) ( 'MVGR3_TXT' )
-    ( 'MVGR4_TXT' ) ( 'MVGR5_TXT' ) ).
+*BOC By Arnav on 02/09/26
+* A literal row in a constructor expression over an elementary line type
+* is rejected on this release - ZPP_FORECAST_UPLOAD failed sixteen times
+* with "'PLANT' and the row type of 'CT_HEAD' are incompatible" for this
+* same shape. The rest of the FORM already builds the list with APPEND,
+* so the leading block now does too.
+*  ct_show = VALUE tt_fname(
+*    ( 'WERKS' ) ( 'MATNR' ) ( 'MAKTX' ) ( 'MATKL' ) ( 'NTGEW' )
+*    ( 'MVGR1_TXT' ) ( 'MVGR2_TXT' ) ( 'MVGR3_TXT' )
+*    ( 'MVGR4_TXT' ) ( 'MVGR5_TXT' ) ).
+  APPEND 'WERKS'     TO ct_show.
+  APPEND 'MATNR'     TO ct_show.
+  APPEND 'MAKTX'     TO ct_show.
+  APPEND 'MATKL'     TO ct_show.
+  APPEND 'NTGEW'     TO ct_show.
+  APPEND 'MVGR1_TXT' TO ct_show.
+  APPEND 'MVGR2_TXT' TO ct_show.
+  APPEND 'MVGR3_TXT' TO ct_show.
+  APPEND 'MVGR4_TXT' TO ct_show.
+  APPEND 'MVGR5_TXT' TO ct_show.
+*EOC By Arnav on 02/09/26
 
   CASE g_mode.
 

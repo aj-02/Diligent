@@ -285,7 +285,7 @@ as printed below; the character count in brackets is given so you can see the fi
 | Short Description | Exceptional Approval Serial Number |
 | Elementary Type → Domain | `ZSD_DO_EXC_SRNO` |
 | Short label | `Sr. No.` (7) |
-| Medium label | `Serial No.` (10 — exactly on the limit) |
+| Medium label | `Serial No.` (10 — well inside the 20-character Medium limit; 10 is the **Short** limit) |
 | Long label | `Serial Number` (13) |
 | Heading | `Sr. No.` (7) |
 
@@ -432,8 +432,17 @@ list), and accept SE11's proposal unless it errors. Two foreign keys, no more:
 
 | Field | Check table | Cardinality | Field-type proposal | Purpose |
 |---|---|---|---|---|
-| `ZCUSTOMER` | `KNA1` | `N : 1` | accept what SE11 proposes (it proposes "key fields/candidates" because `ZCUSTOMER` is part of this table's key) | rejects a customer that does not exist, and gives F4 on the customer in SM30 |
-| `WAERS` | `TCURC` | `N : 1` | accept what SE11 proposes (non-key field) | rejects an invalid currency, gives F4 in SM30 |
+| `ZCUSTOMER` | `KNA1` | `1 : CN` | accept what SE11 proposes (it proposes "key fields/candidates" because `ZCUSTOMER` is part of this table's key) | rejects a customer that does not exist, and gives F4 on the customer in SM30 |
+| `WAERS` | `TCURC` | `1 : CN` | accept what SE11 proposes (non-key field) | rejects an invalid currency, gives F4 in SM30 |
+
+**Cardinality is written check-table-side : foreign-key-table-side, and the LEFT position accepts
+only `1` or `C`.** There is no `N` on the left, so `N : 1` — which earlier drafts of this sheet
+printed — is not a pair SE11 will take; it is rejected at the input field and you cannot save the
+foreign key with it. Read `1 : CN` as: every row of `ZSD_EXP_PAINTS` points at exactly one row of
+the check table (`1`), and one customer — or one currency — may be referenced by any number of
+approval rows including none (`CN`). Cardinality is a semantic attribute only: it does not change
+the runtime check and leaving it blank still activates, but a value you cannot type stops you at
+the foreign-key dialog.
 
 The generated FK condition for `ZCUSTOMER` should come out as `KNA1-MANDT = ZSD_EXP_PAINTS-MANDT`
 and `KNA1-KUNNR = ZSD_EXP_PAINTS-ZCUSTOMER`. If SE11 proposes anything else, stop — it means the
@@ -508,7 +517,9 @@ If it fails, the order to check things in:
 1. Three errors naming the amount fields → §3.5, the Currency/Quantity Fields tab.
 2. "Data element does not exist" → a data element from §2 is not active yet, or `DATUM` is not
    a data element on this system (§0.4).
-3. Foreign key errors → §3.4, usually the wrong data element on row 3.
+3. Foreign key errors → §3.4, usually the wrong data element on row 3. If the foreign-key
+   dialog will not accept the cardinality, you typed `N : 1` — the left position takes only
+   `1` or `C` (§3.4).
 4. Key fields not contiguous → the Key flag was ticked below row 4.
 
 ---

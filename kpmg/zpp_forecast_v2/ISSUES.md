@@ -11,7 +11,29 @@ Log format: date | issue | root cause | files changed | commit | TR
 | 3 | No popup on save; drop the Save checkbox | `MESSAGES_SHOW` popup ran after every save; `p_save` also saved the whole run before the list was drawn | `p_save` withdrawn, `PERFORM save_all` and `FORM save_all` commented out, `show_log( )` replaced by `result_message( )` — one status line. `show_result( )` un-hides `FCST_NO` / `MESSAGE` after the Save button runs, which is what `p_save` used to do up front |
 | 4 | Hide the Legacy checkbox when the switch is blank | New `g_legc_on`, read once in `INITIALIZATION` by `FORM legacy_switch`; `p_legc` carries `MODIF ID LGC` and is suppressed in `AT SELECTION-SCREEN OUTPUT` | ASSUMPTION: switch is TVARVC parameter `ZPP_FCST_LEGACY` ('X' / blank). Single reader, so the source swaps in one place |
 
-Point 1 (general upload message instead of "this changed from that") is in
-`ZPP_FORECAST_UPLOAD` — not touched in this round.
-
 TR: not yet · Files: `kpmg/zpp_forecast_v2/src/zpp_forecast.prog.abap`
+
+## 02/09/26 — ZPP_FORECAST_UPLOAD, general result message (point 1)
+
+Detail column repeated the uploaded values back at the user one row at a time
+("History of X Y will now be reported under Z", "Business forecast 100, final
+quantity now 250"). Replaced with a flat statement of what was uploaded; the
+Result column (Created / Changed / Would create / Would change / Rejected) and
+the closing "Upload finished: n created, n changed, n rejected" already carry
+the outcome.
+
+| FORM | Was | Now |
+|------|-----|-----|
+| `do_category` | `Category C, load factor 1.05, MTS` | `Product category uploaded` |
+| `do_tracking` | `History of M1 M2 will now be reported under M3` | `Material mapping uploaded` |
+| `do_exclusion` | `Already excluded, entry refreshed` / `Excluded from forecasting` | `Exclusion uploaded` |
+| `do_history` | `Twelve months loaded, year total 1200 KG` | `Sales history uploaded` |
+| `do_business` | `Business forecast 100, final quantity now 250` | `Business forecast uploaded` |
+| `do_change` | `Change 50, final quantity now 300, reason RSN` | `Forecast change uploaded` |
+
+Rejected rows keep their full reason — without it the user cannot correct the
+file. `lv_total` in `do_business` was only computed for the removed text, so its
+declaration and both assignments are commented out; the `lv_total` in `do_change`
+stays, it guards the negative-quantity check.
+
+TR: not yet · Files: `kpmg/zpp_forecast_v2/src/zpp_forecast_upload.prog.abap`

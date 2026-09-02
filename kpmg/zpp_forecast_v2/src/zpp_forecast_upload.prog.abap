@@ -4,8 +4,19 @@
 *&
 *& Eight upload types selected by radio button. For each the user can
 *& download a ready made template, fill it in, upload it, and see a
-*& result list saying exactly what was created, what was changed and
-*& what was rejected and why.
+*& result list.
+*&
+*BOC By Arnav on 02/09/26
+*& Was: "a result list saying exactly what was created, what was changed
+*& and what was rejected and why."
+*&
+*& The result list now says WHAT happened to each row - created, changed
+*& or rejected - not what the values were before and after. The uploaded
+*& values are in the file the user just sent and in the forecast report;
+*& repeating them back one row at a time made the list unreadable.
+*& A rejected row still carries its reason, because without it the user
+*& cannot correct the file.
+*EOC By Arnav on 02/09/26
 *&
 *& Built to Forecast Template-Adhesive.xlsx dated 20.08.2026
 *&---------------------------------------------------------------------*
@@ -407,7 +418,10 @@ FORM do_category.
       ENDIF.
     ENDIF.
 
-    lv_txt = |Category { lv_cat }, load factor { lv_load }, { lv_mts }|.
+*BOC By Arnav on 02/09/26
+*   lv_txt = |Category { lv_cat }, load factor { lv_load }, { lv_mts }|.
+    lv_txt = 'Product category uploaded'.
+*EOC By Arnav on 02/09/26
     PERFORM log_ok USING lv_row lv_werks lv_matnr lv_blank lv_ex lv_txt.
 
   ENDLOOP.
@@ -497,7 +511,10 @@ FORM do_tracking.
       ENDIF.
     ENDIF.
 
-    lv_txt = |History of { lv_old1 } { lv_old2 } will now be reported under { lv_new }|.
+*BOC By Arnav on 02/09/26
+*   lv_txt = |History of { lv_old1 } { lv_old2 } will now be reported under { lv_new }|.
+    lv_txt = 'Material mapping uploaded'.
+*EOC By Arnav on 02/09/26
     PERFORM log_ok USING lv_row lv_werks lv_new lv_blank lv_ex lv_txt.
 
   ENDLOOP.
@@ -585,11 +602,16 @@ FORM do_exclusion.
       ENDIF.
     ENDIF.
 
-    IF lv_ex = abap_true.
-      lv_txt = 'Already excluded, entry refreshed'.
-    ELSE.
-      lv_txt = 'Excluded from forecasting'.
-    ENDIF.
+*BOC By Arnav on 02/09/26
+*   IF lv_ex = abap_true.
+*     lv_txt = 'Already excluded, entry refreshed'.
+*   ELSE.
+*     lv_txt = 'Excluded from forecasting'.
+*   ENDIF.
+*   The Result column already says Created or Changed, so the two texts
+*   said the same thing twice.
+    lv_txt = 'Exclusion uploaded'.
+*EOC By Arnav on 02/09/26
     PERFORM log_ok USING lv_row lv_werks lv_matnr lv_blank lv_ex lv_txt.
 
   ENDLOOP.
@@ -704,7 +726,10 @@ FORM do_history.
       ENDIF.
     ENDIF.
 
-    lv_txt = |Twelve months loaded, year total { lv_tot } { lv_meins }|.
+*BOC By Arnav on 02/09/26
+*   lv_txt = |Twelve months loaded, year total { lv_tot } { lv_meins }|.
+    lv_txt = 'Sales history uploaded'.
+*EOC By Arnav on 02/09/26
     PERFORM log_ok USING lv_row lv_werks lv_matnr lv_per lv_ex lv_txt.
 
   ENDLOOP.
@@ -729,7 +754,10 @@ FORM do_business USING pv_mode TYPE char1.
         lv_qtr   TYPE zde_quarter,
         lv_poper TYPE poper,
         lv_qty   TYPE zde_fcst_qty,
-        lv_total TYPE zde_fcst_qty,
+*BOC By Arnav on 02/09/26
+*       lv_total TYPE zde_fcst_qty,
+* The running total was only there to be printed in the row detail
+*EOC By Arnav on 02/09/26
         lv_ex    TYPE abap_bool,
         lv_err   TYPE string,
         lv_txt   TYPE string,
@@ -808,8 +836,11 @@ FORM do_business USING pv_mode TYPE char1.
         ENDIF.
       ENDIF.
 
-      lv_total = ls_qt-final_qty + ls_qt-bus_fcst_add.
-      lv_txt = |Business forecast { lv_qty }, final quantity now { lv_total }|.
+*BOC By Arnav on 02/09/26
+*     lv_total = ls_qt-final_qty + ls_qt-bus_fcst_add.
+*     lv_txt = |Business forecast { lv_qty }, final quantity now { lv_total }|.
+      lv_txt = 'Business forecast uploaded'.
+*EOC By Arnav on 02/09/26
 
     ELSE.
 
@@ -844,8 +875,11 @@ FORM do_business USING pv_mode TYPE char1.
         ENDIF.
       ENDIF.
 
-      lv_total = ls_mn-final_qty + ls_mn-bus_fcst_add.
-      lv_txt = |Business forecast { lv_qty }, final quantity now { lv_total }|.
+*BOC By Arnav on 02/09/26
+*     lv_total = ls_mn-final_qty + ls_mn-bus_fcst_add.
+*     lv_txt = |Business forecast { lv_qty }, final quantity now { lv_total }|.
+      lv_txt = 'Business forecast uploaded'.
+*EOC By Arnav on 02/09/26
 
     ENDIF.
 
@@ -969,7 +1003,10 @@ FORM do_change USING pv_mode TYPE char1.
         ENDIF.
       ENDIF.
 
-      lv_txt = |Change { lv_qty }, final quantity now { lv_total }, reason { lv_rsn }|.
+*BOC By Arnav on 02/09/26
+*     lv_txt = |Change { lv_qty }, final quantity now { lv_total }, reason { lv_rsn }|.
+      lv_txt = 'Forecast change uploaded'.
+*EOC By Arnav on 02/09/26
 
     ELSE.
 
@@ -1009,7 +1046,10 @@ FORM do_change USING pv_mode TYPE char1.
         ENDIF.
       ENDIF.
 
-      lv_txt = |Change { lv_qty }, final quantity now { lv_total }, reason { lv_rsn }|.
+*BOC By Arnav on 02/09/26
+*     lv_txt = |Change { lv_qty }, final quantity now { lv_total }, reason { lv_rsn }|.
+      lv_txt = 'Forecast change uploaded'.
+*EOC By Arnav on 02/09/26
 
     ENDIF.
 

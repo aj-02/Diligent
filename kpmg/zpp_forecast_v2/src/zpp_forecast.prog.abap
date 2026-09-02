@@ -40,6 +40,18 @@ DATA: gt_msg  TYPE bapiret2_t,
       go_alv  TYPE REF TO cl_salv_table,
       g_mode  TYPE char1.
 
+*BOC By Arnav on 02/09/26
+* Switch that decides whether legacy history may be used at all. Read
+* once in INITIALIZATION; the Legacy checkbox is drawn only when it is
+* set, so on a plant with no legacy load the user is not offered it.
+DATA g_legc_on TYPE abap_bool.
+
+* ASSUMPTION: the switch is TVARVC parameter ZPP_FCST_LEGACY, value 'X'
+* or blank. Confirm the real variable - FORM legacy_switch is the only
+* place that reads it, so changing the source is a one line change.
+CONSTANTS gc_tv_legacy TYPE rvari_vnam VALUE 'ZPP_FCST_LEGACY'.
+*EOC By Arnav on 02/09/26
+
 *&---------------------------------------------------------------------*
 SELECTION-SCREEN BEGIN OF BLOCK b0 WITH FRAME TITLE TEXT-b00.
 PARAMETERS: p_ann RADIOBUTTON GROUP mod USER-COMMAND md DEFAULT 'X',
@@ -63,9 +75,16 @@ SELECT-OPTIONS: s_datum FOR sy-datum NO-EXTENSION MODIF ID dat.
 SELECTION-SCREEN END OF BLOCK b1.
 
 SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-b02.
+*BOC By Arnav on 02/09/26
+*PARAMETERS: p_tonn AS CHECKBOX,
+*            p_legc AS CHECKBOX,
+*            p_save AS CHECKBOX.
+* Save is driven from the Save button on the ALV toolbar only, so the
+* Save checkbox is withdrawn. Legacy carries MODIF ID LGC so it can be
+* hidden when the legacy switch is blank.
 PARAMETERS: p_tonn AS CHECKBOX,
-            p_legc AS CHECKBOX,
-            p_save AS CHECKBOX.
+            p_legc AS CHECKBOX MODIF ID lgc.
+*EOC By Arnav on 02/09/26
 SELECTION-SCREEN END OF BLOCK b2.
 
 
@@ -94,6 +113,11 @@ CLASS lcl_handler DEFINITION.
     CLASS-METHODS select_all
       IMPORTING iv_on TYPE abap_bool.
     CLASS-METHODS export.
+*BOC By Arnav on 02/09/26
+    CLASS-METHODS show_result.
+    CLASS-METHODS result_message
+      IMPORTING it_msg TYPE bapiret2_t.
+*EOC By Arnav on 02/09/26
 
 ENDCLASS.
 
@@ -134,9 +158,9 @@ CLASS lcl_handler IMPLEMENTATION.
 
     DATA lv_row TYPE i.
 
-*   The button saves what the user picked. The Save checkbox on the
-*   selection screen saves everything - both routes end in the same
-*   class method, which decides the table from the mode.
+*   The button saves what the user picked, and it is the only route
+*   into the save. The class method it calls decides the table from
+*   the mode.                              "Changes by Arnav on 02/09/26
     DATA(lt_rows) = go_alv->get_selections( )->get_selected_rows( ).
 
     IF lt_rows IS INITIAL.
@@ -158,10 +182,83 @@ CLASS lcl_handler IMPLEMENTATION.
     DATA(lt_msg) = go_fcst->save( EXPORTING iv_mode = g_mode
                                   CHANGING  ct_alv  = gt_alv ).
 
+*BOC By Arnav on 02/09/26
+*   go_alv->refresh( ).
+*   show_log( lt_msg ).
+*   No popup after a save. The forecast number and the per row outcome
+*   are brought onto the list instead, and the run is summed up in one
+*   status line at the foot of the screen.
+    show_result( ).
     go_alv->refresh( ).
-    show_log( lt_msg ).
+    result_message( lt_msg ).
+*EOC By Arnav on 02/09/26
 
   ENDMETHOD.
+
+
+*BOC By Arnav on 02/09/26
+  METHOD show_result.
+
+*   Forecast number and message are hidden while the list is only a
+*   forecast proposal, so it carries exactly the FS columns. Once Save
+*   has run they are the point of having pressed it, so they are taken
+*   out of hiding and put at the end of the list.
+    DATA lv_col TYPE lvc_fname.
+
+    CHECK go_alv IS BOUND.
+
+    DATA(lo_cols) = go_alv->get_columns( ).
+
+    DATA(lt_res) = VALUE tt_fname( ( 'FCST_NO' ) ( 'MESSAGE' ) ).
+
+    LOOP AT lt_res INTO lv_col.
+
+      READ TABLE gt_show TRANSPORTING NO FIELDS
+        WITH KEY table_line = lv_col.
+      IF sy-subrc <> 0.
+        APPEND lv_col TO gt_show.
+      ENDIF.
+
+      TRY.
+          lo_cols->get_column( lv_col )->set_technical( abap_false ).
+          lo_cols->set_column_position( columnname = lv_col
+                                        position   = lines( gt_show ) ).
+        CATCH cx_salv_error.
+      ENDTRY.
+
+    ENDLOOP.
+
+  ENDMETHOD.
+
+
+  METHOD result_message.
+
+*   One general line, not a popup and not a list of technical messages.
+*   Anything that went wrong on an individual row is already written in
+*   the Message column of that row.
+    DATA: lv_err TYPE i,
+          lv_n   TYPE char10,
+          lv_txt TYPE string.
+
+    LOOP AT it_msg INTO DATA(ls_msg).
+      IF ls_msg-type CA 'AEX'.
+        lv_err = lv_err + 1.
+      ENDIF.
+    ENDLOOP.
+
+    IF lv_err = 0.
+      lv_txt = 'Save completed'.
+      MESSAGE lv_txt TYPE 'S'.
+    ELSE.
+      lv_n = lv_err.
+      CONDENSE lv_n.
+      CONCATENATE 'Save completed,' lv_n 'row(s) not saved'
+             INTO lv_txt SEPARATED BY space.
+      MESSAGE lv_txt TYPE 'S' DISPLAY LIKE 'W'.
+    ENDIF.
+
+  ENDMETHOD.
+*EOC By Arnav on 02/09/26
 
 
   METHOD select_all.
@@ -313,6 +410,13 @@ INITIALIZATION.
   ENDIF.
   p_fyear = |{ gv_y }-{ gv_y + 1 }|.
 
+*BOC By Arnav on 02/09/26
+  PERFORM legacy_switch CHANGING g_legc_on.
+  IF g_legc_on = abap_false.
+    CLEAR p_legc.
+  ENDIF.
+*EOC By Arnav on 02/09/26
+
 *&---------------------------------------------------------------------*
 AT SELECTION-SCREEN OUTPUT.
 
@@ -321,6 +425,9 @@ AT SELECTION-SCREEN OUTPUT.
       WHEN 'QTR'. screen-active = COND #( WHEN p_qtr = abap_true THEN 1 ELSE 0 ).
       WHEN 'MTH'. screen-active = COND #( WHEN p_mth = abap_true THEN 1 ELSE 0 ).
       WHEN 'DAT'. screen-active = COND #( WHEN p_ann = abap_true THEN 0 ELSE 1 ).
+*BOC By Arnav on 02/09/26
+      WHEN 'LGC'. screen-active = COND #( WHEN g_legc_on = abap_true THEN 1 ELSE 0 ).
+*EOC By Arnav on 02/09/26
     ENDCASE.
     MODIFY SCREEN.
   ENDLOOP.
@@ -396,11 +503,15 @@ START-OF-SELECTION.
     RETURN.
   ENDIF.
 
-* Saved before the list is drawn, so the forecast number and the result
-* of each row are already on the rows the list shows.
-  IF p_save = abap_true.
-    PERFORM save_all.
-  ENDIF.
+*BOC By Arnav on 02/09/26
+** Saved before the list is drawn, so the forecast number and the result
+** of each row are already on the rows the list shows.
+* IF p_save = abap_true.
+*   PERFORM save_all.
+* ENDIF.
+* Nothing is saved by the run itself any more. The user looks at the
+* list and presses Save on the toolbar if they want to keep it.
+*EOC By Arnav on 02/09/26
 
   PERFORM display.
 
@@ -529,46 +640,70 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 *& Save
 *&
-*& One routine for all three modes. The class decides which table the
-*& rows belong to from the mode it is given:
-*&
-*&   Annual     ZPPT_FCST_YR   draws the forecast number from SNRO
-*&   Quarterly  ZPPT_FCST_QT   reuses the annual number
-*&   Monthly    ZPPT_FCST_MN   reuses the annual number
-*&
-*& Every generated row is saved. The user has already narrowed the run
-*& with plant, material and year on the selection screen, so there is
-*& nothing further to pick.
+*& Saving the whole run from the selection screen is withdrawn. The user
+*& picks rows in the list and presses Save on the toolbar, which runs
+*& LCL_HANDLER=>SAVE_SELECTED. The routine below is kept commented out
+*& so the authority check it carried can be seen next to the new one.
 *&---------------------------------------------------------------------*
-FORM save_all.
+*BOC By Arnav on 02/09/26
+*FORM save_all.
+*
+** LIKE LINE OF s_werks, not RSELOPTION - the generic select option line
+** types LOW as CHAR 45, which is not compatible with WERKS_D
+*  DATA ls_w LIKE LINE OF s_werks.
+*
+** Saving is a different activity from displaying, so it is checked again
+*  LOOP AT s_werks INTO ls_w.
+*    IF zcl_pp_fcst_util=>check_authority( iv_werks = ls_w-low
+*                                          iv_actvt = '01' ) = abap_false.
+*      MESSAGE e010 WITH ls_w-low '01'.
+*    ENDIF.
+*  ENDLOOP.
+*
+** SAVE works on the rows carrying MARK
+*  LOOP AT gt_alv ASSIGNING FIELD-SYMBOL(<ls>).
+*    <ls>-mark = abap_true.
+*  ENDLOOP.
+*
+*  DATA(lt_msg) = go_fcst->save( EXPORTING iv_mode = g_mode
+*                                CHANGING  ct_alv  = gt_alv ).
+*
+** The outcome of a save is something the user asked for, so unlike the
+** generation messages it is shown rather than only logged
+*  lcl_handler=>show_log( lt_msg ).
+*
+*  APPEND LINES OF lt_msg TO gt_msg.
+*
+*ENDFORM.
 
-* LIKE LINE OF s_werks, not RSELOPTION - the generic select option line
-* types LOW as CHAR 45, which is not compatible with WERKS_D
-  DATA ls_w LIKE LINE OF s_werks.
 
-* Saving is a different activity from displaying, so it is checked again
-  LOOP AT s_werks INTO ls_w.
-    IF zcl_pp_fcst_util=>check_authority( iv_werks = ls_w-low
-                                          iv_actvt = '01' ) = abap_false.
-      MESSAGE e010 WITH ls_w-low '01'.
-    ENDIF.
-  ENDLOOP.
+*&---------------------------------------------------------------------*
+*& Legacy switch
+*&
+*& 'X' means legacy sales history has been loaded and may be used, so
+*& the Legacy checkbox is offered. Blank means it has not, and the
+*& checkbox is not drawn at all rather than being offered and then
+*& returning nothing.
+*&
+*& ASSUMPTION: the switch is TVARVC parameter ZPP_FCST_LEGACY (STVARV,
+*& Parameters tab). Confirm the variable actually used - this FORM is
+*& the only reader, so the source can be swapped here alone.
+*&---------------------------------------------------------------------*
+FORM legacy_switch CHANGING cv_on TYPE abap_bool.
 
-* SAVE works on the rows carrying MARK
-  LOOP AT gt_alv ASSIGNING FIELD-SYMBOL(<ls>).
-    <ls>-mark = abap_true.
-  ENDLOOP.
+  CLEAR cv_on.
 
-  DATA(lt_msg) = go_fcst->save( EXPORTING iv_mode = g_mode
-                                CHANGING  ct_alv  = gt_alv ).
+  SELECT SINGLE low FROM tvarvc INTO @DATA(lv_low)
+    WHERE name = @gc_tv_legacy
+      AND type = 'P'
+      AND numb = '0000'.
 
-* The outcome of a save is something the user asked for, so unlike the
-* generation messages it is shown rather than only logged
-  lcl_handler=>show_log( lt_msg ).
-
-  APPEND LINES OF lt_msg TO gt_msg.
+  IF sy-subrc = 0 AND lv_low IS NOT INITIAL.
+    cv_on = abap_true.
+  ENDIF.
 
 ENDFORM.
+*EOC By Arnav on 02/09/26
 
 
 *&---------------------------------------------------------------------*
@@ -594,8 +729,9 @@ FORM display.
 *     The GUI status of THIS program carries the custom buttons.
 *     set_functions = c_functions_all keeps SALV's own functions working
 *     alongside it. If the status cannot be resolved the display below
-*     falls back rather than dumping, and the Save checkbox on the
-*     selection screen still saves.
+*     falls back rather than dumping - without the status there is no
+*     Save button, so nothing can be saved from that run.
+*                                          "Changes by Arnav on 02/09/26
       IF lv_save_ok = abap_true.
         go_alv->set_screen_status(
           pfstatus      = gc_status
@@ -710,6 +846,12 @@ FORM visible_columns CHANGING ct_show TYPE tt_fname.
       APPEND 'LOAD_FCT'   TO ct_show.   " Growth Based on Category
       APPEND 'FCST_QTY'   TO ct_show.   " Forecast (Max * Growth %)
       APPEND 'BUS_FCST'   TO ct_show.   " Business Forecast
+*BOC By Arnav on 02/09/26
+*     Additional plan quantity now sits in front of Final Forecast Qty,
+*     which is the higher of Forecast (Max * Growth %) and Business
+*     Forecast, so the two inputs are read before the result.
+      APPEND 'BUS_FCST_ADD' TO ct_show. " Additional Plan Qty
+*EOC By Arnav on 02/09/26
       APPEND 'FINAL_QTY'  TO ct_show.   " Final Forecast Qty
       APPEND 'M4_FCST'    TO ct_show.   " July'26
       APPEND 'M5_FCST'    TO ct_show.   " Aug'26
@@ -750,26 +892,40 @@ FORM visible_columns CHANGING ct_show TYPE tt_fname.
   ENDCASE.
 
 * ---- the result of a save --------------------------------------------
-* Only when the run actually saved. The forecast number and the per row
-* outcome are the point of pressing save, so they are shown then and
-* only then. The traffic light stays off - an exception column is drawn
-* in front of Plant whatever position it is given.
-  IF p_save = abap_true.
-    APPEND 'FCST_NO' TO ct_show.
-    APPEND 'MESSAGE' TO ct_show.
-  ENDIF.
+*BOC By Arnav on 02/09/26
+** Only when the run actually saved. The forecast number and the per row
+** outcome are the point of pressing save, so they are shown then and
+** only then. The traffic light stays off - an exception column is drawn
+** in front of Plant whatever position it is given.
+*  IF p_save = abap_true.
+*    APPEND 'FCST_NO' TO ct_show.
+*    APPEND 'MESSAGE' TO ct_show.
+*  ENDIF.
+* The run no longer saves, so nothing is known here. The two columns are
+* brought out of hiding by LCL_HANDLER=>SHOW_RESULT once the Save button
+* has actually run. The traffic light stays off - an exception column is
+* drawn in front of Plant whatever position it is given.
+*EOC By Arnav on 02/09/26
 
 * ---- not drawn on this FS sheet, kept at the end --------------------
   IF gc_show_extras = abap_true.
 
-    IF g_mode = zcl_pp_fcst=>gc_mode-quarterly.
-*     Sheet 2 shows Business Forecast but not the additional column.
-*     The Final ALV sheet carries it and the change upload writes it.
-      APPEND 'BUS_FCST_ADD' TO ct_show.
-    ELSE.
-*     MTS / MTO is drawn on sheet 2 only
+*BOC By Arnav on 02/09/26
+*    IF g_mode = zcl_pp_fcst=>gc_mode-quarterly.
+**     Sheet 2 shows Business Forecast but not the additional column.
+**     The Final ALV sheet carries it and the change upload writes it.
+*      APPEND 'BUS_FCST_ADD' TO ct_show.
+*    ELSE.
+**     MTS / MTO is drawn on sheet 2 only
+*      APPEND 'MTS_MTO' TO ct_show.
+*    ENDIF.
+*   BUS_FCST_ADD is a normal column of sheet 2 now, so appending it here
+*   would list it twice. Only MTS / MTO is left to add, and sheet 2
+*   already carries that one as well.
+    IF g_mode <> zcl_pp_fcst=>gc_mode-quarterly.
       APPEND 'MTS_MTO' TO ct_show.
     ENDIF.
+*EOC By Arnav on 02/09/26
 
     APPEND 'MEINS'   TO ct_show.   " unit for every quantity column
     APPEND 'FCST_NO' TO ct_show.   " forecast number, FS requirement E

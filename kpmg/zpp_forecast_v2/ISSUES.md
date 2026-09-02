@@ -71,3 +71,24 @@ in `ZCL_PP_FCST` is a different shape and is not affected.
 
 TR: not yet · Files: `kpmg/zpp_forecast_v2/src/zpp_forecast_upload.prog.abap`,
 `kpmg/zpp_forecast_v2/src/zpp_forecast.prog.abap`
+
+## 02/09/26 — ZPP_FORECAST, two defects found on pre-paste read
+
+Found by reading the file before it went to SE38, not by an activation error.
+
+1. `LCL_HANDLER=>SHOW_RESULT` — on a **second** press of Save, neither `FCST_NO` nor
+   `MESSAGE` is appended to `GT_SHOW` again, so `lines( gt_show )` returned the same
+   number for both and `set_column_position` handed the two columns the same slot,
+   shuffling the column order. Position now taken from `sy-tabix` when the column is
+   already in the list. Cosmetic, no dump.
+2. `p_legc` could still be forced on when the legacy switch is blank. `INITIALIZATION`
+   runs **before** a selection-screen variant is transferred, so `CLEAR p_legc` there
+   loses to a variant with the box ticked, and to `SUBMIT ... WITH p_legc = 'X'`. Hiding
+   the checkbox only stops a user typing it. The switch is now re-asserted at
+   `START-OF-SELECTION`, which runs last and runs in background and under SUBMIT too.
+
+Unverifiable from the code, flagged rather than changed: `set_technical( abap_false )` +
+`refresh( )` after `display( )` has run — the reveal-on-save mechanism. If the two columns
+do not appear on screen after Save, the fallback is to list them from the start.
+
+TR: not yet · Files: `kpmg/zpp_forecast_v2/src/zpp_forecast.prog.abap`

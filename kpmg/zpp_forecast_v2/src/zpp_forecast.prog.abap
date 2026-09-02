@@ -204,6 +204,7 @@ CLASS lcl_handler IMPLEMENTATION.
 *   has run they are the point of having pressed it, so they are taken
 *   out of hiding and put at the end of the list.
     DATA: lv_col  TYPE lvc_fname,
+          lv_pos  TYPE i,
           lt_res  TYPE tt_fname.
 
     CHECK go_alv IS BOUND.
@@ -221,14 +222,21 @@ CLASS lcl_handler IMPLEMENTATION.
 
       READ TABLE gt_show TRANSPORTING NO FIELDS
         WITH KEY table_line = lv_col.
-      IF sy-subrc <> 0.
+
+      IF sy-subrc = 0.
+*       Already there from an earlier press of Save. Its position is the
+*       index it already holds. Using lines( gt_show ) here handed BOTH
+*       columns the same slot on the second press and shuffled the order.
+        lv_pos = sy-tabix.
+      ELSE.
         APPEND lv_col TO gt_show.
+        lv_pos = lines( gt_show ).
       ENDIF.
 
       TRY.
           lo_cols->get_column( lv_col )->set_technical( abap_false ).
           lo_cols->set_column_position( columnname = lv_col
-                                        position   = lines( gt_show ) ).
+                                        position   = lv_pos ).
         CATCH cx_salv_error.
       ENDTRY.
 
@@ -497,6 +505,17 @@ AT SELECTION-SCREEN.
 
 *&---------------------------------------------------------------------*
 START-OF-SELECTION.
+
+*BOC By Arnav on 02/09/26
+* INITIALIZATION runs BEFORE a selection screen variant is transferred,
+* so the CLEAR there loses to a variant that carries Legacy ticked, and
+* to SUBMIT ... WITH p_legc = 'X'. Hiding the checkbox only stops the
+* user typing it. Re-asserted here, which runs last and runs in
+* background and under SUBMIT as well.
+  IF g_legc_on = abap_false.
+    CLEAR p_legc.
+  ENDIF.
+*EOC By Arnav on 02/09/26
 
   PERFORM generate.
 

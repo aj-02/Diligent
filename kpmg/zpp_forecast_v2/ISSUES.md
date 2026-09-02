@@ -37,3 +37,26 @@ declaration and both assignments are commented out; the `lv_total` in `do_change
 stays, it guards the negative-quantity check.
 
 TR: not yet · Files: `kpmg/zpp_forecast_v2/src/zpp_forecast_upload.prog.abap`
+
+## 02/09/26 — ZPP_FORECAST_UPLOAD, 16 activation errors (pre-existing)
+
+`"'PLANT' and the row type of 'CT_HEAD' are incompatible"` × 16, all in
+`FORM template_columns`. Not caused by the point-1 change — the lines are
+original code that had not been activated on this release before.
+
+Root cause: a text literal `'PLANT'` is type `C`. On this release the row of a
+`VALUE #( ( ... ) )` short form must be **compatible** with the row type, and
+`C` is not compatible with `STRING`, which is the row type of `STRING_TABLE`.
+All 16 `ct_head` / `ct_demo` assignments hit it; the `cv_name = '...'` lines did
+not, because a plain MOVE into a `STRING` variable is a conversion and allowed.
+
+Fix: every literal row rewritten as a string template — `( |PLANT| )` — which is
+type `STRING`. Empty row is `( || )`. `CONV string( 'PLANT' )` would work too but
+is far longer on a 16-line block.
+
+Watch: `ZPP_FORECAST` has the same shape at `FORM visible_columns`
+(`ct_show = VALUE tt_fname( ( 'WERKS' ) ... )`) and in `LCL_HANDLER=>SHOW_RESULT`.
+Row type there is `LVC_FNAME` (CHAR30), not `STRING`, so it may pass — if it does
+not, the same string-template fix applies.
+
+TR: not yet · Files: `kpmg/zpp_forecast_v2/src/zpp_forecast_upload.prog.abap`

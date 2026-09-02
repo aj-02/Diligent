@@ -143,65 +143,131 @@ FORM template_columns CHANGING ct_head TYPE string_table
 
   CLEAR: ct_head, ct_demo, cv_name.
 
+*BOC By Arnav on 02/09/26
+* A text literal is type C. This release requires the row of a
+* VALUE constructor to be COMPATIBLE with the row type, and C is not
+* compatible with STRING, so all sixteen assignments below were
+* rejected with "'PLANT' and the row type of 'CT_HEAD' are
+* incompatible". String templates are type STRING, so they are.
+*  IF p_cat = 'X'.
+*    cv_name = 'ZFCST_Product_Category'.
+*    ct_head = VALUE #( ( 'PLANT' ) ( 'MATERIAL' ) ( 'CATEGORY' )
+*                       ( 'LOAD FACTOR' ) ( 'MTS OR MTO' ) ).
+*    ct_demo = VALUE #( ( '1001' ) ( 'FG00000000001' ) ( 'A' )
+*                       ( '1.300' ) ( 'MTS' ) ).
+*
+*  ELSEIF p_trk = 'X'.
+*    cv_name = 'ZFCST_Material_Tracking'.
+*    ct_head = VALUE #( ( 'PLANT' ) ( 'NEW MATERIAL' )
+*                       ( 'OLD MATERIAL 1' ) ( 'OLD MATERIAL 2' ) ).
+*    ct_demo = VALUE #( ( '1001' ) ( 'FG00000000002' )
+*                       ( 'FG00000000001' ) ( '' ) ).
+*
+*  ELSEIF p_exc = 'X'.
+*    cv_name = 'ZFCST_Material_Exclusion'.
+*    ct_head = VALUE #( ( 'PLANT' ) ( 'MATERIAL' ) ).
+*    ct_demo = VALUE #( ( '1001' ) ( 'FG00000000001' ) ).
+*
+*  ELSEIF p_hist = 'X'.
+*    cv_name = 'ZFCST_Legacy_Sales_History'.
+*    ct_head = VALUE #( ( 'PLANT' ) ( 'MATERIAL' ) ( 'YEAR' )
+*                       ( 'M1 APR' ) ( 'M2 MAY' ) ( 'M3 JUN' ) ( 'M4 JUL' )
+*                       ( 'M5 AUG' ) ( 'M6 SEP' ) ( 'M7 OCT' ) ( 'M8 NOV' )
+*                       ( 'M9 DEC' ) ( 'M10 JAN' ) ( 'M11 FEB' ) ( 'M12 MAR' )
+*                       ( 'UOM' ) ).
+*    ct_demo = VALUE #( ( '1001' ) ( 'FG00000000001' ) ( '2025' )
+*                       ( '100' ) ( '120' ) ( '90' ) ( '110' )
+*                       ( '95' ) ( '130' ) ( '105' ) ( '115' )
+*                       ( '125' ) ( '85' ) ( '100' ) ( '140' )
+*                       ( 'EA' ) ).
+*
+*  ELSEIF p_busq = 'X'.
+*    cv_name = 'ZFCST_Business_Forecast_Quarterly'.
+*    ct_head = VALUE #( ( 'MATERIAL' ) ( 'PLANT' ) ( 'QUARTER' )
+*                       ( 'YEAR' ) ( 'SALES FORECAST' ) ).
+*    ct_demo = VALUE #( ( 'FG00000000001' ) ( '1001' ) ( '2' )
+*                       ( '2026' ) ( '12000' ) ).
+*
+*  ELSEIF p_busm = 'X'.
+*    cv_name = 'ZFCST_Business_Forecast_Monthly'.
+*    ct_head = VALUE #( ( 'MATERIAL' ) ( 'PLANT' ) ( 'MONTH' )
+*                       ( 'YEAR' ) ( 'SALES FORECAST' ) ).
+*    ct_demo = VALUE #( ( 'FG00000000001' ) ( '1001' ) ( '1' )
+*                       ( '2026' ) ( '4000' ) ).
+*
+*  ELSEIF p_chgq = 'X'.
+*    cv_name = 'ZFCST_Forecast_Change_Quarterly'.
+*    ct_head = VALUE #( ( 'MATERIAL' ) ( 'PLANT' ) ( 'QUARTER' )
+*                       ( 'YEAR' ) ( 'CHANGE QTY' ) ( 'REASON' ) ).
+*    ct_demo = VALUE #( ( 'FG00000000001' ) ( '1001' ) ( '2' )
+*                       ( '2026' ) ( '10' ) ( 'Additional plan' ) ).
+*
+*  ELSEIF p_chgm = 'X'.
+*    cv_name = 'ZFCST_Forecast_Change_Monthly'.
+*    ct_head = VALUE #( ( 'MATERIAL' ) ( 'PLANT' ) ( 'MONTH' )
+*                       ( 'YEAR' ) ( 'CHANGE QTY' ) ( 'REASON' ) ).
+*    ct_demo = VALUE #( ( 'FG00000000001' ) ( '1001' ) ( '1' )
+*                       ( '2026' ) ( '-10' ) ( 'Reduced plan' ) ).
   IF p_cat = 'X'.
     cv_name = 'ZFCST_Product_Category'.
-    ct_head = VALUE #( ( 'PLANT' ) ( 'MATERIAL' ) ( 'CATEGORY' )
-                       ( 'LOAD FACTOR' ) ( 'MTS OR MTO' ) ).
-    ct_demo = VALUE #( ( '1001' ) ( 'FG00000000001' ) ( 'A' )
-                       ( '1.300' ) ( 'MTS' ) ).
+    ct_head = VALUE #( ( |PLANT| ) ( |MATERIAL| ) ( |CATEGORY| )
+                       ( |LOAD FACTOR| ) ( |MTS OR MTO| ) ).
+    ct_demo = VALUE #( ( |1001| ) ( |FG00000000001| ) ( |A| )
+                       ( |1.300| ) ( |MTS| ) ).
 
   ELSEIF p_trk = 'X'.
     cv_name = 'ZFCST_Material_Tracking'.
-    ct_head = VALUE #( ( 'PLANT' ) ( 'NEW MATERIAL' )
-                       ( 'OLD MATERIAL 1' ) ( 'OLD MATERIAL 2' ) ).
-    ct_demo = VALUE #( ( '1001' ) ( 'FG00000000002' )
-                       ( 'FG00000000001' ) ( '' ) ).
+    ct_head = VALUE #( ( |PLANT| ) ( |NEW MATERIAL| )
+                       ( |OLD MATERIAL 1| ) ( |OLD MATERIAL 2| ) ).
+    ct_demo = VALUE #( ( |1001| ) ( |FG00000000002| )
+                       ( |FG00000000001| ) ( || ) ).
 
   ELSEIF p_exc = 'X'.
     cv_name = 'ZFCST_Material_Exclusion'.
-    ct_head = VALUE #( ( 'PLANT' ) ( 'MATERIAL' ) ).
-    ct_demo = VALUE #( ( '1001' ) ( 'FG00000000001' ) ).
+    ct_head = VALUE #( ( |PLANT| ) ( |MATERIAL| ) ).
+    ct_demo = VALUE #( ( |1001| ) ( |FG00000000001| ) ).
 
   ELSEIF p_hist = 'X'.
     cv_name = 'ZFCST_Legacy_Sales_History'.
-    ct_head = VALUE #( ( 'PLANT' ) ( 'MATERIAL' ) ( 'YEAR' )
-                       ( 'M1 APR' ) ( 'M2 MAY' ) ( 'M3 JUN' ) ( 'M4 JUL' )
-                       ( 'M5 AUG' ) ( 'M6 SEP' ) ( 'M7 OCT' ) ( 'M8 NOV' )
-                       ( 'M9 DEC' ) ( 'M10 JAN' ) ( 'M11 FEB' ) ( 'M12 MAR' )
-                       ( 'UOM' ) ).
-    ct_demo = VALUE #( ( '1001' ) ( 'FG00000000001' ) ( '2025' )
-                       ( '100' ) ( '120' ) ( '90' ) ( '110' )
-                       ( '95' ) ( '130' ) ( '105' ) ( '115' )
-                       ( '125' ) ( '85' ) ( '100' ) ( '140' )
-                       ( 'EA' ) ).
+    ct_head = VALUE #( ( |PLANT| ) ( |MATERIAL| ) ( |YEAR| )
+                       ( |M1 APR| ) ( |M2 MAY| ) ( |M3 JUN| ) ( |M4 JUL| )
+                       ( |M5 AUG| ) ( |M6 SEP| ) ( |M7 OCT| ) ( |M8 NOV| )
+                       ( |M9 DEC| ) ( |M10 JAN| ) ( |M11 FEB| ) ( |M12 MAR| )
+                       ( |UOM| ) ).
+    ct_demo = VALUE #( ( |1001| ) ( |FG00000000001| ) ( |2025| )
+                       ( |100| ) ( |120| ) ( |90| ) ( |110| )
+                       ( |95| ) ( |130| ) ( |105| ) ( |115| )
+                       ( |125| ) ( |85| ) ( |100| ) ( |140| )
+                       ( |EA| ) ).
 
   ELSEIF p_busq = 'X'.
     cv_name = 'ZFCST_Business_Forecast_Quarterly'.
-    ct_head = VALUE #( ( 'MATERIAL' ) ( 'PLANT' ) ( 'QUARTER' )
-                       ( 'YEAR' ) ( 'SALES FORECAST' ) ).
-    ct_demo = VALUE #( ( 'FG00000000001' ) ( '1001' ) ( '2' )
-                       ( '2026' ) ( '12000' ) ).
+    ct_head = VALUE #( ( |MATERIAL| ) ( |PLANT| ) ( |QUARTER| )
+                       ( |YEAR| ) ( |SALES FORECAST| ) ).
+    ct_demo = VALUE #( ( |FG00000000001| ) ( |1001| ) ( |2| )
+                       ( |2026| ) ( |12000| ) ).
 
   ELSEIF p_busm = 'X'.
     cv_name = 'ZFCST_Business_Forecast_Monthly'.
-    ct_head = VALUE #( ( 'MATERIAL' ) ( 'PLANT' ) ( 'MONTH' )
-                       ( 'YEAR' ) ( 'SALES FORECAST' ) ).
-    ct_demo = VALUE #( ( 'FG00000000001' ) ( '1001' ) ( '1' )
-                       ( '2026' ) ( '4000' ) ).
+    ct_head = VALUE #( ( |MATERIAL| ) ( |PLANT| ) ( |MONTH| )
+                       ( |YEAR| ) ( |SALES FORECAST| ) ).
+    ct_demo = VALUE #( ( |FG00000000001| ) ( |1001| ) ( |1| )
+                       ( |2026| ) ( |4000| ) ).
 
   ELSEIF p_chgq = 'X'.
     cv_name = 'ZFCST_Forecast_Change_Quarterly'.
-    ct_head = VALUE #( ( 'MATERIAL' ) ( 'PLANT' ) ( 'QUARTER' )
-                       ( 'YEAR' ) ( 'CHANGE QTY' ) ( 'REASON' ) ).
-    ct_demo = VALUE #( ( 'FG00000000001' ) ( '1001' ) ( '2' )
-                       ( '2026' ) ( '10' ) ( 'Additional plan' ) ).
+    ct_head = VALUE #( ( |MATERIAL| ) ( |PLANT| ) ( |QUARTER| )
+                       ( |YEAR| ) ( |CHANGE QTY| ) ( |REASON| ) ).
+    ct_demo = VALUE #( ( |FG00000000001| ) ( |1001| ) ( |2| )
+                       ( |2026| ) ( |10| ) ( |Additional plan| ) ).
 
   ELSEIF p_chgm = 'X'.
     cv_name = 'ZFCST_Forecast_Change_Monthly'.
-    ct_head = VALUE #( ( 'MATERIAL' ) ( 'PLANT' ) ( 'MONTH' )
-                       ( 'YEAR' ) ( 'CHANGE QTY' ) ( 'REASON' ) ).
-    ct_demo = VALUE #( ( 'FG00000000001' ) ( '1001' ) ( '1' )
-                       ( '2026' ) ( '-10' ) ( 'Reduced plan' ) ).
+    ct_head = VALUE #( ( |MATERIAL| ) ( |PLANT| ) ( |MONTH| )
+                       ( |YEAR| ) ( |CHANGE QTY| ) ( |REASON| ) ).
+    ct_demo = VALUE #( ( |FG00000000001| ) ( |1001| ) ( |1| )
+                       ( |2026| ) ( |-10| ) ( |Reduced plan| ) ).
+*EOC By Arnav on 02/09/26
   ENDIF.
 
 ENDFORM.

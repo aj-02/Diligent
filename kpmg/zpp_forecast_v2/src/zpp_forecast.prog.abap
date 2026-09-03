@@ -831,6 +831,12 @@ ENDFORM.
 FORM visible_columns CHANGING ct_show TYPE tt_fname.
 
   DATA lv_p TYPE numc2.
+*BOC By Arnav on 03/09/26
+* Typed I and not NUMC2: a NUMC in a string template keeps its leading
+* zero, which would build BUS_FCST_ADD01 instead of BUS_FCST_ADD1.
+  DATA: lv_q TYPE i,
+        lv_m TYPE i.
+*EOC By Arnav on 03/09/26
 
   CLEAR ct_show.
 
@@ -909,39 +915,34 @@ FORM visible_columns CHANGING ct_show TYPE tt_fname.
       APPEND 'FCST_QTY'   TO ct_show.   " Forecast (Max * Growth %)
       APPEND 'BUS_FCST'   TO ct_show.   " Business Forecast
       APPEND 'FINAL_QTY'  TO ct_show.   " Final Forecast Qty
-      APPEND 'M4_FCST'    TO ct_show.   " July'26
-      APPEND 'M5_FCST'    TO ct_show.   " Aug'26
-      APPEND 'M6_FCST'    TO ct_show.   " Sep'26
 *BOC By Arnav on 03/09/26
-*     Three blocks of three, so each column lines up with the one above
-*     and below it: the month's forecast, the month's additional plan
-*     quantity, then the month's final, which is the two added. The
-*     add-ons sat in front of FINAL_QTY before, five columns away from
-*     the figure each one adds to.
-      APPEND 'BUS_FCST_ADD1' TO ct_show.
-      APPEND 'BUS_FCST_ADD2' TO ct_show.
-      APPEND 'BUS_FCST_ADD3' TO ct_show.
-      APPEND 'M4_FCST_FINAL' TO ct_show.
-      APPEND 'M5_FCST_FINAL' TO ct_show.
-      APPEND 'M6_FCST_FINAL' TO ct_show.
-*     Final x PRICE, so the value follows the final it is worked out
-*     from. Quarterly only - the annual sheet carries no value columns.
-      APPEND 'M4_VAL'     TO ct_show.
-      APPEND 'M5_VAL'     TO ct_show.
-      APPEND 'M6_VAL'     TO ct_show.
-*EOC By Arnav on 03/09/26
+*     Month by month, so everything belonging to July stands together
+*     and is followed by everything belonging to August:
+*
+*       Jul-26 · Jul-26 additional · Jul-26 final · Jul-26 value
+*       Aug-26 · Aug-26 additional · Aug-26 final · Aug-26 value
+*       Sep-26 · Sep-26 additional · Sep-26 final · Sep-26 value
+*
+*     Final = forecast + additional, value = final x PRICE, so a figure
+*     is checked by reading along its own month rather than counting
+*     three columns across. Tonnage joins its month when the Tonnage
+*     checkbox is ticked.
+      DO 3 TIMES.
 
-      IF p_tonn = abap_true.
-        APPEND 'M4_TON' TO ct_show.
-        APPEND 'M5_TON' TO ct_show.
-        APPEND 'M6_TON' TO ct_show.
-      ENDIF.
+        lv_q = sy-index.        " 1, 2, 3 - the additional plan columns
+        lv_m = lv_q + 3.        " 4, 5, 6 - the Mn_ columns
 
-*BOC By Arnav on 03/09/26
-*     Tonnage value follows the tonnage it belongs to
-      APPEND 'M4_TON_VAL' TO ct_show.
-      APPEND 'M5_TON_VAL' TO ct_show.
-      APPEND 'M6_TON_VAL' TO ct_show.
+        APPEND CONV lvc_fname( |M{ lv_m }_FCST| )       TO ct_show.
+        APPEND CONV lvc_fname( |BUS_FCST_ADD{ lv_q }| ) TO ct_show.
+        APPEND CONV lvc_fname( |M{ lv_m }_FCST_FINAL| ) TO ct_show.
+        APPEND CONV lvc_fname( |M{ lv_m }_VAL| )        TO ct_show.
+
+        IF p_tonn = abap_true.
+          APPEND CONV lvc_fname( |M{ lv_m }_TON| )     TO ct_show.
+          APPEND CONV lvc_fname( |M{ lv_m }_TON_VAL| ) TO ct_show.
+        ENDIF.
+
+      ENDDO.
 *EOC By Arnav on 03/09/26
 
       APPEND 'MTS_MTO'    TO ct_show.   " AE17, the last FS column
@@ -1139,18 +1140,9 @@ FORM setup_columns USING pt_show TYPE tt_fname.
     PERFORM txt USING 'BUS_FCST'     'Business Forecast'.
     PERFORM txt USING 'BUS_FCST_ADD' 'Additional Plan Qty'.
 *BOC By Arnav on 03/09/26
-    PERFORM txt USING 'BUS_FCST_ADD1' 'Additional Plan Qty Month 1'.
-    PERFORM txt USING 'BUS_FCST_ADD2' 'Additional Plan Qty Month 2'.
-    PERFORM txt USING 'BUS_FCST_ADD3' 'Additional Plan Qty Month 3'.
-    PERFORM txt USING 'M4_FCST_FINAL' 'Final Forecast Month 1'.
-    PERFORM txt USING 'M5_FCST_FINAL' 'Final Forecast Month 2'.
-    PERFORM txt USING 'M6_FCST_FINAL' 'Final Forecast Month 3'.
-    PERFORM txt USING 'M4_VAL'        'Value Month 1'.
-    PERFORM txt USING 'M5_VAL'        'Value Month 2'.
-    PERFORM txt USING 'M6_VAL'        'Value Month 3'.
-    PERFORM txt USING 'M4_TON_VAL'    'Tonnage Value Month 1'.
-    PERFORM txt USING 'M5_TON_VAL'    'Tonnage Value Month 2'.
-    PERFORM txt USING 'M6_TON_VAL'    'Tonnage Value Month 3'.
+*   The new quarterly columns are named from the financial calendar by
+*   MONTH_HEADINGS, the same routine that names M4_FCST and M4_TON, so
+*   they read Jul-26 rather than "Month 1". Nothing static here.
 *EOC By Arnav on 03/09/26
     PERFORM txt USING 'FINAL_QTY'    'Final Forecast Qty'.
 *   The FS heads both column O and column Q "Final Forecast Qty". The
@@ -1265,6 +1257,7 @@ FORM month_headings.
         lv_col TYPE lvc_fname,
         lv_ix  TYPE i,
         lv_qi  TYPE i,
+        lv_ai  TYPE i,   "Changes by Arnav on 03/09/26
         lv_per TYPE numc2,
         lv_yy  TYPE gjahr,
         lv_mm  TYPE numc2.
@@ -1331,6 +1324,28 @@ FORM month_headings.
       lv_hdr = |{ lv_nam }-{ lv_yy+2(2) } tonnage|.
       lv_col = |M{ lv_ix }_TON|.
       PERFORM txt USING lv_col lv_hdr.
+
+*BOC By Arnav on 03/09/26
+*     The additional plan quantity, the final and the two value columns
+*     are named from the same month, so a quarter 4 run reads Jan-27
+*     rather than "Month 1".
+      lv_ai  = lv_ix - 3.
+      lv_hdr = |{ lv_nam }-{ lv_yy+2(2) } additional|.
+      lv_col = |BUS_FCST_ADD{ lv_ai }|.
+      PERFORM txt USING lv_col lv_hdr.
+
+      lv_hdr = |{ lv_nam }-{ lv_yy+2(2) } final|.
+      lv_col = |M{ lv_ix }_FCST_FINAL|.
+      PERFORM txt USING lv_col lv_hdr.
+
+      lv_hdr = |{ lv_nam }-{ lv_yy+2(2) } value|.
+      lv_col = |M{ lv_ix }_VAL|.
+      PERFORM txt USING lv_col lv_hdr.
+
+      lv_hdr = |{ lv_nam }-{ lv_yy+2(2) } tonnage value|.
+      lv_col = |M{ lv_ix }_TON_VAL|.
+      PERFORM txt USING lv_col lv_hdr.
+*EOC By Arnav on 03/09/26
     ENDLOOP.
 
   ELSE.

@@ -387,3 +387,25 @@ the 2"). That was written when there was one add-on column; with three, they bel
 the monthly forecasts rather than in front of the quarter-level FINAL_QTY.
 
 TR: not yet · Files: `kpmg/zpp_forecast_v2/src/zpp_forecast.prog.abap`
+
+## 03/09/26 — quarterly ALV: month by month, headings from the calendar
+
+Supersedes the "three blocks of three" entry above.
+
+Columns are now grouped by MONTH, not by kind, and built in a DO 3 TIMES loop:
+
+  Jul-26 · Jul-26 additional · Jul-26 final · Jul-26 value [· Jul-26 tonnage · tonnage value]
+  Aug-26 · Aug-26 additional · Aug-26 final · Aug-26 value [...]
+  Sep-26 · Sep-26 additional · Sep-26 final · Sep-26 value [...]
+
+The static 'Month 1 / 2 / 3' headings are gone. `MONTH_HEADINGS` names the additional,
+final and both value columns from the financial calendar, exactly as it already named
+`Mn_FCST` and `Mn_TON`, so a quarter 4 run reads Jan-27 and not "Month 1".
+
+Two things worth remembering:
+  - `LV_Q` and `LV_M` are typed I, not NUMC2. A NUMC in a string template keeps its
+    leading zero, which would have built BUS_FCST_ADD01 instead of BUS_FCST_ADD1.
+    `LV_P` stays NUMC2 because the annual sheet needs M01..M12.
+  - Tonnage now joins its own month rather than sitting in a block of its own.
+
+TR: not yet · Files: `kpmg/zpp_forecast_v2/src/zpp_forecast.prog.abap`

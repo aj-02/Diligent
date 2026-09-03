@@ -165,3 +165,23 @@ July. That is rejected as out of range, so it fails loudly rather than writing t
 month — but the error text is the only thing telling them the convention.
 
 TR: not yet · Files: `kpmg/zpp_forecast_v2/src/zpp_forecast_upload.prog.abap`
+
+## 03/09/26 — MONTH is the fiscal period on BOTH change templates (settled)
+
+Supersedes the two entries above. Arnav's call after seeing that MONTH meant two different
+things across the two files.
+
+`MONTH` is the fiscal period 1-12, 1 = April, 12 = March, in
+`ZFCST_Forecast_Change_Quarterly` and `ZFCST_Forecast_Change_Monthly` alike. The monthly
+file already worked this way (`check_period` mode M) — only the quarterly one changed.
+
+On the quarterly file the period must also fall inside the quarter on the same row:
+Q1 takes 1-3, Q2 takes 4-6, Q3 takes 7-9, Q4 takes 10-12. Rejected with
+"Month 7 is not in quarter 2". Column chosen by `month - ( quarter - 1 ) * 3`.
+Template demo row is Quarter 2, month 4.
+
+The 1/2/3-within-the-quarter version stays commented in the same block in case it comes
+back. Note it only differs from Q2 onward — for Q1 both readings give April, May, June,
+which is why the CR's own example row (Q2, month 1) read naturally and was wrong.
+
+TR: not yet · Files: `kpmg/zpp_forecast_v2/src/zpp_forecast_upload.prog.abap`

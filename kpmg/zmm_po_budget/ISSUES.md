@@ -33,45 +33,40 @@ things; the `<002>` block did two:
 | `item->invalidate( )` | line 172 | **missing** |
 | `ch_failed = abap_true` | line 173 | present |
 
-**Why DEV and not QAS — NOT ESTABLISHED. Earlier claim in this entry was wrong.**
+**Why DEV and not QAS — RESOLVED 03/09/26. The defect is present in DEV too, but dormant.**
 
-An earlier version of this entry claimed the missing `mmpur_business_obj_id` explained the
-DEV/QAS split, via a stale framework global. Arnav correctly rejected that: a missing macro
-call is a system-independent code defect and would fail in both systems. The stale-global
-story was a hypothesis, never verified against the macro internals. Retracted.
+An earlier version of this entry claimed a stale framework global explained the split. Arnav
+correctly rejected that — a missing macro call is system-independent and would fail in both
+systems. Retracted. The real answer is simpler.
 
-The fix below is still correct on its own merits — it matches the proven `ZMM_MSGS 007` block
-in the same method and removes a dependency on framework state the block does not control —
-but it is not the explanation for the two systems behaving differently.
+`ZMM_BUDGET` was confirmed present in QAS via SE91, ruling out the missing-message-class
+theory. Arnav also confirmed by debugger that the `mmpur_message_forced` statement IS reached
+in QAS, on the `IF sy-subrc <> 0` branch. That means the `SELECT SINGLE` on `ZMM_PO_BUDGET`
+returns no row for the tested `WERKS` + `EKGRP` + `GJAHR` in QAS, so an error path runs.
 
-What can actually differ between two systems running identical source, in check order:
+In DEV the budget check passes, so no message is ever issued and the broken display is never
+exercised. "Working fine in DEV" means the happy path was the only path ever tested.
 
-1. **`ZMM_BUDGET` messages missing in QAS.** The only candidate that explains both halves.
-   The message id reaches the macro as a character literal `'ZMM_BUDGET'`, so unlike
-   `MESSAGE e002(zmm_budget)` there is NO syntax check — the class can be absent and the code
-   still activates clean. At runtime the collector cannot resolve the T100 text, the entry is
-   dropped, and it never reaches `LSBAL_DISPLAY_BASEF05`, which is exactly what the debug
-   showed. The table transported; the message class may have been on a different TR.
-   **Check: SE91 in QAS, ZMM_BUDGET, messages 001 / 002 / 008.**
-2. **The QAS method source is not the DEV source.** `ZME_PROCESS_PO_CUST` is one shared impl
-   class carrying blocks from Hemang, Saurabh, UDAYABAP03, Raj and Arnav. It is a single
-   object, so the last TR imported into QAS overwrites the whole class, not just its own
-   block. The screenshot proves the `<002>` block is present; it proves nothing about the
-   other ~900 lines. **Check: download the QAS version and diff against the DEV copy.**
-3. **Client-dependent config drives different code paths.** Line ~153,
-   `IF line_exists( lt_po_doctyp[ low = ls_header-bsart ] )`, is fed from TVARVC
-   (`ty_tvarv` / `it_type`, added by Raj). TVARVC is maintained per client in STVARV and does
-   not travel with the workbench request. This matters directly: raw `MESSAGE e021(zmm)`,
-   `e052(zmm)`, `e024(zmm)` statements sit AFTER the `<002>` block, and a raw `MESSAGE TYPE E`
-   returns to the screen immediately, so collected MM messages behind it are never flushed to
-   the log. A QAS-only config path tripping one of those would kill the budget message.
-   **Check: STVARV in both systems vs the test PO's BSART.**
-4. **The DEV test may not have been the same test.** `ch_failed = 'X'` blocks the save on its
-   own and ME21N shows a generic refusal with none of Arnav's text. If DEV only ever showed
-   the refusal and never the words "No budget maintained for plant..." or "Budget has been
-   exhausted...", then it never worked in either system, there is no difference to explain,
-   and the missing `mmpur_business_obj_id` is the whole story. **Confirm this before chasing
-   1 to 3.**
+| | DEV | QAS |
+|---|---|---|
+| matching budget row for the tested key | exists | missing |
+| error path runs | no | yes |
+| message display defect | present, dormant | present, exposed |
+| observed | PO saves - "works" | PO blocked, no explanation |
+
+Same code, same behaviour. Two independent problems were being read as one:
+
+1. **Data.** No `ZMM_PO_BUDGET` row for the tested plant / purchasing group / year in QAS.
+   "Table has data" is not "a row for this key". `lv_bud_gjahr` comes from
+   `ls_header-bedat(4)`, the PO document-date year - a common mismatch when the row was
+   maintained for a different year. Read `lv_bud_werks`, `ls_header-ekgrp`, `lv_bud_gjahr`
+   off the debugger and SE16 the table on exactly those three.
+2. **Code.** The message never reaches the display, so the block is silent and the cause is
+   invisible. Fixed below.
+
+**Confirming test, still to run:** in DEV, create a PO for a plant / purchasing group /
+document-date year with no budget row, or exceed a maintained budget. If DEV also blocks with
+no message text, the defect is confirmed system-independent and the fix below is the answer.
 
 **Fix applied 03/09/26** — inside the existing `*BOC <002>` block, extended not re-wrapped,
 old lines commented out in place:

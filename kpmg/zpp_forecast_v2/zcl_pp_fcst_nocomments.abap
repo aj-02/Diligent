@@ -50,6 +50,7 @@ CLASS zcl_pp_fcst DEFINITION
              prod_cat  TYPE zde_prod_cat,
              load_fct  TYPE zde_load_fct,
              mts_mto   TYPE zde_mts_mto,
+             price     TYPE p LENGTH 13 DECIMALS 2,
 
              m01        TYPE zde_fcst_qty,
              m02        TYPE zde_fcst_qty,
@@ -112,6 +113,18 @@ CLASS zcl_pp_fcst DEFINITION
              m5_ton       TYPE zde_fcst_qty,
              m6_ton       TYPE zde_fcst_qty,
              reason       TYPE zde_fcst_reason,
+             bus_fcst_add1 TYPE zde_fcst_qty,
+             bus_fcst_add2 TYPE zde_fcst_qty,
+             bus_fcst_add3 TYPE zde_fcst_qty,
+             m4_fcst_final TYPE zde_fcst_qty,
+             m5_fcst_final TYPE zde_fcst_qty,
+             m6_fcst_final TYPE zde_fcst_qty,
+             m4_val        TYPE p LENGTH 13 DECIMALS 2,
+             m5_val        TYPE p LENGTH 13 DECIMALS 2,
+             m6_val        TYPE p LENGTH 13 DECIMALS 2,
+             m4_ton_val    TYPE p LENGTH 13 DECIMALS 2,
+             m5_ton_val    TYPE p LENGTH 13 DECIMALS 2,
+             m6_ton_val    TYPE p LENGTH 13 DECIMALS 2,
            END OF ty_alv,
            tt_alv   TYPE STANDARD TABLE OF ty_alv WITH DEFAULT KEY,
            tr_werks TYPE RANGE OF werks_d,
@@ -212,6 +225,11 @@ CLASS zcl_pp_fcst DEFINITION
                 ir_matnr        TYPE tr_matnr
       RETURNING VALUE(rt_scope) TYPE tt_scope.
 
+    METHODS merge_missing
+      IMPORTING it_from  TYPE tt_hist
+      EXPORTING ev_added TYPE i
+      CHANGING  ct_hist  TYPE tt_hist.
+
     METHODS fill_master_data
       CHANGING cs_alv TYPE ty_alv.
 
@@ -235,6 +253,10 @@ CLASS zcl_pp_fcst DEFINITION
       RETURNING VALUE(rv_no) TYPE zde_fcst_no.
 
     METHODS number_get
+      IMPORTING iv_fyear     TYPE zde_fyear
+      RETURNING VALUE(rv_no) TYPE zde_fcst_no.
+
+    METHODS number_from_table
       IMPORTING iv_fyear     TYPE zde_fyear
       RETURNING VALUE(rv_no) TYPE zde_fcst_no.
 
@@ -267,15 +289,32 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
                                    IMPORTING ev_from  = DATA(lv_from)
                                              ev_to    = DATA(lv_to) ).
 
+    DATA: lt_std   TYPE tt_hist,
+          lv_gaps  TYPE i.
+
+    CLEAR: mt_hist, lt_std, lv_gaps.
+
     IF iv_legacy = abap_true.
       mt_hist = read_legacy( ir_werks = ir_werks ir_matnr = ir_matnr
                              iv_from = lv_from iv_to = lv_to ).
+    ENDIF.
+
+    lt_std = read_billing( ir_werks = ir_werks ir_matnr = ir_matnr
+                           iv_from = lv_from iv_to = lv_to ).
+    add_old_material_qty( EXPORTING ir_werks = ir_werks ir_matnr = ir_matnr
+                                    iv_from = lv_from iv_to = lv_to
+                          CHANGING  ct_hist = lt_std ).
+
+    IF iv_legacy = abap_true.
+      merge_missing( EXPORTING it_from  = lt_std
+                     IMPORTING ev_added = lv_gaps
+                     CHANGING  ct_hist  = mt_hist ).
+      IF lv_gaps > 0.
+        add_msg( EXPORTING iv_type = 'W' iv_number = 023 iv_v1 = lv_gaps
+                 CHANGING  ct_msg = et_msg ).
+      ENDIF.
     ELSE.
-      mt_hist = read_billing( ir_werks = ir_werks ir_matnr = ir_matnr
-                              iv_from = lv_from iv_to = lv_to ).
-      add_old_material_qty( EXPORTING ir_werks = ir_werks ir_matnr = ir_matnr
-                                      iv_from = lv_from iv_to = lv_to
-                            CHANGING  ct_hist = mt_hist ).
+      mt_hist = lt_std.
     ENDIF.
 
     DATA(lt_scope) = build_scope( ir_werks = ir_werks ir_matnr = ir_matnr ).
@@ -379,15 +418,32 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
       DATA(lv_swap) = lv_from. lv_from = lv_to. lv_to = lv_swap.
     ENDIF.
 
+    DATA: lt_std  TYPE tt_hist,
+          lv_gaps TYPE i.
+
+    CLEAR: mt_hist, lt_std, lv_gaps.
+
     IF iv_legacy = abap_true.
       mt_hist = read_legacy( ir_werks = ir_werks ir_matnr = ir_matnr
                              iv_from = lv_from iv_to = lv_to ).
+    ENDIF.
+
+    lt_std = read_billing( ir_werks = ir_werks ir_matnr = ir_matnr
+                           iv_from = lv_from iv_to = lv_to ).
+    add_old_material_qty( EXPORTING ir_werks = ir_werks ir_matnr = ir_matnr
+                                    iv_from = lv_from iv_to = lv_to
+                          CHANGING  ct_hist = lt_std ).
+
+    IF iv_legacy = abap_true.
+      merge_missing( EXPORTING it_from  = lt_std
+                     IMPORTING ev_added = lv_gaps
+                     CHANGING  ct_hist  = mt_hist ).
+      IF lv_gaps > 0.
+        add_msg( EXPORTING iv_type = 'W' iv_number = 023 iv_v1 = lv_gaps
+                 CHANGING  ct_msg = et_msg ).
+      ENDIF.
     ELSE.
-      mt_hist = read_billing( ir_werks = ir_werks ir_matnr = ir_matnr
-                              iv_from = lv_from iv_to = lv_to ).
-      add_old_material_qty( EXPORTING ir_werks = ir_werks ir_matnr = ir_matnr
-                                      iv_from = lv_from iv_to = lv_to
-                            CHANGING  ct_hist = mt_hist ).
+      mt_hist = lt_std.
     ENDIF.
 
     DATA(lt_scope) = build_scope( ir_werks = ir_werks ir_matnr = ir_matnr ).
@@ -441,13 +497,21 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
       ls_alv-max_qty  = nmax( val1 = ls_alv-ly_qtr_tot val2 = ls_alv-l3m_tot ).
       ls_alv-fcst_qty = ls_alv-max_qty * ls_alv-load_fct.
 
-      SELECT SINGLE bus_fcst, bus_fcst_add FROM zppt_fcst_qt
-        INTO ( @ls_alv-bus_fcst, @ls_alv-bus_fcst_add )
+      SELECT SINGLE bus_fcst, bus_fcst_add1, bus_fcst_add2, bus_fcst_add3,
+                    reason, price
+        FROM zppt_fcst_qt
+        INTO ( @ls_alv-bus_fcst,
+               @ls_alv-bus_fcst_add1, @ls_alv-bus_fcst_add2,
+               @ls_alv-bus_fcst_add3,
+               @ls_alv-reason, @ls_alv-price )
         WHERE werks = @ls_scope-werks AND matnr = @ls_scope-matnr
           AND gjahr = @ls_alv-gjahr   AND quarter = @iv_quarter.
 
       ls_alv-final_qty = nmax( val1 = ls_alv-fcst_qty val2 = ls_alv-bus_fcst ).
-      ls_alv-total_qty = ls_alv-final_qty + ls_alv-bus_fcst_add.
+      ls_alv-total_qty = ls_alv-final_qty
+                       + ls_alv-bus_fcst_add1
+                       + ls_alv-bus_fcst_add2
+                       + ls_alv-bus_fcst_add3.
 
       DO 3 TIMES.
 
@@ -469,6 +533,32 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
         ENDIF.
         IF iv_tonnage = abap_true AND <lv_t> IS ASSIGNED.
           <lv_t> = zcl_pp_fcst_util=>to_tonnage( iv_qty = lv_share iv_ntgew = ls_alv-ntgew ).
+        ENDIF.
+
+        ASSIGN COMPONENT |BUS_FCST_ADD{ lv_i }|      OF STRUCTURE ls_alv
+          TO FIELD-SYMBOL(<lv_a>).
+        ASSIGN COMPONENT |M{ lv_i + 3 }_FCST_FINAL|  OF STRUCTURE ls_alv
+          TO FIELD-SYMBOL(<lv_ff>).
+        ASSIGN COMPONENT |M{ lv_i + 3 }_VAL|         OF STRUCTURE ls_alv
+          TO FIELD-SYMBOL(<lv_v>).
+        ASSIGN COMPONENT |M{ lv_i + 3 }_TON_VAL|     OF STRUCTURE ls_alv
+          TO FIELD-SYMBOL(<lv_tv>).
+
+        IF <lv_a> IS ASSIGNED AND <lv_ff> IS ASSIGNED.
+
+          DATA(lv_final) = CONV zde_fcst_qty( lv_share + <lv_a> ).
+          <lv_ff> = lv_final.
+
+          IF <lv_v> IS ASSIGNED.
+            <lv_v> = lv_final * ls_alv-price.
+          ENDIF.
+
+          IF <lv_tv> IS ASSIGNED.
+            DATA(lv_fton) = zcl_pp_fcst_util=>to_tonnage( iv_qty   = lv_final
+                                                          iv_ntgew = ls_alv-ntgew ).
+            <lv_tv> = lv_fton * ls_alv-price.
+          ENDIF.
+
         ENDIF.
 
       ENDDO.
@@ -508,18 +598,35 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
       DATA(lv_swap) = lv_from. lv_from = lv_to. lv_to = lv_swap.
     ENDIF.
 
+    DATA: lt_std  TYPE tt_hist,
+          lv_gaps TYPE i.
+
+    CLEAR: mt_hist, lt_std, lv_gaps.
+
     IF iv_legacy = abap_true.
       mt_hist = read_legacy( ir_werks = ir_werks ir_matnr = ir_matnr
                              iv_from = lv_from iv_to = lv_to ).
+    ENDIF.
+
+    lt_std = read_matdoc( ir_werks = ir_werks ir_matnr = ir_matnr
+                          iv_from = lv_from iv_to = lv_to ).
+    add_old_material_qty( EXPORTING ir_werks       = ir_werks
+                                    ir_matnr       = ir_matnr
+                                    iv_from        = lv_from
+                                    iv_to          = lv_to
+                                    iv_use_billing = abap_false
+                          CHANGING  ct_hist        = lt_std ).
+
+    IF iv_legacy = abap_true.
+      merge_missing( EXPORTING it_from  = lt_std
+                     IMPORTING ev_added = lv_gaps
+                     CHANGING  ct_hist  = mt_hist ).
+      IF lv_gaps > 0.
+        add_msg( EXPORTING iv_type = 'W' iv_number = 023 iv_v1 = lv_gaps
+                 CHANGING  ct_msg = et_msg ).
+      ENDIF.
     ELSE.
-      mt_hist = read_matdoc( ir_werks = ir_werks ir_matnr = ir_matnr
-                             iv_from = lv_from iv_to = lv_to ).
-      add_old_material_qty( EXPORTING ir_werks       = ir_werks
-                                      ir_matnr       = ir_matnr
-                                      iv_from        = lv_from
-                                      iv_to          = lv_to
-                                      iv_use_billing = abap_false
-                            CHANGING  ct_hist        = mt_hist ).
+      mt_hist = lt_std.
     ENDIF.
 
     DATA(lt_scope) = build_scope( ir_werks = ir_werks ir_matnr = ir_matnr ).
@@ -610,6 +717,7 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
   METHOD save.
 
     DATA lv_saved TYPE i.
+    DATA lv_refused TYPE i.
 
     LOOP AT ct_alv ASSIGNING FIELD-SYMBOL(<ls>) WHERE mark = abap_true.
 
@@ -618,6 +726,7 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
         add_msg( EXPORTING iv_number = 010 iv_v1 = <ls>-werks iv_v2 = '01'
                  CHANGING  ct_msg = rt_msg ).
         <ls>-light = '1'.
+        lv_refused = lv_refused + 1.
         CONTINUE.
       ENDIF.
 
@@ -633,6 +742,7 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
             add_msg( EXPORTING iv_number = 021 iv_v1 = <ls>-fyear
                      CHANGING  ct_msg = rt_msg ).
             <ls>-light = '1'.
+            lv_refused = lv_refused + 1.
             CONTINUE.
           ENDIF.
 
@@ -661,6 +771,7 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
                                iv_v2 = <ls>-matnr iv_v3 = <ls>-fyear
                      CHANGING  ct_msg = rt_msg ).
             <ls>-light = '1'.
+            lv_refused = lv_refused + 1.
             CONTINUE.
           ENDIF.
 
@@ -681,6 +792,7 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
                                iv_v2 = <ls>-matnr iv_v3 = <ls>-fyear
                      CHANGING  ct_msg = rt_msg ).
             <ls>-light = '1'.
+            lv_refused = lv_refused + 1.
             CONTINUE.
           ENDIF.
 
@@ -700,6 +812,7 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
       ELSE.
         <ls>-light   = '1'.
         <ls>-message = |Save failed|.
+        lv_refused   = lv_refused + 1.
       ENDIF.
 
     ENDLOOP.
@@ -711,7 +824,12 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
                CHANGING  ct_msg = rt_msg ).
     ELSE.
       ROLLBACK WORK.
-      add_msg( EXPORTING iv_number = 017 CHANGING ct_msg = rt_msg ).
+      IF lv_refused > 0.
+        add_msg( EXPORTING iv_number = 022 iv_v1 = lv_refused
+                 CHANGING  ct_msg = rt_msg ).
+      ELSE.
+        add_msg( EXPORTING iv_number = 017 CHANGING ct_msg = rt_msg ).
+      ENDIF.
     ENDIF.
 
   ENDMETHOD.
@@ -839,7 +957,8 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
 
   METHOD add_old_material_qty.
 
-    SELECT werks, new_matnr, old_matnr1, old_matnr2
+    SELECT werks, new_matnr,
+           old_matnr1, old_matnr2, old_matnr3, old_matnr4, old_matnr5
       FROM zppt_mat_track
       INTO TABLE @DATA(lt_track)
       WHERE werks     IN @ir_werks
@@ -855,14 +974,14 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
 
       CLEAR: lr_old, lr_wrk, lt_old.
 
-      IF ls_track-old_matnr1 IS NOT INITIAL
-     AND ls_track-old_matnr1 <> ls_track-new_matnr.
-        APPEND VALUE #( sign = 'I' option = 'EQ' low = ls_track-old_matnr1 ) TO lr_old.
-      ENDIF.
-      IF ls_track-old_matnr2 IS NOT INITIAL
-     AND ls_track-old_matnr2 <> ls_track-new_matnr.
-        APPEND VALUE #( sign = 'I' option = 'EQ' low = ls_track-old_matnr2 ) TO lr_old.
-      ENDIF.
+      DO 5 TIMES.
+        ASSIGN COMPONENT |OLD_MATNR{ sy-index }| OF STRUCTURE ls_track
+          TO FIELD-SYMBOL(<lv_o>).
+        CHECK sy-subrc = 0.
+        IF <lv_o> IS NOT INITIAL AND <lv_o> <> ls_track-new_matnr.
+          APPEND VALUE #( sign = 'I' option = 'EQ' low = <lv_o> ) TO lr_old.
+        ENDIF.
+      ENDDO.
       CHECK lr_old IS NOT INITIAL.
 
       APPEND VALUE #( sign = 'I' option = 'EQ' low = ls_track-werks ) TO lr_wrk.
@@ -897,16 +1016,14 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
 
       ENDLOOP.
 
-      IF ls_track-old_matnr1 IS NOT INITIAL
-     AND ls_track-old_matnr1 <> ls_track-new_matnr.
-        DELETE ct_hist WHERE werks = ls_track-werks
-                         AND matnr = ls_track-old_matnr1.
-      ENDIF.
-      IF ls_track-old_matnr2 IS NOT INITIAL
-     AND ls_track-old_matnr2 <> ls_track-new_matnr.
-        DELETE ct_hist WHERE werks = ls_track-werks
-                         AND matnr = ls_track-old_matnr2.
-      ENDIF.
+      DO 5 TIMES.
+        ASSIGN COMPONENT |OLD_MATNR{ sy-index }| OF STRUCTURE ls_track
+          TO FIELD-SYMBOL(<lv_d>).
+        CHECK sy-subrc = 0.
+        IF <lv_d> IS NOT INITIAL AND <lv_d> <> ls_track-new_matnr.
+          DELETE ct_hist WHERE werks = ls_track-werks AND matnr = <lv_d>.
+        ENDIF.
+      ENDDO.
 
     ENDLOOP.
 
@@ -951,20 +1068,21 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
                         AND matnr = ls_scope-matnr.
     ENDLOOP.
 
-    SELECT werks, old_matnr1, old_matnr2
+    SELECT werks,
+           old_matnr1, old_matnr2, old_matnr3, old_matnr4, old_matnr5
       FROM zppt_mat_track
       INTO TABLE @DATA(lt_trk)
       WHERE werks IN @ir_werks.
 
     LOOP AT lt_trk INTO DATA(ls_trk).
-      IF ls_trk-old_matnr1 IS NOT INITIAL.
-        DELETE rt_scope WHERE werks = ls_trk-werks
-                          AND matnr = ls_trk-old_matnr1.
-      ENDIF.
-      IF ls_trk-old_matnr2 IS NOT INITIAL.
-        DELETE rt_scope WHERE werks = ls_trk-werks
-                          AND matnr = ls_trk-old_matnr2.
-      ENDIF.
+      DO 5 TIMES.
+        ASSIGN COMPONENT |OLD_MATNR{ sy-index }| OF STRUCTURE ls_trk
+          TO FIELD-SYMBOL(<lv_s>).
+        CHECK sy-subrc = 0.
+        IF <lv_s> IS NOT INITIAL.
+          DELETE rt_scope WHERE werks = ls_trk-werks AND matnr = <lv_s>.
+        ENDIF.
+      ENDDO.
     ENDLOOP.
 
   ENDMETHOD.
@@ -1060,10 +1178,65 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
                  OTHERS                  = 4.
 
     IF sy-subrc <> 0.
-      CLEAR rv_no.
+      rv_no = number_from_table( iv_fyear ).
     ELSE.
       rv_no = |{ rv_no ALPHA = IN }|.
     ENDIF.
+
+  ENDMETHOD.
+
+  METHOD number_from_table.
+
+    DATA: lv_max  TYPE zde_fcst_no,
+          lv_char TYPE char10,
+          lv_num  TYPE n LENGTH 10.
+
+    CLEAR rv_no.
+
+    SELECT MAX( fcst_no ) FROM zppt_fcst_yr INTO @lv_max
+      WHERE fyear = @iv_fyear.
+
+    IF lv_max IS INITIAL.
+
+      zcl_pp_fcst_util=>split_fyear( EXPORTING iv_fyear     = iv_fyear
+                                     IMPORTING ev_year_from = DATA(lv_year) ).
+      CHECK lv_year IS NOT INITIAL.
+
+      CONCATENATE lv_year+2(2) '00000001' INTO lv_char.
+      rv_no = lv_char.
+      RETURN.
+
+    ENDIF.
+
+    TRY.
+        lv_num = lv_max.
+      CATCH cx_sy_conversion_no_number.
+        RETURN.
+    ENDTRY.
+
+    lv_num = lv_num + 1.
+    rv_no  = lv_num.
+
+  ENDMETHOD.
+
+  METHOD merge_missing.
+
+    CLEAR ev_added.
+
+    LOOP AT it_from INTO DATA(ls_from).
+
+      READ TABLE ct_hist TRANSPORTING NO FIELDS
+        WITH TABLE KEY werks = ls_from-werks
+                       matnr = ls_from-matnr
+                       gjahr = ls_from-gjahr
+                       month = ls_from-month.
+
+      CHECK sy-subrc <> 0.
+
+      INSERT ls_from INTO TABLE ct_hist.
+      ev_added = ev_added + 1.
+
+    ENDLOOP.
 
   ENDMETHOD.
 

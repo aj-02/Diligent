@@ -33,59 +33,40 @@ things; the `<002>` block did two:
 | `item->invalidate( )` | line 172 | **missing** |
 | `ch_failed = abap_true` | line 173 | present |
 
-**Why DEV and not QAS — RESOLVED 03/09/26, third and final version.**
+**Why DEV and not QAS — STILL UNRESOLVED. Four explanations tried, all wrong.**
 
-Two earlier explanations in this entry were wrong and are retracted:
-- a stale framework global with no identified source (rejected by Arnav: a missing macro call
-  is system-independent). The mechanism was right, the missing piece was WHERE the difference
-  comes from - see below;
-- "dormant in DEV because only the happy path was tested" (disproved: Arnav confirmed the
-  error message DOES display in DEV).
+Retracted in order, each killed by a fact from the real system:
 
-Also ruled out by check: `ZMM_BUDGET` exists in QAS (SE91).
+1. *Stale framework global, source unidentified* — rejected by Arnav: a missing macro call is
+   system-independent and would fail in both systems.
+2. *Missing message class in QAS* — ruled out, SE91 confirms `ZMM_BUDGET` exists in QAS.
+3. *Dormant in DEV, only the happy path tested* — disproved, the error message DOES display
+   in DEV.
+4. *`mmpur_business_obj_id` at line 163 never runs in QAS because `ZRAW` is absent from TVARVC
+   `ZPO_DOCTYPE`* — disproved, `ZRAW` is absent in DEV too. So line 163 runs in NEITHER
+   system, the object id is unset in both, and DEV displays the message anyway. This also
+   disproves the premise underneath all four: a message with no object id can display fine.
 
-**The actual chain.** `mmpur_business_obj_id` appears exactly ONCE in the whole method, at
-line 163. The `<002>` block never sets it, so it inherits whatever line 163 left behind. Line
-163 sits behind two gates, both of which differ between DEV and QAS by their nature:
+**Every one of these was reasoned from `ZME_PROCESS_PO_CUST_CHECK_full.abap`, which is the
+DEV source as supplied 19/08/2026. The QAS source has never been seen or diffed.** That is the
+golden-rule check flagged in the first reply of this thread and it is still outstanding. Same
+code plus same config cannot give different results; `ZPO_DOCTYPE` matches and the message
+class matches, so the source itself is the remaining variable.
 
-```
-line 153:  IF line_exists( lt_po_doctyp[ low = ls_header-bsart ] ).
-line 159:    IF ls_mbew-vprsv = 'S' AND ls_mbew-stprs = 0.
-line 163:      mmpur_business_obj_id ls_item_data-id.
-line 167:      mmpur_message_forced: 'E' 'ZMM_MSGS' '007' ...
-```
+**Blocking question, never confirmed:** in QAS with the budget exceeded, does the PO SAVE or
+is it BLOCKED? "Blocked, no message" is a display problem. "Saves normally" means `ch_failed`
+is being cleared after the `<002>` block and the message is a side issue — a different bug
+entirely. Everything above assumed "blocked" without checking.
 
-- **Gate 1, `lt_po_doctyp`, is read from TVARVC** (line ~38, `NAME = 'ZPO_DOCTYPE'`,
-  `TYPE = 'S'`). TVARVC is maintained per client in STVARV and does NOT travel with a
-  workbench transport, so DEV and QAS routinely hold different entries, or QAS holds none.
-- **Gate 2, `vprsv = 'S' AND stprs = 0`** - standard price zero. Normal for dummy DEV test
-  materials, almost never true in QAS where materials carry real costed prices.
+**Next step:** SE19 QAS → `ME_PROCESS_PO_CUST` → implementation → class → SE24 → method
+`IF_EX_ME_PROCESS_PO_CUST~CHECK` → copy the source into `incoming/` and diff against the DEV
+copy. Compare in particular anything touching `ch_failed` after the `CHECK sy-tcode NE 'ME29N'`
+line, and any raw `MESSAGE ... TYPE 'E'` between the `<002>` block and `ENDMETHOD` — a raw
+`MESSAGE E` returns to the screen immediately and would discard the collected MM messages.
 
-DEV: both gates open, line 163 fires, the budget message rides on the id it set, and displays.
-QAS: either gate closes, line 163 never runs, the budget message is owned by nothing and is
-discarded before it reaches `LSBAL_DISPLAY_BASEF05` - exactly what the debugger showed.
-
-The code is identical in both systems; the state it silently depends on is not.
-
-**CONFIRMED by Arnav 03/09/26: `ZRAW` is not present in `ZPO_DOCTYPE` in QAS.**
-
-The test PO's document type is `ZRAW`. TVARVC variant `ZPO_DOCTYPE` contains `ZRAW` in DEV
-but not in QAS, so `line_exists( lt_po_doctyp[ low = ls_header-bsart ] )` is false in QAS,
-line 163 never runs, the budget message has no owner and is dropped before display. Chain
-closed - gate 1 is the one that differs, and TVARVC not transporting is why.
-
-**Do not add `ZRAW` to `ZPO_DOCTYPE` in QAS as a workaround.** It would mask the defect (the
-message would still be borrowing another block's object id and would break again on the next
-config change) and it would silently switch on Hemang's standard-price validation
-(`ZMM_MSGS 007`) for every `ZRAW` PO in QAS, which is not this WRICEF's call to make.
-
-**Separate finding to raise, not to fix here:** `ZRAW` missing from `ZPO_DOCTYPE` in QAS means
-the `ZMM_MSGS 007` standard-price check is not executing at all for `ZRAW` POs in quality.
-That is a live gap in another developer's validation, found incidentally. Owner: Hemang Joshi.
-Draft mail prepared 03/09/26; sending stays manual.
-
-The fix below removes the dependency entirely - the budget message stops relying on another
-author's error firing first.
+**Status of the fix below:** it is defensible practice and matches the `ZMM_MSGS 007` block,
+but it is NOT the cause of the DEV/QAS difference and must not be described as such. Whether
+it is worth pasting at all should be decided after the source diff.
 
 **Fix applied 03/09/26** — inside the existing `*BOC <002>` block, extended not re-wrapped,
 old lines commented out in place:

@@ -331,10 +331,10 @@ FORM template_columns CHANGING ct_head TYPE string_table
   ELSEIF p_chgq = 'X'.
     cv_name = 'ZFCST_Forecast_Change_Quarterly'.
 *BOC By Arnav on 03/09/26
-*   MONTH is new, between QUARTER and YEAR. It is the FISCAL PERIOD,
-*   1 to 12, where 1 is April and 12 is March, and it must fall inside
-*   the quarter on the same row - quarter 2 takes 4, 5 or 6, quarter 4
-*   takes 10, 11 or 12. Every column after it has moved one place right.
+*   MONTH is new, between QUARTER and YEAR. It is 1, 2 or 3 - the
+*   first, second or third month OF THAT QUARTER - not a calendar month
+*   and not a fiscal period. Every column after it has moved one place
+*   right. See DO_CHANGE for the fiscal period reading, kept commented.
     APPEND 'MATERIAL'   TO ct_head.
     APPEND 'PLANT'      TO ct_head.
     APPEND 'QUARTER'    TO ct_head.
@@ -345,7 +345,7 @@ FORM template_columns CHANGING ct_head TYPE string_table
     APPEND 'FG00000000001'   TO ct_demo.
     APPEND '1001'            TO ct_demo.
     APPEND '2'               TO ct_demo.
-    APPEND '4'               TO ct_demo.
+    APPEND '1'               TO ct_demo.
     APPEND '2026'            TO ct_demo.
     APPEND '10'              TO ct_demo.
     APPEND 'Additional plan' TO ct_demo.
@@ -1198,7 +1198,7 @@ FORM do_change USING pv_mode TYPE char1.
         lv_c_rsn  TYPE char40,
         lv_mi     TYPE i,
         lv_slot   TYPE i,
-        lv_qchk   TYPE zde_quarter,
+*       lv_qchk   TYPE zde_quarter,   " see the MONTH block in the LOOP
 *EOC By Arnav on 03/09/26
         lv_yes   TYPE abap_bool.
 
@@ -1241,32 +1241,44 @@ FORM do_change USING pv_mode TYPE char1.
 
 *BOC By Arnav on 03/09/26
 *   The quarter is split by month, so a quarterly change has to say
-*   which month it applies to. MONTH is the FISCAL PERIOD, 1 to 12,
-*   where 1 is April and 12 is March - the same numbering the monthly
-*   uploads use. It must fall inside the quarter given on the same row:
-*   quarter 1 takes 1 to 3, quarter 2 takes 4 to 6, quarter 3 takes
-*   7 to 9, quarter 4 takes 10 to 12.
+*   which of the three months of the quarter it applies to. MONTH is
+*   1, 2 or 3 - first, second or third month OF THE QUARTER - not a
+*   calendar month and not a fiscal period. Quarter 2 month 1 is July.
+*
+*   THE OTHER READING, kept ready rather than described: MONTH as the
+*   fiscal period 1-12, where quarter 2 takes 4 to 6 and quarter 4
+*   takes 10 to 12. Uncomment the block below, comment out the block
+*   above it, and uncomment LV_QCHK in the DATA list to switch. Nothing
+*   else changes - everything downstream already works off LV_SLOT.
     CLEAR lv_slot.
 
     IF pv_mode = 'Q'.
 
       PERFORM to_int USING lv_c_mon CHANGING lv_mi.
 
-      IF lv_mi < 1 OR lv_mi > 12.
-        lv_err = 'Month must be a period 1 to 12, where 1 is April and 12 is March'.
+      IF lv_mi < 1 OR lv_mi > 3.
+        lv_err = 'Month must be 1, 2 or 3 - the first, second or third month of the quarter'.
         PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
         CONTINUE.
       ENDIF.
 
-      lv_qchk = zcl_pp_fcst_util=>period_to_quarter( CONV #( lv_mi ) ).
-      IF lv_qchk <> lv_pi.
-        lv_err = |Month { lv_mi } is not in quarter { lv_pi }|.
-        PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
-        CONTINUE.
-      ENDIF.
+      lv_slot = lv_mi.
 
-*     Which of the three columns the period lands in - 1, 2 or 3
-      lv_slot = lv_mi - ( lv_pi - 1 ) * 3.
+*     IF lv_mi < 1 OR lv_mi > 12.
+*       lv_err = 'Month must be a period 1 to 12, where 1 is April and 12 is March'.
+*       PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
+*       CONTINUE.
+*     ENDIF.
+*
+*     lv_qchk = zcl_pp_fcst_util=>period_to_quarter( CONV #( lv_mi ) ).
+*     IF lv_qchk <> lv_pi.
+*       lv_err = |Month { lv_mi } is not in quarter { lv_pi }|.
+*       PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
+*       CONTINUE.
+*     ENDIF.
+*
+**    Which of the three columns the period lands in - 1, 2 or 3
+*     lv_slot = lv_mi - ( lv_pi - 1 ) * 3.
 
     ENDIF.
 *EOC By Arnav on 03/09/26

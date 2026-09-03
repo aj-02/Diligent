@@ -147,3 +147,21 @@ first, second and third month of whichever quarter is run — Q4 fills them with
 Mar. Pre-existing, not introduced here.
 
 TR: not yet · Files: `kpmg/zpp_forecast_v2/src/zpp_forecast_upload.prog.abap`
+
+## 03/09/26 — MONTH reverted to 1/2/3 per quarter (provisional)
+
+Arnav's call: go with 1, 2, 3 within the quarter for now, revisit if the business raises it.
+So Quarter 2 month 1 is July, Quarter 4 month 1 is January. Template demo row is back to
+month 1, matching the CR's own example.
+
+The fiscal-period version (Q2 takes 4-6, Q4 takes 10-12, validated with
+`period_to_quarter`) is **kept commented in place** inside the same block in `do_change`,
+so switching is uncommenting rather than rewriting. Everything downstream works off
+`LV_SLOT`, which both readings set, so nothing else has to change. `LV_QCHK` in the DATA
+list is commented out alongside and must be uncommented too.
+
+Risk if this stands: a user given a column headed MONTH next to Quarter 2 may type 7 for
+July. That is rejected as out of range, so it fails loudly rather than writing the wrong
+month — but the error text is the only thing telling them the convention.
+
+TR: not yet · Files: `kpmg/zpp_forecast_v2/src/zpp_forecast_upload.prog.abap`

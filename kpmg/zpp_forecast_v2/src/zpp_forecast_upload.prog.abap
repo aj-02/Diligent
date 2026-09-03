@@ -48,6 +48,24 @@ CONSTANTS: gc_new  TYPE char14 VALUE 'Created',
            gc_tchg TYPE char14 VALUE 'Would change'.
 
 *BOC By Arnav on 03/09/26
+* MONTH on the quarterly change file has two possible readings and the
+* business has not settled which one it wants. Switch here, one letter,
+* rather than editing the validation:
+*
+*   'S' - 1, 2 or 3: the first, second or third month OF THE QUARTER.
+*         Quarter 2 month 1 is July. This is what is live.
+*   'P' - the fiscal period 1 to 12, 1 = April and 12 = March, checked
+*         against the quarter on the same row. Quarter 2 takes 4 to 6,
+*         quarter 4 takes 10 to 12. This matches the monthly templates.
+*
+* The two agree only for quarter 1, where both give April, May, June.
+* The downloadable template's example row follows this switch too, so
+* changing the letter is the whole job.
+*
+* A DATA rather than a CONSTANTS on purpose - a constant would let the
+* compiler fold the IF and report the other branch as unreachable.
+DATA gv_qmonth TYPE char1 VALUE 'S'.
+
 * Used by DO_CHANGE to reach BUS_FCST_ADDn / REASONn / Mn_FCST_FINAL by
 * name. Declared here because a FORM may not declare a field symbol
 * inside a loop it re-enters per row.
@@ -331,11 +349,10 @@ FORM template_columns CHANGING ct_head TYPE string_table
   ELSEIF p_chgq = 'X'.
     cv_name = 'ZFCST_Forecast_Change_Quarterly'.
 *BOC By Arnav on 03/09/26
-*   MONTH is new, between QUARTER and YEAR. It is the FISCAL PERIOD,
-*   1 to 12, where 1 is April and 12 is March - the same numbering the
-*   monthly templates use - and it must fall inside the quarter on the
-*   same row. Q2 takes 4, 5 or 6; Q4 takes 10, 11 or 12. Every column
-*   after it has moved one place right.
+*   MONTH is new, between QUARTER and YEAR. Every column after it has
+*   moved one place right. What MONTH means is GV_QMONTH at the top of
+*   the program - 'S' for 1, 2 or 3 within the quarter, 'P' for the
+*   fiscal period 1 to 12. The example row below follows the switch.
     APPEND 'MATERIAL'   TO ct_head.
     APPEND 'PLANT'      TO ct_head.
     APPEND 'QUARTER'    TO ct_head.
@@ -346,7 +363,11 @@ FORM template_columns CHANGING ct_head TYPE string_table
     APPEND 'FG00000000001'   TO ct_demo.
     APPEND '1001'            TO ct_demo.
     APPEND '2'               TO ct_demo.
-    APPEND '4'               TO ct_demo.
+    IF gv_qmonth = 'P'.
+      APPEND '4'             TO ct_demo.   " quarter 2, fiscal period 4
+    ELSE.
+      APPEND '1'             TO ct_demo.   " quarter 2, first month
+    ENDIF.
     APPEND '2026'            TO ct_demo.
     APPEND '10'              TO ct_demo.
     APPEND 'Additional plan' TO ct_demo.
@@ -1241,44 +1262,47 @@ FORM do_change USING pv_mode TYPE char1.
     ENDIF.
 
 *BOC By Arnav on 03/09/26
-*   MONTH is the FISCAL PERIOD, 1 to 12, where 1 is April and 12 is
-*   March - the SAME numbering the monthly change and monthly business
-*   forecast files already use, so the word MONTH means one thing across
-*   every template. It must fall inside the quarter given on the same
-*   row: Q1 takes 1-3, Q2 takes 4-6, Q3 takes 7-9, Q4 takes 10-12.
-*
-*   The earlier reading - MONTH as 1, 2 or 3 within the quarter - is
-*   commented out below. It differs from this one for every quarter
-*   except Q1, where both give April, May, June.
+*   Which reading applies is GV_QMONTH, declared at the top of the
+*   program. Whichever it is, LV_SLOT ends up 1, 2 or 3 and everything
+*   downstream works off that alone.
     CLEAR lv_slot.
 
     IF pv_mode = 'Q'.
 
       PERFORM to_int USING lv_c_mon CHANGING lv_mi.
 
-*     IF lv_mi < 1 OR lv_mi > 3.
-*       lv_err = 'Month must be 1, 2 or 3 - the first, second or third month of the quarter'.
-*       PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
-*       CONTINUE.
-*     ENDIF.
-*
-*     lv_slot = lv_mi.
+      IF gv_qmonth = 'P'.
 
-      IF lv_mi < 1 OR lv_mi > 12.
-        lv_err = 'Month must be a period 1 to 12, where 1 is April and 12 is March'.
-        PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
-        CONTINUE.
+*       Fiscal period 1 to 12, and it must sit inside the quarter given
+*       on the same row
+        IF lv_mi < 1 OR lv_mi > 12.
+          lv_err = 'Month must be a period 1 to 12, where 1 is April and 12 is March'.
+          PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
+          CONTINUE.
+        ENDIF.
+
+        lv_qchk = zcl_pp_fcst_util=>period_to_quarter( CONV #( lv_mi ) ).
+        IF lv_qchk <> lv_pi.
+          lv_err = |Month { lv_mi } is not in quarter { lv_pi }|.
+          PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
+          CONTINUE.
+        ENDIF.
+
+        lv_slot = lv_mi - ( lv_pi - 1 ) * 3.
+
+      ELSE.
+
+*       First, second or third month of the quarter. 1, 2 and 3 only -
+*       anything else is rejected.
+        IF lv_mi < 1 OR lv_mi > 3.
+          lv_err = 'Month must be 1, 2 or 3 - the first, second or third month of the quarter'.
+          PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
+          CONTINUE.
+        ENDIF.
+
+        lv_slot = lv_mi.
+
       ENDIF.
-
-      lv_qchk = zcl_pp_fcst_util=>period_to_quarter( CONV #( lv_mi ) ).
-      IF lv_qchk <> lv_pi.
-        lv_err = |Month { lv_mi } is not in quarter { lv_pi }|.
-        PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
-        CONTINUE.
-      ENDIF.
-
-*     Which of the three columns the period lands in - 1, 2 or 3
-      lv_slot = lv_mi - ( lv_pi - 1 ) * 3.
 
     ENDIF.
 *EOC By Arnav on 03/09/26

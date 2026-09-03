@@ -185,3 +185,25 @@ back. Note it only differs from Q2 onward — for Q1 both readings give April, M
 which is why the CR's own example row (Q2, month 1) read naturally and was wrong.
 
 TR: not yet · Files: `kpmg/zpp_forecast_v2/src/zpp_forecast_upload.prog.abap`
+
+## 03/09/26 — MONTH convention put behind one switch, set to 1/2/3
+
+Supersedes the three entries above. The convention flipped three times in one session, so
+it is no longer an edit — it is `DATA gv_qmonth TYPE char1 VALUE 'S'.` at the top of
+`ZPP_FORECAST_UPLOAD`.
+
+    'S'  MONTH is 1, 2 or 3 - first, second or third month of the quarter.  <-- LIVE
+    'P'  MONTH is the fiscal period 1-12, 1 = April, checked against the quarter.
+
+Both branches are live code in `do_change`; whichever runs, `LV_SLOT` ends up 1, 2 or 3 and
+everything downstream works off that. The downloadable template's example row follows the
+switch too, so changing the one letter is the whole job — no other edit, no re-test of the
+write path.
+
+`DATA` and not `CONSTANTS` deliberately: a constant lets the compiler fold the IF and
+report the other branch as unreachable.
+
+The two readings agree only for quarter 1 (both give April, May, June), which is why the
+CR's own example row, Quarter 2 month 1, read naturally under either.
+
+TR: not yet · Files: `kpmg/zpp_forecast_v2/src/zpp_forecast_upload.prog.abap`

@@ -33,57 +33,64 @@ things; the `<002>` block did two:
 | `item->invalidate( )` | line 172 | **missing** |
 | `ch_failed = abap_true` | line 173 | present |
 
-**Why DEV and not QAS — STILL UNRESOLVED. Four explanations tried, all wrong.**
+**Why DEV and not QAS — never established. Six explanations tried, all disproved.**
 
-Retracted in order, each killed by a fact from the real system:
-
-1. *Stale framework global, source unidentified* — rejected by Arnav: a missing macro call is
+1. *Stale framework global, source unidentified* — rejected: a missing macro call is
    system-independent and would fail in both systems.
-2. *Missing message class in QAS* — ruled out, SE91 confirms `ZMM_BUDGET` exists in QAS.
-3. *Dormant in DEV, only the happy path tested* — disproved, the error message DOES display
-   in DEV.
-4. *`mmpur_business_obj_id` at line 163 never runs in QAS because `ZRAW` is absent from TVARVC
-   `ZPO_DOCTYPE`* — disproved, `ZRAW` is absent in DEV too. So line 163 runs in NEITHER
-   system, the object id is unset in both, and DEV displays the message anyway. This also
-   disproves the premise underneath all four: a message with no object id can display fine.
+2. *Message class missing in QAS* — SE91 confirms `ZMM_BUDGET` exists in QAS.
+3. *Dormant in DEV, only the happy path tested* — the error message DOES display in DEV.
+4. *`mmpur_business_obj_id` (line 163) skipped in QAS because `ZRAW` is absent from TVARVC
+   `ZPO_DOCTYPE`* — `ZRAW` is absent in DEV too, so line 163 runs in neither system and DEV
+   displays anyway. This also disproves the premise under 1 and 4: a message with no object
+   id can display fine.
+5. *Message 001 text missing in QAS* — SE91 confirms 001 exists with text.
+6. *Different number of CHECK calls, Enter vs straight-Save* — the block is entered twice in
+   DEV and once in QAS, but pressing Enter in QAS does not make the message appear.
 
-**Every one of these was reasoned from `ZME_PROCESS_PO_CUST_CHECK_full.abap`, which is the
-DEV source as supplied 19/08/2026. The QAS source has never been seen or diffed.** That is the
-golden-rule check flagged in the first reply of this thread and it is still outstanding. Same
-code plus same config cannot give different results; `ZPO_DOCTYPE` matches and the message
-class matches, so the source itself is the remaining variable.
+Confirmed facts: the statement is reached in QAS; `ch_failed` works (ME21N offers Hold, so
+over-budget POs ARE blocked in QAS); the message never reaches `LSBAL_DISPLAY_BASEF05`.
 
-**Blocking question, never confirmed:** in QAS with the budget exceeded, does the PO SAVE or
-is it BLOCKED? "Blocked, no message" is a display problem. "Saves normally" means `ch_failed`
-is being cleared after the `<002>` block and the message is a side issue — a different bug
-entirely. Everything above assumed "blocked" without checking.
+**Resolution taken 03/09/26 — stop diagnosing the collector, stop using it.**
 
-**Next step:** SE19 QAS → `ME_PROCESS_PO_CUST` → implementation → class → SE24 → method
-`IF_EX_ME_PROCESS_PO_CUST~CHECK` → copy the source into `incoming/` and diff against the DEV
-copy. Compare in particular anything touching `ch_failed` after the `CHECK sy-tcode NE 'ME29N'`
-line, and any raw `MESSAGE ... TYPE 'E'` between the `<002>` block and `ENDMETHOD` — a raw
-`MESSAGE E` returns to the screen immediately and would discard the collected MM messages.
+`mmpur_message_forced` fails silently by design: it hands the text to the purchasing message
+collector and something downstream decides whether to render it. Known silent-drop paths
+include no business object id, `mmpur_remove_msg_by_context` clearing it on a later CHECK
+call, a context mismatch, the item object being re-instantiated between check and display,
+and a raw `MESSAGE TYPE 'E'` elsewhere in the method returning to the screen and discarding
+what is pending. A plain `MESSAGE` has none of them - it displays or it dumps.
 
-**Status of the fix below:** it is defensible practice and matches the `ZMM_MSGS 007` block,
-but it is NOT the cause of the DEV/QAS difference and must not be described as such. Whether
-it is worth pasting at all should be decided after the source diff.
+Decisive practical point that should have carried more weight from the start: **eight other
+validations in this same method already use raw `MESSAGE ... TYPE 'E'` and they work in QAS**
+(lines ~452, 464, 469, 538, 595, 722, 909, 967). The `<002>` block was the only one on the
+collector route.
+
+All three budget messages switched to plain `MESSAGE e00X(zmm_budget)`. This also gains a
+syntax check on the message id, which the literal `'ZMM_BUDGET'` passed to the macro never had.
+
+**Trade-off, accepted:** a type E message returns to the screen immediately, so validations
+placed after the `<002>` block do not run on that round trip. This already matches how the
+other eight checks in this method behave, and they run normally once the budget is corrected.
+`ch_failed` is set BEFORE each MESSAGE for the same reason.
+
+**Root cause of the DEV/QAS difference remains unknown and is now moot.** If it ever needs to
+be chased, the one check never done is a diff of the QAS method source against the DEV copy.
 
 **Fix applied 03/09/26** — inside the existing `*BOC <002>` block, extended not re-wrapped,
-old lines commented out in place:
+old `mmpur_message_forced` lines commented out in place directly above their replacements:
 
-- item loop changed from `lt_details` (data only) to `lt_items` (references), so the item id
-  and the item reference are both available; same rows selected either way
-- `lv_bud_objid` / `lo_bud_item` capture the first account-assigned item
-- `mmpur_business_obj_id lv_bud_objid.` before each of the three `mmpur_message_forced` calls
-- `lo_bud_item->invalidate( )` after each, guarded by `IS BOUND`
+- `mmpur_message_forced 'E' 'ZMM_BUDGET' '002' ...` -> `MESSAGE e002(zmm_budget) WITH ...`
+- `mmpur_message_forced 'E' 'ZMM_BUDGET' '008' ...` -> `MESSAGE e008(zmm_budget) WITH ...`
+- `mmpur_message_forced 'E' 'ZMM_BUDGET' '001' ...` -> `MESSAGE e001(zmm_budget).`
+- `ch_failed = abap_true.` moved BEFORE each MESSAGE - a type E message returns to the screen
+  immediately and anything after it never runs
 
-Files: `ZME_PROCESS_PO_CUST_CHECK_full.abap` (973 → 1027 lines),
-`BADI_CHECK_SNIPPET.abap` (111 → 175 lines, the paste unit).
+An interim version of this fix added `mmpur_business_obj_id` and `invalidate( )` and looped
+`lt_items` instead of `lt_details`. That machinery was built on explanation 4, which was
+disproved, so it has been removed - the block is back to the simple `lt_details` loop of the
+19/08/2026 original with only the three message statements changed.
 
-Types used are all proven by working code in the same method — `MEPOITEM-ID` (line 163),
-`purchase_order_items` (line 79), `item->invalidate( )` (line 172). No metafield constant was
-added: `mmmfd_*` only positions the cursor and no correct constant for an item value field is
-confirmed.
+Files: `ZME_PROCESS_PO_CUST_CHECK_full.abap` (973 -> 994 lines),
+`BADI_CHECK_SNIPPET.abap` (111 -> 137 lines, the paste unit).
 
 **Deliberately NOT changed.** The consumed-budget `SELECT` still has no `k~bstyp = 'F'`
 restriction, so contracts (`K`) and scheduling agreements (`L`) count as consumed budget, and

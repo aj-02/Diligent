@@ -908,21 +908,27 @@ FORM visible_columns CHANGING ct_show TYPE tt_fname.
       APPEND 'LOAD_FCT'   TO ct_show.   " Growth Based on Category
       APPEND 'FCST_QTY'   TO ct_show.   " Forecast (Max * Growth %)
       APPEND 'BUS_FCST'   TO ct_show.   " Business Forecast
-*BOC By Arnav on 03/09/26
-*     The quarter splits by month now, so the single additional plan
-*     column becomes three, in front of Final Forecast Qty.
-      APPEND 'BUS_FCST_ADD1' TO ct_show.
-      APPEND 'BUS_FCST_ADD2' TO ct_show.
-      APPEND 'BUS_FCST_ADD3' TO ct_show.
-*EOC By Arnav on 03/09/26
       APPEND 'FINAL_QTY'  TO ct_show.   " Final Forecast Qty
       APPEND 'M4_FCST'    TO ct_show.   " July'26
       APPEND 'M5_FCST'    TO ct_show.   " Aug'26
       APPEND 'M6_FCST'    TO ct_show.   " Sep'26
 *BOC By Arnav on 03/09/26
+*     Three blocks of three, so each column lines up with the one above
+*     and below it: the month's forecast, the month's additional plan
+*     quantity, then the month's final, which is the two added. The
+*     add-ons sat in front of FINAL_QTY before, five columns away from
+*     the figure each one adds to.
+      APPEND 'BUS_FCST_ADD1' TO ct_show.
+      APPEND 'BUS_FCST_ADD2' TO ct_show.
+      APPEND 'BUS_FCST_ADD3' TO ct_show.
       APPEND 'M4_FCST_FINAL' TO ct_show.
       APPEND 'M5_FCST_FINAL' TO ct_show.
       APPEND 'M6_FCST_FINAL' TO ct_show.
+*     Final x PRICE, so the value follows the final it is worked out
+*     from. Quarterly only - the annual sheet carries no value columns.
+      APPEND 'M4_VAL'     TO ct_show.
+      APPEND 'M5_VAL'     TO ct_show.
+      APPEND 'M6_VAL'     TO ct_show.
 *EOC By Arnav on 03/09/26
 
       IF p_tonn = abap_true.
@@ -932,11 +938,7 @@ FORM visible_columns CHANGING ct_show TYPE tt_fname.
       ENDIF.
 
 *BOC By Arnav on 03/09/26
-*     Value columns, quarterly only - the annual sheet carries no price
-*     figures. PRICE itself is drawn on every mode further down.
-      APPEND 'M4_VAL'     TO ct_show.
-      APPEND 'M5_VAL'     TO ct_show.
-      APPEND 'M6_VAL'     TO ct_show.
+*     Tonnage value follows the tonnage it belongs to
       APPEND 'M4_TON_VAL' TO ct_show.
       APPEND 'M5_TON_VAL' TO ct_show.
       APPEND 'M6_TON_VAL' TO ct_show.

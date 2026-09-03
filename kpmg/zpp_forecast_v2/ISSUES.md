@@ -365,3 +365,25 @@ parameter was withdrawn for point 3, so the text pointed at nothing.
 Both ZIPs rebuilt.
 
 TR: not yet · Files: the three `.prog.xml` under `kpmg/zpp_forecast_v2/src/`
+
+## 03/09/26 — quarterly ALV column order: three blocks of three
+
+The three add-ons sat in front of FINAL_QTY, five columns away from the monthly forecast
+each one adds to. Reordered so the quarterly sheet reads across:
+
+  FCST_QTY  BUS_FCST  FINAL_QTY
+  M4_FCST        M5_FCST        M6_FCST          the quarter split by month
+  BUS_FCST_ADD1  BUS_FCST_ADD2  BUS_FCST_ADD3    the add-on for each month
+  M4_FCST_FINAL  M5_FCST_FINAL  M6_FCST_FINAL    forecast + add-on
+  M4_VAL         M5_VAL         M6_VAL           final x PRICE
+  [M4_TON        M5_TON         M6_TON]          only when Tonnage is ticked
+  M4_TON_VAL     M5_TON_VAL     M6_TON_VAL       final tonnage x PRICE
+
+Each column now sits directly above and below the ones it is derived from, so a value can
+be checked by reading down the block.
+
+This supersedes point 2 of 02/09 ("BUS_FCST_ADD before the field that displays the max of
+the 2"). That was written when there was one add-on column; with three, they belong beside
+the monthly forecasts rather than in front of the quarter-level FINAL_QTY.
+
+TR: not yet · Files: `kpmg/zpp_forecast_v2/src/zpp_forecast.prog.abap`

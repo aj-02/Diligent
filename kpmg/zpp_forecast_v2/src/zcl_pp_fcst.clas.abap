@@ -167,19 +167,17 @@ CLASS zcl_pp_fcst DEFINITION
              reason       TYPE zde_fcst_reason,
 *BOC By Arnav on 03/09/26
 *            Quarterly splits the additional plan quantity by month.
-*            BUS_FCST_ADD and REASON above are left for the MONTHLY
-*            sheet - ZPPT_FCST_MN is one row per month already and has
-*            nothing to split. The nine below belong to quarterly and
-*            match ZPPT_FCST_QT.
+*            BUS_FCST_ADD above is left for the MONTHLY sheet -
+*            ZPPT_FCST_MN is one row per month already and has nothing
+*            to split. REASON stays SINGLE on both tables: the CR did
+*            not ask for one per month. A quarter changed three times
+*            therefore keeps the reason from the LAST row uploaded.
              bus_fcst_add1 TYPE zde_fcst_qty,
              bus_fcst_add2 TYPE zde_fcst_qty,
              bus_fcst_add3 TYPE zde_fcst_qty,
              m4_fcst_final TYPE zde_fcst_qty,
              m5_fcst_final TYPE zde_fcst_qty,
              m6_fcst_final TYPE zde_fcst_qty,
-             reason1       TYPE zde_fcst_reason,
-             reason2       TYPE zde_fcst_reason,
-             reason3       TYPE zde_fcst_reason,
 *            Final quantity x PRICE, and final tonnage x PRICE. Both are
 *            0 until the price logic lands.
              m4_val        TYPE zde_fcst_val,

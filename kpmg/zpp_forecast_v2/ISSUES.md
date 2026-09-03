@@ -207,3 +207,37 @@ The two readings agree only for quarter 1 (both give April, May, June), which is
 CR's own example row, Quarter 2 month 1, read naturally under either.
 
 TR: not yet · Files: `kpmg/zpp_forecast_v2/src/zpp_forecast_upload.prog.abap`
+
+## 03/09/26 — CR rebuilt on the CORRECT base (supersedes every 03/09 entry above)
+
+**What went wrong.** The session branch forked from `ed57e79` (31/08), before branch
+`claude/forecast-template-adhesive-hnqpxq` was written and never merged to main. Every
+file edited on 02-03/09 therefore started from a version that never had the 31/08-01/09
+work — real .XLSX upload, legacy fallback to standard tables, month-name headings,
+MTS/MTO, Net Weight, Price, CSV templates driven from DDIC. The ZIP built from it
+overwrote all of that in the system. The golden rule exists for exactly this: a fresh
+SE80 download was never requested before the CR build.
+
+**Recovery.** The four sources were restored from `5906927` (tip of that branch) and every
+CR change re-applied on top. Nothing was lost - it was all in git.
+
+| Object | Lines | Change |
+|---|---|---|
+| `ZCL_PP_FCST` | 1490 -> 1611 | `ty_alv` per-month adds/finals/value fields; `price` upgraded from the packed workaround to `ZDE_FCST_PRICE` with `waers` (the DDIC now has a currency field, so the reason for the workaround is gone); quarterly reads the three adds + reason/waers/price back so SAVE's CORRESPONDING cannot blank them; five old material codes in three places |
+| `ZPP_FORECAST_UPLOAD` | 2090 -> 2437 | MONTH column + `GV_QMONTH` switch ('S' = 1/2/3 live, 'P' = fiscal period); per-month change write; `qt_finals`; `final_qty` loses unused `CV_ADD`; five old codes in `do_tracking` and `check_chain`; general per-row messages; `field_label` passes a dash-free key through as its own heading |
+| `ZPP_FORECAST` | 1500 -> 1704 | Quarterly shows `ADD1/2/3`, three finals, six value columns, `WAERS`; Save checkbox withdrawn; `POPUP_TO_CONFIRM` withdrawn (`FORM SAVE_PROMPT` commented out whole - it still read `P_SAVE`); `SHOW_RESULT` / `RESULT_MESSAGE`; legacy switch with re-assert at START-OF-SELECTION |
+| `ZPP_FORECAST_REPORT` | 413 -> 421 | `QTR_ADD` = `ADD1+ADD2+ADD3` |
+
+**Corrections to earlier claims in this file.** Price DID already exist (`ty_alv-price`,
+a Price column on all three modes and on the Final ALV) - Arnav was right and I was reading
+the wrong branch. The CSV download is deliberate on this base, not a regression: the
+template is comma separated with proper quoting and the upload reads CSV back.
+
+`REASON` stays a SINGLE field on both tables - `REASON1/2/3` was my addition, not in the CR,
+and was reverted at Arnav's call. A quarter changed three times keeps the last row's reason.
+
+Verified: all five sources balance FORM/IF/LOOP/TRY/CASE/DO/WHILE/METHOD/CLASS, no line
+over 120, every field the code reads exists in the DDIC, ZIP 39 files, XML well-formed,
+no BOM, LF only.
+
+TR: not yet

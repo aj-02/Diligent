@@ -33,40 +33,47 @@ things; the `<002>` block did two:
 | `item->invalidate( )` | line 172 | **missing** |
 | `ch_failed = abap_true` | line 173 | present |
 
-**Why DEV and not QAS — RESOLVED 03/09/26. The defect is present in DEV too, but dormant.**
+**Why DEV and not QAS — RESOLVED 03/09/26, third and final version.**
 
-An earlier version of this entry claimed a stale framework global explained the split. Arnav
-correctly rejected that — a missing macro call is system-independent and would fail in both
-systems. Retracted. The real answer is simpler.
+Two earlier explanations in this entry were wrong and are retracted:
+- a stale framework global with no identified source (rejected by Arnav: a missing macro call
+  is system-independent). The mechanism was right, the missing piece was WHERE the difference
+  comes from - see below;
+- "dormant in DEV because only the happy path was tested" (disproved: Arnav confirmed the
+  error message DOES display in DEV).
 
-`ZMM_BUDGET` was confirmed present in QAS via SE91, ruling out the missing-message-class
-theory. Arnav also confirmed by debugger that the `mmpur_message_forced` statement IS reached
-in QAS, on the `IF sy-subrc <> 0` branch. That means the `SELECT SINGLE` on `ZMM_PO_BUDGET`
-returns no row for the tested `WERKS` + `EKGRP` + `GJAHR` in QAS, so an error path runs.
+Also ruled out by check: `ZMM_BUDGET` exists in QAS (SE91).
 
-In DEV the budget check passes, so no message is ever issued and the broken display is never
-exercised. "Working fine in DEV" means the happy path was the only path ever tested.
+**The actual chain.** `mmpur_business_obj_id` appears exactly ONCE in the whole method, at
+line 163. The `<002>` block never sets it, so it inherits whatever line 163 left behind. Line
+163 sits behind two gates, both of which differ between DEV and QAS by their nature:
 
-| | DEV | QAS |
-|---|---|---|
-| matching budget row for the tested key | exists | missing |
-| error path runs | no | yes |
-| message display defect | present, dormant | present, exposed |
-| observed | PO saves - "works" | PO blocked, no explanation |
+```
+line 153:  IF line_exists( lt_po_doctyp[ low = ls_header-bsart ] ).
+line 159:    IF ls_mbew-vprsv = 'S' AND ls_mbew-stprs = 0.
+line 163:      mmpur_business_obj_id ls_item_data-id.
+line 167:      mmpur_message_forced: 'E' 'ZMM_MSGS' '007' ...
+```
 
-Same code, same behaviour. Two independent problems were being read as one:
+- **Gate 1, `lt_po_doctyp`, is read from TVARVC** (line ~38, `NAME = 'ZPO_DOCTYPE'`,
+  `TYPE = 'S'`). TVARVC is maintained per client in STVARV and does NOT travel with a
+  workbench transport, so DEV and QAS routinely hold different entries, or QAS holds none.
+- **Gate 2, `vprsv = 'S' AND stprs = 0`** - standard price zero. Normal for dummy DEV test
+  materials, almost never true in QAS where materials carry real costed prices.
 
-1. **Data.** No `ZMM_PO_BUDGET` row for the tested plant / purchasing group / year in QAS.
-   "Table has data" is not "a row for this key". `lv_bud_gjahr` comes from
-   `ls_header-bedat(4)`, the PO document-date year - a common mismatch when the row was
-   maintained for a different year. Read `lv_bud_werks`, `ls_header-ekgrp`, `lv_bud_gjahr`
-   off the debugger and SE16 the table on exactly those three.
-2. **Code.** The message never reaches the display, so the block is silent and the cause is
-   invisible. Fixed below.
+DEV: both gates open, line 163 fires, the budget message rides on the id it set, and displays.
+QAS: either gate closes, line 163 never runs, the budget message is owned by nothing and is
+discarded before it reaches `LSBAL_DISPLAY_BASEF05` - exactly what the debugger showed.
 
-**Confirming test, still to run:** in DEV, create a PO for a plant / purchasing group /
-document-date year with no budget row, or exceed a maintained budget. If DEV also blocks with
-no message text, the defect is confirmed system-independent and the fix below is the answer.
+The code is identical in both systems; the state it silently depends on is not.
+
+**Confirming observation, one look, still to make:** in DEV, on the PO where the budget error
+displays, does the message list ALSO show `ZMM_MSGS 007` ("standard price is zero")? If yes,
+line 163 ran and the chain is proven. Supporting checks: STVARV `ZPO_DOCTYPE` in both systems
+vs the test PO's `BSART`; SE16 MBEW for the test material + plant, `VPRSV` / `STPRS` in both.
+
+The fix below removes the dependency entirely - the budget message stops relying on another
+author's error firing first.
 
 **Fix applied 03/09/26** — inside the existing `*BOC <002>` block, extended not re-wrapped,
 old lines commented out in place:

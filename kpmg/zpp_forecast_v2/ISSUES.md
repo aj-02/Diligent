@@ -324,3 +324,19 @@ they are. They echo no uploaded values, so point 1 is satisfied, and "already ex
 tells the user the row was a no-op. `FORM do_exclusion` stays byte-identical to QA.
 
 Point 1 therefore applies to five of the six upload types by design, not by omission.
+
+## 03/09/26 — ZPP_FORECAST1.zip, delta only
+
+`ZPP_FORECAST.zip` (39 files) is the whole package. `ZPP_FORECAST1.zip` (15 files) carries
+only what differs from the QA base, so a pull cannot touch anything that is already correct:
+
+  3 new DDIC   ZDO_FCST_VAL, ZDE_FCST_PRICE, ZDE_FCST_VAL
+  2 tables     ZPPT_FCST_QT, ZPPT_MAT_TRACK
+  1 class      ZCL_PP_FCST (.abap + .clas.xml)
+  3 reports    ZPP_FORECAST, ZPP_FORECAST_UPLOAD, ZPP_FORECAST_REPORT (.abap + .prog.xml)
+  package.devc.xml and .abapgit.xml, which abapGit needs to resolve the package
+
+Deliberately NOT in it, all byte-identical to QA: `ZCL_PP_FCST_UTIL`, message class
+`ZPP_FCST` (024 already present there), and the six unchanged tables, seven domains and
+eight data elements.
+

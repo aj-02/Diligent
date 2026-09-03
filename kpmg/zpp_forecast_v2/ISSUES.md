@@ -128,3 +128,22 @@ the monthly change upload is untouched.
 tonnage *value* columns use the final's tonnage. Flag if that should be consistent.
 
 TR: not yet · ZIP rebuilt from `src/`, 39 files
+
+## 03/09/26 — quarterly change upload: MONTH is the fiscal period, not a slot
+
+Arnav confirmed "quarter 2 i.e. month 4 5 6". The first build read MONTH as 1/2/3 within
+the quarter, which matched the CR's example row (Quarter 2, month 1) but not his intent.
+
+MONTH is now the **fiscal period 1-12**, 1 = April, 12 = March — the same numbering the
+monthly uploads already use. It must fall inside the quarter on the same row
+(`period_to_quarter( month ) = quarter`), so Q1 takes 1-3, Q2 takes 4-6, Q3 takes 7-9,
+Q4 takes 10-12. A mismatch is rejected with "Month 7 is not in quarter 2".
+
+The column the value lands in is `month - ( quarter - 1 ) * 3` → 1, 2 or 3, which picks
+`BUS_FCST_ADD1/2/3` and `REASON1/2/3`. Template demo row changed from month 1 to month 4.
+
+Note for the TS: `M4_FCST` / `M5_FCST` / `M6_FCST` are named after Q2 but always hold the
+first, second and third month of whichever quarter is run — Q4 fills them with Jan, Feb,
+Mar. Pre-existing, not introduced here.
+
+TR: not yet · Files: `kpmg/zpp_forecast_v2/src/zpp_forecast_upload.prog.abap`

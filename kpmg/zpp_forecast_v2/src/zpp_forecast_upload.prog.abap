@@ -2,21 +2,13 @@
 *& Report  ZPP_FORECAST_UPLOAD   Transaction  ZFCST_UPL
 *& ZFORECAST (Adhesive) - all uploads in one program
 *&
-*& Eight upload types selected by radio button. For each the user can
-*& download a ready made template, fill it in, upload it, and see a
-*& result list.
+*& Eight upload types selected by radio button. Each radio button has a
+*& Download Template button of its own beside it, so the file the user
+*& fills in always carries the right columns in the right order.
 *&
-*BOC By Arnav on 02/09/26
-*& Was: "a result list saying exactly what was created, what was changed
-*& and what was rejected and why."
-*&
-*& The result list now says WHAT happened to each row - created, changed
-*& or rejected - not what the values were before and after. The uploaded
-*& values are in the file the user just sent and in the forecast report;
-*& repeating them back one row at a time made the list unreadable.
-*& A rejected row still carries its reason, because without it the user
-*& cannot correct the file.
-*EOC By Arnav on 02/09/26
+*& The file is read back as a real Excel workbook (.XLSX / .XLS) through
+*& CL_FDT_XL_SPREADSHEET, or as CSV or tab separated text. The user no
+*& longer has to save their spreadsheet as a text file first.
 *&
 *& Built to Forecast Template-Adhesive.xlsx dated 20.08.2026
 *&---------------------------------------------------------------------*
@@ -47,53 +39,97 @@ CONSTANTS: gc_new  TYPE char14 VALUE 'Created',
            gc_tnew TYPE char14 VALUE 'Would create',
            gc_tchg TYPE char14 VALUE 'Would change'.
 
-*BOC By Arnav on 03/09/26
-* MONTH on the quarterly change file has two possible readings and the
-* business has not settled which one it wants. Switch here, one letter,
-* rather than editing the validation:
-*
-*   'S' - 1, 2 or 3: the first, second or third month OF THE QUARTER.
-*         Quarter 2 month 1 is July. This is what is live.
-*   'P' - the fiscal period 1 to 12, 1 = April and 12 = March, checked
-*         against the quarter on the same row. Quarter 2 takes 4 to 6,
-*         quarter 4 takes 10 to 12. This matches the monthly templates.
-*
-* The two agree only for quarter 1, where both give April, May, June.
-* The downloadable template's example row follows this switch too, so
-* changing the letter is the whole job.
-*
-* A DATA rather than a CONSTANTS on purpose - a constant would let the
-* compiler fold the IF and report the other branch as unreachable.
-DATA gv_qmonth TYPE char1 VALUE 'S'.
-
-* Used by DO_CHANGE to reach BUS_FCST_ADDn / REASONn / Mn_FCST_FINAL by
-* name. Declared here because a FORM may not declare a field symbol
-* inside a loop it re-enters per row.
-FIELD-SYMBOLS: <gv_add> TYPE any,
-               <gv_rsn> TYPE any,
-               <gv_fin> TYPE any.
-*EOC By Arnav on 03/09/26
-
 DATA: gt_raw TYPE STANDARD TABLE OF ty_raw,
       gt_log TYPE STANDARD TABLE OF ty_log,
       g_new  TYPE i,
       g_chg  TYPE i,
       g_err  TYPE i,
-      g_tab  TYPE c LENGTH 1.
+      g_tab  TYPE c LENGTH 1,
+*BOC By Arnav on 31/08/26
+*     The upload type as a key rather than eight radio buttons, so the
+*     template layout can be asked for by name
+      g_type TYPE char4,
+*     Set when the file was read as a workbook. CL_FDT_XL_SPREADSHEET
+*     consumes the heading row itself, so the header checkbox must not
+*     delete a second row.
+      g_xls  TYPE abap_bool.
+*EOC By Arnav on 31/08/26
 
 *&---------------------------------------------------------------------*
 SELECTION-SCREEN FUNCTION KEY 1.
 
+*BOC By Arnav on 31/08/26
+* One Download Template button per upload type, on the line of the radio
+* button it belongs to. The single button in the application toolbar
+* served whichever radio button happened to be selected, so a user who
+* wanted the legacy history layout had to select that radio button
+* first; the eight buttons below each download their own layout whatever
+* is selected.
+*
+* The radio button texts move from the selection texts into COMMENT
+* fields, because a parameter inside BEGIN OF LINE does not draw its
+* selection text. They are filled in INITIALIZATION.
+*
+*PARAMETERS: p_cat  RADIOBUTTON GROUP typ DEFAULT 'X',
+*            p_trk  RADIOBUTTON GROUP typ,
+*            p_exc  RADIOBUTTON GROUP typ,
+*            p_hist RADIOBUTTON GROUP typ,
+*            p_busq RADIOBUTTON GROUP typ,
+*            p_busm RADIOBUTTON GROUP typ,
+*            p_chgq RADIOBUTTON GROUP typ,
+*            p_chgm RADIOBUTTON GROUP typ.
 SELECTION-SCREEN BEGIN OF BLOCK b0 WITH FRAME TITLE TEXT-b00.
-PARAMETERS: p_cat  RADIOBUTTON GROUP typ DEFAULT 'X',
-            p_trk  RADIOBUTTON GROUP typ,
-            p_exc  RADIOBUTTON GROUP typ,
-            p_hist RADIOBUTTON GROUP typ,
-            p_busq RADIOBUTTON GROUP typ,
-            p_busm RADIOBUTTON GROUP typ,
-            p_chgq RADIOBUTTON GROUP typ,
-            p_chgm RADIOBUTTON GROUP typ.
+
+SELECTION-SCREEN BEGIN OF LINE.
+PARAMETERS p_cat RADIOBUTTON GROUP typ DEFAULT 'X'.
+SELECTION-SCREEN COMMENT 3(33) c_cat FOR FIELD p_cat.
+SELECTION-SCREEN PUSHBUTTON 40(24) b_cat USER-COMMAND tcat.
+SELECTION-SCREEN END OF LINE.
+
+SELECTION-SCREEN BEGIN OF LINE.
+PARAMETERS p_trk RADIOBUTTON GROUP typ.
+SELECTION-SCREEN COMMENT 3(33) c_trk FOR FIELD p_trk.
+SELECTION-SCREEN PUSHBUTTON 40(24) b_trk USER-COMMAND ttrk.
+SELECTION-SCREEN END OF LINE.
+
+SELECTION-SCREEN BEGIN OF LINE.
+PARAMETERS p_exc RADIOBUTTON GROUP typ.
+SELECTION-SCREEN COMMENT 3(33) c_exc FOR FIELD p_exc.
+SELECTION-SCREEN PUSHBUTTON 40(24) b_exc USER-COMMAND texc.
+SELECTION-SCREEN END OF LINE.
+
+SELECTION-SCREEN BEGIN OF LINE.
+PARAMETERS p_hist RADIOBUTTON GROUP typ.
+SELECTION-SCREEN COMMENT 3(33) c_hist FOR FIELD p_hist.
+SELECTION-SCREEN PUSHBUTTON 40(24) b_hist USER-COMMAND thst.
+SELECTION-SCREEN END OF LINE.
+
+SELECTION-SCREEN BEGIN OF LINE.
+PARAMETERS p_busq RADIOBUTTON GROUP typ.
+SELECTION-SCREEN COMMENT 3(33) c_busq FOR FIELD p_busq.
+SELECTION-SCREEN PUSHBUTTON 40(24) b_busq USER-COMMAND tbsq.
+SELECTION-SCREEN END OF LINE.
+
+SELECTION-SCREEN BEGIN OF LINE.
+PARAMETERS p_busm RADIOBUTTON GROUP typ.
+SELECTION-SCREEN COMMENT 3(33) c_busm FOR FIELD p_busm.
+SELECTION-SCREEN PUSHBUTTON 40(24) b_busm USER-COMMAND tbsm.
+SELECTION-SCREEN END OF LINE.
+
+SELECTION-SCREEN BEGIN OF LINE.
+PARAMETERS p_chgq RADIOBUTTON GROUP typ.
+SELECTION-SCREEN COMMENT 3(33) c_chgq FOR FIELD p_chgq.
+SELECTION-SCREEN PUSHBUTTON 40(24) b_chgq USER-COMMAND tcgq.
+SELECTION-SCREEN END OF LINE.
+
+SELECTION-SCREEN BEGIN OF LINE.
+PARAMETERS p_chgm RADIOBUTTON GROUP typ.
+SELECTION-SCREEN COMMENT 3(33) c_chgm FOR FIELD p_chgm.
+SELECTION-SCREEN PUSHBUTTON 40(24) b_chgm USER-COMMAND tcgm.
+SELECTION-SCREEN END OF LINE.
+
 SELECTION-SCREEN END OF BLOCK b0.
+*EOC By Arnav on 31/08/26
 
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-b01.
 PARAMETERS: p_file TYPE localfile,
@@ -111,6 +147,28 @@ INITIALIZATION.
   sscrfields-functxt_01 = 'Download Template'.
   g_tab = cl_abap_char_utilities=>horizontal_tab.
 
+*BOC By Arnav on 31/08/26
+* Radio button texts, which a parameter inside BEGIN OF LINE cannot draw
+* from the selection texts
+  c_cat  = 'Product Category'.
+  c_trk  = 'Material Tracking'.
+  c_exc  = 'Material Exclusion'.
+  c_hist = 'Legacy Sales History'.
+  c_busq = 'Business Forecast Quarterly'.
+  c_busm = 'Business Forecast Monthly'.
+  c_chgq = 'Forecast Change Quarterly'.
+  c_chgm = 'Forecast Change Monthly'.
+
+  b_cat  = 'Download Template'.
+  b_trk  = 'Download Template'.
+  b_exc  = 'Download Template'.
+  b_hist = 'Download Template'.
+  b_busq = 'Download Template'.
+  b_busm = 'Download Template'.
+  b_chgq = 'Download Template'.
+  b_chgm = 'Download Template'.
+*EOC By Arnav on 31/08/26
+
 *&---------------------------------------------------------------------*
 AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_file.
 
@@ -119,11 +177,35 @@ AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_file.
 *&---------------------------------------------------------------------*
 AT SELECTION-SCREEN.
 
-  IF sscrfields-ucomm = 'FC01'.
-    PERFORM download_template.
-  ELSEIF sscrfields-ucomm = 'ONLI' AND p_file IS INITIAL.
-    MESSAGE e013 WITH 'no file name entered'.
-  ENDIF.
+*BOC By Arnav on 31/08/26
+*  IF sscrfields-ucomm = 'FC01'.
+*    PERFORM download_template.
+*  ELSEIF sscrfields-ucomm = 'ONLI' AND p_file IS INITIAL.
+*    MESSAGE e013 WITH 'no file name entered'.
+*  ENDIF.
+  CASE sscrfields-ucomm.
+
+*   The application toolbar button still serves whichever radio button
+*   is selected. The eight buttons name their own type.
+    WHEN 'FC01'.
+      PERFORM current_type CHANGING g_type.
+      PERFORM download_template USING g_type.
+    WHEN 'TCAT'. PERFORM download_template USING 'CAT'.
+    WHEN 'TTRK'. PERFORM download_template USING 'TRK'.
+    WHEN 'TEXC'. PERFORM download_template USING 'EXC'.
+    WHEN 'THST'. PERFORM download_template USING 'HIST'.
+    WHEN 'TBSQ'. PERFORM download_template USING 'BUSQ'.
+    WHEN 'TBSM'. PERFORM download_template USING 'BUSM'.
+    WHEN 'TCGQ'. PERFORM download_template USING 'CHGQ'.
+    WHEN 'TCGM'. PERFORM download_template USING 'CHGM'.
+
+    WHEN 'ONLI'.
+      IF p_file IS INITIAL.
+        MESSAGE e013 WITH 'no file name entered'.
+      ENDIF.
+
+  ENDCASE.
+*EOC By Arnav on 31/08/26
 
 *&---------------------------------------------------------------------*
 START-OF-SELECTION.
@@ -164,240 +246,243 @@ START-OF-SELECTION.
 *& Template definition - one place, used by the download button and
 *& matching the layouts documented for the functional team
 *&---------------------------------------------------------------------*
-FORM template_columns CHANGING ct_head TYPE string_table
-                               ct_demo TYPE string_table
-                               cv_name TYPE string.
+FORM current_type CHANGING cv_type TYPE char4.
 
-*BOC By Arnav on 02/09/26
-* Second old material is blank on the tracking example row. An empty
-* STRING variable is appended rather than a literal, so the row type is
-* never in question.
-  DATA lv_blank TYPE string.
-*EOC By Arnav on 02/09/26
+  CLEAR cv_type.
 
-  CLEAR: ct_head, ct_demo, cv_name.
-
-*BOC By Arnav on 02/09/26
-* A text literal is type C and the row of CT_HEAD / CT_DEMO is STRING.
-* The VALUE constructor short form below was rejected sixteen times with
-* "'PLANT' and the row type of 'CT_HEAD' are incompatible", and writing
-* the rows as string templates - ( |PLANT| ) - was rejected the same way,
-* so this release will not take a constructor expression here at all.
-* Plain APPEND is used instead: it assigns by conversion rather than by
-* compatibility, which is the pre-7.40 idiom and works on any release.
-*  IF p_cat = 'X'.
-*    cv_name = 'ZFCST_Product_Category'.
-*    ct_head = VALUE #( ( 'PLANT' ) ( 'MATERIAL' ) ( 'CATEGORY' )
-*                       ( 'LOAD FACTOR' ) ( 'MTS OR MTO' ) ).
-*    ct_demo = VALUE #( ( '1001' ) ( 'FG00000000001' ) ( 'A' )
-*                       ( '1.300' ) ( 'MTS' ) ).
-*
-*  ELSEIF p_trk = 'X'.
-*    cv_name = 'ZFCST_Material_Tracking'.
-*    ct_head = VALUE #( ( 'PLANT' ) ( 'NEW MATERIAL' )
-*                       ( 'OLD MATERIAL 1' ) ( 'OLD MATERIAL 2' ) ).
-*    ct_demo = VALUE #( ( '1001' ) ( 'FG00000000002' )
-*                       ( 'FG00000000001' ) ( '' ) ).
-*
-*  ELSEIF p_exc = 'X'.
-*    cv_name = 'ZFCST_Material_Exclusion'.
-*    ct_head = VALUE #( ( 'PLANT' ) ( 'MATERIAL' ) ).
-*    ct_demo = VALUE #( ( '1001' ) ( 'FG00000000001' ) ).
-*
-*  ELSEIF p_hist = 'X'.
-*    cv_name = 'ZFCST_Legacy_Sales_History'.
-*    ct_head = VALUE #( ( 'PLANT' ) ( 'MATERIAL' ) ( 'YEAR' )
-*                       ( 'M1 APR' ) ( 'M2 MAY' ) ( 'M3 JUN' ) ( 'M4 JUL' )
-*                       ( 'M5 AUG' ) ( 'M6 SEP' ) ( 'M7 OCT' ) ( 'M8 NOV' )
-*                       ( 'M9 DEC' ) ( 'M10 JAN' ) ( 'M11 FEB' ) ( 'M12 MAR' )
-*                       ( 'UOM' ) ).
-*    ct_demo = VALUE #( ( '1001' ) ( 'FG00000000001' ) ( '2025' )
-*                       ( '100' ) ( '120' ) ( '90' ) ( '110' )
-*                       ( '95' ) ( '130' ) ( '105' ) ( '115' )
-*                       ( '125' ) ( '85' ) ( '100' ) ( '140' )
-*                       ( 'EA' ) ).
-*
-*  ELSEIF p_busq = 'X'.
-*    cv_name = 'ZFCST_Business_Forecast_Quarterly'.
-*    ct_head = VALUE #( ( 'MATERIAL' ) ( 'PLANT' ) ( 'QUARTER' )
-*                       ( 'YEAR' ) ( 'SALES FORECAST' ) ).
-*    ct_demo = VALUE #( ( 'FG00000000001' ) ( '1001' ) ( '2' )
-*                       ( '2026' ) ( '12000' ) ).
-*
-*  ELSEIF p_busm = 'X'.
-*    cv_name = 'ZFCST_Business_Forecast_Monthly'.
-*    ct_head = VALUE #( ( 'MATERIAL' ) ( 'PLANT' ) ( 'MONTH' )
-*                       ( 'YEAR' ) ( 'SALES FORECAST' ) ).
-*    ct_demo = VALUE #( ( 'FG00000000001' ) ( '1001' ) ( '1' )
-*                       ( '2026' ) ( '4000' ) ).
-*
-*  ELSEIF p_chgq = 'X'.
-*    cv_name = 'ZFCST_Forecast_Change_Quarterly'.
-*    ct_head = VALUE #( ( 'MATERIAL' ) ( 'PLANT' ) ( 'QUARTER' )
-*                       ( 'YEAR' ) ( 'CHANGE QTY' ) ( 'REASON' ) ).
-*    ct_demo = VALUE #( ( 'FG00000000001' ) ( '1001' ) ( '2' )
-*                       ( '2026' ) ( '10' ) ( 'Additional plan' ) ).
-*
-*  ELSEIF p_chgm = 'X'.
-*    cv_name = 'ZFCST_Forecast_Change_Monthly'.
-*    ct_head = VALUE #( ( 'MATERIAL' ) ( 'PLANT' ) ( 'MONTH' )
-*                       ( 'YEAR' ) ( 'CHANGE QTY' ) ( 'REASON' ) ).
-*    ct_demo = VALUE #( ( 'FG00000000001' ) ( '1001' ) ( '1' )
-*                       ( '2026' ) ( '-10' ) ( 'Reduced plan' ) ).
-  IF p_cat = 'X'.
-    cv_name = 'ZFCST_Product_Category'.
-    APPEND 'PLANT'       TO ct_head.
-    APPEND 'MATERIAL'    TO ct_head.
-    APPEND 'CATEGORY'    TO ct_head.
-    APPEND 'LOAD FACTOR' TO ct_head.
-    APPEND 'MTS OR MTO'  TO ct_head.
-    APPEND '1001'          TO ct_demo.
-    APPEND 'FG00000000001' TO ct_demo.
-    APPEND 'A'             TO ct_demo.
-    APPEND '1.300'         TO ct_demo.
-    APPEND 'MTS'           TO ct_demo.
-
-  ELSEIF p_trk = 'X'.
-    cv_name = 'ZFCST_Material_Tracking'.
-    APPEND 'PLANT'          TO ct_head.
-    APPEND 'NEW MATERIAL'   TO ct_head.
-    APPEND 'OLD MATERIAL 1' TO ct_head.
-    APPEND 'OLD MATERIAL 2' TO ct_head.
-*BOC By Arnav on 03/09/26
-    APPEND 'OLD MATERIAL 3' TO ct_head.
-    APPEND 'OLD MATERIAL 4' TO ct_head.
-    APPEND 'OLD MATERIAL 5' TO ct_head.
-*EOC By Arnav on 03/09/26
-    APPEND '1001'          TO ct_demo.
-    APPEND 'FG00000000002' TO ct_demo.
-    APPEND 'FG00000000001' TO ct_demo.
-    APPEND lv_blank        TO ct_demo.
-*BOC By Arnav on 03/09/26
-    APPEND lv_blank        TO ct_demo.
-    APPEND lv_blank        TO ct_demo.
-    APPEND lv_blank        TO ct_demo.
-*EOC By Arnav on 03/09/26
-
-  ELSEIF p_exc = 'X'.
-    cv_name = 'ZFCST_Material_Exclusion'.
-    APPEND 'PLANT'    TO ct_head.
-    APPEND 'MATERIAL' TO ct_head.
-    APPEND '1001'          TO ct_demo.
-    APPEND 'FG00000000001' TO ct_demo.
-
-  ELSEIF p_hist = 'X'.
-    cv_name = 'ZFCST_Legacy_Sales_History'.
-    APPEND 'PLANT'    TO ct_head.
-    APPEND 'MATERIAL' TO ct_head.
-    APPEND 'YEAR'     TO ct_head.
-    APPEND 'M1 APR'   TO ct_head.
-    APPEND 'M2 MAY'   TO ct_head.
-    APPEND 'M3 JUN'   TO ct_head.
-    APPEND 'M4 JUL'   TO ct_head.
-    APPEND 'M5 AUG'   TO ct_head.
-    APPEND 'M6 SEP'   TO ct_head.
-    APPEND 'M7 OCT'   TO ct_head.
-    APPEND 'M8 NOV'   TO ct_head.
-    APPEND 'M9 DEC'   TO ct_head.
-    APPEND 'M10 JAN'  TO ct_head.
-    APPEND 'M11 FEB'  TO ct_head.
-    APPEND 'M12 MAR'  TO ct_head.
-    APPEND 'UOM'      TO ct_head.
-    APPEND '1001'          TO ct_demo.
-    APPEND 'FG00000000001' TO ct_demo.
-    APPEND '2025'          TO ct_demo.
-    APPEND '100'           TO ct_demo.
-    APPEND '120'           TO ct_demo.
-    APPEND '90'            TO ct_demo.
-    APPEND '110'           TO ct_demo.
-    APPEND '95'            TO ct_demo.
-    APPEND '130'           TO ct_demo.
-    APPEND '105'           TO ct_demo.
-    APPEND '115'           TO ct_demo.
-    APPEND '125'           TO ct_demo.
-    APPEND '85'            TO ct_demo.
-    APPEND '100'           TO ct_demo.
-    APPEND '140'           TO ct_demo.
-    APPEND 'EA'            TO ct_demo.
-
-  ELSEIF p_busq = 'X'.
-    cv_name = 'ZFCST_Business_Forecast_Quarterly'.
-    APPEND 'MATERIAL'       TO ct_head.
-    APPEND 'PLANT'          TO ct_head.
-    APPEND 'QUARTER'        TO ct_head.
-    APPEND 'YEAR'           TO ct_head.
-    APPEND 'SALES FORECAST' TO ct_head.
-    APPEND 'FG00000000001' TO ct_demo.
-    APPEND '1001'          TO ct_demo.
-    APPEND '2'             TO ct_demo.
-    APPEND '2026'          TO ct_demo.
-    APPEND '12000'         TO ct_demo.
-
-  ELSEIF p_busm = 'X'.
-    cv_name = 'ZFCST_Business_Forecast_Monthly'.
-    APPEND 'MATERIAL'       TO ct_head.
-    APPEND 'PLANT'          TO ct_head.
-    APPEND 'MONTH'          TO ct_head.
-    APPEND 'YEAR'           TO ct_head.
-    APPEND 'SALES FORECAST' TO ct_head.
-    APPEND 'FG00000000001' TO ct_demo.
-    APPEND '1001'          TO ct_demo.
-    APPEND '1'             TO ct_demo.
-    APPEND '2026'          TO ct_demo.
-    APPEND '4000'          TO ct_demo.
-
-  ELSEIF p_chgq = 'X'.
-    cv_name = 'ZFCST_Forecast_Change_Quarterly'.
-*BOC By Arnav on 03/09/26
-*   MONTH is new, between QUARTER and YEAR. Every column after it has
-*   moved one place right. What MONTH means is GV_QMONTH at the top of
-*   the program - 'S' for 1, 2 or 3 within the quarter, 'P' for the
-*   fiscal period 1 to 12. The example row below follows the switch.
-    APPEND 'MATERIAL'   TO ct_head.
-    APPEND 'PLANT'      TO ct_head.
-    APPEND 'QUARTER'    TO ct_head.
-    APPEND 'MONTH'      TO ct_head.
-    APPEND 'YEAR'       TO ct_head.
-    APPEND 'CHANGE QTY' TO ct_head.
-    APPEND 'REASON'     TO ct_head.
-    APPEND 'FG00000000001'   TO ct_demo.
-    APPEND '1001'            TO ct_demo.
-    APPEND '2'               TO ct_demo.
-    IF gv_qmonth = 'P'.
-      APPEND '4'             TO ct_demo.   " quarter 2, fiscal period 4
-    ELSE.
-      APPEND '1'             TO ct_demo.   " quarter 2, first month
-    ENDIF.
-    APPEND '2026'            TO ct_demo.
-    APPEND '10'              TO ct_demo.
-    APPEND 'Additional plan' TO ct_demo.
-*EOC By Arnav on 03/09/26
-
-  ELSEIF p_chgm = 'X'.
-    cv_name = 'ZFCST_Forecast_Change_Monthly'.
-    APPEND 'MATERIAL'   TO ct_head.
-    APPEND 'PLANT'      TO ct_head.
-    APPEND 'MONTH'      TO ct_head.
-    APPEND 'YEAR'       TO ct_head.
-    APPEND 'CHANGE QTY' TO ct_head.
-    APPEND 'REASON'     TO ct_head.
-    APPEND 'FG00000000001' TO ct_demo.
-    APPEND '1001'          TO ct_demo.
-    APPEND '1'             TO ct_demo.
-    APPEND '2026'          TO ct_demo.
-    APPEND '-10'           TO ct_demo.
-    APPEND 'Reduced plan'  TO ct_demo.
-*EOC By Arnav on 02/09/26
-  ENDIF.
+  CASE 'X'.
+    WHEN p_cat.  cv_type = 'CAT'.
+    WHEN p_trk.  cv_type = 'TRK'.
+    WHEN p_exc.  cv_type = 'EXC'.
+    WHEN p_hist. cv_type = 'HIST'.
+    WHEN p_busq. cv_type = 'BUSQ'.
+    WHEN p_busm. cv_type = 'BUSM'.
+    WHEN p_chgq. cv_type = 'CHGQ'.
+    WHEN p_chgm. cv_type = 'CHGM'.
+  ENDCASE.
 
 ENDFORM.
 
 
 *&---------------------------------------------------------------------*
-FORM download_template.
+*& BOC By Arnav on 31/08/26
+*&
+*& Template layout - taken from the dictionary, not typed in here
+*&
+*& The layout used to be written into this program: the column headings
+*& as literals, and a second row of sample data carrying plant 1001,
+*& material FG00000000001 and year 2026. Two things were wrong with it.
+*&
+*&   1  It is hardcoded master data. That plant, that material and that
+*&      year belong to no real system, they go stale on their own, and
+*&      the standard for this repository is that nothing is hardcoded
+*&      unless the functional spec says to hardcode it.
+*&   2  A heading typed here drifts away from the field it loads. The
+*&      heading IS the DDIC label of that field now, so a label changed
+*&      in SE11 changes the template with it and the two cannot
+*&      disagree.
+*&
+*& The sample row goes with it. Saying what a column means is the
+*& heading's job; saying what a valid value is belongs to the validation
+*& messages, which already name every rule.
+*&
+*& The old body, for reference - it is also what the syntax check was
+*& rejecting, "'PLANT' and the row type of CT_HEAD are incompatible",
+*& sixteen times, two per upload type:
+*&
+*&   ct_head = VALUE #( ( 'PLANT' ) ( 'MATERIAL' ) ( 'CATEGORY' )
+*&                      ( 'LOAD FACTOR' ) ( 'MTS OR MTO' ) ).
+*&   ct_demo = VALUE #( ( '1001' ) ( 'FG00000000001' ) ( 'A' )
+*&                      ( '1.300' ) ( 'MTS' ) ).
+*&
+*& The rows of a VALUE table constructor have to be COMPATIBLE with the
+*& row type on this release, not merely convertible. 'PLANT' is a C
+*& literal and the row type of STRING_TABLE is STRING, so every one of
+*& them was refused. APPEND converts and is used throughout instead -
+*& the same statement ZPP_FORECAST already builds its column list with.
+*&---------------------------------------------------------------------*
+FORM template_columns USING pv_type TYPE any
+                      CHANGING ct_head TYPE string_table
+                               cv_name TYPE string.
+
+  DATA: lt_pre  TYPE string_table,
+        lt_post TYPE string_table,
+        lv_key  TYPE string,
+        lv_txt  TYPE string,
+        lv_per  TYPE char12,
+        lv_i    TYPE i,
+        lv_mth  TYPE abap_bool.
+
+  CLEAR: ct_head, cv_name.
+
+* Each entry is the table and field the column loads. The order is the
+* order of the columns in the file, and it is the ONLY thing about the
+* layout this program still decides for itself.
+  CASE pv_type.
+
+    WHEN 'CAT'.
+      cv_name = 'ZFCST_Product_Category'.
+      APPEND 'ZPPT_PROD_CAT-WERKS'    TO lt_pre.
+      APPEND 'ZPPT_PROD_CAT-MATNR'    TO lt_pre.
+      APPEND 'ZPPT_PROD_CAT-PROD_CAT' TO lt_pre.
+      APPEND 'ZPPT_PROD_CAT-LOAD_FCT' TO lt_pre.
+      APPEND 'ZPPT_PROD_CAT-MTS_MTO'  TO lt_pre.
+
+    WHEN 'TRK'.
+      cv_name = 'ZFCST_Material_Tracking'.
+      APPEND 'ZPPT_MAT_TRACK-WERKS'      TO lt_pre.
+      APPEND 'ZPPT_MAT_TRACK-NEW_MATNR'  TO lt_pre.
+      APPEND 'ZPPT_MAT_TRACK-OLD_MATNR1' TO lt_pre.
+      APPEND 'ZPPT_MAT_TRACK-OLD_MATNR2' TO lt_pre.
+
+    WHEN 'EXC'.
+      cv_name = 'ZFCST_Material_Exclusion'.
+      APPEND 'ZPPT_MAT_EXCL-WERKS' TO lt_pre.
+      APPEND 'ZPPT_MAT_EXCL-MATNR' TO lt_pre.
+
+    WHEN 'HIST'.
+      cv_name = 'ZFCST_Legacy_Sales_History'.
+      APPEND 'ZPPT_SLS_HIST-WERKS' TO lt_pre.
+      APPEND 'ZPPT_SLS_HIST-MATNR' TO lt_pre.
+      APPEND 'ZPPT_SLS_HIST-GJAHR' TO lt_pre.
+      lv_mth = abap_true.
+      APPEND 'ZPPT_SLS_HIST-MEINS' TO lt_post.
+
+    WHEN 'BUSQ'.
+      cv_name = 'ZFCST_Business_Forecast_Quarterly'.
+      APPEND 'ZPPT_FCST_QT-MATNR'    TO lt_pre.
+      APPEND 'ZPPT_FCST_QT-WERKS'    TO lt_pre.
+      APPEND 'ZPPT_FCST_QT-QUARTER'  TO lt_pre.
+      APPEND 'ZPPT_FCST_QT-GJAHR'    TO lt_pre.
+      APPEND 'ZPPT_FCST_QT-BUS_FCST' TO lt_pre.
+
+    WHEN 'BUSM'.
+      cv_name = 'ZFCST_Business_Forecast_Monthly'.
+      APPEND 'ZPPT_FCST_MN-MATNR'    TO lt_pre.
+      APPEND 'ZPPT_FCST_MN-WERKS'    TO lt_pre.
+      APPEND 'ZPPT_FCST_MN-PERIOD'   TO lt_pre.
+      APPEND 'ZPPT_FCST_MN-GJAHR'    TO lt_pre.
+      APPEND 'ZPPT_FCST_MN-BUS_FCST' TO lt_pre.
+
+    WHEN 'CHGQ'.
+      cv_name = 'ZFCST_Forecast_Change_Quarterly'.
+      APPEND 'ZPPT_FCST_QT-MATNR'        TO lt_pre.
+      APPEND 'ZPPT_FCST_QT-WERKS'        TO lt_pre.
+      APPEND 'ZPPT_FCST_QT-QUARTER'      TO lt_pre.
+      APPEND 'ZPPT_FCST_QT-GJAHR'        TO lt_pre.
+      APPEND 'ZPPT_FCST_QT-BUS_FCST_ADD' TO lt_pre.
+      APPEND 'ZPPT_FCST_QT-REASON'       TO lt_pre.
+
+    WHEN 'CHGM'.
+      cv_name = 'ZFCST_Forecast_Change_Monthly'.
+      APPEND 'ZPPT_FCST_MN-MATNR'        TO lt_pre.
+      APPEND 'ZPPT_FCST_MN-WERKS'        TO lt_pre.
+      APPEND 'ZPPT_FCST_MN-PERIOD'       TO lt_pre.
+      APPEND 'ZPPT_FCST_MN-GJAHR'        TO lt_pre.
+      APPEND 'ZPPT_FCST_MN-BUS_FCST_ADD' TO lt_pre.
+      APPEND 'ZPPT_FCST_MN-REASON'       TO lt_pre.
+
+    WHEN OTHERS.
+      RETURN.
+
+  ENDCASE.
+
+  LOOP AT lt_pre INTO lv_key.
+    PERFORM field_label USING lv_key CHANGING lv_txt.
+    APPEND lv_txt TO ct_head.
+  ENDLOOP.
+
+* The twelve legacy columns are all ZDE_FCST_QTY, so the dictionary
+* label is the same twelve times over and would not tell the user which
+* month is which. They are named from the financial calendar instead -
+* period 1 is April - by the same routine that labels the result list,
+* so the template and the log say the same thing.
+  IF lv_mth = abap_true.
+    DO 12 TIMES.
+      lv_i = sy-index.
+      PERFORM period_text USING 'M' lv_i CHANGING lv_per.
+      lv_txt = lv_per.
+      CONDENSE lv_txt.
+      APPEND lv_txt TO ct_head.
+    ENDDO.
+  ENDIF.
+
+  LOOP AT lt_post INTO lv_key.
+    PERFORM field_label USING lv_key CHANGING lv_txt.
+    APPEND lv_txt TO ct_head.
+  ENDLOOP.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+*& The dictionary label of TABLE-FIELD
+*&
+*& Long text first, then medium, then the field text, so the heading is
+*& as readable as the dictionary allows. A field with no label at all
+*& still gets its own name rather than an empty column.
+*&---------------------------------------------------------------------*
+FORM field_label USING pv_key TYPE string
+                 CHANGING cv_txt TYPE string.
+
+  DATA: lt_part TYPE string_table,
+        lv_s    TYPE string,
+        lv_tab  TYPE ddobjname,
+        lv_fld  TYPE dfies-fieldname,
+        lt_dfie TYPE STANDARD TABLE OF dfies,
+        ls_dfie TYPE dfies.
+
+  CLEAR cv_txt.
+
+  SPLIT pv_key AT '-' INTO TABLE lt_part.
+
+  READ TABLE lt_part INTO lv_s INDEX 1.
+  CHECK sy-subrc = 0.
+  lv_tab = lv_s.
+
+  READ TABLE lt_part INTO lv_s INDEX 2.
+  CHECK sy-subrc = 0.
+  lv_fld = lv_s.
+
+  CALL FUNCTION 'DDIF_FIELDINFO_GET'
+    EXPORTING  tabname        = lv_tab
+               fieldname      = lv_fld
+               langu          = sy-langu
+    TABLES     dfies_tab      = lt_dfie
+    EXCEPTIONS not_found      = 1
+               internal_error = 2
+               OTHERS         = 3.
+
+  IF sy-subrc = 0.
+    READ TABLE lt_dfie INTO ls_dfie INDEX 1.
+    IF sy-subrc = 0.
+      IF ls_dfie-scrtext_l IS NOT INITIAL.
+        cv_txt = ls_dfie-scrtext_l.
+      ELSEIF ls_dfie-scrtext_m IS NOT INITIAL.
+        cv_txt = ls_dfie-scrtext_m.
+      ELSE.
+        cv_txt = ls_dfie-fieldtext.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+
+  IF cv_txt IS INITIAL.
+    cv_txt = lv_fld.
+  ENDIF.
+
+  CONDENSE cv_txt.
+
+ENDFORM.
+*& EOC By Arnav on 31/08/26
+
+
+*&---------------------------------------------------------------------*
+* PV_TYPE is TYPE ANY, not TYPE CHAR4: the eight buttons pass a literal
+* such as 'CAT', which is C(3) and would not be type compatible with a
+* C(4) formal parameter.
+FORM download_template USING pv_type TYPE any.
 
   DATA: lt_head TYPE string_table,
-        lt_demo TYPE string_table,
         lt_out  TYPE string_table,
         lv_name TYPE string,
         lv_line TYPE string,
@@ -406,22 +491,33 @@ FORM download_template.
         lv_file TYPE string,
         lv_msg  TYPE string.
 
-  PERFORM template_columns CHANGING lt_head lt_demo lv_name.
+  PERFORM template_columns USING pv_type
+                           CHANGING lt_head lv_name.
 
   CHECK lt_head IS NOT INITIAL.
 
-* Row 1 the column headings, row 2 one example line the user overwrites
+*BOC By Arnav on 31/08/26
+* One row, the column headings. The sample row that used to follow it
+* carried invented master data - see the note on TEMPLATE_COLUMNS.
+*  PERFORM join_row USING lt_demo CHANGING lv_line.
+*  APPEND lv_line TO lt_out.
   PERFORM join_row USING lt_head CHANGING lv_line.
   APPEND lv_line TO lt_out.
+*EOC By Arnav on 31/08/26
 
-  PERFORM join_row USING lt_demo CHANGING lv_line.
-  APPEND lv_line TO lt_out.
-
-  CONCATENATE lv_name '.txt' INTO lv_file.
+*BOC By Arnav on 31/08/26
+* The template was written as .txt, which Excel opens through the text
+* import wizard - and a user who clicked past it got the columns in one
+* cell and uploaded a file the program could not read. A .csv opens
+* straight into columns, and the upload now reads the workbook back
+* whether it is saved as .csv or as .xlsx.
+*  CONCATENATE lv_name '.txt' INTO lv_file.
+  CONCATENATE lv_name '.csv' INTO lv_file.
+*EOC By Arnav on 31/08/26
 
   cl_gui_frontend_services=>file_save_dialog(
     EXPORTING  default_file_name = lv_file
-               default_extension = 'txt'
+               default_extension = 'csv'   "Changes by Arnav on 31/08/26
     CHANGING   filename          = lv_file
                path              = lv_path
                fullpath          = lv_full
@@ -439,7 +535,13 @@ FORM download_template.
                OTHERS           = 2 ).
 
   IF sy-subrc = 0.
-    CONCATENATE 'Template saved to' lv_full INTO lv_msg SEPARATED BY space.
+*BOC By Arnav on 31/08/26
+*   The headings are the dictionary labels of the fields the columns
+*   load, so the user is told to keep them where they are.
+    CONCATENATE 'Template saved to' lv_full
+                '- keep row 1 and the column order as they are'
+           INTO lv_msg SEPARATED BY space.
+*EOC By Arnav on 31/08/26
     MESSAGE lv_msg TYPE 'S'.
   ELSE.
     MESSAGE e013 WITH lv_full.
@@ -449,22 +551,44 @@ ENDFORM.
 
 
 *&---------------------------------------------------------------------*
+*BOC By Arnav on 31/08/26
+*& The template is comma separated now rather than tab separated, so a
+*& value that itself contains a comma or a quote is wrapped in quotes
+*& and its own quotes are doubled - the CSV convention the upload reads
+*& back. Nothing in the shipped layouts needs it today; a reason text
+*& added to a template later would.
+*&---------------------------------------------------------------------*
 FORM join_row USING pt_val TYPE string_table
               CHANGING cv_line TYPE string.
 
-  DATA lv_val TYPE string.
+  DATA: lv_val TYPE string,
+        lv_out TYPE string,
+        lv_ix  TYPE i.
 
   CLEAR cv_line.
 
   LOOP AT pt_val INTO lv_val.
-    IF sy-tabix = 1.
-      cv_line = lv_val.
-    ELSE.
-      CONCATENATE cv_line g_tab lv_val INTO cv_line.
+
+*   SY-TABIX is read straight away rather than after the statements
+*   below, so nothing in between can have moved it
+    lv_ix  = sy-tabix.
+    lv_out = lv_val.
+
+    IF lv_out CS ',' OR lv_out CS '"' OR lv_out CS g_tab.
+      REPLACE ALL OCCURRENCES OF '"' IN lv_out WITH '""'.
+      CONCATENATE '"' lv_out '"' INTO lv_out.
     ENDIF.
+
+    IF lv_ix = 1.
+      cv_line = lv_out.
+    ELSE.
+      CONCATENATE cv_line ',' lv_out INTO cv_line.
+    ENDIF.
+
   ENDLOOP.
 
 ENDFORM.
+*& EOC By Arnav on 31/08/26
 
 
 *&---------------------------------------------------------------------*
@@ -490,34 +614,393 @@ ENDFORM.
 
 
 *&---------------------------------------------------------------------*
+*& BOC By Arnav on 31/08/26
+*&
+*& Reading the file the user actually has
+*&
+*& GUI_UPLOAD with FILETYPE 'ASC' and HAS_FIELD_SEPARATOR reads tab
+*& separated TEXT. Handed a real .XLSX it reads the zip container as
+*& text, so every row came back as rubbish or as nothing at all - which
+*& is what the users were reporting. The workbook is now read as a
+*& workbook; CSV and tab separated text still work exactly as before:
+*&
+*&   .XLSX .XLSM .XLS   binary, CL_FDT_XL_SPREADSHEET, first worksheet
+*&   .CSV               comma separated, quoted values understood
+*&   anything else      tab separated, comma as a fallback
+*&
+*& The old body, for reference:
+*&
+*&   cl_gui_frontend_services=>gui_upload(
+*&     EXPORTING  filename            = lv_name
+*&                filetype            = 'ASC'
+*&                has_field_separator = 'X'
+*&     CHANGING   data_tab            = gt_raw ... ).
+*&   IF p_head = 'X'.
+*&     DELETE gt_raw INDEX 1.
+*&   ENDIF.
+*&---------------------------------------------------------------------*
 FORM upload_file.
 
-  DATA lv_name TYPE string.
+  DATA: lv_name TYPE string,
+        lv_ext  TYPE string.
+
+  CLEAR: gt_raw, g_xls.
 
   lv_name = p_file.
+  PERFORM file_extension USING lv_name CHANGING lv_ext.
 
-  cl_gui_frontend_services=>gui_upload(
-    EXPORTING  filename            = lv_name
-               filetype            = 'ASC'
-               has_field_separator = 'X'
-    CHANGING   data_tab            = gt_raw
-    EXCEPTIONS file_open_error     = 1
-               file_read_error     = 2
-               OTHERS              = 3 ).
-
-  IF sy-subrc <> 0.
-    MESSAGE e013 WITH lv_name.
+  IF lv_ext = 'XLSX' OR lv_ext = 'XLSM' OR lv_ext = 'XLS'.
+    PERFORM upload_excel USING lv_name.
+  ELSE.
+    PERFORM upload_text  USING lv_name lv_ext.
   ENDIF.
 
-  IF p_head = 'X'.
-    DELETE gt_raw INDEX 1.
-  ENDIF.
+  PERFORM drop_header.
 
 * Trailing blank lines at the end of a spreadsheet export are ignored
 * rather than reported as errors
   DELETE gt_raw WHERE f01 IS INITIAL AND f02 IS INITIAL AND f03 IS INITIAL.
 
 ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+FORM file_extension USING pv_name TYPE string
+                    CHANGING cv_ext TYPE string.
+
+  DATA: lt_part TYPE string_table,
+        lv_last TYPE i.
+
+  CLEAR cv_ext.
+  CHECK pv_name CS '.'.
+
+* The LAST dot, so a path such as C:\My.Files\history.xlsx is read
+* correctly
+  SPLIT pv_name AT '.' INTO TABLE lt_part.
+  lv_last = lines( lt_part ).
+  CHECK lv_last > 1.
+
+  READ TABLE lt_part INTO cv_ext INDEX lv_last.
+  CHECK sy-subrc = 0.
+
+  CONDENSE cv_ext.
+  cv_ext = to_upper( cv_ext ).
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+*& A real Excel workbook
+*&
+*& The sheet is read by COLUMN POSITION, never by column name.
+*& CL_FDT_XL_SPREADSHEET builds the component names from the heading row
+*& of the sheet, which the user can and does retype; the template fixes
+*& the ORDER of the columns, and that is what is relied on.
+*&---------------------------------------------------------------------*
+FORM upload_excel USING pv_name TYPE string.
+
+  DATA: lt_bin  TYPE solix_tab,
+        lv_len  TYPE i,
+        lv_xstr TYPE xstring,
+        lt_ws   TYPE if_fdt_doc_spreadsheet=>t_worksheet_names,
+        lv_ws   TYPE string,
+        lo_xl   TYPE REF TO cl_fdt_xl_spreadsheet,
+        lr_data TYPE REF TO data,
+        ls_raw  TYPE ty_raw,
+        lv_ix   TYPE i,
+        lv_val  TYPE string.
+
+  FIELD-SYMBOLS: <lt_tab> TYPE STANDARD TABLE,
+                 <ls_row> TYPE any,
+                 <lv_in>  TYPE any,
+                 <lv_out> TYPE any.
+
+  cl_gui_frontend_services=>gui_upload(
+    EXPORTING  filename        = pv_name
+               filetype        = 'BIN'
+    IMPORTING  filelength      = lv_len
+    CHANGING   data_tab        = lt_bin
+    EXCEPTIONS file_open_error = 1
+               file_read_error = 2
+               OTHERS          = 3 ).
+
+  IF sy-subrc <> 0 OR lv_len = 0.
+    MESSAGE e013 WITH pv_name.
+    RETURN.
+  ENDIF.
+
+  lv_xstr = cl_bcs_convert=>solix_to_xstring( it_solix = lt_bin
+                                              iv_size  = lv_len ).
+
+* A workbook saved in the old .XLS format, or a file renamed to .XLSX
+* that is not one, cannot be parsed. The user is told to save it as CSV
+* rather than being left with an empty list.
+  TRY.
+      CREATE OBJECT lo_xl
+        EXPORTING document_name = pv_name
+                  xdocument     = lv_xstr.
+
+      lo_xl->if_fdt_doc_spreadsheet~get_worksheet_names(
+        IMPORTING worksheet_names = lt_ws ).
+
+      READ TABLE lt_ws INTO lv_ws INDEX 1.
+      IF sy-subrc <> 0.
+        MESSAGE e024 WITH pv_name.
+        RETURN.
+      ENDIF.
+
+      lr_data = lo_xl->if_fdt_doc_spreadsheet~get_itab_from_worksheet( lv_ws ).
+
+    CATCH cx_root.
+      MESSAGE e024 WITH pv_name.
+      RETURN.
+  ENDTRY.
+
+  IF lr_data IS NOT BOUND.
+    MESSAGE e024 WITH pv_name.
+    RETURN.
+  ENDIF.
+
+  ASSIGN lr_data->* TO <lt_tab>.
+  IF <lt_tab> IS NOT ASSIGNED.
+    MESSAGE e024 WITH pv_name.
+    RETURN.
+  ENDIF.
+
+  g_xls = abap_true.
+
+  LOOP AT <lt_tab> ASSIGNING <ls_row>.
+
+    CLEAR ls_raw.
+
+    DO 16 TIMES.
+
+      lv_ix = sy-index.
+
+      UNASSIGN: <lv_in>, <lv_out>.
+      ASSIGN COMPONENT lv_ix OF STRUCTURE <ls_row> TO <lv_in>.
+      IF sy-subrc <> 0.
+        EXIT.
+      ENDIF.
+      ASSIGN COMPONENT lv_ix OF STRUCTURE ls_raw TO <lv_out>.
+      IF sy-subrc <> 0.
+        EXIT.
+      ENDIF.
+
+      lv_val = <lv_in>.
+      CONDENSE lv_val.
+      <lv_out> = lv_val.
+
+    ENDDO.
+
+    APPEND ls_raw TO gt_raw.
+
+  ENDLOOP.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+*& CSV or tab separated text
+*&---------------------------------------------------------------------*
+FORM upload_text USING pv_name TYPE string
+                       pv_ext  TYPE string.
+
+  DATA: lt_line TYPE string_table,
+        lv_line TYPE string,
+        lv_sep  TYPE c LENGTH 1,
+        ls_raw  TYPE ty_raw.
+
+* Read whole lines. The separator is decided below rather than by
+* HAS_FIELD_SEPARATOR, which only ever splits on a tab.
+  cl_gui_frontend_services=>gui_upload(
+    EXPORTING  filename        = pv_name
+               filetype        = 'ASC'
+    CHANGING   data_tab        = lt_line
+    EXCEPTIONS file_open_error = 1
+               file_read_error = 2
+               OTHERS          = 3 ).
+
+  IF sy-subrc <> 0.
+    MESSAGE e013 WITH pv_name.
+    RETURN.
+  ENDIF.
+
+* A tab anywhere in the file wins, so a tab separated export whose text
+* happens to contain commas is still split on tabs
+  CLEAR lv_sep.
+  LOOP AT lt_line INTO lv_line.
+    IF lv_line CS g_tab.
+      lv_sep = g_tab.
+      EXIT.
+    ENDIF.
+    IF lv_line CS ','.
+      lv_sep = ','.
+      EXIT.
+    ENDIF.
+  ENDLOOP.
+
+  IF lv_sep IS INITIAL.
+    IF pv_ext = 'CSV'.
+      lv_sep = ','.
+    ELSE.
+      lv_sep = g_tab.
+    ENDIF.
+  ENDIF.
+
+  LOOP AT lt_line INTO lv_line.
+    CLEAR ls_raw.
+    PERFORM split_line USING lv_line lv_sep CHANGING ls_raw.
+    APPEND ls_raw TO gt_raw.
+  ENDLOOP.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+*& One line into the sixteen raw columns
+*&
+*& SPLIT does the work whenever the line carries no quote, which is
+*& every line of every template shipped today. Only a line that really
+*& is quoted is walked character by character.
+*&---------------------------------------------------------------------*
+FORM split_line USING pv_line TYPE string
+                      pv_sep  TYPE c
+                CHANGING cs_raw TYPE ty_raw.
+
+  DATA: lt_fld TYPE string_table,
+        lv_fld TYPE string,
+        lv_len TYPE i,
+        lv_off TYPE i,
+        lv_ch  TYPE c LENGTH 1,
+        lv_q   TYPE abap_bool,
+        lv_val TYPE string,
+        lv_ix  TYPE i.
+
+  CLEAR cs_raw.
+
+  IF pv_line NS '"'.
+
+    SPLIT pv_line AT pv_sep INTO TABLE lt_fld.
+    LOOP AT lt_fld INTO lv_fld.
+*     SY-TABIX is copied first. Handing a system field straight to a
+*     FORM passes it by reference, and the form is then working on a
+*     field the runtime may move underneath it.
+      lv_ix = sy-tabix.
+      PERFORM put_field USING lv_ix lv_fld CHANGING cs_raw.
+    ENDLOOP.
+    RETURN.
+
+  ENDIF.
+
+  lv_ix  = 1.
+  lv_len = strlen( pv_line ).
+
+  WHILE lv_off < lv_len.
+
+    lv_ch = pv_line+lv_off(1).
+
+    IF lv_ch = '"'.
+*     Two quotes inside a quoted value are one quote
+      IF lv_q = abap_true AND lv_off + 2 <= lv_len AND pv_line+lv_off(2) = '""'.
+        CONCATENATE lv_val '"' INTO lv_val RESPECTING BLANKS.
+        lv_off = lv_off + 2.
+        CONTINUE.
+      ENDIF.
+      IF lv_q = abap_true.
+        lv_q = abap_false.
+      ELSE.
+        lv_q = abap_true.
+      ENDIF.
+      lv_off = lv_off + 1.
+      CONTINUE.
+    ENDIF.
+
+    IF lv_ch = pv_sep AND lv_q = abap_false.
+      PERFORM put_field USING lv_ix lv_val CHANGING cs_raw.
+      CLEAR lv_val.
+      lv_ix  = lv_ix + 1.
+      lv_off = lv_off + 1.
+      CONTINUE.
+    ENDIF.
+
+    CONCATENATE lv_val lv_ch INTO lv_val RESPECTING BLANKS.
+    lv_off = lv_off + 1.
+
+  ENDWHILE.
+
+  PERFORM put_field USING lv_ix lv_val CHANGING cs_raw.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+FORM put_field USING pv_ix  TYPE i
+                     pv_val TYPE string
+               CHANGING cs_raw TYPE ty_raw.
+
+  FIELD-SYMBOLS <lv_out> TYPE any.
+
+* Sixteen columns is what TY_RAW holds. A file with more is not an
+* error, the extra columns simply belong to no field.
+  CHECK pv_ix >= 1 AND pv_ix <= 16.
+
+  UNASSIGN <lv_out>.
+  ASSIGN COMPONENT pv_ix OF STRUCTURE cs_raw TO <lv_out>.
+  CHECK sy-subrc = 0.
+
+  <lv_out> = pv_val.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+*& The heading row
+*&
+*& CL_FDT_XL_SPREADSHEET turns the heading row of the sheet into the
+*& component names of the table it returns, so an Excel upload arrives
+*& with the heading already gone. Deleting on the checkbox alone would
+*& then have thrown away the first real row. The row is matched against
+*& the first heading of the template instead, and the checkbox is only
+*& used for a text file whose first row is something else.
+*&---------------------------------------------------------------------*
+FORM drop_header.
+
+  DATA: lt_head  TYPE string_table,
+        lv_name  TYPE string,
+        lv_first TYPE string,
+        lv_col1  TYPE string,
+        ls_first TYPE ty_raw.
+
+  CHECK gt_raw IS NOT INITIAL.
+
+  PERFORM current_type CHANGING g_type.
+  PERFORM template_columns USING g_type
+                           CHANGING lt_head lv_name.
+
+  READ TABLE gt_raw INTO ls_first INDEX 1.
+  CHECK sy-subrc = 0.
+
+  lv_first = ls_first-f01.
+  CONDENSE lv_first.
+  lv_first = to_upper( lv_first ).
+
+  READ TABLE lt_head INTO lv_col1 INDEX 1.
+  IF sy-subrc = 0.
+    lv_col1 = to_upper( lv_col1 ).
+  ENDIF.
+
+  IF lv_col1 IS NOT INITIAL AND lv_first = lv_col1.
+    DELETE gt_raw INDEX 1.
+    RETURN.
+  ENDIF.
+
+  IF p_head = 'X' AND g_xls = abap_false.
+    DELETE gt_raw INDEX 1.
+  ENDIF.
+
+ENDFORM.
+*& EOC By Arnav on 31/08/26
 
 
 *&---------------------------------------------------------------------*
@@ -604,10 +1087,7 @@ FORM do_category.
       ENDIF.
     ENDIF.
 
-*BOC By Arnav on 02/09/26
-*   lv_txt = |Category { lv_cat }, load factor { lv_load }, { lv_mts }|.
-    lv_txt = 'Product category uploaded'.
-*EOC By Arnav on 02/09/26
+    lv_txt = |Category { lv_cat }, load factor { lv_load }, { lv_mts }|.
     PERFORM log_ok USING lv_row lv_werks lv_matnr lv_blank lv_ex lv_txt.
 
   ENDLOOP.
@@ -628,25 +1108,10 @@ FORM do_tracking.
         lv_new   TYPE matnr,
         lv_old1  TYPE matnr,
         lv_old2  TYPE matnr,
-*BOC By Arnav on 03/09/26
-        lv_old3  TYPE matnr,
-        lv_old4  TYPE matnr,
-        lv_old5  TYPE matnr,
-*       The five codes as read, used for the checks and for CHECK_CHAIN
-*       before the stored row is fetched
-        ls_chk   TYPE zppt_mat_track,
-        lv_cnt   TYPE i,
-        lv_j     TYPE i,
-*EOC By Arnav on 03/09/26
         lv_ex    TYPE abap_bool,
         lv_err   TYPE string,
         lv_txt   TYPE string,
         lv_blank TYPE char12.
-
-*BOC By Arnav on 03/09/26
-  FIELD-SYMBOLS: <lv_a> TYPE any,
-                 <lv_b> TYPE any.
-*EOC By Arnav on 03/09/26
 
   LOOP AT gt_raw INTO ls_raw.
 
@@ -655,18 +1120,6 @@ FORM do_tracking.
     PERFORM to_material USING ls_raw-f02 CHANGING lv_new.
     PERFORM to_material USING ls_raw-f03 CHANGING lv_old1.
     PERFORM to_material USING ls_raw-f04 CHANGING lv_old2.
-*BOC By Arnav on 03/09/26
-    PERFORM to_material USING ls_raw-f05 CHANGING lv_old3.
-    PERFORM to_material USING ls_raw-f06 CHANGING lv_old4.
-    PERFORM to_material USING ls_raw-f07 CHANGING lv_old5.
-
-    CLEAR ls_chk.
-    ls_chk-old_matnr1 = lv_old1.
-    ls_chk-old_matnr2 = lv_old2.
-    ls_chk-old_matnr3 = lv_old3.
-    ls_chk-old_matnr4 = lv_old4.
-    ls_chk-old_matnr5 = lv_old5.
-*EOC By Arnav on 03/09/26
 
     PERFORM check_marc USING lv_werks lv_new CHANGING lv_err.
     IF lv_err IS NOT INITIAL.
@@ -674,64 +1127,27 @@ FORM do_tracking.
       CONTINUE.
     ENDIF.
 
-*BOC By Arnav on 03/09/26
-*   IF lv_old1 IS INITIAL AND lv_old2 IS INITIAL.
-*     lv_err = 'At least one old material code must be given'.
-*     ...
-*   IF lv_old1 = lv_new OR lv_old2 = lv_new.
-*     ...
-*   IF lv_old1 IS NOT INITIAL AND lv_old1 = lv_old2.
-*     lv_err = 'Old material 1 and old material 2 are the same code'.
-*     ...
-*   The same three checks, over five codes instead of two.
-    CLEAR: lv_cnt, lv_err.
-
-    DO 5 TIMES.
-      UNASSIGN <lv_a>.
-      ASSIGN COMPONENT |OLD_MATNR{ sy-index }| OF STRUCTURE ls_chk TO <lv_a>.
-      CHECK sy-subrc = 0.
-      CHECK <lv_a> IS NOT INITIAL.
-
-      lv_cnt = lv_cnt + 1.
-
-      IF <lv_a> = lv_new.
-        lv_err = 'An old material code must be different from the new code'.
-        EXIT.
-      ENDIF.
-
-      lv_j = sy-index.
-      DO 5 TIMES.
-        CHECK sy-index > lv_j.
-        UNASSIGN <lv_b>.
-        ASSIGN COMPONENT |OLD_MATNR{ sy-index }| OF STRUCTURE ls_chk TO <lv_b>.
-        CHECK sy-subrc = 0.
-        IF <lv_b> IS NOT INITIAL AND <lv_b> = <lv_a>.
-          lv_err = 'The same old material code is given twice'.
-          EXIT.
-        ENDIF.
-      ENDDO.
-
-      IF lv_err IS NOT INITIAL.
-        EXIT.
-      ENDIF.
-    ENDDO.
-
-    IF lv_err IS INITIAL AND lv_cnt = 0.
+    IF lv_old1 IS INITIAL AND lv_old2 IS INITIAL.
       lv_err = 'At least one old material code must be given'.
-    ENDIF.
-
-    IF lv_err IS NOT INITIAL.
       PERFORM log USING lv_row lv_werks lv_new lv_blank gc_err lv_err.
       CONTINUE.
     ENDIF.
-*EOC By Arnav on 03/09/26
+
+    IF lv_old1 = lv_new OR lv_old2 = lv_new.
+      lv_err = 'The old material code must be different from the new code'.
+      PERFORM log USING lv_row lv_werks lv_new lv_blank gc_err lv_err.
+      CONTINUE.
+    ENDIF.
+
+    IF lv_old1 IS NOT INITIAL AND lv_old1 = lv_old2.
+      lv_err = 'Old material 1 and old material 2 are the same code'.
+      PERFORM log USING lv_row lv_werks lv_new lv_blank gc_err lv_err.
+      CONTINUE.
+    ENDIF.
 
 *   An old code that is itself a successor would make the chain
 *   ambiguous, so it is refused rather than silently mis-added
-*BOC By Arnav on 03/09/26
-*   PERFORM check_chain USING lv_werks lv_old1 lv_old2 CHANGING lv_err.
-    PERFORM check_chain USING lv_werks ls_chk CHANGING lv_err.
-*EOC By Arnav on 03/09/26
+    PERFORM check_chain USING lv_werks lv_old1 lv_old2 CHANGING lv_err.
     IF lv_err IS NOT INITIAL.
       PERFORM log USING lv_row lv_werks lv_new lv_blank gc_err lv_err.
       CONTINUE.
@@ -749,11 +1165,6 @@ FORM do_tracking.
     ls_trk-new_matnr  = lv_new.
     ls_trk-old_matnr1 = lv_old1.
     ls_trk-old_matnr2 = lv_old2.
-*BOC By Arnav on 03/09/26
-    ls_trk-old_matnr3 = lv_old3.
-    ls_trk-old_matnr4 = lv_old4.
-    ls_trk-old_matnr5 = lv_old5.
-*EOC By Arnav on 03/09/26
     PERFORM stamp USING lv_ex CHANGING ls_trk-ernam ls_trk-erdat
                                        ls_trk-aenam ls_trk-aedat.
 
@@ -766,10 +1177,7 @@ FORM do_tracking.
       ENDIF.
     ENDIF.
 
-*BOC By Arnav on 02/09/26
-*   lv_txt = |History of { lv_old1 } { lv_old2 } will now be reported under { lv_new }|.
-    lv_txt = 'Material mapping uploaded'.
-*EOC By Arnav on 02/09/26
+    lv_txt = |History of { lv_old1 } { lv_old2 } will now be reported under { lv_new }|.
     PERFORM log_ok USING lv_row lv_werks lv_new lv_blank lv_ex lv_txt.
 
   ENDLOOP.
@@ -778,63 +1186,31 @@ ENDFORM.
 
 
 *&---------------------------------------------------------------------*
-*BOC By Arnav on 03/09/26
-*FORM check_chain USING pv_werks TYPE werks_d
-*                       pv_old1  TYPE matnr
-*                       pv_old2  TYPE matnr
-*                 CHANGING pv_err TYPE string.
-*
-*  DATA lv_hit TYPE matnr.
-*
-*  CLEAR pv_err.
-*
-*  IF pv_old1 IS NOT INITIAL.
-*    SELECT SINGLE new_matnr FROM zppt_mat_track INTO @lv_hit
-*      WHERE werks = @pv_werks AND new_matnr = @pv_old1.
-*    IF sy-subrc = 0.
-*      pv_err = |{ pv_old1 } is already a new code in this table, a chain is not supported|.
-*      RETURN.
-*    ENDIF.
-*  ENDIF.
-*
-*  IF pv_old2 IS NOT INITIAL.
-*    SELECT SINGLE new_matnr FROM zppt_mat_track INTO @lv_hit
-*      WHERE werks = @pv_werks AND new_matnr = @pv_old2.
-*    IF sy-subrc = 0.
-*      pv_err = |{ pv_old2 } is already a new code in this table, a chain is not supported|.
-*    ENDIF.
-*  ENDIF.
-* Five old codes now, so the row is passed in whole and walked, rather
-* than one parameter per code.
 FORM check_chain USING pv_werks TYPE werks_d
-                       ps_trk   TYPE zppt_mat_track
+                       pv_old1  TYPE matnr
+                       pv_old2  TYPE matnr
                  CHANGING pv_err TYPE string.
 
-  DATA: lv_hit TYPE matnr,
-        lv_old TYPE matnr.
-
-  FIELD-SYMBOLS <lv_o> TYPE any.
+  DATA lv_hit TYPE matnr.
 
   CLEAR pv_err.
 
-  DO 5 TIMES.
-
-    UNASSIGN <lv_o>.
-    ASSIGN COMPONENT |OLD_MATNR{ sy-index }| OF STRUCTURE ps_trk TO <lv_o>.
-    CHECK sy-subrc = 0.
-
-    lv_old = <lv_o>.
-    CHECK lv_old IS NOT INITIAL.
-
+  IF pv_old1 IS NOT INITIAL.
     SELECT SINGLE new_matnr FROM zppt_mat_track INTO @lv_hit
-      WHERE werks = @pv_werks AND new_matnr = @lv_old.
+      WHERE werks = @pv_werks AND new_matnr = @pv_old1.
     IF sy-subrc = 0.
-      pv_err = |{ lv_old } is already a new code in this table, a chain is not supported|.
+      pv_err = |{ pv_old1 } is already a new code in this table, a chain is not supported|.
       RETURN.
     ENDIF.
+  ENDIF.
 
-  ENDDO.
-*EOC By Arnav on 03/09/26
+  IF pv_old2 IS NOT INITIAL.
+    SELECT SINGLE new_matnr FROM zppt_mat_track INTO @lv_hit
+      WHERE werks = @pv_werks AND new_matnr = @pv_old2.
+    IF sy-subrc = 0.
+      pv_err = |{ pv_old2 } is already a new code in this table, a chain is not supported|.
+    ENDIF.
+  ENDIF.
 
 ENDFORM.
 
@@ -889,16 +1265,11 @@ FORM do_exclusion.
       ENDIF.
     ENDIF.
 
-*BOC By Arnav on 02/09/26
-*   IF lv_ex = abap_true.
-*     lv_txt = 'Already excluded, entry refreshed'.
-*   ELSE.
-*     lv_txt = 'Excluded from forecasting'.
-*   ENDIF.
-*   The Result column already says Created or Changed, so the two texts
-*   said the same thing twice.
-    lv_txt = 'Exclusion uploaded'.
-*EOC By Arnav on 02/09/26
+    IF lv_ex = abap_true.
+      lv_txt = 'Already excluded, entry refreshed'.
+    ELSE.
+      lv_txt = 'Excluded from forecasting'.
+    ENDIF.
     PERFORM log_ok USING lv_row lv_werks lv_matnr lv_blank lv_ex lv_txt.
 
   ENDLOOP.
@@ -1013,10 +1384,7 @@ FORM do_history.
       ENDIF.
     ENDIF.
 
-*BOC By Arnav on 02/09/26
-*   lv_txt = |Twelve months loaded, year total { lv_tot } { lv_meins }|.
-    lv_txt = 'Sales history uploaded'.
-*EOC By Arnav on 02/09/26
+    lv_txt = |Twelve months loaded, year total { lv_tot } { lv_meins }|.
     PERFORM log_ok USING lv_row lv_werks lv_matnr lv_per lv_ex lv_txt.
 
   ENDLOOP.
@@ -1041,10 +1409,7 @@ FORM do_business USING pv_mode TYPE char1.
         lv_qtr   TYPE zde_quarter,
         lv_poper TYPE poper,
         lv_qty   TYPE zde_fcst_qty,
-*BOC By Arnav on 02/09/26
-*       lv_total TYPE zde_fcst_qty,
-* The running total was only there to be printed in the row detail
-*EOC By Arnav on 02/09/26
+        lv_total TYPE zde_fcst_qty,
         lv_ex    TYPE abap_bool,
         lv_err   TYPE string,
         lv_txt   TYPE string,
@@ -1109,13 +1474,8 @@ FORM do_business USING pv_mode TYPE char1.
       ENDIF.
 
       ls_qt-bus_fcst = lv_qty.
-*BOC By Arnav on 03/09/26
-*     PERFORM final_qty CHANGING ls_qt-fcst_qty ls_qt-bus_fcst
-*                                ls_qt-bus_fcst_add ls_qt-final_qty.
       PERFORM final_qty CHANGING ls_qt-fcst_qty ls_qt-bus_fcst
-                                 ls_qt-final_qty.
-      PERFORM qt_finals CHANGING ls_qt.
-*EOC By Arnav on 03/09/26
+                                 ls_qt-bus_fcst_add ls_qt-final_qty.
       PERFORM stamp USING lv_ex CHANGING ls_qt-ernam ls_qt-erdat
                                          ls_qt-aenam ls_qt-aedat.
 
@@ -1128,11 +1488,8 @@ FORM do_business USING pv_mode TYPE char1.
         ENDIF.
       ENDIF.
 
-*BOC By Arnav on 02/09/26
-*     lv_total = ls_qt-final_qty + ls_qt-bus_fcst_add.
-*     lv_txt = |Business forecast { lv_qty }, final quantity now { lv_total }|.
-      lv_txt = 'Business forecast uploaded'.
-*EOC By Arnav on 02/09/26
+      lv_total = ls_qt-final_qty + ls_qt-bus_fcst_add.
+      lv_txt = |Business forecast { lv_qty }, final quantity now { lv_total }|.
 
     ELSE.
 
@@ -1153,12 +1510,8 @@ FORM do_business USING pv_mode TYPE char1.
       ENDIF.
 
       ls_mn-bus_fcst = lv_qty.
-*BOC By Arnav on 03/09/26
-*     PERFORM final_qty CHANGING ls_mn-fcst_qty ls_mn-bus_fcst
-*                                ls_mn-bus_fcst_add ls_mn-final_qty.
       PERFORM final_qty CHANGING ls_mn-fcst_qty ls_mn-bus_fcst
-                                 ls_mn-final_qty.
-*EOC By Arnav on 03/09/26
+                                 ls_mn-bus_fcst_add ls_mn-final_qty.
       PERFORM stamp USING lv_ex CHANGING ls_mn-ernam ls_mn-erdat
                                          ls_mn-aenam ls_mn-aedat.
 
@@ -1171,11 +1524,8 @@ FORM do_business USING pv_mode TYPE char1.
         ENDIF.
       ENDIF.
 
-*BOC By Arnav on 02/09/26
-*     lv_total = ls_mn-final_qty + ls_mn-bus_fcst_add.
-*     lv_txt = |Business forecast { lv_qty }, final quantity now { lv_total }|.
-      lv_txt = 'Business forecast uploaded'.
-*EOC By Arnav on 02/09/26
+      lv_total = ls_mn-final_qty + ls_mn-bus_fcst_add.
+      lv_txt = |Business forecast { lv_qty }, final quantity now { lv_total }|.
 
     ENDIF.
 
@@ -1209,19 +1559,6 @@ FORM do_change USING pv_mode TYPE char1.
         lv_txt   TYPE string,
         lv_tmp   TYPE char40,
         lv_per   TYPE char12,
-*BOC By Arnav on 03/09/26
-*       The quarterly file carries MONTH in column 4, so YEAR, QUANTITY
-*       and REASON all sit one column further right than in the monthly
-*       file. The four below hold whichever column applies to this mode,
-*       so the checks underneath do not have to know.
-        lv_c_mon  TYPE char40,
-        lv_c_year TYPE char40,
-        lv_c_qty  TYPE char40,
-        lv_c_rsn  TYPE char40,
-        lv_mi     TYPE i,
-        lv_slot   TYPE i,
-        lv_qchk   TYPE zde_quarter,
-*EOC By Arnav on 03/09/26
         lv_yes   TYPE abap_bool.
 
   lv_yes = abap_true.
@@ -1232,21 +1569,6 @@ FORM do_change USING pv_mode TYPE char1.
     PERFORM to_material USING ls_raw-f01 CHANGING lv_matnr.
     PERFORM to_plant    USING ls_raw-f02 CHANGING lv_werks.
     PERFORM period_text USING pv_mode ls_raw-f03 CHANGING lv_per.
-
-*BOC By Arnav on 03/09/26
-    CLEAR: lv_c_mon, lv_c_year, lv_c_qty, lv_c_rsn, lv_mi.
-
-    IF pv_mode = 'Q'.
-      lv_c_mon  = ls_raw-f04.
-      lv_c_year = ls_raw-f05.
-      lv_c_qty  = ls_raw-f06.
-      lv_c_rsn  = ls_raw-f07.
-    ELSE.
-      lv_c_year = ls_raw-f04.
-      lv_c_qty  = ls_raw-f05.
-      lv_c_rsn  = ls_raw-f06.
-    ENDIF.
-*EOC By Arnav on 03/09/26
 
     PERFORM check_marc USING lv_werks lv_matnr CHANGING lv_err.
     IF lv_err IS NOT INITIAL.
@@ -1261,56 +1583,7 @@ FORM do_change USING pv_mode TYPE char1.
       CONTINUE.
     ENDIF.
 
-*BOC By Arnav on 03/09/26
-*   Which reading applies is GV_QMONTH, declared at the top of the
-*   program. Whichever it is, LV_SLOT ends up 1, 2 or 3 and everything
-*   downstream works off that alone.
-    CLEAR lv_slot.
-
-    IF pv_mode = 'Q'.
-
-      PERFORM to_int USING lv_c_mon CHANGING lv_mi.
-
-      IF gv_qmonth = 'P'.
-
-*       Fiscal period 1 to 12, and it must sit inside the quarter given
-*       on the same row
-        IF lv_mi < 1 OR lv_mi > 12.
-          lv_err = 'Month must be a period 1 to 12, where 1 is April and 12 is March'.
-          PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
-          CONTINUE.
-        ENDIF.
-
-        lv_qchk = zcl_pp_fcst_util=>period_to_quarter( CONV #( lv_mi ) ).
-        IF lv_qchk <> lv_pi.
-          lv_err = |Month { lv_mi } is not in quarter { lv_pi }|.
-          PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
-          CONTINUE.
-        ENDIF.
-
-        lv_slot = lv_mi - ( lv_pi - 1 ) * 3.
-
-      ELSE.
-
-*       First, second or third month of the quarter. 1, 2 and 3 only -
-*       anything else is rejected.
-        IF lv_mi < 1 OR lv_mi > 3.
-          lv_err = 'Month must be 1, 2 or 3 - the first, second or third month of the quarter'.
-          PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
-          CONTINUE.
-        ENDIF.
-
-        lv_slot = lv_mi.
-
-      ENDIF.
-
-    ENDIF.
-*EOC By Arnav on 03/09/26
-
-*BOC By Arnav on 03/09/26
-*   PERFORM to_int USING ls_raw-f04 CHANGING lv_year.
-    PERFORM to_int USING lv_c_year CHANGING lv_year.
-*EOC By Arnav on 03/09/26
+    PERFORM to_int USING ls_raw-f04 CHANGING lv_year.
     IF lv_year < 1900 OR lv_year > 2999.
       lv_err = 'Year must be the four digit year the financial year starts in'.
       PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
@@ -1318,10 +1591,7 @@ FORM do_change USING pv_mode TYPE char1.
     ENDIF.
     lv_gjahr = lv_year.
 
-*BOC By Arnav on 03/09/26
-*   lv_tmp = ls_raw-f06.
-    lv_tmp = lv_c_rsn.
-*EOC By Arnav on 03/09/26
+    lv_tmp = ls_raw-f06.
     CONDENSE lv_tmp.
     lv_rsn = lv_tmp.
     IF lv_rsn IS INITIAL.
@@ -1330,10 +1600,7 @@ FORM do_change USING pv_mode TYPE char1.
       CONTINUE.
     ENDIF.
 
-*BOC By Arnav on 03/09/26
-*   PERFORM to_dec USING ls_raw-f05 CHANGING lv_qty.
-    PERFORM to_dec USING lv_c_qty CHANGING lv_qty.
-*EOC By Arnav on 03/09/26
+    PERFORM to_dec USING ls_raw-f05 CHANGING lv_qty.
     IF lv_qty = 0.
       lv_err = 'Change quantity is zero or not numeric, nothing to apply'.
       PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
@@ -1356,55 +1623,19 @@ FORM do_change USING pv_mode TYPE char1.
         CONTINUE.
       ENDIF.
 
-*BOC By Arnav on 03/09/26
-*     ls_qt-bus_fcst_add = lv_qty.
-*     ls_qt-reason       = lv_rsn.
-*     PERFORM final_qty CHANGING ls_qt-fcst_qty ls_qt-bus_fcst
-*                                ls_qt-bus_fcst_add ls_qt-final_qty.
-*
-**    FINAL_QTY no longer carries the change, so the guard tests the
-**    total the change actually moves
-*     lv_total = ls_qt-final_qty + ls_qt-bus_fcst_add.
-*     IF lv_total < 0.
-*       lv_err = 'The reduction is larger than the forecast, the final quantity would be negative'.
-*       PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
-*       CONTINUE.
-*     ENDIF.
-*     The change lands on the month it names, and only that month. The
-*     other two additional quantities and their reasons are left as the
-*     row already holds them.
-      UNASSIGN: <gv_add>, <gv_rsn>.
-      ASSIGN COMPONENT |BUS_FCST_ADD{ lv_slot }| OF STRUCTURE ls_qt TO <gv_add>.
-      ASSIGN COMPONENT |REASON{ lv_slot }|       OF STRUCTURE ls_qt TO <gv_rsn>.
-
-      IF <gv_add> IS NOT ASSIGNED OR <gv_rsn> IS NOT ASSIGNED.
-        lv_err = 'Month is outside the three months of the quarter'.
-        PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
-        CONTINUE.
-      ENDIF.
-
-      <gv_add> = lv_qty.
-      <gv_rsn> = lv_rsn.
-
+      ls_qt-bus_fcst_add = lv_qty.
+      ls_qt-reason       = lv_rsn.
       PERFORM final_qty CHANGING ls_qt-fcst_qty ls_qt-bus_fcst
-                                 ls_qt-final_qty.
-      PERFORM qt_finals CHANGING ls_qt.
+                                 ls_qt-bus_fcst_add ls_qt-final_qty.
 
-*     A reduction may not take THAT MONTH below zero. The quarter total
-*     is no longer the thing being guarded - each month stands alone.
-      CLEAR lv_total.
-      UNASSIGN <gv_fin>.
-      ASSIGN COMPONENT |M{ lv_slot + 3 }_FCST_FINAL| OF STRUCTURE ls_qt
-        TO <gv_fin>.
-      IF <gv_fin> IS ASSIGNED.
-        lv_total = <gv_fin>.
-      ENDIF.
+*     FINAL_QTY no longer carries the change, so the guard tests the
+*     total the change actually moves
+      lv_total = ls_qt-final_qty + ls_qt-bus_fcst_add.
       IF lv_total < 0.
-        lv_err = 'The reduction is larger than the forecast for that month, the final quantity would be negative'.
+        lv_err = 'The reduction is larger than the forecast, the final quantity would be negative'.
         PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
         CONTINUE.
       ENDIF.
-*EOC By Arnav on 03/09/26
 
       PERFORM stamp USING lv_yes CHANGING ls_qt-ernam ls_qt-erdat
                                           ls_qt-aenam ls_qt-aedat.
@@ -1418,10 +1649,7 @@ FORM do_change USING pv_mode TYPE char1.
         ENDIF.
       ENDIF.
 
-*BOC By Arnav on 02/09/26
-*     lv_txt = |Change { lv_qty }, final quantity now { lv_total }, reason { lv_rsn }|.
-      lv_txt = 'Forecast change uploaded'.
-*EOC By Arnav on 02/09/26
+      lv_txt = |Change { lv_qty }, final quantity now { lv_total }, reason { lv_rsn }|.
 
     ELSE.
 
@@ -1439,12 +1667,8 @@ FORM do_change USING pv_mode TYPE char1.
 
       ls_mn-bus_fcst_add = lv_qty.
       ls_mn-reason       = lv_rsn.
-*BOC By Arnav on 03/09/26
-*     PERFORM final_qty CHANGING ls_mn-fcst_qty ls_mn-bus_fcst
-*                                ls_mn-bus_fcst_add ls_mn-final_qty.
       PERFORM final_qty CHANGING ls_mn-fcst_qty ls_mn-bus_fcst
-                                 ls_mn-final_qty.
-*EOC By Arnav on 03/09/26
+                                 ls_mn-bus_fcst_add ls_mn-final_qty.
 
       lv_total = ls_mn-final_qty + ls_mn-bus_fcst_add.
       IF lv_total < 0.
@@ -1465,10 +1689,7 @@ FORM do_change USING pv_mode TYPE char1.
         ENDIF.
       ENDIF.
 
-*BOC By Arnav on 02/09/26
-*     lv_txt = |Change { lv_qty }, final quantity now { lv_total }, reason { lv_rsn }|.
-      lv_txt = 'Forecast change uploaded'.
-*EOC By Arnav on 02/09/26
+      lv_txt = |Change { lv_qty }, final quantity now { lv_total }, reason { lv_rsn }|.
 
     ENDIF.
 
@@ -1493,75 +1714,14 @@ ENDFORM.
 *& This previously added all three together, which inflated every
 *& uploaded row.
 *&---------------------------------------------------------------------*
-*BOC By Arnav on 03/09/26
-*FORM final_qty CHANGING cv_gen TYPE zde_fcst_qty
-*                        cv_bus TYPE zde_fcst_qty
-*                        cv_add TYPE zde_fcst_qty
-*                        cv_fin TYPE zde_fcst_qty.
-* CV_ADD was never read, and the quarterly table has no single
-* BUS_FCST_ADD to pass any more. The parameter is dropped.
 FORM final_qty CHANGING cv_gen TYPE zde_fcst_qty
                         cv_bus TYPE zde_fcst_qty
+                        cv_add TYPE zde_fcst_qty
                         cv_fin TYPE zde_fcst_qty.
 
   cv_fin = nmax( val1 = cv_gen val2 = cv_bus ).
 
 ENDFORM.
-
-
-*&---------------------------------------------------------------------*
-*& Quarterly per month finals and values
-*&
-*& Final of a month  = that month's forecast + that month's additional
-*&                     plan quantity
-*& Value             = final quantity x PRICE
-*& Tonnage value     = final quantity x net weight x PRICE
-*&
-*& PRICE is 0 until the price logic is supplied, so both value columns
-*& compute to 0 today. Nothing else has to change when it arrives.
-*&---------------------------------------------------------------------*
-FORM qt_finals CHANGING cs_qt TYPE zppt_fcst_qt.
-
-  DATA: lv_i   TYPE i,
-        lv_fin TYPE zde_fcst_qty,
-        lv_ton TYPE zde_fcst_qty.
-
-  FIELD-SYMBOLS: <lv_f>  TYPE any,
-                 <lv_a>  TYPE any,
-                 <lv_ff> TYPE any,
-                 <lv_v>  TYPE any,
-                 <lv_tv> TYPE any.
-
-  DO 3 TIMES.
-
-    lv_i = sy-index.
-
-    UNASSIGN: <lv_f>, <lv_a>, <lv_ff>, <lv_v>, <lv_tv>.
-
-    ASSIGN COMPONENT |M{ lv_i + 3 }_FCST|       OF STRUCTURE cs_qt TO <lv_f>.
-    ASSIGN COMPONENT |BUS_FCST_ADD{ lv_i }|     OF STRUCTURE cs_qt TO <lv_a>.
-    ASSIGN COMPONENT |M{ lv_i + 3 }_FCST_FINAL| OF STRUCTURE cs_qt TO <lv_ff>.
-    ASSIGN COMPONENT |M{ lv_i + 3 }_VAL|        OF STRUCTURE cs_qt TO <lv_v>.
-    ASSIGN COMPONENT |M{ lv_i + 3 }_TON_VAL|    OF STRUCTURE cs_qt TO <lv_tv>.
-
-    CHECK <lv_f> IS ASSIGNED AND <lv_a> IS ASSIGNED AND <lv_ff> IS ASSIGNED.
-
-    lv_fin  = <lv_f> + <lv_a>.
-    <lv_ff> = lv_fin.
-
-    IF <lv_v> IS ASSIGNED.
-      <lv_v> = lv_fin * cs_qt-price.
-    ENDIF.
-
-    IF <lv_tv> IS ASSIGNED.
-      lv_ton = lv_fin * cs_qt-ntgew.
-      <lv_tv> = lv_ton * cs_qt-price.
-    ENDIF.
-
-  ENDDO.
-
-ENDFORM.
-*EOC By Arnav on 03/09/26
 
 
 *&---------------------------------------------------------------------*

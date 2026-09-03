@@ -67,10 +67,22 @@ discarded before it reaches `LSBAL_DISPLAY_BASEF05` - exactly what the debugger 
 
 The code is identical in both systems; the state it silently depends on is not.
 
-**Confirming observation, one look, still to make:** in DEV, on the PO where the budget error
-displays, does the message list ALSO show `ZMM_MSGS 007` ("standard price is zero")? If yes,
-line 163 ran and the chain is proven. Supporting checks: STVARV `ZPO_DOCTYPE` in both systems
-vs the test PO's `BSART`; SE16 MBEW for the test material + plant, `VPRSV` / `STPRS` in both.
+**CONFIRMED by Arnav 03/09/26: `ZRAW` is not present in `ZPO_DOCTYPE` in QAS.**
+
+The test PO's document type is `ZRAW`. TVARVC variant `ZPO_DOCTYPE` contains `ZRAW` in DEV
+but not in QAS, so `line_exists( lt_po_doctyp[ low = ls_header-bsart ] )` is false in QAS,
+line 163 never runs, the budget message has no owner and is dropped before display. Chain
+closed - gate 1 is the one that differs, and TVARVC not transporting is why.
+
+**Do not add `ZRAW` to `ZPO_DOCTYPE` in QAS as a workaround.** It would mask the defect (the
+message would still be borrowing another block's object id and would break again on the next
+config change) and it would silently switch on Hemang's standard-price validation
+(`ZMM_MSGS 007`) for every `ZRAW` PO in QAS, which is not this WRICEF's call to make.
+
+**Separate finding to raise, not to fix here:** `ZRAW` missing from `ZPO_DOCTYPE` in QAS means
+the `ZMM_MSGS 007` standard-price check is not executing at all for `ZRAW` POs in quality.
+That is a live gap in another developer's validation, found incidentally. Owner: Hemang Joshi.
+Draft mail prepared 03/09/26; sending stays manual.
 
 The fix below removes the dependency entirely - the budget message stops relying on another
 author's error firing first.

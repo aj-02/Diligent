@@ -340,3 +340,28 @@ Deliberately NOT in it, all byte-identical to QA: `ZCL_PP_FCST_UTIL`, message cl
 `ZPP_FCST` (024 already present there), and the six unchanged tables, seven domains and
 eight data elements.
 
+
+## 03/09/26 — import error: "REPORT/PROGRAM statement is missing, or the program type is INCLUDE"
+
+Two errors on the pull, for `ZPP_FORECAST` and `ZPP_FORECAST_REPORT`, both at line 1.
+
+Cause: the `PROGDIR` block of all three `.prog.xml` files listed `SUBC` BEFORE `VARCL`.
+abapGit deserialises with `CALL TRANSFORMATION id`, which walks the target structure
+component by component - `varcl` is component 5 of `zif_abapgit_sap_report=>ty_progdir`
+and `subc` is component 11 - so an element arriving out of sequence is not applied.
+`SUBC` therefore never reached the program directory and the programs were created with
+no type at all, which SE38 reports as "program type is INCLUDE".
+
+This is the exact defect CLAUDE.md records for `ovl/ztest_t001` and warns is copied
+between objects unnoticed. All three were wrong; only two showed, because
+`ZPP_FORECAST_UPLOAD` already existed as an executable program from an earlier paste, so
+its directory entry did not need to change.
+
+Fixed in all three - the order is now NAME, VARCL, SUBC, FIXPT, UCCHECK.
+
+Also removed: the orphan `P_SAVE` selection text from `ZPP_FORECAST`'s TPOOL. The
+parameter was withdrawn for point 3, so the text pointed at nothing.
+
+Both ZIPs rebuilt.
+
+TR: not yet · Files: the three `.prog.xml` under `kpmg/zpp_forecast_v2/src/`

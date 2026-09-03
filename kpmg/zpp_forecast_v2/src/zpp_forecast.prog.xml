@@ -4,9 +4,9 @@
   <asx:values>
    <PROGDIR>
     <NAME>ZPP_FORECAST</NAME>
+    <VARCL>X</VARCL>
     <SUBC>1</SUBC>
     <FIXPT>X</FIXPT>
-    <VARCL>X</VARCL>
     <UCCHECK>X</UCCHECK>
    </PROGDIR>
    <TPOOL>
@@ -98,12 +98,6 @@
      <KEY>P_LEGC</KEY>
      <ENTRY>Legacy Data Preferred</ENTRY>
      <LENGTH>21</LENGTH>
-    </item>
-    <item>
-     <ID>S</ID>
-     <KEY>P_SAVE</KEY>
-     <ENTRY>Save Forecast to Database</ENTRY>
-     <LENGTH>25</LENGTH>
     </item>
    </TPOOL>
   </asx:values>

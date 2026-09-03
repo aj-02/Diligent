@@ -1683,8 +1683,12 @@ FORM do_business USING pv_mode TYPE char1.
       ENDIF.
 
       ls_mn-bus_fcst = lv_qty.
+*BOC By Arnav on 03/09/26
+*     PERFORM final_qty CHANGING ls_mn-fcst_qty ls_mn-bus_fcst
+*                                ls_mn-bus_fcst_add ls_mn-final_qty.
       PERFORM final_qty CHANGING ls_mn-fcst_qty ls_mn-bus_fcst
-                                 ls_mn-bus_fcst_add ls_mn-final_qty.
+                                 ls_mn-final_qty.
+*EOC By Arnav on 03/09/26
       PERFORM stamp USING lv_ex CHANGING ls_mn-ernam ls_mn-erdat
                                          ls_mn-aenam ls_mn-aedat.
 
@@ -1950,8 +1954,12 @@ FORM do_change USING pv_mode TYPE char1.
 
       ls_mn-bus_fcst_add = lv_qty.
       ls_mn-reason       = lv_rsn.
+*BOC By Arnav on 03/09/26
+*     PERFORM final_qty CHANGING ls_mn-fcst_qty ls_mn-bus_fcst
+*                                ls_mn-bus_fcst_add ls_mn-final_qty.
       PERFORM final_qty CHANGING ls_mn-fcst_qty ls_mn-bus_fcst
-                                 ls_mn-bus_fcst_add ls_mn-final_qty.
+                                 ls_mn-final_qty.
+*EOC By Arnav on 03/09/26
 
       lv_total = ls_mn-final_qty + ls_mn-bus_fcst_add.
       IF lv_total < 0.

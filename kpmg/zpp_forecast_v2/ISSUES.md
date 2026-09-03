@@ -241,3 +241,23 @@ over 120, every field the code reads exists in the DDIC, ZIP 39 files, XML well-
 no BOM, LF only.
 
 TR: not yet
+
+## 03/09/26 — activation error: FINAL_QTY parameter count
+
+`"Different number of parameters in FORM and PERFORM (routine: FINAL_QTY, number of formal
+parameters: 3, number of actual parameters: 4)"` at line 1686.
+
+Cause: `CV_ADD` was dropped from `FORM final_qty` (it was never read, and the quarterly
+table has no single `BUS_FCST_ADD` to pass any more), but only the two quarterly call sites
+were updated. Both **monthly** branches — `do_business` and `do_change` — still passed
+`ls_mn-bus_fcst_add` as a fourth argument. The compiler stops at the first, which is why
+only one error showed.
+
+Fixed both. All four call sites now pass three arguments.
+
+Added a check that would have caught it: every `PERFORM` in all five sources is now
+compared against its `FORM` signature (quote-aware, so string literals with spaces are not
+miscounted). Result: 0 mismatches across the whole object. Worth re-running after any
+change to a FORM signature.
+
+TR: not yet · Files: `kpmg/zpp_forecast_v2/src/zpp_forecast_upload.prog.abap`

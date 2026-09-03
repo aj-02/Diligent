@@ -261,3 +261,29 @@ miscounted). Result: 0 mismatches across the whole object. Worth re-running afte
 change to a FORM signature.
 
 TR: not yet · Files: `kpmg/zpp_forecast_v2/src/zpp_forecast_upload.prog.abap`
+
+## 03/09/26 — QA source verified against the rebuild; CHANGE QTY heading reverted
+
+Arnav supplied the QA copy of `ZPP_FORECAST_UPLOAD`. It matches `5906927` exactly — 2090
+lines, 8 per-radio Download Template buttons, 33 FORMs — so the restore base was right.
+
+All 25 distinguishing features survive the rebuild: the eight pushbuttons and their
+`TCAT`-`TCGM` handling, `g_type`, `g_xls`, `current_type`, `download_template USING`,
+`upload_excel`, `upload_text`, `file_extension`, `split_line`, `put_field`, `drop_header`,
+`field_label`, `CL_FDT_XL_SPREADSHEET`, `solix_to_xstring`, `get_itab_from_worksheet`,
+`MESSAGE e024`, CSV `join_row`. No routine lost; `qt_finals` is the only addition.
+
+All 49 deleted lines checked one by one - each is an active line replaced by its CR
+equivalent, with the original preserved commented in its BOC/EOC block.
+
+**Corrected:** the CHGQ quantity column had been given the literal heading 'CHANGE QTY'.
+That broke the 31/08 principle that every heading is the DDIC label of the field it loads.
+Pointed at `ZPPT_FCST_QT-BUS_FCST_ADD1` instead, so it reads "Forecast Quantity" again,
+exactly as in QA. `MONTH` stays a literal - it is the only column with no table field
+behind it.
+
+**Open:** `do_exclusion` still carries its two original result texts ('Already excluded,
+entry refreshed' / 'Excluded from forecasting'). They echo no uploaded values so they do
+not breach point 1; left as they are pending Arnav's call.
+
+TR: not yet · Files: `kpmg/zpp_forecast_v2/src/zpp_forecast_upload.prog.abap`

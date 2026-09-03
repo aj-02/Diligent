@@ -397,18 +397,18 @@ FORM template_columns USING pv_type TYPE any
       cv_name = 'ZFCST_Forecast_Change_Quarterly'.
 *BOC By Arnav on 03/09/26
 *     MONTH is new, between QUARTER and YEAR, and everything after it
-*     has moved one place right. It is not a field of any table - the
-*     quantity it carries is routed to BUS_FCST_ADD1, 2 or 3 by the
-*     month - so it and the quantity are given plain headings rather
-*     than a dictionary label that would read "Forecast Quantity" and
-*     say nothing.
+*     has moved one place right. MONTH is the only column with no table
+*     field behind it, so it is the only plain heading here - the
+*     quantity keeps its dictionary label, "Forecast Quantity", exactly
+*     as before, by pointing at BUS_FCST_ADD1. The value is routed to
+*     ADD1, ADD2 or ADD3 by the month at upload time.
 *     APPEND 'ZPPT_FCST_QT-BUS_FCST_ADD' TO lt_pre.
       APPEND 'ZPPT_FCST_QT-MATNR'        TO lt_pre.
       APPEND 'ZPPT_FCST_QT-WERKS'        TO lt_pre.
       APPEND 'ZPPT_FCST_QT-QUARTER'      TO lt_pre.
       APPEND 'MONTH'                     TO lt_pre.
       APPEND 'ZPPT_FCST_QT-GJAHR'        TO lt_pre.
-      APPEND 'CHANGE QTY'                TO lt_pre.
+      APPEND 'ZPPT_FCST_QT-BUS_FCST_ADD1'  TO lt_pre.
       APPEND 'ZPPT_FCST_QT-REASON'       TO lt_pre.
 *EOC By Arnav on 03/09/26
 

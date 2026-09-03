@@ -47,6 +47,15 @@ CONSTANTS: gc_new  TYPE char14 VALUE 'Created',
            gc_tnew TYPE char14 VALUE 'Would create',
            gc_tchg TYPE char14 VALUE 'Would change'.
 
+*BOC By Arnav on 03/09/26
+* Used by DO_CHANGE to reach BUS_FCST_ADDn / REASONn / Mn_FCST_FINAL by
+* name. Declared here because a FORM may not declare a field symbol
+* inside a loop it re-enters per row.
+FIELD-SYMBOLS: <gv_add> TYPE any,
+               <gv_rsn> TYPE any,
+               <gv_fin> TYPE any.
+*EOC By Arnav on 03/09/26
+
 DATA: gt_raw TYPE STANDARD TABLE OF ty_raw,
       gt_log TYPE STANDARD TABLE OF ty_log,
       g_new  TYPE i,
@@ -236,10 +245,20 @@ FORM template_columns CHANGING ct_head TYPE string_table
     APPEND 'NEW MATERIAL'   TO ct_head.
     APPEND 'OLD MATERIAL 1' TO ct_head.
     APPEND 'OLD MATERIAL 2' TO ct_head.
+*BOC By Arnav on 03/09/26
+    APPEND 'OLD MATERIAL 3' TO ct_head.
+    APPEND 'OLD MATERIAL 4' TO ct_head.
+    APPEND 'OLD MATERIAL 5' TO ct_head.
+*EOC By Arnav on 03/09/26
     APPEND '1001'          TO ct_demo.
     APPEND 'FG00000000002' TO ct_demo.
     APPEND 'FG00000000001' TO ct_demo.
     APPEND lv_blank        TO ct_demo.
+*BOC By Arnav on 03/09/26
+    APPEND lv_blank        TO ct_demo.
+    APPEND lv_blank        TO ct_demo.
+    APPEND lv_blank        TO ct_demo.
+*EOC By Arnav on 03/09/26
 
   ELSEIF p_exc = 'X'.
     cv_name = 'ZFCST_Material_Exclusion'.
@@ -311,18 +330,25 @@ FORM template_columns CHANGING ct_head TYPE string_table
 
   ELSEIF p_chgq = 'X'.
     cv_name = 'ZFCST_Forecast_Change_Quarterly'.
+*BOC By Arnav on 03/09/26
+*   MONTH is new, between QUARTER and YEAR. It is the first, second or
+*   third month OF THAT QUARTER - 1, 2 or 3 - not a calendar month and
+*   not a fiscal period. Every column after it has moved one place right.
     APPEND 'MATERIAL'   TO ct_head.
     APPEND 'PLANT'      TO ct_head.
     APPEND 'QUARTER'    TO ct_head.
+    APPEND 'MONTH'      TO ct_head.
     APPEND 'YEAR'       TO ct_head.
     APPEND 'CHANGE QTY' TO ct_head.
     APPEND 'REASON'     TO ct_head.
     APPEND 'FG00000000001'   TO ct_demo.
     APPEND '1001'            TO ct_demo.
     APPEND '2'               TO ct_demo.
+    APPEND '1'               TO ct_demo.
     APPEND '2026'            TO ct_demo.
     APPEND '10'              TO ct_demo.
     APPEND 'Additional plan' TO ct_demo.
+*EOC By Arnav on 03/09/26
 
   ELSEIF p_chgm = 'X'.
     cv_name = 'ZFCST_Forecast_Change_Monthly'.
@@ -579,10 +605,25 @@ FORM do_tracking.
         lv_new   TYPE matnr,
         lv_old1  TYPE matnr,
         lv_old2  TYPE matnr,
+*BOC By Arnav on 03/09/26
+        lv_old3  TYPE matnr,
+        lv_old4  TYPE matnr,
+        lv_old5  TYPE matnr,
+*       The five codes as read, used for the checks and for CHECK_CHAIN
+*       before the stored row is fetched
+        ls_chk   TYPE zppt_mat_track,
+        lv_cnt   TYPE i,
+        lv_j     TYPE i,
+*EOC By Arnav on 03/09/26
         lv_ex    TYPE abap_bool,
         lv_err   TYPE string,
         lv_txt   TYPE string,
         lv_blank TYPE char12.
+
+*BOC By Arnav on 03/09/26
+  FIELD-SYMBOLS: <lv_a> TYPE any,
+                 <lv_b> TYPE any.
+*EOC By Arnav on 03/09/26
 
   LOOP AT gt_raw INTO ls_raw.
 
@@ -591,6 +632,18 @@ FORM do_tracking.
     PERFORM to_material USING ls_raw-f02 CHANGING lv_new.
     PERFORM to_material USING ls_raw-f03 CHANGING lv_old1.
     PERFORM to_material USING ls_raw-f04 CHANGING lv_old2.
+*BOC By Arnav on 03/09/26
+    PERFORM to_material USING ls_raw-f05 CHANGING lv_old3.
+    PERFORM to_material USING ls_raw-f06 CHANGING lv_old4.
+    PERFORM to_material USING ls_raw-f07 CHANGING lv_old5.
+
+    CLEAR ls_chk.
+    ls_chk-old_matnr1 = lv_old1.
+    ls_chk-old_matnr2 = lv_old2.
+    ls_chk-old_matnr3 = lv_old3.
+    ls_chk-old_matnr4 = lv_old4.
+    ls_chk-old_matnr5 = lv_old5.
+*EOC By Arnav on 03/09/26
 
     PERFORM check_marc USING lv_werks lv_new CHANGING lv_err.
     IF lv_err IS NOT INITIAL.
@@ -598,27 +651,64 @@ FORM do_tracking.
       CONTINUE.
     ENDIF.
 
-    IF lv_old1 IS INITIAL AND lv_old2 IS INITIAL.
+*BOC By Arnav on 03/09/26
+*   IF lv_old1 IS INITIAL AND lv_old2 IS INITIAL.
+*     lv_err = 'At least one old material code must be given'.
+*     ...
+*   IF lv_old1 = lv_new OR lv_old2 = lv_new.
+*     ...
+*   IF lv_old1 IS NOT INITIAL AND lv_old1 = lv_old2.
+*     lv_err = 'Old material 1 and old material 2 are the same code'.
+*     ...
+*   The same three checks, over five codes instead of two.
+    CLEAR: lv_cnt, lv_err.
+
+    DO 5 TIMES.
+      UNASSIGN <lv_a>.
+      ASSIGN COMPONENT |OLD_MATNR{ sy-index }| OF STRUCTURE ls_chk TO <lv_a>.
+      CHECK sy-subrc = 0.
+      CHECK <lv_a> IS NOT INITIAL.
+
+      lv_cnt = lv_cnt + 1.
+
+      IF <lv_a> = lv_new.
+        lv_err = 'An old material code must be different from the new code'.
+        EXIT.
+      ENDIF.
+
+      lv_j = sy-index.
+      DO 5 TIMES.
+        CHECK sy-index > lv_j.
+        UNASSIGN <lv_b>.
+        ASSIGN COMPONENT |OLD_MATNR{ sy-index }| OF STRUCTURE ls_chk TO <lv_b>.
+        CHECK sy-subrc = 0.
+        IF <lv_b> IS NOT INITIAL AND <lv_b> = <lv_a>.
+          lv_err = 'The same old material code is given twice'.
+          EXIT.
+        ENDIF.
+      ENDDO.
+
+      IF lv_err IS NOT INITIAL.
+        EXIT.
+      ENDIF.
+    ENDDO.
+
+    IF lv_err IS INITIAL AND lv_cnt = 0.
       lv_err = 'At least one old material code must be given'.
-      PERFORM log USING lv_row lv_werks lv_new lv_blank gc_err lv_err.
-      CONTINUE.
     ENDIF.
 
-    IF lv_old1 = lv_new OR lv_old2 = lv_new.
-      lv_err = 'The old material code must be different from the new code'.
+    IF lv_err IS NOT INITIAL.
       PERFORM log USING lv_row lv_werks lv_new lv_blank gc_err lv_err.
       CONTINUE.
     ENDIF.
-
-    IF lv_old1 IS NOT INITIAL AND lv_old1 = lv_old2.
-      lv_err = 'Old material 1 and old material 2 are the same code'.
-      PERFORM log USING lv_row lv_werks lv_new lv_blank gc_err lv_err.
-      CONTINUE.
-    ENDIF.
+*EOC By Arnav on 03/09/26
 
 *   An old code that is itself a successor would make the chain
 *   ambiguous, so it is refused rather than silently mis-added
-    PERFORM check_chain USING lv_werks lv_old1 lv_old2 CHANGING lv_err.
+*BOC By Arnav on 03/09/26
+*   PERFORM check_chain USING lv_werks lv_old1 lv_old2 CHANGING lv_err.
+    PERFORM check_chain USING lv_werks ls_chk CHANGING lv_err.
+*EOC By Arnav on 03/09/26
     IF lv_err IS NOT INITIAL.
       PERFORM log USING lv_row lv_werks lv_new lv_blank gc_err lv_err.
       CONTINUE.
@@ -636,6 +726,11 @@ FORM do_tracking.
     ls_trk-new_matnr  = lv_new.
     ls_trk-old_matnr1 = lv_old1.
     ls_trk-old_matnr2 = lv_old2.
+*BOC By Arnav on 03/09/26
+    ls_trk-old_matnr3 = lv_old3.
+    ls_trk-old_matnr4 = lv_old4.
+    ls_trk-old_matnr5 = lv_old5.
+*EOC By Arnav on 03/09/26
     PERFORM stamp USING lv_ex CHANGING ls_trk-ernam ls_trk-erdat
                                        ls_trk-aenam ls_trk-aedat.
 
@@ -660,31 +755,63 @@ ENDFORM.
 
 
 *&---------------------------------------------------------------------*
+*BOC By Arnav on 03/09/26
+*FORM check_chain USING pv_werks TYPE werks_d
+*                       pv_old1  TYPE matnr
+*                       pv_old2  TYPE matnr
+*                 CHANGING pv_err TYPE string.
+*
+*  DATA lv_hit TYPE matnr.
+*
+*  CLEAR pv_err.
+*
+*  IF pv_old1 IS NOT INITIAL.
+*    SELECT SINGLE new_matnr FROM zppt_mat_track INTO @lv_hit
+*      WHERE werks = @pv_werks AND new_matnr = @pv_old1.
+*    IF sy-subrc = 0.
+*      pv_err = |{ pv_old1 } is already a new code in this table, a chain is not supported|.
+*      RETURN.
+*    ENDIF.
+*  ENDIF.
+*
+*  IF pv_old2 IS NOT INITIAL.
+*    SELECT SINGLE new_matnr FROM zppt_mat_track INTO @lv_hit
+*      WHERE werks = @pv_werks AND new_matnr = @pv_old2.
+*    IF sy-subrc = 0.
+*      pv_err = |{ pv_old2 } is already a new code in this table, a chain is not supported|.
+*    ENDIF.
+*  ENDIF.
+* Five old codes now, so the row is passed in whole and walked, rather
+* than one parameter per code.
 FORM check_chain USING pv_werks TYPE werks_d
-                       pv_old1  TYPE matnr
-                       pv_old2  TYPE matnr
+                       ps_trk   TYPE zppt_mat_track
                  CHANGING pv_err TYPE string.
 
-  DATA lv_hit TYPE matnr.
+  DATA: lv_hit TYPE matnr,
+        lv_old TYPE matnr.
+
+  FIELD-SYMBOLS <lv_o> TYPE any.
 
   CLEAR pv_err.
 
-  IF pv_old1 IS NOT INITIAL.
+  DO 5 TIMES.
+
+    UNASSIGN <lv_o>.
+    ASSIGN COMPONENT |OLD_MATNR{ sy-index }| OF STRUCTURE ps_trk TO <lv_o>.
+    CHECK sy-subrc = 0.
+
+    lv_old = <lv_o>.
+    CHECK lv_old IS NOT INITIAL.
+
     SELECT SINGLE new_matnr FROM zppt_mat_track INTO @lv_hit
-      WHERE werks = @pv_werks AND new_matnr = @pv_old1.
+      WHERE werks = @pv_werks AND new_matnr = @lv_old.
     IF sy-subrc = 0.
-      pv_err = |{ pv_old1 } is already a new code in this table, a chain is not supported|.
+      pv_err = |{ lv_old } is already a new code in this table, a chain is not supported|.
       RETURN.
     ENDIF.
-  ENDIF.
 
-  IF pv_old2 IS NOT INITIAL.
-    SELECT SINGLE new_matnr FROM zppt_mat_track INTO @lv_hit
-      WHERE werks = @pv_werks AND new_matnr = @pv_old2.
-    IF sy-subrc = 0.
-      pv_err = |{ pv_old2 } is already a new code in this table, a chain is not supported|.
-    ENDIF.
-  ENDIF.
+  ENDDO.
+*EOC By Arnav on 03/09/26
 
 ENDFORM.
 
@@ -959,8 +1086,13 @@ FORM do_business USING pv_mode TYPE char1.
       ENDIF.
 
       ls_qt-bus_fcst = lv_qty.
+*BOC By Arnav on 03/09/26
+*     PERFORM final_qty CHANGING ls_qt-fcst_qty ls_qt-bus_fcst
+*                                ls_qt-bus_fcst_add ls_qt-final_qty.
       PERFORM final_qty CHANGING ls_qt-fcst_qty ls_qt-bus_fcst
-                                 ls_qt-bus_fcst_add ls_qt-final_qty.
+                                 ls_qt-final_qty.
+      PERFORM qt_finals CHANGING ls_qt.
+*EOC By Arnav on 03/09/26
       PERFORM stamp USING lv_ex CHANGING ls_qt-ernam ls_qt-erdat
                                          ls_qt-aenam ls_qt-aedat.
 
@@ -998,8 +1130,12 @@ FORM do_business USING pv_mode TYPE char1.
       ENDIF.
 
       ls_mn-bus_fcst = lv_qty.
+*BOC By Arnav on 03/09/26
+*     PERFORM final_qty CHANGING ls_mn-fcst_qty ls_mn-bus_fcst
+*                                ls_mn-bus_fcst_add ls_mn-final_qty.
       PERFORM final_qty CHANGING ls_mn-fcst_qty ls_mn-bus_fcst
-                                 ls_mn-bus_fcst_add ls_mn-final_qty.
+                                 ls_mn-final_qty.
+*EOC By Arnav on 03/09/26
       PERFORM stamp USING lv_ex CHANGING ls_mn-ernam ls_mn-erdat
                                          ls_mn-aenam ls_mn-aedat.
 
@@ -1050,6 +1186,17 @@ FORM do_change USING pv_mode TYPE char1.
         lv_txt   TYPE string,
         lv_tmp   TYPE char40,
         lv_per   TYPE char12,
+*BOC By Arnav on 03/09/26
+*       The quarterly file carries MONTH in column 4, so YEAR, QUANTITY
+*       and REASON all sit one column further right than in the monthly
+*       file. The four below hold whichever column applies to this mode,
+*       so the checks underneath do not have to know.
+        lv_c_mon  TYPE char40,
+        lv_c_year TYPE char40,
+        lv_c_qty  TYPE char40,
+        lv_c_rsn  TYPE char40,
+        lv_mi     TYPE i,
+*EOC By Arnav on 03/09/26
         lv_yes   TYPE abap_bool.
 
   lv_yes = abap_true.
@@ -1060,6 +1207,21 @@ FORM do_change USING pv_mode TYPE char1.
     PERFORM to_material USING ls_raw-f01 CHANGING lv_matnr.
     PERFORM to_plant    USING ls_raw-f02 CHANGING lv_werks.
     PERFORM period_text USING pv_mode ls_raw-f03 CHANGING lv_per.
+
+*BOC By Arnav on 03/09/26
+    CLEAR: lv_c_mon, lv_c_year, lv_c_qty, lv_c_rsn, lv_mi.
+
+    IF pv_mode = 'Q'.
+      lv_c_mon  = ls_raw-f04.
+      lv_c_year = ls_raw-f05.
+      lv_c_qty  = ls_raw-f06.
+      lv_c_rsn  = ls_raw-f07.
+    ELSE.
+      lv_c_year = ls_raw-f04.
+      lv_c_qty  = ls_raw-f05.
+      lv_c_rsn  = ls_raw-f06.
+    ENDIF.
+*EOC By Arnav on 03/09/26
 
     PERFORM check_marc USING lv_werks lv_matnr CHANGING lv_err.
     IF lv_err IS NOT INITIAL.
@@ -1074,7 +1236,23 @@ FORM do_change USING pv_mode TYPE char1.
       CONTINUE.
     ENDIF.
 
-    PERFORM to_int USING ls_raw-f04 CHANGING lv_year.
+*BOC By Arnav on 03/09/26
+*   The quarter is split by month, so a quarterly change has to say
+*   which of the three months it applies to.
+    IF pv_mode = 'Q'.
+      PERFORM to_int USING lv_c_mon CHANGING lv_mi.
+      IF lv_mi < 1 OR lv_mi > 3.
+        lv_err = 'Month must be 1, 2 or 3 - the first, second or third month of the quarter'.
+        PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
+        CONTINUE.
+      ENDIF.
+    ENDIF.
+*EOC By Arnav on 03/09/26
+
+*BOC By Arnav on 03/09/26
+*   PERFORM to_int USING ls_raw-f04 CHANGING lv_year.
+    PERFORM to_int USING lv_c_year CHANGING lv_year.
+*EOC By Arnav on 03/09/26
     IF lv_year < 1900 OR lv_year > 2999.
       lv_err = 'Year must be the four digit year the financial year starts in'.
       PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
@@ -1082,7 +1260,10 @@ FORM do_change USING pv_mode TYPE char1.
     ENDIF.
     lv_gjahr = lv_year.
 
-    lv_tmp = ls_raw-f06.
+*BOC By Arnav on 03/09/26
+*   lv_tmp = ls_raw-f06.
+    lv_tmp = lv_c_rsn.
+*EOC By Arnav on 03/09/26
     CONDENSE lv_tmp.
     lv_rsn = lv_tmp.
     IF lv_rsn IS INITIAL.
@@ -1091,7 +1272,10 @@ FORM do_change USING pv_mode TYPE char1.
       CONTINUE.
     ENDIF.
 
-    PERFORM to_dec USING ls_raw-f05 CHANGING lv_qty.
+*BOC By Arnav on 03/09/26
+*   PERFORM to_dec USING ls_raw-f05 CHANGING lv_qty.
+    PERFORM to_dec USING lv_c_qty CHANGING lv_qty.
+*EOC By Arnav on 03/09/26
     IF lv_qty = 0.
       lv_err = 'Change quantity is zero or not numeric, nothing to apply'.
       PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
@@ -1114,19 +1298,55 @@ FORM do_change USING pv_mode TYPE char1.
         CONTINUE.
       ENDIF.
 
-      ls_qt-bus_fcst_add = lv_qty.
-      ls_qt-reason       = lv_rsn.
-      PERFORM final_qty CHANGING ls_qt-fcst_qty ls_qt-bus_fcst
-                                 ls_qt-bus_fcst_add ls_qt-final_qty.
+*BOC By Arnav on 03/09/26
+*     ls_qt-bus_fcst_add = lv_qty.
+*     ls_qt-reason       = lv_rsn.
+*     PERFORM final_qty CHANGING ls_qt-fcst_qty ls_qt-bus_fcst
+*                                ls_qt-bus_fcst_add ls_qt-final_qty.
+*
+**    FINAL_QTY no longer carries the change, so the guard tests the
+**    total the change actually moves
+*     lv_total = ls_qt-final_qty + ls_qt-bus_fcst_add.
+*     IF lv_total < 0.
+*       lv_err = 'The reduction is larger than the forecast, the final quantity would be negative'.
+*       PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
+*       CONTINUE.
+*     ENDIF.
+*     The change lands on the month it names, and only that month. The
+*     other two additional quantities and their reasons are left as the
+*     row already holds them.
+      UNASSIGN: <gv_add>, <gv_rsn>.
+      ASSIGN COMPONENT |BUS_FCST_ADD{ lv_mi }| OF STRUCTURE ls_qt TO <gv_add>.
+      ASSIGN COMPONENT |REASON{ lv_mi }|       OF STRUCTURE ls_qt TO <gv_rsn>.
 
-*     FINAL_QTY no longer carries the change, so the guard tests the
-*     total the change actually moves
-      lv_total = ls_qt-final_qty + ls_qt-bus_fcst_add.
-      IF lv_total < 0.
-        lv_err = 'The reduction is larger than the forecast, the final quantity would be negative'.
+      IF <gv_add> IS NOT ASSIGNED OR <gv_rsn> IS NOT ASSIGNED.
+        lv_err = 'Month is outside the three months of the quarter'.
         PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
         CONTINUE.
       ENDIF.
+
+      <gv_add> = lv_qty.
+      <gv_rsn> = lv_rsn.
+
+      PERFORM final_qty CHANGING ls_qt-fcst_qty ls_qt-bus_fcst
+                                 ls_qt-final_qty.
+      PERFORM qt_finals CHANGING ls_qt.
+
+*     A reduction may not take THAT MONTH below zero. The quarter total
+*     is no longer the thing being guarded - each month stands alone.
+      CLEAR lv_total.
+      UNASSIGN <gv_fin>.
+      ASSIGN COMPONENT |M{ lv_mi + 3 }_FCST_FINAL| OF STRUCTURE ls_qt
+        TO <gv_fin>.
+      IF <gv_fin> IS ASSIGNED.
+        lv_total = <gv_fin>.
+      ENDIF.
+      IF lv_total < 0.
+        lv_err = 'The reduction is larger than the forecast for that month, the final quantity would be negative'.
+        PERFORM log USING lv_row lv_werks lv_matnr lv_per gc_err lv_err.
+        CONTINUE.
+      ENDIF.
+*EOC By Arnav on 03/09/26
 
       PERFORM stamp USING lv_yes CHANGING ls_qt-ernam ls_qt-erdat
                                           ls_qt-aenam ls_qt-aedat.
@@ -1161,8 +1381,12 @@ FORM do_change USING pv_mode TYPE char1.
 
       ls_mn-bus_fcst_add = lv_qty.
       ls_mn-reason       = lv_rsn.
+*BOC By Arnav on 03/09/26
+*     PERFORM final_qty CHANGING ls_mn-fcst_qty ls_mn-bus_fcst
+*                                ls_mn-bus_fcst_add ls_mn-final_qty.
       PERFORM final_qty CHANGING ls_mn-fcst_qty ls_mn-bus_fcst
-                                 ls_mn-bus_fcst_add ls_mn-final_qty.
+                                 ls_mn-final_qty.
+*EOC By Arnav on 03/09/26
 
       lv_total = ls_mn-final_qty + ls_mn-bus_fcst_add.
       IF lv_total < 0.
@@ -1211,14 +1435,75 @@ ENDFORM.
 *& This previously added all three together, which inflated every
 *& uploaded row.
 *&---------------------------------------------------------------------*
+*BOC By Arnav on 03/09/26
+*FORM final_qty CHANGING cv_gen TYPE zde_fcst_qty
+*                        cv_bus TYPE zde_fcst_qty
+*                        cv_add TYPE zde_fcst_qty
+*                        cv_fin TYPE zde_fcst_qty.
+* CV_ADD was never read, and the quarterly table has no single
+* BUS_FCST_ADD to pass any more. The parameter is dropped.
 FORM final_qty CHANGING cv_gen TYPE zde_fcst_qty
                         cv_bus TYPE zde_fcst_qty
-                        cv_add TYPE zde_fcst_qty
                         cv_fin TYPE zde_fcst_qty.
 
   cv_fin = nmax( val1 = cv_gen val2 = cv_bus ).
 
 ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+*& Quarterly per month finals and values
+*&
+*& Final of a month  = that month's forecast + that month's additional
+*&                     plan quantity
+*& Value             = final quantity x PRICE
+*& Tonnage value     = final quantity x net weight x PRICE
+*&
+*& PRICE is 0 until the price logic is supplied, so both value columns
+*& compute to 0 today. Nothing else has to change when it arrives.
+*&---------------------------------------------------------------------*
+FORM qt_finals CHANGING cs_qt TYPE zppt_fcst_qt.
+
+  DATA: lv_i   TYPE i,
+        lv_fin TYPE zde_fcst_qty,
+        lv_ton TYPE zde_fcst_qty.
+
+  FIELD-SYMBOLS: <lv_f>  TYPE any,
+                 <lv_a>  TYPE any,
+                 <lv_ff> TYPE any,
+                 <lv_v>  TYPE any,
+                 <lv_tv> TYPE any.
+
+  DO 3 TIMES.
+
+    lv_i = sy-index.
+
+    UNASSIGN: <lv_f>, <lv_a>, <lv_ff>, <lv_v>, <lv_tv>.
+
+    ASSIGN COMPONENT |M{ lv_i + 3 }_FCST|       OF STRUCTURE cs_qt TO <lv_f>.
+    ASSIGN COMPONENT |BUS_FCST_ADD{ lv_i }|     OF STRUCTURE cs_qt TO <lv_a>.
+    ASSIGN COMPONENT |M{ lv_i + 3 }_FCST_FINAL| OF STRUCTURE cs_qt TO <lv_ff>.
+    ASSIGN COMPONENT |M{ lv_i + 3 }_VAL|        OF STRUCTURE cs_qt TO <lv_v>.
+    ASSIGN COMPONENT |M{ lv_i + 3 }_TON_VAL|    OF STRUCTURE cs_qt TO <lv_tv>.
+
+    CHECK <lv_f> IS ASSIGNED AND <lv_a> IS ASSIGNED AND <lv_ff> IS ASSIGNED.
+
+    lv_fin  = <lv_f> + <lv_a>.
+    <lv_ff> = lv_fin.
+
+    IF <lv_v> IS ASSIGNED.
+      <lv_v> = lv_fin * cs_qt-price.
+    ENDIF.
+
+    IF <lv_tv> IS ASSIGNED.
+      lv_ton = lv_fin * cs_qt-ntgew.
+      <lv_tv> = lv_ton * cs_qt-price.
+    ENDIF.
+
+  ENDDO.
+
+ENDFORM.
+*EOC By Arnav on 03/09/26
 
 
 *&---------------------------------------------------------------------*

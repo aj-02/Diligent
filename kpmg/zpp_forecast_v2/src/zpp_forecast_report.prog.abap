@@ -157,7 +157,15 @@ FORM collect.
                                                  quarter = lv_qtr.
       IF sy-subrc = 0.
         ls_out-qtr_fcst = ls_qt-final_qty.
-        ls_out-qtr_add  = ls_qt-bus_fcst_add.
+*BOC By Arnav on 03/09/26
+*       ls_out-qtr_add  = ls_qt-bus_fcst_add.
+*       The quarterly table splits the additional plan quantity across
+*       the three months of the quarter. This report shows the quarter
+*       as one line, so the three are added back together here.
+        ls_out-qtr_add  = ls_qt-bus_fcst_add1
+                        + ls_qt-bus_fcst_add2
+                        + ls_qt-bus_fcst_add3.
+*EOC By Arnav on 03/09/26
       ENDIF.
       ls_out-qtr_total = ls_out-qtr_fcst + ls_out-qtr_add.
 

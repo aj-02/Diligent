@@ -892,18 +892,44 @@ FORM visible_columns CHANGING ct_show TYPE tt_fname.
 *     Additional plan quantity now sits in front of Final Forecast Qty,
 *     which is the higher of Forecast (Max * Growth %) and Business
 *     Forecast, so the two inputs are read before the result.
-      APPEND 'BUS_FCST_ADD' TO ct_show. " Additional Plan Qty
+*     03/09/26 - the single additional column is replaced by one per
+*     month. The quarter is split three ways now.
+*     APPEND 'BUS_FCST_ADD' TO ct_show. " Additional Plan Qty
+      APPEND 'BUS_FCST_ADD1' TO ct_show.  " Additional Plan Qty M1
+      APPEND 'BUS_FCST_ADD2' TO ct_show.  " Additional Plan Qty M2
+      APPEND 'BUS_FCST_ADD3' TO ct_show.  " Additional Plan Qty M3
 *EOC By Arnav on 02/09/26
       APPEND 'FINAL_QTY'  TO ct_show.   " Final Forecast Qty
       APPEND 'M4_FCST'    TO ct_show.   " July'26
       APPEND 'M5_FCST'    TO ct_show.   " Aug'26
       APPEND 'M6_FCST'    TO ct_show.   " Sep'26
 
+*BOC By Arnav on 03/09/26
+*     Final per month, then the value columns. PRICE is 0 until the
+*     price logic is supplied, so the six value columns read 0 today.
+*     They are drawn on the quarterly sheet only - the annual sheet
+*     above carries no price.
+      APPEND 'M4_FCST_FINAL' TO ct_show.
+      APPEND 'M5_FCST_FINAL' TO ct_show.
+      APPEND 'M6_FCST_FINAL' TO ct_show.
+*EOC By Arnav on 03/09/26
+
       IF p_tonn = abap_true.
         APPEND 'M4_TON' TO ct_show.
         APPEND 'M5_TON' TO ct_show.
         APPEND 'M6_TON' TO ct_show.
       ENDIF.
+
+*BOC By Arnav on 03/09/26
+      APPEND 'PRICE'      TO ct_show.
+      APPEND 'M4_VAL'     TO ct_show.
+      APPEND 'M5_VAL'     TO ct_show.
+      APPEND 'M6_VAL'     TO ct_show.
+      APPEND 'M4_TON_VAL' TO ct_show.
+      APPEND 'M5_TON_VAL' TO ct_show.
+      APPEND 'M6_TON_VAL' TO ct_show.
+      APPEND 'WAERS'      TO ct_show.
+*EOC By Arnav on 03/09/26
 
       APPEND 'MTS_MTO'    TO ct_show.   " AE17, the last FS column
 
@@ -1093,6 +1119,22 @@ FORM setup_columns USING pt_show TYPE tt_fname.
     PERFORM txt USING 'LOAD_FCT'     'Growth Based on Category'.
     PERFORM txt USING 'BUS_FCST'     'Business Forecast'.
     PERFORM txt USING 'BUS_FCST_ADD' 'Additional Plan Qty'.
+*BOC By Arnav on 03/09/26
+    PERFORM txt USING 'BUS_FCST_ADD1'  'Additional Plan Qty Month 1'.
+    PERFORM txt USING 'BUS_FCST_ADD2'  'Additional Plan Qty Month 2'.
+    PERFORM txt USING 'BUS_FCST_ADD3'  'Additional Plan Qty Month 3'.
+    PERFORM txt USING 'M4_FCST_FINAL'  'Final Forecast Month 1'.
+    PERFORM txt USING 'M5_FCST_FINAL'  'Final Forecast Month 2'.
+    PERFORM txt USING 'M6_FCST_FINAL'  'Final Forecast Month 3'.
+    PERFORM txt USING 'PRICE'          'Price'.
+    PERFORM txt USING 'M4_VAL'         'Value Month 1'.
+    PERFORM txt USING 'M5_VAL'         'Value Month 2'.
+    PERFORM txt USING 'M6_VAL'         'Value Month 3'.
+    PERFORM txt USING 'M4_TON_VAL'     'Tonnage Value Month 1'.
+    PERFORM txt USING 'M5_TON_VAL'     'Tonnage Value Month 2'.
+    PERFORM txt USING 'M6_TON_VAL'     'Tonnage Value Month 3'.
+    PERFORM txt USING 'WAERS'          'Currency'.
+*EOC By Arnav on 03/09/26
     PERFORM txt USING 'FINAL_QTY'    'Final Forecast Qty'.
 *   The FS heads both column O and column Q "Final Forecast Qty". The
 *   second is qualified here so the two can be told apart on screen.

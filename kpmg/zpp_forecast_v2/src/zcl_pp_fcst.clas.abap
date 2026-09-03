@@ -141,6 +141,31 @@ CLASS zcl_pp_fcst DEFINITION
              m5_ton       TYPE zde_fcst_qty,
              m6_ton       TYPE zde_fcst_qty,
              reason       TYPE zde_fcst_reason,
+*BOC By Arnav on 03/09/26
+*            Quarterly splits by month. BUS_FCST_ADD above is left for
+*            the MONTHLY sheet, which is one row per month already and
+*            has nothing to split. The three below belong to quarterly.
+             bus_fcst_add1 TYPE zde_fcst_qty,
+             bus_fcst_add2 TYPE zde_fcst_qty,
+             bus_fcst_add3 TYPE zde_fcst_qty,
+             m4_fcst_final TYPE zde_fcst_qty,
+             m5_fcst_final TYPE zde_fcst_qty,
+             m6_fcst_final TYPE zde_fcst_qty,
+             reason1       TYPE zde_fcst_reason,
+             reason2       TYPE zde_fcst_reason,
+             reason3       TYPE zde_fcst_reason,
+*            PRICE is 0 until the price logic is supplied, so every
+*            value below computes to 0. WAERS stays blank until the
+*            same source tells us which currency the price is in.
+             waers         TYPE waers,
+             price         TYPE zde_fcst_price,
+             m4_val        TYPE zde_fcst_val,
+             m5_val        TYPE zde_fcst_val,
+             m6_val        TYPE zde_fcst_val,
+             m4_ton_val    TYPE zde_fcst_val,
+             m5_ton_val    TYPE zde_fcst_val,
+             m6_ton_val    TYPE zde_fcst_val,
+*EOC By Arnav on 03/09/26
            END OF ty_alv,
            tt_alv   TYPE STANDARD TABLE OF ty_alv WITH DEFAULT KEY,
            tr_werks TYPE RANGE OF werks_d,
@@ -512,13 +537,35 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
       ls_alv-fcst_qty = ls_alv-max_qty * ls_alv-load_fct.
 
       "--- Business forecast already uploaded ----------------------------
-      SELECT SINGLE bus_fcst, bus_fcst_add FROM zppt_fcst_qt
-        INTO ( @ls_alv-bus_fcst, @ls_alv-bus_fcst_add )
+*BOC By Arnav on 03/09/26
+*     SELECT SINGLE bus_fcst, bus_fcst_add FROM zppt_fcst_qt
+*       INTO ( @ls_alv-bus_fcst, @ls_alv-bus_fcst_add )
+*       WHERE werks = @ls_scope-werks AND matnr = @ls_scope-matnr
+*         AND gjahr = @ls_alv-gjahr   AND quarter = @iv_quarter.
+*
+*     ls_alv-final_qty = nmax( val1 = ls_alv-fcst_qty val2 = ls_alv-bus_fcst ).
+*     ls_alv-total_qty = ls_alv-final_qty + ls_alv-bus_fcst_add.
+*     The additional plan quantity is per month now. The reasons and the
+*     price are read back as well - SAVE writes the row with
+*     CORRESPONDING, so anything not read here would be blanked out by
+*     the next save.
+      SELECT SINGLE bus_fcst, bus_fcst_add1, bus_fcst_add2, bus_fcst_add3,
+                    reason1, reason2, reason3, waers, price
+        FROM zppt_fcst_qt
+        INTO ( @ls_alv-bus_fcst,
+               @ls_alv-bus_fcst_add1, @ls_alv-bus_fcst_add2,
+               @ls_alv-bus_fcst_add3,
+               @ls_alv-reason1, @ls_alv-reason2, @ls_alv-reason3,
+               @ls_alv-waers, @ls_alv-price )
         WHERE werks = @ls_scope-werks AND matnr = @ls_scope-matnr
           AND gjahr = @ls_alv-gjahr   AND quarter = @iv_quarter.
 
       ls_alv-final_qty = nmax( val1 = ls_alv-fcst_qty val2 = ls_alv-bus_fcst ).
-      ls_alv-total_qty = ls_alv-final_qty + ls_alv-bus_fcst_add.
+      ls_alv-total_qty = ls_alv-final_qty
+                       + ls_alv-bus_fcst_add1
+                       + ls_alv-bus_fcst_add2
+                       + ls_alv-bus_fcst_add3.
+*EOC By Arnav on 03/09/26
 
       "--- Split back into the three months ------------------------------
       DO 3 TIMES.
@@ -542,6 +589,38 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
         IF iv_tonnage = abap_true AND <lv_t> IS ASSIGNED.
           <lv_t> = zcl_pp_fcst_util=>to_tonnage( iv_qty = lv_share iv_ntgew = ls_alv-ntgew ).
         ENDIF.
+
+*BOC By Arnav on 03/09/26
+*       Final per month = that month's forecast plus that month's
+*       additional plan quantity. The value columns are the final
+*       quantity, and the final quantity in tonnes, times the price.
+*       PRICE is 0 until the price logic arrives, so both are 0 today.
+        ASSIGN COMPONENT |BUS_FCST_ADD{ lv_i }|      OF STRUCTURE ls_alv
+          TO FIELD-SYMBOL(<lv_a>).
+        ASSIGN COMPONENT |M{ lv_i + 3 }_FCST_FINAL|  OF STRUCTURE ls_alv
+          TO FIELD-SYMBOL(<lv_ff>).
+        ASSIGN COMPONENT |M{ lv_i + 3 }_VAL|         OF STRUCTURE ls_alv
+          TO FIELD-SYMBOL(<lv_v>).
+        ASSIGN COMPONENT |M{ lv_i + 3 }_TON_VAL|     OF STRUCTURE ls_alv
+          TO FIELD-SYMBOL(<lv_tv>).
+
+        IF <lv_a> IS ASSIGNED AND <lv_ff> IS ASSIGNED.
+
+          DATA(lv_final) = CONV zde_fcst_qty( lv_share + <lv_a> ).
+          <lv_ff> = lv_final.
+
+          IF <lv_v> IS ASSIGNED.
+            <lv_v> = lv_final * ls_alv-price.
+          ENDIF.
+
+          IF <lv_tv> IS ASSIGNED.
+            DATA(lv_fton) = zcl_pp_fcst_util=>to_tonnage( iv_qty   = lv_final
+                                                          iv_ntgew = ls_alv-ntgew ).
+            <lv_tv> = lv_fton * ls_alv-price.
+          ENDIF.
+
+        ENDIF.
+*EOC By Arnav on 03/09/26
 
       ENDDO.
 
@@ -961,11 +1040,20 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
 *&---------------------------------------------------------------------*
   METHOD add_old_material_qty.
 
-    SELECT werks, new_matnr, old_matnr1, old_matnr2
+*BOC By Arnav on 03/09/26
+*   SELECT werks, new_matnr, old_matnr1, old_matnr2
+*     FROM zppt_mat_track
+*     INTO TABLE @DATA(lt_track)
+*     WHERE werks     IN @ir_werks
+*       AND new_matnr IN @ir_matnr.
+*   Five superseded codes per successor, not two.
+    SELECT werks, new_matnr,
+           old_matnr1, old_matnr2, old_matnr3, old_matnr4, old_matnr5
       FROM zppt_mat_track
       INTO TABLE @DATA(lt_track)
       WHERE werks     IN @ir_werks
         AND new_matnr IN @ir_matnr.
+*EOC By Arnav on 03/09/26
 
     CHECK lt_track IS NOT INITIAL.
 
@@ -977,14 +1065,25 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
 
       CLEAR: lr_old, lr_wrk, lt_old.
 
-      IF ls_track-old_matnr1 IS NOT INITIAL
-     AND ls_track-old_matnr1 <> ls_track-new_matnr.
-        APPEND VALUE #( sign = 'I' option = 'EQ' low = ls_track-old_matnr1 ) TO lr_old.
-      ENDIF.
-      IF ls_track-old_matnr2 IS NOT INITIAL
-     AND ls_track-old_matnr2 <> ls_track-new_matnr.
-        APPEND VALUE #( sign = 'I' option = 'EQ' low = ls_track-old_matnr2 ) TO lr_old.
-      ENDIF.
+*BOC By Arnav on 03/09/26
+*     IF ls_track-old_matnr1 IS NOT INITIAL
+*    AND ls_track-old_matnr1 <> ls_track-new_matnr.
+*       APPEND VALUE #( sign = 'I' option = 'EQ' low = ls_track-old_matnr1 ) TO lr_old.
+*     ENDIF.
+*     IF ls_track-old_matnr2 IS NOT INITIAL
+*    AND ls_track-old_matnr2 <> ls_track-new_matnr.
+*       APPEND VALUE #( sign = 'I' option = 'EQ' low = ls_track-old_matnr2 ) TO lr_old.
+*     ENDIF.
+*     Written as a loop so a sixth old code is one number, not a block.
+      DO 5 TIMES.
+        ASSIGN COMPONENT |OLD_MATNR{ sy-index }| OF STRUCTURE ls_track
+          TO FIELD-SYMBOL(<lv_o>).
+        CHECK sy-subrc = 0.
+        IF <lv_o> IS NOT INITIAL AND <lv_o> <> ls_track-new_matnr.
+          APPEND VALUE #( sign = 'I' option = 'EQ' low = <lv_o> ) TO lr_old.
+        ENDIF.
+      ENDDO.
+*EOC By Arnav on 03/09/26
       CHECK lr_old IS NOT INITIAL.
 
       APPEND VALUE #( sign = 'I' option = 'EQ' low = ls_track-werks ) TO lr_wrk.
@@ -1026,16 +1125,26 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
 *     The old code is retired and its history now belongs to the
 *     successor, so it must not remain in its own right. Without this it
 *     would be counted twice and would receive a forecast of its own.
-      IF ls_track-old_matnr1 IS NOT INITIAL
-     AND ls_track-old_matnr1 <> ls_track-new_matnr.
-        DELETE ct_hist WHERE werks = ls_track-werks
-                         AND matnr = ls_track-old_matnr1.
-      ENDIF.
-      IF ls_track-old_matnr2 IS NOT INITIAL
-     AND ls_track-old_matnr2 <> ls_track-new_matnr.
-        DELETE ct_hist WHERE werks = ls_track-werks
-                         AND matnr = ls_track-old_matnr2.
-      ENDIF.
+*BOC By Arnav on 03/09/26
+*     IF ls_track-old_matnr1 IS NOT INITIAL
+*    AND ls_track-old_matnr1 <> ls_track-new_matnr.
+*       DELETE ct_hist WHERE werks = ls_track-werks
+*                        AND matnr = ls_track-old_matnr1.
+*     ENDIF.
+*     IF ls_track-old_matnr2 IS NOT INITIAL
+*    AND ls_track-old_matnr2 <> ls_track-new_matnr.
+*       DELETE ct_hist WHERE werks = ls_track-werks
+*                        AND matnr = ls_track-old_matnr2.
+*     ENDIF.
+      DO 5 TIMES.
+        ASSIGN COMPONENT |OLD_MATNR{ sy-index }| OF STRUCTURE ls_track
+          TO FIELD-SYMBOL(<lv_d>).
+        CHECK sy-subrc = 0.
+        IF <lv_d> IS NOT INITIAL AND <lv_d> <> ls_track-new_matnr.
+          DELETE ct_hist WHERE werks = ls_track-werks AND matnr = <lv_d>.
+        ENDIF.
+      ENDDO.
+*EOC By Arnav on 03/09/26
 
     ENDLOOP.
 
@@ -1087,21 +1196,39 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
 *   shown for the successor carrying the full twelve months. This also
 *   covers the case where the old code still has a category maintained,
 *   which would otherwise add it back.
-    SELECT werks, old_matnr1, old_matnr2
+*BOC By Arnav on 03/09/26
+*   SELECT werks, old_matnr1, old_matnr2
+*     FROM zppt_mat_track
+*     INTO TABLE @DATA(lt_trk)
+*     WHERE werks IN @ir_werks.
+*
+*   LOOP AT lt_trk INTO DATA(ls_trk).
+*     IF ls_trk-old_matnr1 IS NOT INITIAL.
+*       DELETE rt_scope WHERE werks = ls_trk-werks
+*                         AND matnr = ls_trk-old_matnr1.
+*     ENDIF.
+*     IF ls_trk-old_matnr2 IS NOT INITIAL.
+*       DELETE rt_scope WHERE werks = ls_trk-werks
+*                         AND matnr = ls_trk-old_matnr2.
+*     ENDIF.
+*   ENDLOOP.
+    SELECT werks,
+           old_matnr1, old_matnr2, old_matnr3, old_matnr4, old_matnr5
       FROM zppt_mat_track
       INTO TABLE @DATA(lt_trk)
       WHERE werks IN @ir_werks.
 
     LOOP AT lt_trk INTO DATA(ls_trk).
-      IF ls_trk-old_matnr1 IS NOT INITIAL.
-        DELETE rt_scope WHERE werks = ls_trk-werks
-                          AND matnr = ls_trk-old_matnr1.
-      ENDIF.
-      IF ls_trk-old_matnr2 IS NOT INITIAL.
-        DELETE rt_scope WHERE werks = ls_trk-werks
-                          AND matnr = ls_trk-old_matnr2.
-      ENDIF.
+      DO 5 TIMES.
+        ASSIGN COMPONENT |OLD_MATNR{ sy-index }| OF STRUCTURE ls_trk
+          TO FIELD-SYMBOL(<lv_s>).
+        CHECK sy-subrc = 0.
+        IF <lv_s> IS NOT INITIAL.
+          DELETE rt_scope WHERE werks = ls_trk-werks AND matnr = <lv_s>.
+        ENDIF.
+      ENDDO.
     ENDLOOP.
+*EOC By Arnav on 03/09/26
 
   ENDMETHOD.
 

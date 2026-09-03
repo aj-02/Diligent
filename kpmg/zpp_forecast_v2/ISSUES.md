@@ -92,3 +92,39 @@ Unverifiable from the code, flagged rather than changed: `set_technical( abap_fa
 do not appear on screen after Save, the fallback is to list them from the start.
 
 TR: not yet · Files: `kpmg/zpp_forecast_v2/src/zpp_forecast.prog.abap`
+
+## 03/09/26 — CR of 02/09/26 built: month split, price columns, 5-material tracking
+
+Everything in the CR except the price *logic*, which is still pending. `PRICE` is stored
+and read but never derived, so it is 0 and both value columns compute to 0. When the
+source is known, populate `PRICE` and `WAERS` — nothing else has to change.
+
+**DDIC**
+
+| Object | Change |
+|---|---|
+| `ZDO_FCST_VAL` | new domain, CURR 15,2 |
+| `ZDE_FCST_PRICE` `ZDE_FCST_VAL` | new data elements over it |
+| `ZPPT_FCST_QT` | `BUS_FCST_ADD` and `REASON` **removed**; added `BUS_FCST_ADD1/2/3`, `M4/M5/M6_FCST_FINAL`, `REASON1/2/3`, `WAERS`, `PRICE`, `M4/M5/M6_VAL`, `M4/M5/M6_TON_VAL` |
+| `ZPPT_MAT_TRACK` | added `OLD_MATNR3/4/5` |
+
+`ZPPT_FCST_MN` is untouched — the monthly table is already one row per month, so its
+`BUS_FCST_ADD` and `REASON` stay.
+
+**Code**
+
+| Object | Change |
+|---|---|
+| `ZCL_PP_FCST` | `ty_alv` carries the new fields; quarterly reads the three additionals, the three reasons, `WAERS` and `PRICE` back (SAVE writes with CORRESPONDING, so anything not read would be blanked); per-month final and value computed in the split loop; material tracking walks 5 old codes in three places |
+| `ZPP_FORECAST_UPLOAD` | quarterly change template gains `MONTH` at column 4, everything after shifts right; `do_change` resolves column offsets by mode; the change lands on `BUS_FCST_ADDn` / `REASONn` for the month it names; negative guard is now per month, not per quarter; tracking template gains 3 columns; `check_chain` and the duplicate checks walk 5 codes; new `FORM qt_finals`; `final_qty` lost its never-read `CV_ADD` parameter |
+| `ZPP_FORECAST` | quarterly sheet shows `BUS_FCST_ADD1/2/3`, the three finals, `PRICE`, the six value columns and `WAERS`. Annual sheet carries no price |
+| `ZPP_FORECAST_REPORT` | `QTR_ADD` is now `ADD1+ADD2+ADD3` — the report shows the quarter on one line |
+
+Assumptions, all stated to Arnav and unchallenged: `month` is 1/2/3 **within the quarter**;
+the CR's lines 12–13 naming `BUS_FCST_ADD1` for months 2 and 3 were a copy-paste slip;
+the monthly change upload is untouched.
+
+`M4_TON`/`M5_TON`/`M6_TON` still hold the tonnage of the forecast, not of the final. The
+tonnage *value* columns use the final's tonnage. Flag if that should be consistent.
+
+TR: not yet · ZIP rebuilt from `src/`, 39 files

@@ -316,3 +316,11 @@ and value calculation (CR 1-5); five old material codes in three places (CR 6);
 Nothing else in the three objects was touched.
 
 TR: not yet
+
+## 03/09/26 — do_exclusion result texts: closed, no change
+
+Arnav's call: leave 'Already excluded, entry refreshed' / 'Excluded from forecasting' as
+they are. They echo no uploaded values, so point 1 is satisfied, and "already excluded"
+tells the user the row was a no-op. `FORM do_exclusion` stays byte-identical to QA.
+
+Point 1 therefore applies to five of the six upload types by design, not by omission.

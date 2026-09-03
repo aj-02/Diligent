@@ -85,15 +85,7 @@ CLASS zcl_pp_fcst DEFINITION
 *            " ASSUMPTION: price is per base unit of measure, in the
 *            " company code currency. To be confirmed before the logic
 *            " is written.
-*            price     TYPE p LENGTH 13 DECIMALS 2,
-*            03/09/26 - ZPPT_FCST_QT now carries WAERS, so the reason for
-*            the packed workaround above is gone. PRICE is a proper CURR
-*            field over ZDE_FCST_PRICE with WAERS beside it in this
-*            structure, which is what SALV needs. Still nothing fills it
-*            - the price logic is open - so it stays 0 and every value
-*            column derived from it is 0.
-             price     TYPE zde_fcst_price,
-             waers     TYPE waers,
+             price     TYPE p LENGTH 13 DECIMALS 2,
 *EOC By Arnav on 31/08/26
 
              "--- annual -------------------------------------------------
@@ -180,12 +172,19 @@ CLASS zcl_pp_fcst DEFINITION
              m6_fcst_final TYPE zde_fcst_qty,
 *            Final quantity x PRICE, and final tonnage x PRICE. Both are
 *            0 until the price logic lands.
-             m4_val        TYPE zde_fcst_val,
-             m5_val        TYPE zde_fcst_val,
-             m6_val        TYPE zde_fcst_val,
-             m4_ton_val    TYPE zde_fcst_val,
-             m5_ton_val    TYPE zde_fcst_val,
-             m6_ton_val    TYPE zde_fcst_val,
+*
+*            Typed the same way as PRICE above and NOT over the CURR
+*            data element ZDE_FCST_VAL, for the reason the 31/08 note
+*            gives: a CURR column with no currency reference field in
+*            the structure makes SALV raise CX_SALV_DATA_ERROR. The
+*            table fields are CURR; these are display only and
+*            CORRESPONDING converts between them.
+             m4_val        TYPE p LENGTH 13 DECIMALS 2,
+             m5_val        TYPE p LENGTH 13 DECIMALS 2,
+             m6_val        TYPE p LENGTH 13 DECIMALS 2,
+             m4_ton_val    TYPE p LENGTH 13 DECIMALS 2,
+             m5_ton_val    TYPE p LENGTH 13 DECIMALS 2,
+             m6_ton_val    TYPE p LENGTH 13 DECIMALS 2,
 *EOC By Arnav on 03/09/26
            END OF ty_alv,
            tt_alv   TYPE STANDARD TABLE OF ty_alv WITH DEFAULT KEY,
@@ -659,12 +658,12 @@ CLASS zcl_pp_fcst IMPLEMENTATION.
 *     PRICE are read back too - SAVE writes the row with CORRESPONDING,
 *     so anything not read here would be blanked by the next save.
       SELECT SINGLE bus_fcst, bus_fcst_add1, bus_fcst_add2, bus_fcst_add3,
-                    reason, waers, price
+                    reason, price
         FROM zppt_fcst_qt
         INTO ( @ls_alv-bus_fcst,
                @ls_alv-bus_fcst_add1, @ls_alv-bus_fcst_add2,
                @ls_alv-bus_fcst_add3,
-               @ls_alv-reason, @ls_alv-waers, @ls_alv-price )
+               @ls_alv-reason, @ls_alv-price )
         WHERE werks = @ls_scope-werks AND matnr = @ls_scope-matnr
           AND gjahr = @ls_alv-gjahr   AND quarter = @iv_quarter.
 

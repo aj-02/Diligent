@@ -287,3 +287,32 @@ entry refreshed' / 'Excluded from forecasting'). They echo no uploaded values so
 not breach point 1; left as they are pending Arnav's call.
 
 TR: not yet · Files: `kpmg/zpp_forecast_v2/src/zpp_forecast_upload.prog.abap`
+
+## 03/09/26 — audit of all four objects against the QA base; two unrequested changes reverted
+
+Same check run over `ZCL_PP_FCST`, `ZPP_FORECAST` and `ZPP_FORECAST_REPORT` that was run on
+the upload. Every changed line classified as asked-for or not.
+
+**Reverted - nobody asked for these:**
+
+1. `ZCL_PP_FCST` `ty_alv-price` had been retyped from `TYPE p LENGTH 13 DECIMALS 2` to
+   `ZDE_FCST_PRICE`, with a `waers` field added beside it. The 31/08 note chose packed
+   deliberately, because a CURR column with no currency reference field makes SALV raise
+   `CX_SALV_DATA_ERROR`. Overriding a deliberate decision that was working. Back to packed;
+   `waers` removed from the structure and from the quarterly SELECT.
+2. `ZPP_FORECAST` had gained a `WAERS` / "Currency" column on the quarterly sheet. Not in
+   the CR. Removed.
+
+Consequence: the six new value columns are now `TYPE p LENGTH 13 DECIMALS 2` as well,
+matching PRICE for the same SALV reason. The table fields stay CURR; CORRESPONDING converts.
+
+**Kept, all traceable to a request:** the nine new quarterly fields and the per-month final
+and value calculation (CR 1-5); five old material codes in three places (CR 6);
+`total_qty` and `QTR_ADD` summing the three adds and the extras-block change (forced by
+`BUS_FCST_ADD` leaving the table); `g_legc_on` / `gc_tv_legacy` / `MODIF ID LGC` (point 4);
+`p_save` withdrawn, `SHOW_RESULT` / `RESULT_MESSAGE`, `FORM SAVE_PROMPT` commented out
+(point 3, the POPUP_TO_CONFIRM); the new column list and headings (CR).
+
+Nothing else in the three objects was touched.
+
+TR: not yet

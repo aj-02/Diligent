@@ -940,7 +940,6 @@ FORM visible_columns CHANGING ct_show TYPE tt_fname.
       APPEND 'M4_TON_VAL' TO ct_show.
       APPEND 'M5_TON_VAL' TO ct_show.
       APPEND 'M6_TON_VAL' TO ct_show.
-      APPEND 'WAERS'      TO ct_show.
 *EOC By Arnav on 03/09/26
 
       APPEND 'MTS_MTO'    TO ct_show.   " AE17, the last FS column
@@ -1150,7 +1149,6 @@ FORM setup_columns USING pt_show TYPE tt_fname.
     PERFORM txt USING 'M4_TON_VAL'    'Tonnage Value Month 1'.
     PERFORM txt USING 'M5_TON_VAL'    'Tonnage Value Month 2'.
     PERFORM txt USING 'M6_TON_VAL'    'Tonnage Value Month 3'.
-    PERFORM txt USING 'WAERS'         'Currency'.
 *EOC By Arnav on 03/09/26
     PERFORM txt USING 'FINAL_QTY'    'Final Forecast Qty'.
 *   The FS heads both column O and column Q "Final Forecast Qty". The

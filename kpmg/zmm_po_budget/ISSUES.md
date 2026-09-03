@@ -33,12 +33,45 @@ things; the `<002>` block did two:
 | `item->invalidate( )` | line 172 | **missing** |
 | `ch_failed = abap_true` | line 173 | present |
 
-**Why DEV and not QAS.** `mmpur_business_obj_id` sets a framework global. With none set by
-the block itself, the message inherited whatever id earlier processing had left behind. In
-DEV that global happened to hold a live item and the message rendered; in QAS the earlier
-path (gated at line 153 on `lt_po_doctyp` / `ls_header-bsart`) does not run for the document
-type being tested, the global is blank or stale, and the message is orphaned. `ch_failed`
-still blocked the save, so the symptom was a refused save with no explanation.
+**Why DEV and not QAS — NOT ESTABLISHED. Earlier claim in this entry was wrong.**
+
+An earlier version of this entry claimed the missing `mmpur_business_obj_id` explained the
+DEV/QAS split, via a stale framework global. Arnav correctly rejected that: a missing macro
+call is a system-independent code defect and would fail in both systems. The stale-global
+story was a hypothesis, never verified against the macro internals. Retracted.
+
+The fix below is still correct on its own merits — it matches the proven `ZMM_MSGS 007` block
+in the same method and removes a dependency on framework state the block does not control —
+but it is not the explanation for the two systems behaving differently.
+
+What can actually differ between two systems running identical source, in check order:
+
+1. **`ZMM_BUDGET` messages missing in QAS.** The only candidate that explains both halves.
+   The message id reaches the macro as a character literal `'ZMM_BUDGET'`, so unlike
+   `MESSAGE e002(zmm_budget)` there is NO syntax check — the class can be absent and the code
+   still activates clean. At runtime the collector cannot resolve the T100 text, the entry is
+   dropped, and it never reaches `LSBAL_DISPLAY_BASEF05`, which is exactly what the debug
+   showed. The table transported; the message class may have been on a different TR.
+   **Check: SE91 in QAS, ZMM_BUDGET, messages 001 / 002 / 008.**
+2. **The QAS method source is not the DEV source.** `ZME_PROCESS_PO_CUST` is one shared impl
+   class carrying blocks from Hemang, Saurabh, UDAYABAP03, Raj and Arnav. It is a single
+   object, so the last TR imported into QAS overwrites the whole class, not just its own
+   block. The screenshot proves the `<002>` block is present; it proves nothing about the
+   other ~900 lines. **Check: download the QAS version and diff against the DEV copy.**
+3. **Client-dependent config drives different code paths.** Line ~153,
+   `IF line_exists( lt_po_doctyp[ low = ls_header-bsart ] )`, is fed from TVARVC
+   (`ty_tvarv` / `it_type`, added by Raj). TVARVC is maintained per client in STVARV and does
+   not travel with the workbench request. This matters directly: raw `MESSAGE e021(zmm)`,
+   `e052(zmm)`, `e024(zmm)` statements sit AFTER the `<002>` block, and a raw `MESSAGE TYPE E`
+   returns to the screen immediately, so collected MM messages behind it are never flushed to
+   the log. A QAS-only config path tripping one of those would kill the budget message.
+   **Check: STVARV in both systems vs the test PO's BSART.**
+4. **The DEV test may not have been the same test.** `ch_failed = 'X'` blocks the save on its
+   own and ME21N shows a generic refusal with none of Arnav's text. If DEV only ever showed
+   the refusal and never the words "No budget maintained for plant..." or "Budget has been
+   exhausted...", then it never worked in either system, there is no difference to explain,
+   and the missing `mmpur_business_obj_id` is the whole story. **Confirm this before chasing
+   1 to 3.**
 
 **Fix applied 03/09/26** — inside the existing `*BOC <002>` block, extended not re-wrapped,
 old lines commented out in place:

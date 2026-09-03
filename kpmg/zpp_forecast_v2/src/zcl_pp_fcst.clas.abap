@@ -85,7 +85,15 @@ CLASS zcl_pp_fcst DEFINITION
 *            " ASSUMPTION: price is per base unit of measure, in the
 *            " company code currency. To be confirmed before the logic
 *            " is written.
-             price     TYPE p LENGTH 13 DECIMALS 2,
+*            price     TYPE p LENGTH 13 DECIMALS 2,
+*            03/09/26 - ZPPT_FCST_QT now carries WAERS, so the reason for
+*            the packed workaround above is gone. PRICE is a proper CURR
+*            field over ZDE_FCST_PRICE with WAERS beside it in this
+*            structure, which is what SALV needs. Still nothing fills it
+*            - the price logic is open - so it stays 0 and every value
+*            column derived from it is 0.
+             price     TYPE zde_fcst_price,
+             waers     TYPE waers,
 *EOC By Arnav on 31/08/26
 
              "--- annual -------------------------------------------------
@@ -157,6 +165,30 @@ CLASS zcl_pp_fcst DEFINITION
              m5_ton       TYPE zde_fcst_qty,
              m6_ton       TYPE zde_fcst_qty,
              reason       TYPE zde_fcst_reason,
+*BOC By Arnav on 03/09/26
+*            Quarterly splits the additional plan quantity by month.
+*            BUS_FCST_ADD and REASON above are left for the MONTHLY
+*            sheet - ZPPT_FCST_MN is one row per month already and has
+*            nothing to split. The nine below belong to quarterly and
+*            match ZPPT_FCST_QT.
+             bus_fcst_add1 TYPE zde_fcst_qty,
+             bus_fcst_add2 TYPE zde_fcst_qty,
+             bus_fcst_add3 TYPE zde_fcst_qty,
+             m4_fcst_final TYPE zde_fcst_qty,
+             m5_fcst_final TYPE zde_fcst_qty,
+             m6_fcst_final TYPE zde_fcst_qty,
+             reason1       TYPE zde_fcst_reason,
+             reason2       TYPE zde_fcst_reason,
+             reason3       TYPE zde_fcst_reason,
+*            Final quantity x PRICE, and final tonnage x PRICE. Both are
+*            0 until the price logic lands.
+             m4_val        TYPE zde_fcst_val,
+             m5_val        TYPE zde_fcst_val,
+             m6_val        TYPE zde_fcst_val,
+             m4_ton_val    TYPE zde_fcst_val,
+             m5_ton_val    TYPE zde_fcst_val,
+             m6_ton_val    TYPE zde_fcst_val,
+*EOC By Arnav on 03/09/26
            END OF ty_alv,
            tt_alv   TYPE STANDARD TABLE OF ty_alv WITH DEFAULT KEY,
            tr_werks TYPE RANGE OF werks_d,

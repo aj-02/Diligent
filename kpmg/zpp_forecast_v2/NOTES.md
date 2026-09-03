@@ -55,6 +55,16 @@ package.devc, the 2 classes, 3 reports, 7 domains, 8 data elements, 8 tables and
 
 Import via `ZABAPGIT_STANDALONE` → New Offline Repo → Import package from ZIP → Pull.
 
+**DEFECT FOUND 03/09/26 — the PROGDIR element order in all three `prog.xml` files is wrong.**
+They carry `NAME, SUBC, FIXPT, VARCL, UCCHECK`. The correct order is
+`NAME, VARCL, SUBC, FIXPT, UCCHECK` (`varcl` is component 5 of
+`zif_abapgit_sap_report=>ty_progdir`, `subc` 11, `fixpt` 23, `uccheck` 30). abapGit
+deserialises with `CALL TRANSFORMATION id`, which raises `CX_XSLT_FORMAT_ERROR` on the first
+out-of-sequence element, so this ZIP would short-dump on `VARCL`. The claim above that this
+object "ships this way cleanly" is **not supported by any record of a successful import** —
+found while building `kpmg/zsd_exc_approval/ZSD_EXP_PAINTS.zip`, which uses the correct order.
+Fix the three `prog.xml` files and re-zip before attempting an import here.
+
 **Re-zip from `src/` rather than trusting the existing archive** — `ZPP_FORECAST.zip` was
 rebuilt 23.08 while several `src/` XMLs date from 20–21.08.
 

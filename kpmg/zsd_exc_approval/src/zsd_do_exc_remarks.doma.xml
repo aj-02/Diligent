@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<abapGit version="v1.0.0" serializer="LCL_OBJECT_DOMA" serializer_version="v1.0.0">
+ <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+  <asx:values>
+   <DD01V>
+    <DOMNAME>ZSD_DO_EXC_REMARKS</DOMNAME>
+    <DDLANGUAGE>E</DDLANGUAGE>
+    <DATATYPE>CHAR</DATATYPE>
+    <LENG>000250</LENG>
+    <OUTPUTLEN>000250</OUTPUTLEN>
+    <DDTEXT>Exceptional Approval Remarks</DDTEXT>
+    <LOWERCASE>X</LOWERCASE>
+   </DD01V>
+  </asx:values>
+ </asx:abap>
+</abapGit>

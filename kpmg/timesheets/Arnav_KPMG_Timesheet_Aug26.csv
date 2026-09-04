@@ -1,0 +1,56 @@
+Date,Client Name,Activity Description,Charge hours,Leave Hrs,Total Hrs,Weeday
+14-Aug-26,Astral Limited,"1. WRICEF ID-2A - ZFORECAST (Adhesive): Forecast Template-Adhesive.xlsx dated 14.08.2026 received
+2. FS walkthrough and requirement study with functional team
+3. Assumption register B01 to B42 prepared for confirmation
+4. Table name length analysis - all names exceed the SAP 16 character limit, rename list drafted",,,8,Friday
+15-Aug-26,Astral Limited,,,,,Saturday
+16-Aug-26,Astral Limited,,,,,Sunday
+17-Aug-26,Astral Limited,"1. ZFORECAST - DDIC design and build: 8 transparent tables, 7 domains, 8 data elements
+2. Message class ZPP_FCST created
+3. Number range object ZPPFCST created (ZPP_ADHESIVE_SNRO renamed - SNRO limit is 10 characters)
+4. Renames applied and documented - ZPP_ADH_FORECAST_YEAR to ZPPT_FCST_YR and similar",,,8,Monday
+18-Aug-26,Astral Limited,"1. ZFORECAST - calculation engine class ZCL_PP_FORECAST developed
+2. Utility class ZCL_PP_FORECAST_UTIL - financial year, quarter, period and tonnage helpers
+3. Annual and quarterly figures sourced from VBRK / VBRP summing VBRP-FKIMG
+4. Monthly figures sourced from MATDOC with movement type 601",,,8,Tuesday
+19-Aug-26,Astral Limited,"1. ZFORECAST - upload program with template download (GUI_DOWNLOAD) and GUI_UPLOAD
+2. Final ALV report program developed
+3. Legacy material flag logic built from ZPPT_SLS_HIST M01 to M12
+4. ZFORECAST_Adhesive_Assumptions_and_Queries document prepared and shared with functional",,,8,Wednesday
+20-Aug-26,Astral Limited,"1. Revised Forecast Template-Adhesive.xlsx dated 20.08.2026 received - re-scoped as version 2
+2. Gap analysis between the 14.08 and 20.08 templates; version 1 object inventory frozen
+3. Decision to rebuild screen free on CL_SALV_TABLE, removing CALL SCREEN 0100 and cl_gui_custom_container
+4. Load factor and MTS/MTO merged into ZPPT_PROD_CAT; hardcoded values moved to config table ZPPT_FCST_CFG",,,8,Thursday
+21-Aug-26,Astral Limited,"1. ZFORECAST v2 - classes ZCL_PP_FCST and ZCL_PP_FCST_UTIL rebuilt
+2. Programs ZPP_FORECAST (ZFCST), ZPP_FORECAST_REPORT (ZFCST_RPT), ZPP_FORECAST_UPLOAD (ZFCST_UPL)
+3. VBRP-SHKZG sign handling verified in the system against the FS wording
+4. Clause 34 TDS Report FS v1 dated 21.08.2026 received - initial study",,,8,Friday
+22-Aug-26,Astral Limited,,,,,Saturday
+23-Aug-26,Astral Limited,,,,,Sunday
+24-Aug-26,Astral Limited,"1. WRICEF 050_BRD_FS - Budget control on indirect purchase: scheduling agreement scope taken up
+2. ME31L / ME32L do not pass through ME_PROCESS_PO_CUST - implicit enhancement route in SAPMM06E identified
+3. Debug probes placed in SAPMM06E - established that EFFWR and NETWR are empty on an SA and NETPR is populated
+4. Five step value fallback designed - EFFWR, NETWR, ZWERT, KTMNG x NETPR / PEINH, scheduled qty x NETPR / PEINH",,,8,Monday
+25-Aug-26,Astral Limited,"1. WRICEF 050 - SA enhancement coded in SAPMM06E using classic Open SQL (program is not in strict mode)
+2. PO side - budget check block <002> inserted into the existing BAdI ME_PROCESS_PO_CUST method CHECK
+3. DDIC - table ZMM_PO_BUDGET, domain ZDO_BUDGET_AMT, data elements ZDE_BUDGET / ZDE_ADD_BUDGET, message class ZMM_BUDGET
+4. Table maintenance - SE54 event 01 routine and PBO screen module to protect the consumed budget field",,,8,Tuesday
+26-Aug-26,Astral Limited,"1. ZFI_TDS_CL34 - Clause 34 TDS report, new development from FS v1
+2. Program built with TOP / SCR / FORMS includes - 25 column ALV, GL wise and document number wise
+3. Base tables WITH_ITEM, BKPF and BSEG read, with LFA1 and T059 texts
+4. GL derivation logic - direct FI via BSEG-GHKON and MM invoice via RSEG to MBEW to T030",,,8,Wednesday
+27-Aug-26,Astral Limited,"1. ZFI_TDS_CL34 - hardening pass; authorisation check on F_BKPF_BUK added for foreground and background runs
+2. Activation error fixed - T059Z-TXT40 does not exist, column moved to T059OT-TEXT40
+3. Fixed positional mismatch between the BSEG SELECT list and its target type; corrected over length source lines that wrapped on paste
+4. Two live runs executed - 49 rows and 17 rows, arithmetic reconciled; queries Q9, Q10, Q11, Q14, Q17 to Q19 closed",,,8,Thursday
+28-Aug-26,Astral Limited,"1. WRICEF 195_BRD_FS - ZMB5B: Receipt amount and Issue amount columns for the Storage Loc./Batch Stock option
+2. Analysis - values exist as BESTAND-SOLLWERT / HABENWERT but standard fills them only in the valuated stock branch
+3. Changes made in summen_bilden, bestaende_berechnen and create_fieldcat_totals_flat; BESTAND-WAERS currency handled
+4. Unit wise paste sheet prepared; ANFWERT / ENDWERT excluded as MBEW-SALK3 does not exist per storage location",,,8,Friday
+29-Aug-26,Astral Limited,,,,,Saturday
+30-Aug-26,Astral Limited,,,,,Sunday
+31-Aug-26,Astral Limited,"1. WRICEF 141.A Exceptional Approval (Adhesives) - FS review; source is BP credit management Additional Information, table BP3100
+2. WRICEF 141.B Exceptional Approval (Paints) - FS review; custom table, upload program and report scoped
+3. 16 open queries logged for functional - blocker is the L4/L5/L6 name source given as SAPLSLVC_FULLSCREEN, which is a function group and not a data source
+4. Credit limit query raised - UKMBP_CMS_SGM is keyed by partner and credit segment, the FS names neither",,,8,Monday
+,,,,,,
